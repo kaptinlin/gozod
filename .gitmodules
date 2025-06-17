@@ -1,0 +1,3 @@
+[submodule ".reference/zod"]
+	path = .reference/zod
+	url = https://github.com/colinhacks/zod.git

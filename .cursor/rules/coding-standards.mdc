@@ -1,0 +1,284 @@
+---
+description: GoZod coding standards and best practices
+globs:
+- "**/*.go"
+alwaysApply: true
+---
+
+# GoZod Coding Standards and Best Practices
+
+This document defines comprehensive coding standards and best practices for the GoZod validation library. It provides guiding principles for implementing Go code that ensures full compatibility with the TypeScript Zod v4 API while following Go language idioms and performance optimization principles.
+
+## 🎯 Core Design Philosophy
+
+### 1. Smart Type Inference First
+- **Input-Output Consistency**: Output the same type as input
+- **Preserve Go Type Inference Advantages**: `String().Parse("hello")` → `string`, `String().Parse(&"hello")` → `*string`
+- **Nilable Modifier Semantics**: Only changes handling of `nil`, doesn't change type inference logic
+- **Avoid Type Coercion**: Let Go's type system work naturally
+
+### 2. Full TypeScript Zod v4 Correspondence
+- **Complete API Compatibility**: Maintain the same method signatures, parameters, and return value structures
+- **Behavioral Consistency**: Same input produces same output
+- **Error Handling Correspondence**: Error types and messages correspond to TypeScript version
+- **Field Naming Consistency**: Use the same naming conventions as JS version
+
+### 3. Go Language Idioms
+- **Use Go 1.21+ Features**: Fully utilize generics and performance optimizations
+- **Follow Go Conventions**: Error handling, naming conventions, package organization
+- **Value Types First**: Use value types rather than pointer types for struct fields
+- **Zero-Allocation Optimization**: Avoid memory allocation when possible
+
+### 4. Avoid Over-Engineering
+- **Simplified Implementation**: Direct inlining rather than complex function wrapping
+- **Remove Unnecessary Wrapping**: Avoid intermediate variables and wrapper functions
+- **Unified Patterns**: Use consistent design patterns, avoid special cases
+- **Progressive Complexity**: Start simple, add complexity as needed
+
+## 🏗️ Architectural Design Principles
+
+### 1. Three-Layer Architecture Pattern
+- **Definition Layer**: Basic type definitions and configuration information
+- **Internals Layer**: Internal type implementation, including parse functions, check lists, etc.
+- **Public Interface Layer**: Provides public APIs for user use
+
+### 2. Unified Wrapper Pattern
+- **Default Wrapper**: Type-safe default value functionality
+- **Prefault Wrapper**: Type-safe fallback value functionality
+- **Optional Wrapper**: Handles missing field semantics
+- **Nilable Flag**: Set flag directly on original type, preserve smart inference
+
+### 3. Separation of Concerns Principle
+- **Refine**: Only validates data, never modifies data
+- **Transform**: Can modify data type and content
+- **Coerce**: Performs type coercion before parsing
+- **Check**: Low-level validation mechanism, supports complex validation logic
+
+## 📊 TypeScript to GoZod Mapping
+
+### Basic Type Mapping
+
+| TypeScript Zod v4 | Go Type | GoZod Constructor | Description |
+|-------------------|---------|----------------|-------------|
+| `z.string()` | `string` | `gozod.String()` | String validation |
+| `z.number()` | `float64` | `gozod.Number()` | Number validation (default float64) |
+| `z.boolean()` | `bool` | `gozod.Bool()` | Boolean validation |
+| `z.array(T)` | `[]T` | `gozod.Slice(T)` | Dynamic array |
+| `z.object({})` | `struct` | `gozod.Object({})` | Object validation |
+| `z.union([])` | `interface{}` | `gozod.Union([])` | Union type |
+
+### Modifier Mapping
+
+| TypeScript Zod v4 | GoZod | Semantic Differences |
+|-------------------|-------|---------------------|
+| `.optional()` | `.Optional()` | Missing field handling |
+| `.nullable()` | `.Nilable()` | Null value handling, preserve type inference |
+| `.nullish()` | `.Nullish()` | Combines optional and nullable |
+| `.default(value)` | `gozod.Default(schema, value)` | Wrapper pattern |
+| `.catch(value)` | `gozod.Prefault(schema, value)` | Fallback value mechanism |
+
+### Validation Method Mapping
+
+| TypeScript Zod v4 | GoZod | Return Type |
+|-------------------|-------|-------------|
+| `.min(n)` | `.Min(n)` | Same type, supports method chaining |
+| `.max(n)` | `.Max(n)` | Same type, supports method chaining |
+| `.refine(fn)` | `.Refine(fn)` | Same type, type-safe |
+| `.transform(fn)` | `.Transform(fn)` | `ZodType[any, any]`, supports type conversion |
+| `.pipe(schema)` | `.Pipe(schema)` | Pipeline connection |
+
+## 🔧 Go Language Idiom Guidelines
+
+### 1. Error Handling Patterns
+```go
+// ✅ Standard Go error handling
+result, err := schema.Parse(input)
+if err != nil {
+    return fmt.Errorf("validation failed: %w", err)
+}
+
+// ❌ Avoid exception style
+try {
+    result := schema.MustParse(input)
+} catch (err) {
+    // Not Go convention
+}
+```
+
+### 2. Interface Design Principles
+```go
+// ✅ Small and focused interfaces
+type ZodCheck interface {
+    GetZod() *ZodCheckInternals
+}
+
+type Cloneable interface {
+    CloneFrom(source any)
+}
+
+// ❌ Avoid large, all-encompassing interfaces
+type ZodEverything interface {
+    Parse(...) (any, error)
+    Validate(...) error
+    Transform(...) any
+    // ... too many methods
+}
+```
+
+### 3. Package Organization Principles
+- **Organize by Function**: Core types, validation checks, error handling organized separately
+- **Avoid Circular Dependencies**: Clear dependency relationship diagram
+- **Minimize Public API**: Only export necessary types and functions
+- **Hide Internal Implementation**: Use internal packages or private fields
+
+### 4. Naming Conventions
+```go
+// ✅ Go-style naming
+type ZodString struct { ... }
+func (z *ZodString) Min(min int) *ZodString { ... }
+var EmailRegex = regexp.MustCompile(...)
+
+// ❌ Avoid non-Go style
+type zodString struct { ... }  // Private types should have good reason
+func (z *ZodString) min(min int) *ZodString { ... }  // Public methods should be capitalized
+var emailRegex = ...  // Package-level variables should be capitalized
+```
+
+## 🚀 Performance Optimization Guidelines
+
+### 1. Memory Allocation Optimization
+- **Pre-allocate Slices**: Use `make([]T, 0, capacity)` when size is known
+- **Object Pools**: Use `sync.Pool` for frequently allocated objects
+- **String Building**: Use `strings.Builder` instead of string concatenation
+- **Avoid Unnecessary Copying**: Use pointers to pass large structs
+
+### 2. Compile-Time Optimization
+- **Pre-compile Regular Expressions**: Pre-compile common regex at package level
+- **Extract Constants**: Extract magic numbers as named constants
+- **Inline Functions**: Use inlining for simple functions instead of function calls
+- **Type Assertion Optimization**: Use type switch instead of multiple assertions
+
+### 3. Runtime Optimization
+- **Early Return**: Check and return as early as possible
+- **Conditional Execution**: Avoid unnecessary computations
+- **Cache Results**: Cache expensive computation results
+- **Batch Operations**: Combine multiple small operations into batch operations
+
+## 🎯 TypeScript vs Go Difference Handling
+
+### 1. Type System Differences
+| Concept | TypeScript | Go | Handling Strategy |
+|---------|------------|----|-----------------| 
+| Optional fields | `field?: T` | `*T` or `Optional` wrapper | Use wrapper pattern |
+| Union types | `T \| U` | `interface{}` + type assertion | Runtime type checking |
+| Literal types | `"literal"` | Constants + validation | Enum validation |
+| Generic constraints | `T extends U` | `T interface{ ... }` | Interface constraints |
+
+### 2. Runtime Behavior Differences
+- **undefined vs nil**: TypeScript's `undefined` corresponds to Go's `nil`
+- **Type Coercion**: TypeScript's implicit conversion vs Go's explicit conversion
+- **Error Handling**: TypeScript's exceptions vs Go's error values
+- **Async Processing**: TypeScript's Promise vs Go's synchronous processing
+
+### 3. API Design Differences
+```go
+// TypeScript: Method chaining
+// z.string().min(5).max(10).email()
+
+// Go: Maintain same chaining
+gozod.String().Min(5).Max(10).Email()
+
+// TypeScript: Optional parameters
+// z.string().min(5, { message: "Too short" })
+
+// Go: Use struct parameters
+gozod.String().Min(5, gozod.SchemaParams{Error: "Too short"})
+```
+
+## 🔄 Unified Design Patterns
+
+### 1. Hybrid Method Pattern
+Every schema type provides both type-safe and flexible method versions:
+
+```go
+// Type-safe version - only accepts the specific type
+func (z *ZodString) Refine(fn func(string) bool, params ...SchemaParams) *ZodString
+
+// Flexible version - accepts any type
+func (z *ZodString) RefineAny(fn func(any) bool, params ...SchemaParams) ZodType[any, any]
+```
+
+### 2. Smart Type Inference Pattern
+All Parse methods preserve input type characteristics:
+
+```go
+func (z *ZodString) Parse(input any, ctx ...*ParseContext) (any, error) {
+    // Type validation logic...
+    
+    // Return original input to preserve type characteristics
+    return input, nil  // Instead of always returning extracted value
+}
+```
+
+### 3. Wrapper Factory Pattern
+Consistent wrapper creation across all types:
+
+```go
+// Default wrapper
+func (z *ZodString) Default(value string) *ZodStringDefault {
+    return &ZodStringDefault{
+        schema:  z,
+        default: value,
+        def:     ZodTypeDef{Type: "default"},
+    }
+}
+
+// Generic wrapper functions
+func Optional[T ZodType[any, any]](schema T) *ZodOptional[T] { ... }
+func Nilable[T ZodType[any, any]](schema T) *ZodNilable[T] { ... }
+```
+
+## 📝 Code Quality Standards
+
+### 1. Documentation Requirements
+- **Every public type**: Must have complete GoDoc comments
+- **Every public method**: Must have clear usage examples and parameter descriptions
+- **Complex logic**: Must have inline comments explaining the reasoning
+- **API changes**: Must update corresponding documentation
+
+### 2. Testing Requirements
+- **Unit tests**: Every public method must have comprehensive unit tests
+- **Integration tests**: Complex workflows must have integration tests
+- **Compatibility tests**: Ensure behavior matches TypeScript Zod v4
+- **Performance tests**: Critical paths must have benchmark tests
+
+### 3. Code Review Standards
+- **Type safety**: All type assertions and conversions must be safe
+- **Error handling**: All error cases must be properly handled
+- **Performance**: No unnecessary allocations or computations
+- **Compatibility**: Changes must not break TypeScript compatibility
+
+## 🛠️ Development Workflow
+
+### 1. Implementation Order
+1. **Define type structure** (Def, Internals, main type)
+2. **Implement core interfaces** (ZodType, Parse method)
+3. **Add validation methods** (Min, Max, specific checks)
+4. **Implement modifiers** (Optional, Nilable, Default)
+5. **Add advanced features** (Refine, Transform, Pipe)
+6. **Write comprehensive tests**
+7. **Add documentation and examples**
+
+### 2. Code Organization
+- **One type per file**: Each schema type in its own file
+- **Related functionality grouped**: Validation checks near type definition
+- **Clear dependencies**: Import only what's needed
+- **Consistent patterns**: Follow established patterns across all types
+
+### 3. Version Management
+- **Semantic versioning**: Follow semver for all releases
+- **Backward compatibility**: Maintain compatibility within major versions
+- **Deprecation warnings**: Provide clear migration paths for deprecated features
+- **Change documentation**: Document all API changes with examples
+
+This document serves as the authoritative guide for all GoZod development, ensuring consistency, quality, and compatibility across the entire codebase. 
