@@ -51,7 +51,7 @@ GoZod provides two methods for parsing data:
 Use `.Parse()` for standard Go error handling patterns:
 
 ```go
-userData := map[string]interface{}{
+userData := map[string]any{
     "username": "johndoe",
     "email":    "john@example.com",
     "age":      25,
@@ -66,7 +66,7 @@ if err != nil {
 }
 
 // Use validated data
-validatedUser := result.(map[string]interface{})
+validatedUser := result.(map[string]any)
 fmt.Printf("Valid user: %s\n", validatedUser["username"])
 ```
 
@@ -281,7 +281,7 @@ Here's a practical example of using GoZod in an HTTP API:
 
 ```go
 func handleAPIRequest(w http.ResponseWriter, r *http.Request) {
-    var requestData map[string]interface{}
+    var requestData map[string]any
     if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
@@ -293,7 +293,7 @@ func handleAPIRequest(w http.ResponseWriter, r *http.Request) {
         if errors.As(err, &zodErr) {
             flattened := gozod.FlattenError(zodErr)
             
-            errorResponse := map[string]interface{}{
+            errorResponse := map[string]any{
                 "success": false,
                 "errors":  flattened.FieldErrors,
             }
@@ -306,7 +306,7 @@ func handleAPIRequest(w http.ResponseWriter, r *http.Request) {
     }
     
     // Process validated data
-    validData := result.(map[string]interface{})
+    validData := result.(map[string]any)
     processAPIRequest(validData)
 }
 ```
@@ -334,7 +334,7 @@ func loadConfig(filename string) (*AppConfig, error) {
         return nil, err
     }
     
-    var configData map[string]interface{}
+    var configData map[string]any
     if err := json.Unmarshal(data, &configData); err != nil {
         return nil, err
     }
@@ -345,7 +345,7 @@ func loadConfig(filename string) (*AppConfig, error) {
     }
     
     // Convert to struct
-    validConfig := validated.(map[string]interface{})
+    validConfig := validated.(map[string]any)
     return &AppConfig{
         Port:     validConfig["port"].(int),
         Database: validConfig["database"].(string),

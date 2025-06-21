@@ -50,7 +50,7 @@ func main() {
     validator := gozod.ToJSONSchema(userSchema)
     
     // Validate data directly
-    userData := map[string]interface{}{
+    userData := map[string]any{
         "username": "john",
         "email":    "john@example.com",
         "age":      25,
@@ -182,7 +182,7 @@ GoZod supports metadata storage that will be included in the generated JSON Sche
 emailSchema := gozod.String().Meta(gozod.GlobalMetadata{
     Title:       "Email Address",
     Description: "User's email address",
-    Examples:    []interface{}{"user@example.com"},
+    Examples:    []any{"user@example.com"},
 })
 
 jsonSchema := gozod.ToJSONSchema(emailSchema)
@@ -329,7 +329,7 @@ func main() {
     })
     
     // Test data validation
-    validProduct := map[string]interface{}{
+    validProduct := map[string]any{
         "id":         "550e8400-e29b-41d4-a716-446655440000",
         "name":       "Widget Pro",
         "price":      29.99,
@@ -337,7 +337,7 @@ func main() {
         "created_at": "2023-01-01T12:00:00Z",
     }
     
-    invalidProduct := map[string]interface{}{
+    invalidProduct := map[string]any{
         "id":    "invalid-uuid",
         "name":  "", // too short
         "price": -10, // negative price

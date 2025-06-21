@@ -1,0 +1,395 @@
+# GoZod Checks Implementation Guide
+
+## 📋 Overview
+
+This document provides implementation guidelines for GoZod validation checks based on the current architecture. All checks follow a unified factory function pattern that directly creates `core.ZodCheckInternals` instances with optional JSON Schema support.
+
+## 🎯 Core Design Principles
+
+### 1. Factory Function Pattern
+- All check functions return `core.ZodCheck` interface
+- Direct creation of `core.ZodCheckInternals` instances
+- No wrapper types or unnecessary abstractions
+
+### 2. JSON Schema Integration
+- OnAttach callbacks for metadata generation
+- Automatic constraint merging for compatible properties
+- Type-appropriate attribute mapping
+
+### 3. Validation Reuse
+- Leverage `pkg/validate` package for actual validation logic
+- Avoid duplicating validation implementations
+- Focus on error handling and schema generation
+
+## 🏗️ Current Architecture
+
+### Core Types (from `core` package)
+
+```go
+// ZodCheck interface - implemented by ZodCheckInternals
+type ZodCheck interface {
+    GetZod() *ZodCheckInternals
+}
+
+// ZodCheckInternals - the main check implementation
+type ZodCheckInternals struct {
+    Def      *ZodCheckDef                     // Check definition
+    Check    func(payload *ParsePayload)      // Validation function  
+    OnAttach []func(any)                     // JSON Schema callbacks
+    When     func(payload *ParsePayload) bool // Conditional execution
+}
+
+// ZodCheckDef - check metadata
+type ZodCheckDef struct {
+    Check  string                // Check type identifier
+    Params map[string]any        // Check parameters
+    Error  *ZodErrorMap         // Custom error mapping
+}
+```
+
+### Helper Functions (from `internal/checks/checks.go`)
+
+```go
+// normalizeParams - standardize string parameters to error maps
+func normalizeParams(def *ZodCheckDef, params []string)
+
+// setBagProperty - set JSON Schema property
+func setBagProperty(schema any, key string, value any)
+
+// mergeConstraint - merge constraints with conflict resolution
+func mergeConstraint(schema any, key string, value any, merge func(old, new any) any)
+
+// mergeMinimumConstraint/mergeMaximumConstraint - boundary constraint merging
+func mergeMinimumConstraint(schema any, value any, inclusive bool)
+func mergeMaximumConstraint(schema any, value any, inclusive bool)
+```
+
+## 🔧 Implementation Patterns
+
+### 1. Basic Validation Check
+
+**Template for simple validation checks:**
+
+```go
+// Example: String length validation
+func MinLength(minimum int, message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{
+        Check: "min_length",
+        Params: map[string]any{"minimum": minimum},
+    }
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.MinLength(payload.Value, minimum) {
+                origin := utils.GetLengthableOrigin(payload.Value)
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateTooSmallIssue(minimum, true, origin, payload.Value))
+            }
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                // Set appropriate JSON Schema constraints based on type
+                if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+                    internals := s.GetInternals()
+                    switch internals.Type {
+                    case core.ZodTypeString:
+                        mergeMinimumConstraint(schema, minimum, true) // sets minLength
+                    case core.ZodTypeArray:
+                        setBagProperty(schema, "minItems", minimum)
+                    case core.ZodTypeObject:
+                        setBagProperty(schema, "minProperties", minimum)
+                    }
+                }
+            },
+        },
+    }
+}
+```
+
+### 2. Numeric Validation Check
+
+**Template for numeric comparisons:**
+
+```go
+// Example: Less than validation
+func Lt(limit any, message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{
+        Check: "lt", 
+        Params: map[string]any{"limit": limit},
+    }
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.Lt(payload.Value, limit) {
+                origin := utils.GetNumericOrigin(payload.Value)
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateTooSmallIssue(limit, false, origin, payload.Value))
+            }
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                mergeMaximumConstraint(schema, limit, false) // sets exclusiveMaximum
+            },
+        },
+    }
+}
+```
+
+### 3. Format Validation Check
+
+**Template for format/pattern validation:**
+
+```go
+// Example: Email validation
+func Email(message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{Check: "email"}
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.Email(payload.Value) {
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateInvalidFormatIssue("email", payload.Value, nil))
+            }
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                setBagProperty(schema, "format", "email")
+                setBagProperty(schema, "type", "string")
+            },
+        },
+    }
+}
+```
+
+### 4. String Content Validation
+
+**Template for string content checks:**
+
+```go
+// Example: String includes validation
+func Includes(substring string, message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{
+        Check: "includes",
+        Params: map[string]any{"substring": substring},
+    }
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.Includes(payload.Value, substring) {
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateInvalidStringIssue("includes", payload.Value))
+            }
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                // Create regex pattern for JSON Schema
+                pattern := fmt.Sprintf(".*%s.*", utils.EscapeRegex(substring))
+                addPatternToSchema(schema, pattern)
+            },
+        },
+    }
+}
+
+// Helper for pattern addition
+func addPatternToSchema(schema any, pattern string) {
+    if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+        internals := s.GetInternals()
+        if internals.Bag == nil {
+            internals.Bag = make(map[string]any)
+        }
+        internals.Bag["pattern"] = pattern
+    }
+}
+```
+
+### 5. Conditional Validation
+
+**Template for checks with conditional execution:**
+
+```go
+// Example: Size validation with type checking
+func MaxSize(maximum int, message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{
+        Check: "max_size",
+        Params: map[string]any{"maximum": maximum},
+    }
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.MaxSize(payload.Value, maximum) {
+                origin := utils.GetSizableOrigin(payload.Value)
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateTooBigIssue(maximum, true, origin, payload.Value))
+            }
+        },
+        When: func(payload *core.ParsePayload) bool {
+            // Only apply to maps and collections
+            return reflectx.IsMap(payload.Value) || reflectx.HasLength(payload.Value)
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+                    internals := s.GetInternals()
+                    switch internals.Type {
+                    case core.ZodTypeArray:
+                        setBagProperty(schema, "maxItems", maximum)
+                    case core.ZodTypeObject:
+                        setBagProperty(schema, "maxProperties", maximum)
+                    }
+                }
+            },
+        },
+    }
+}
+```
+
+## 📚 Implementation Guidelines
+
+### 1. Function Naming
+- Use descriptive, action-oriented names: `MinLength`, `Email`, `Positive`
+- Follow Go naming conventions: exported functions start with capital letter
+- Keep names consistent with TypeScript Zod when possible
+
+### 2. Parameter Handling
+- Accept validation parameters as first arguments
+- Optional `message ...string` parameter for custom error messages
+- Use `normalizeParams(def, message)` to handle error customization
+
+### 3. Validation Logic
+- Always use `pkg/validate` package for actual validation
+- Call `validate.SomeValidation(payload.Value, ...params)`
+- Handle validation failure by appending appropriate issues
+
+### 4. Error Creation
+- Use appropriate issue creators from `internal/issues` package:
+  - `CreateTooSmallIssue` / `CreateTooBigIssue` for size/length
+  - `CreateInvalidFormatIssue` for format validation
+  - `CreateInvalidStringIssue` for string content
+  - `CreateCustomIssue` for custom validation
+- Include proper origin information using `utils.Get*Origin()` functions
+
+### 5. JSON Schema Integration
+- Always provide OnAttach callbacks for JSON Schema generation
+- Use helper functions for setting bag properties:
+  - `setBagProperty()` for simple key-value pairs
+  - `mergeConstraint()` for conflict resolution
+  - `mergeMinimumConstraint()` / `mergeMaximumConstraint()` for boundaries
+- Map validation constraints to appropriate JSON Schema properties:
+  - String length → `minLength` / `maxLength`
+  - Array size → `minItems` / `maxItems`  
+  - Object size → `minProperties` / `maxProperties`
+  - Numeric bounds → `minimum` / `maximum` / `exclusiveMinimum` / `exclusiveMaximum`
+  - Patterns → `pattern`
+  - Formats → `format`
+
+### 6. Conditional Execution
+- Use `When` function for type-specific checks
+- Check value type compatibility before applying validation
+- Example: size checks only apply to maps and collections
+
+## 🧪 Testing Pattern
+
+**Standard test structure for new checks:**
+
+```go
+func TestNewCheck(t *testing.T) {
+    t.Run("validates correctly", func(t *testing.T) {
+        check := NewCheck(params...)
+        
+        // Test valid case
+        payload := &core.ParsePayload{
+            Value:  validValue,
+            Issues: make([]core.ZodRawIssue, 0),
+        }
+        executeCheck(check, payload)
+        if len(payload.Issues) != 0 {
+            t.Errorf("Expected no issues for valid input, got %d", len(payload.Issues))
+        }
+        
+        // Test invalid case  
+        payload = &core.ParsePayload{
+            Value:  invalidValue,
+            Issues: make([]core.ZodRawIssue, 0),
+        }
+        executeCheck(check, payload)
+        if len(payload.Issues) != 1 {
+            t.Errorf("Expected 1 issue for invalid input, got %d", len(payload.Issues))
+        }
+    })
+
+    t.Run("supports custom error messages", func(t *testing.T) {
+        check := NewCheck(params..., "Custom error message")
+        
+        payload := &core.ParsePayload{
+            Value:  invalidValue,
+            Issues: make([]core.ZodRawIssue, 0),
+        }
+        executeCheck(check, payload)
+        
+        if len(payload.Issues) != 1 {
+            t.Fatal("Expected 1 issue")
+        }
+        // Test that custom error message is used
+    })
+}
+```
+
+## 📖 Common Patterns
+
+### Convenience Functions
+Create shortcuts for common use cases:
+
+```go
+// Positive is a convenience function for Gt(0)
+func Positive(message ...string) core.ZodCheck {
+    return Gt(0, message...)
+}
+
+// NonEmpty is a convenience function for MinLength(1) 
+func NonEmpty(message ...string) core.ZodCheck {
+    return MinLength(1, message...)
+}
+```
+
+### Range Validations
+For range checks, create single functions:
+
+```go
+func LengthRange(min, max int, message ...string) core.ZodCheck {
+    def := &core.ZodCheckDef{
+        Check: "length_range",
+        Params: map[string]any{"min": min, "max": max},
+    }
+    normalizeParams(def, message)
+
+    return &core.ZodCheckInternals{
+        Def: def,
+        Check: func(payload *core.ParsePayload) {
+            if !validate.MinLength(payload.Value, min) || 
+               !validate.MaxLength(payload.Value, max) {
+                origin := utils.GetLengthableOrigin(payload.Value)
+                payload.Issues = append(payload.Issues, 
+                    issues.CreateInvalidLengthIssue(min, max, origin, payload.Value))
+            }
+        },
+        OnAttach: []func(any){
+            func(schema any) {
+                mergeMinimumConstraint(schema, min, true)
+                mergeMaximumConstraint(schema, max, true)
+            },
+        },
+    }
+}
+```
+
+This guide provides all the patterns and conventions needed to implement new validation checks that integrate seamlessly with the existing GoZod validation system and JSON Schema generation.

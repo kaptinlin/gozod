@@ -87,7 +87,7 @@ If a registry is defined without a metadata type, you can use it as a generic "c
 
 ```go
 // Create an untyped registry
-genericRegistry := gozod.NewRegistry[interface{}]()
+genericRegistry := gozod.NewRegistry[any]()
 
 // Add schemas without specific metadata structure
 genericRegistry.Add(gozod.String(), "any metadata")
@@ -106,9 +106,9 @@ type GlobalMetadata struct {
     ID          string        `json:"id,omitempty"`
     Title       string        `json:"title,omitempty"`
     Description string        `json:"description,omitempty"`
-    Examples    []interface{} `json:"examples,omitempty"`
-    // Additional properties can be added via embedded struct or interface{}
-    Extra       map[string]interface{} `json:"-"` // Custom properties
+    Examples    []any `json:"examples,omitempty"`
+    // Additional properties can be added via embedded struct or any
+    Extra       map[string]any `json:"-"` // Custom properties
 }
 ```
 
@@ -121,7 +121,7 @@ emailSchema := gozod.Email().Register(gozod.GlobalRegistry, gozod.GlobalMetadata
     ID:          "email_address", 
     Title:       "Email address",
     Description: "Your email address",
-    Examples:    []interface{}{"first.last@example.com"},
+    Examples:    []any{"first.last@example.com"},
 })
 ```
 
@@ -194,7 +194,7 @@ You can define complex metadata structures to suit your application's needs:
 // API documentation metadata
 type APIMetadata struct {
     Description string            `json:"description"`
-    Examples    []interface{}     `json:"examples"`
+    Examples    []any     `json:"examples"`
     Deprecated  bool              `json:"deprecated,omitempty"`
     Tags        []string          `json:"tags,omitempty"`
     Validation  ValidationRules   `json:"validation,omitempty"`
@@ -346,12 +346,12 @@ userSchema := gozod.Struct(gozod.ObjectSchema{
     "name": gozod.String().Meta(gozod.GlobalMetadata{
         Title:       "User Name",
         Description: "The user's full name",
-        Examples:    []interface{}{"John Doe"},
+        Examples:    []any{"John Doe"},
     }),
     "age": gozod.Int().Min(18).Meta(gozod.GlobalMetadata{
         Title:       "User Age", 
         Description: "The user's age (must be 18 or older)",
-        Examples:    []interface{}{25},
+        Examples:    []any{25},
     }),
 })
 
@@ -382,7 +382,7 @@ jsonSchema := gozod.ToJSONSchema(userSchema)
 
 ## Best Practices
 
-1. **Use typed registries**: Define specific metadata structures for different use cases rather than using `interface{}`.
+1. **Use typed registries**: Define specific metadata structures for different use cases rather than using `any`.
 
 2. **Namespace your IDs**: When using schema IDs, use namespacing to avoid conflicts (`"api.v1.User"` vs `"User"`).
 

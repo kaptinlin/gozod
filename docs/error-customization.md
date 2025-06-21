@@ -191,7 +191,7 @@ import (
     "github.com/kaptinlin/gozod"
 )
 
-func validateUserForm(data map[string]interface{}) error {
+func validateUserForm(data map[string]any) error {
     schema := gozod.Object(gozod.ObjectSchema{
         "username": gozod.String().Min(3, gozod.SchemaParams{
             Error: "Username must be at least 3 characters",
@@ -229,7 +229,7 @@ func validateUserForm(data map[string]interface{}) error {
 }
 
 func main() {
-    invalidData := map[string]interface{}{
+    invalidData := map[string]any{
         "username": "ab",
         "email":    "not-an-email",
         "password": "short",

@@ -29,9 +29,9 @@ func main() {
     })
 
     // Invalid data with multiple issues
-    invalidData := map[string]interface{}{
+    invalidData := map[string]any{
         "username": "ab",                        // too short
-        "numbers":  []interface{}{1, "text", -5}, // mixed types and negative number
+        "numbers":  []any{1, "text", -5}, // mixed types and negative number
         "extra":    "not allowed",               // unexpected key
     }
 
@@ -69,7 +69,7 @@ func FormatErrorWithMapper(err *ZodError, mapper func(ZodIssue) string) ZodForma
 The `ZodFormattedError` type is a map structure where each field contains an `_errors` array:
 
 ```go
-type ZodFormattedError map[string]interface{}
+type ZodFormattedError map[string]any
 // Structure: { "field": { "_errors": []string, "nested": { "_errors": []string } } }
 ```
 
@@ -95,12 +95,12 @@ func main() {
         }),
     })
 
-    invalidData := map[string]interface{}{
-        "user": map[string]interface{}{
+    invalidData := map[string]any{
+        "user": map[string]any{
             "name": "A",
             "age":  16,
         },
-        "settings": map[string]interface{}{
+        "settings": map[string]any{
             "theme": "blue",
         },
     }
@@ -156,9 +156,9 @@ func main() {
         "data":     gozod.Slice(gozod.Int()),
     })
 
-    invalidData := map[string]interface{}{
+    invalidData := map[string]any{
         "username": "ab",
-        "data":     []interface{}{1, "invalid", 3},
+        "data":     []any{1, "invalid", 3},
         "extra":    "field",
     }
 
@@ -214,7 +214,7 @@ func main() {
         "age":      gozod.Int().Min(18),
     })
 
-    formData := map[string]interface{}{
+    formData := map[string]any{
         "username": "ab",
         "email":    "invalid-email",
         "age":      16,
@@ -258,7 +258,7 @@ func main() {
         "email":    gozod.String().Email(),
     })
     
-    invalidData := map[string]interface{}{
+    invalidData := map[string]any{
         "username": "ab",
         "email":    "not-an-email",
     }
@@ -323,7 +323,7 @@ import (
 )
 
 func handleUserCreation(w http.ResponseWriter, r *http.Request) {
-    var userData map[string]interface{}
+    var userData map[string]any
     if err := json.NewDecoder(r.Body).Decode(&userData); err != nil {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
@@ -342,7 +342,7 @@ func handleUserCreation(w http.ResponseWriter, r *http.Request) {
             // Use flattened errors for API response
             flattened := gozod.FlattenError(zodErr)
             
-            errorResponse := map[string]interface{}{
+            errorResponse := map[string]any{
                 "success": false,
                 "message": "Validation failed",
                 "errors":  flattened.FieldErrors,
@@ -361,7 +361,7 @@ func handleUserCreation(w http.ResponseWriter, r *http.Request) {
     
     // Process valid data...
     w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    json.NewEncoder(w).Encode(map[string]any{
         "success": true,
         "message": "User created successfully",
     })
@@ -386,7 +386,7 @@ type FormField struct {
     Errors   []string
 }
 
-func processContactForm(formData map[string]interface{}) ([]FormField, error) {
+func processContactForm(formData map[string]any) ([]FormField, error) {
     schema := gozod.Object(gozod.ObjectSchema{
         "name":    gozod.String().Min(1),
         "email":   gozod.String().Email(),
@@ -430,15 +430,15 @@ import (
     "github.com/kaptinlin/gozod"
 )
 
-func customErrorFormatter(zodErr *gozod.ZodError) map[string]interface{} {
-    result := map[string]interface{}{
+func customErrorFormatter(zodErr *gozod.ZodError) map[string]any {
+    result := map[string]any{
         "hasErrors":  true,
         "errorCount": len(zodErr.Issues),
-        "errors":     make([]map[string]interface{}, 0, len(zodErr.Issues)),
+        "errors":     make([]map[string]any, 0, len(zodErr.Issues)),
     }
 
     for _, issue := range zodErr.Issues {
-        errorInfo := map[string]interface{}{
+        errorInfo := map[string]any{
             "code":    issue.Code,
             "message": issue.Message,
             "path":    gozod.ToDotPath(issue.Path),
@@ -467,7 +467,7 @@ func customErrorFormatter(zodErr *gozod.ZodError) map[string]interface{} {
             }
         }
         
-        result["errors"] = append(result["errors"].([]map[string]interface{}), errorInfo)
+        result["errors"] = append(result["errors"].([]map[string]any), errorInfo)
     }
     
     return result
@@ -528,7 +528,7 @@ chineseFlattened := gozod.FlattenErrorWithMapper(validationErr, createLocalizedM
 GoZod provides a utility function to convert error paths to dot notation:
 
 ```go
-func ToDotPath(path []interface{}) string
+func ToDotPath(path []any) string
 ```
 
 This function handles:
@@ -538,13 +538,13 @@ This function handles:
 - Special characters: `["user name"]` → `["user name"]`
 
 ```go
-path1 := []interface{}{"user", "profile", "email"}
+path1 := []any{"user", "profile", "email"}
 fmt.Println(gozod.ToDotPath(path1)) // "user.profile.email"
 
-path2 := []interface{}{"items", 0, "name"}
+path2 := []any{"items", 0, "name"}
 fmt.Println(gozod.ToDotPath(path2)) // "items[0].name"
 
-path3 := []interface{}{"user name", "first"}
+path3 := []any{"user name", "first"}
 fmt.Println(gozod.ToDotPath(path3)) // `["user name"].first`
 ```
 

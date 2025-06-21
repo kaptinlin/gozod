@@ -279,7 +279,7 @@ userSchema := gozod.Object(gozod.ObjectSchema{
 })
 
 // Validate map data
-userData := map[string]interface{}{
+userData := map[string]any{
     "name": "Alice",
     "age":  25,
     "email": "alice@example.com",
@@ -289,7 +289,7 @@ result, err := userSchema.Parse(userData)
 // result: validated map, err: nil
 
 // Missing optional field is okay
-minimalData := map[string]interface{}{
+minimalData := map[string]any{
     "name": "Bob",
     "age":  30,
     // email is optional, so omitting it is fine
@@ -349,7 +349,7 @@ strictSchema := gozod.Object(gozod.ObjectSchema{
     "name": gozod.String(),
 }).Strict()
 
-_, err := strictSchema.Parse(map[string]interface{}{
+_, err := strictSchema.Parse(map[string]any{
     "name":  "Alice",
     "extra": "field",  // Error: unexpected field
 })
@@ -359,7 +359,7 @@ stripSchema := gozod.Object(gozod.ObjectSchema{
     "name": gozod.String(),
 }).Strip()
 
-result, err := stripSchema.Parse(map[string]interface{}{
+result, err := stripSchema.Parse(map[string]any{
     "name":  "Alice",
     "extra": "field",  // Silently removed
 })
@@ -370,7 +370,7 @@ passthroughSchema := gozod.Object(gozod.ObjectSchema{
     "name": gozod.String(),
 }).Passthrough()
 
-result, err = passthroughSchema.Parse(map[string]interface{}{
+result, err = passthroughSchema.Parse(map[string]any{
     "name":  "Alice",
     "extra": "field",  // Preserved
 })
@@ -407,10 +407,10 @@ catchallSchema := gozod.Object(gozod.ObjectSchema{
 ```go
 // Basic slice validation
 stringSlice := gozod.Slice(gozod.String().Min(2))
-result, err := stringSlice.Parse([]interface{}{"hello", "world"})
-// result: []interface{}{"hello", "world"}, err: nil
+result, err := stringSlice.Parse([]any{"hello", "world"})
+// result: []any{"hello", "world"}, err: nil
 
-_, err = stringSlice.Parse([]interface{}{"hello", "hi"})
+_, err = stringSlice.Parse([]any{"hello", "hi"})
 // Error: "hi" is too short
 
 // Size constraints
@@ -429,13 +429,13 @@ coordinates := gozod.Array([]gozod.ZodType[any, any]{
     gozod.Float64(), // y coordinate
 })
 
-result, err := coordinates.Parse([]interface{}{3.14, 2.71})
-// result: []interface{}{3.14, 2.71}, err: nil
+result, err := coordinates.Parse([]any{3.14, 2.71})
+// result: []any{3.14, 2.71}, err: nil
 
-_, err = coordinates.Parse([]interface{}{3.14})
+_, err = coordinates.Parse([]any{3.14})
 // Error: wrong number of elements
 
-_, err = coordinates.Parse([]interface{}{3.14, 2.71, 1.41})
+_, err = coordinates.Parse([]any{3.14, 2.71, 1.41})
 // Error: too many elements
 ```
 
@@ -464,11 +464,11 @@ result, err := userMap.Parse(map[string]int{
 // result: map[string]int{"alice": 25, "bob": 30}, err: nil
 
 // Type inference preservation
-result, err = userMap.Parse(map[interface{}]interface{}{
+result, err = userMap.Parse(map[any]any{
     "alice": 25,
     "bob":   30,
 })
-// result: map[interface{}]interface{}{"alice": 25, "bob": 30}, err: nil
+// result: map[any]any{"alice": 25, "bob": 30}, err: nil
 ```
 
 ### Map Constraints
@@ -613,14 +613,14 @@ apiResponse := gozod.DiscriminatedUnion("status", []gozod.ZodType[any, any]{
 })
 
 // Efficient validation
-successData := map[string]interface{}{
+successData := map[string]any{
     "status": "success",
     "data":   "Operation completed",
 }
 result, err := apiResponse.Parse(successData)
 // result: validated success response, err: nil
 
-errorData := map[string]interface{}{
+errorData := map[string]any{
     "status": "error",
     "error":  "Something went wrong",
     "code":   500,
@@ -645,7 +645,7 @@ personEmployee := gozod.Intersection(
 )
 
 // Requires ALL fields from both schemas
-validData := map[string]interface{}{
+validData := map[string]any{
     "name":       "Alice",
     "age":        30,
     "employeeId": "EMP001",
@@ -655,7 +655,7 @@ result, err := personEmployee.Parse(validData)
 // result: validated combined object, err: nil
 
 // Missing any required field fails
-invalidData := map[string]interface{}{
+invalidData := map[string]any{
     "name": "Alice",
     "age":  30,
     // Missing employeeId and department
@@ -713,7 +713,7 @@ optionalSchema := gozod.String().Optional()
 
 // DIFFERENT nil handling semantics:
 nilableResult, _ := nilableSchema.Parse(nil)  // (*string)(nil) - typed nil pointer
-optionalResult, _ := optionalSchema.Parse(nil) // nil - generic interface{} nil
+optionalResult, _ := optionalSchema.Parse(nil) // nil - generic any nil
 
 // Use cases:
 // - Optional: JSON fields that might be absent → returns generic nil
@@ -791,14 +791,14 @@ _, err := defaultSchema.Parse(123)       // Error (type validation fails, no fal
 
 ```go
 // Transform modifies data after validation
-upperSchema := gozod.String().Transform(func(s string, ctx *RefinementContext) (any, error) {
+upperSchema := gozod.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
     return strings.ToUpper(s), nil
 })
 
 result, err := upperSchema.Parse("hello")  // Valid: "HELLO"
 
 // Transform with validation
-processedSchema := gozod.String().Min(3).Transform(func(s string, ctx *RefinementContext) (any, error) {
+processedSchema := gozod.String().Min(3).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
     return fmt.Sprintf("processed: %s", s), nil
 })
 
@@ -811,7 +811,7 @@ _, err = processedSchema.Parse("hi")          // Error: fails Min(3) before tran
 ```go
 // Pipe chains validation and transformation
 pipeline := gozod.String().
-    Transform(func(s string, ctx *RefinementContext) (any, error) {
+    Transform(func(s string, ctx *core.RefinementContext) (any, error) {
         return strings.TrimSpace(s), nil // Clean input first
     }).
     Pipe(gozod.String().Min(3)) // Then validate cleaned string
@@ -821,7 +821,7 @@ _, err = pipeline.Parse("  hi  ")           // Error: trimmed "hi" fails Min(3)
 
 // Pipeline example
 stringToNumberPipe := gozod.String().
-    Transform(func(s string, ctx *RefinementContext) (any, error) {
+    Transform(func(s string, ctx *core.RefinementContext) (any, error) {
         return strconv.ParseFloat(s, 64)
     }).
     Pipe(gozod.Float64().Min(0)) // Validate as positive number
@@ -843,7 +843,7 @@ refineSchema := gozod.String().Refine(func(s string) bool {
 refineResult, _ := refineSchema.Parse(input)  // "hello" (unchanged)
 
 // Transform: modifies the data
-transformSchema := gozod.String().Transform(func(s string, ctx *RefinementContext) (any, error) {
+transformSchema := gozod.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
     return strings.ToUpper(s), nil
 })
 transformResult, _ := transformSchema.Parse(input)  // "HELLO" (modified)
@@ -855,7 +855,7 @@ transformResult, _ := transformSchema.Parse(input)  // "HELLO" (modified)
 
 | Method | Description | Example |
 |--------|-------------|---------|
-| `.Transform(fn)` | Modify data after validation | `gozod.String().Transform(func(s string, ctx *RefinementContext) (any, error) {...})` |
+| `.Transform(fn)` | Modify data after validation | `gozod.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {...})` |
 | `.Pipe(schema)` | Chain to another schema | `gozod.String().Transform(...).Pipe(gozod.String().Min(3))` |
 | `.Refine(fn)` | Custom validation only | `gozod.String().Refine(func(s string) bool {...})` |
 
@@ -891,7 +891,7 @@ result, _ = bigIntSchema.Parse("9223372036854775808")  // *big.Int
 ```go
 // Record coercion - returns type-safe map[string]T
 recordSchema := gozod.Coerce.Record(gozod.String(), gozod.Int())
-result, _ := recordSchema.Parse(map[string]interface{}{
+result, _ := recordSchema.Parse(map[string]any{
     "age":   "25", // String coerced to int
     "score": 95,
 })
@@ -899,7 +899,7 @@ result, _ := recordSchema.Parse(map[string]interface{}{
 
 // Map coercion - returns type-safe map[K]V
 mapSchema := gozod.Coerce.Map(gozod.String(), gozod.Int())
-result, _ = mapSchema.Parse(map[interface{}]interface{}{
+result, _ = mapSchema.Parse(map[any]any{
     "key1": "10", // Coerced to map[string]int
     "key2": 20,
 })
@@ -914,14 +914,14 @@ objectSchema := gozod.Coerce.gozod.Object(gozod.ObjectSchema{
     "age":  gozod.Int(),
 })
 result, _ = objectSchema.Parse(Person{Name: "Alice", Age: 25})
-// Converts struct to map[string]interface{}
+// Converts struct to map[string]any
 ```
 
 ### Schema-Level Coercion
 
 ```go
 // Enable coercion via parameters
-coerceSchema := gozod.String(SchemaParams{Coerce: true})
+coerceSchema := gozod.String(core.SchemaParams{Coerce: true})
 result, _ := coerceSchema.Parse(123)  // "123"
 
 // Coercion with validation

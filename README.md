@@ -59,7 +59,7 @@ userSchema := gozod.Object(gozod.ObjectSchema{
 })
 
 // Validate JSON-like data
-userData := map[string]interface{}{
+userData := map[string]any{
     "name": "Alice",
     "age":  25,
     "email": "alice@example.com",

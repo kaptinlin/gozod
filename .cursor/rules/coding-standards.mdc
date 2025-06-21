@@ -1,8 +1,7 @@
 ---
-description: GoZod coding standards and best practices
+description:
 globs:
-- "**/*.go"
-alwaysApply: true
+alwaysApply: false
 ---
 
 # GoZod Coding Standards and Best Practices
@@ -65,7 +64,7 @@ This document defines comprehensive coding standards and best practices for the 
 | `z.boolean()` | `bool` | `gozod.Bool()` | Boolean validation |
 | `z.array(T)` | `[]T` | `gozod.Slice(T)` | Dynamic array |
 | `z.object({})` | `struct` | `gozod.Object({})` | Object validation |
-| `z.union([])` | `interface{}` | `gozod.Union([])` | Union type |
+| `z.union([])` | `any` | `gozod.Union([])` | Union type |
 
 ### Modifier Mapping
 
@@ -168,9 +167,9 @@ var emailRegex = ...  // Package-level variables should be capitalized
 
 ### 1. Type System Differences
 | Concept | TypeScript | Go | Handling Strategy |
-|---------|------------|----|-----------------| 
+|---------|------------|----|-----------------|
 | Optional fields | `field?: T` | `*T` or `Optional` wrapper | Use wrapper pattern |
-| Union types | `T \| U` | `interface{}` + type assertion | Runtime type checking |
+| Union types | `T \| U` | `any` + type assertion | Runtime type checking |
 | Literal types | `"literal"` | Constants + validation | Enum validation |
 | Generic constraints | `T extends U` | `T interface{ ... }` | Interface constraints |
 
@@ -214,7 +213,7 @@ All Parse methods preserve input type characteristics:
 ```go
 func (z *ZodString) Parse(input any, ctx ...*ParseContext) (any, error) {
     // Type validation logic...
-    
+
     // Return original input to preserve type characteristics
     return input, nil  // Instead of always returning extracted value
 }
@@ -281,4 +280,4 @@ func Nilable[T ZodType[any, any]](schema T) *ZodNilable[T] { ... }
 - **Deprecation warnings**: Provide clear migration paths for deprecated features
 - **Change documentation**: Document all API changes with examples
 
-This document serves as the authoritative guide for all GoZod development, ensuring consistency, quality, and compatibility across the entire codebase. 
+This document serves as the authoritative guide for all GoZod development, ensuring consistency, quality, and compatibility across the entire codebase.

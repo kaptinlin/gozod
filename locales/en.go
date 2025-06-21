@@ -3,195 +3,180 @@ package locales
 import (
 	"fmt"
 
-	"github.com/kaptinlin/gozod"
+	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/pkg/mapx"
+	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-// Sizable maps types to their sizing information
-var sizable = map[string]struct {
-	Unit string
-	Verb string
-}{
-	"string": {Unit: "characters", Verb: "to have"},
-	"file":   {Unit: "bytes", Verb: "to have"},
-	"array":  {Unit: "items", Verb: "to have"},
-	"slice":  {Unit: "items", Verb: "to have"},
-	"set":    {Unit: "items", Verb: "to have"},
-}
+// =============================================================================
+// ENGLISH LOCALE FORMATTER
+// =============================================================================
 
-// getSizing returns sizing information for a given type
-func getSizing(origin string) *struct {
-	Unit string
-	Verb string
-} {
-	if info, ok := sizable[origin]; ok {
-		return &info
-	}
-	return nil
-}
+// formatEn provides English error messages
+func formatEn(raw core.ZodRawIssue) string {
+	code := raw.Code
 
-// parsedType determines the type of a value
-func parsedType(data interface{}) string {
-	switch gozod.GetParsedType(data) {
-	case gozod.ParsedTypeString:
-		return "string"
-	case gozod.ParsedTypeNumber:
-		return "number"
-	case gozod.ParsedTypeBigint:
-		return "bigint"
-	case gozod.ParsedTypeBool:
-		return "bool"
-	case gozod.ParsedTypeFloat:
-		return "float"
-	case gozod.ParsedTypeObject:
-		return "object"
-	case gozod.ParsedTypeFunction:
-		return "function"
-	case gozod.ParsedTypeFile:
-		return "file"
-	case gozod.ParsedTypeDate:
-		return "date"
-	case gozod.ParsedTypeArray:
-		return "array"
-	case gozod.ParsedTypeSlice:
-		return "slice"
-	case gozod.ParsedTypeMap:
-		return "map"
-	case gozod.ParsedTypeNaN:
-		return "NaN"
-	case gozod.ParsedTypeNil:
-		return "nil"
-	case gozod.ParsedTypeComplex:
-		return "complex"
-	default:
-		return string(gozod.GetParsedType(data))
-	}
-}
+	switch code {
+	case core.InvalidType:
+		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		received := issues.ParsedTypeToString(raw.Input)
+		return fmt.Sprintf("Invalid input: expected %s, received %s", expected, received)
 
-// Nouns maps string formats to their human-readable names
-var nouns = map[string]string{
-	"regex":            "input",
-	"email":            "email address",
-	"url":              "URL",
-	"emoji":            "emoji",
-	"uuid":             "UUID",
-	"uuidv4":           "UUIDv4",
-	"uuidv6":           "UUIDv6",
-	"nanoid":           "nanoid",
-	"guid":             "GUID",
-	"cuid":             "cuid",
-	"cuid2":            "cuid2",
-	"ulid":             "ULID",
-	"xid":              "XID",
-	"ksuid":            "KSUID",
-	"datetime":         "ISO datetime",
-	"date":             "ISO date",
-	"time":             "ISO time",
-	"duration":         "ISO duration",
-	"ipv4":             "IPv4 address",
-	"ipv6":             "IPv6 address",
-	"cidrv4":           "IPv4 range",
-	"cidrv6":           "IPv6 range",
-	"base64":           "base64-encoded string",
-	"base64url":        "base64url-encoded string",
-	"json_string":      "JSON string",
-	"e164":             "E.164 number",
-	"jwt":              "JWT",
-	"template_literal": "input",
-}
-
-func errorEn(issue gozod.ZodRawIssue) string {
-	switch issue.Code {
-	case "invalid_type":
-		return fmt.Sprintf("Invalid input: expected %s, received %s", issue.GetExpected(), parsedType(issue.Input))
-	case "invalid_value":
-		values := issue.GetValues()
+	case core.InvalidValue:
+		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		if len(values) == 0 {
+			return "Invalid value"
+		}
 		if len(values) == 1 {
-			return fmt.Sprintf("Invalid input: expected %s", gozod.StringifyPrimitive(values[0]))
+			return fmt.Sprintf("Invalid input: expected %s", issues.StringifyPrimitive(values[0]))
 		}
-		return fmt.Sprintf("Invalid option: expected one of %s", gozod.JoinValues(values, "|"))
-	case "too_big":
-		adj := "<"
-		if issue.GetInclusive() {
-			adj = "<="
+		// Use issues.JoinValuesWithSeparator for consistent formatting
+		return fmt.Sprintf("Invalid option: expected one of %s", issues.JoinValuesWithSeparator(values, "|"))
+
+	case core.TooBig:
+		return formatSizeConstraintEn(raw, false)
+
+	case core.TooSmall:
+		return formatSizeConstraintEn(raw, true)
+
+	case core.InvalidFormat:
+		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		if format == "" {
+			return "Invalid format"
 		}
-		origin := issue.GetOrigin()
-		sizing := getSizing(origin)
-		if sizing != nil {
-			if origin == "" {
-				origin = "value"
-			}
-			unit := sizing.Unit
-			if unit == "" {
-				unit = "elements"
-			}
-			if origin == "slice" || origin == "array" {
-				return fmt.Sprintf("Too big: expected %s to have %s%v %s", origin, adj, issue.GetMaximum(), unit)
-			}
-			return fmt.Sprintf("Too big: expected %s to have %s%v %s", origin, adj, issue.GetMaximum(), unit)
+		return formatStringValidationEn(raw, format)
+
+	case core.NotMultipleOf:
+		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		if divisor == nil {
+			return "Invalid number: must be a multiple of divisor"
 		}
-		if origin == "" {
-			origin = "value"
+		return fmt.Sprintf("Invalid number: must be a multiple of %v", divisor)
+
+	case core.UnrecognizedKeys:
+		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		if len(keys) == 0 {
+			return "Unrecognized key(s) in object"
 		}
-		return fmt.Sprintf("Too big: expected %s to be %s%v", origin, adj, issue.GetMaximum())
-	case "too_small":
-		adj := ">"
-		if issue.GetInclusive() {
-			adj = ">="
-		}
-		origin := issue.GetOrigin()
-		sizing := getSizing(origin)
-		if sizing != nil {
-			// Use consistent format for slice/array types to match main error generation
-			if origin == "slice" || origin == "array" {
-				return fmt.Sprintf("Too small: expected %s to have %s%v %s", origin, adj, issue.GetMinimum(), sizing.Unit)
-			}
-			return fmt.Sprintf("Too small: expected %s to have %s%v %s", origin, adj, issue.GetMinimum(), sizing.Unit)
-		}
-		return fmt.Sprintf("Too small: expected %s to be %s%v", origin, adj, issue.GetMinimum())
-	case "invalid_format":
-		format := issue.GetFormat()
-		if format == "starts_with" {
-			return fmt.Sprintf("Invalid string: must start with \"%s\"", issue.GetPrefix())
-		}
-		if format == "ends_with" {
-			return fmt.Sprintf("Invalid string: must end with \"%s\"", issue.GetSuffix())
-		}
-		if format == "includes" {
-			return fmt.Sprintf("Invalid string: must include \"%s\"", issue.GetIncludes())
-		}
-		if format == "regex" {
-			return fmt.Sprintf("Invalid string: must match pattern %s", issue.GetPattern())
-		}
-		noun := nouns[format]
-		if noun == "" {
-			noun = format
-		}
-		return fmt.Sprintf("Invalid %s", noun)
-	case "not_multiple_of":
-		return fmt.Sprintf("Invalid number: must be a multiple of %v", issue.GetDivisor())
-	case "unrecognized_keys":
-		keys := issue.GetKeys()
-		plural := ""
+		keyStr := "key"
 		if len(keys) > 1 {
-			plural = "s"
+			keyStr = "keys"
 		}
-		keyInterfaces := make([]interface{}, len(keys))
-		for i, k := range keys {
-			keyInterfaces[i] = k
+		// Use slicex for better key handling and issues.JoinValuesWithSeparator for formatting
+		if keysAny, err := slicex.ToAny(keys); err == nil && !slicex.IsEmpty(keysAny) {
+			keysJoined := issues.JoinValuesWithSeparator(keysAny, ", ")
+			return fmt.Sprintf("Unrecognized %s: %s", keyStr, keysJoined)
 		}
-		return fmt.Sprintf("Unrecognized key%s: %s", plural, gozod.JoinValues(keyInterfaces, ", "))
-	case "invalid_key":
-		return fmt.Sprintf("Invalid key in %s", issue.GetOrigin())
-	case "invalid_union":
+		return fmt.Sprintf("Unrecognized %s in object", keyStr)
+
+	case core.InvalidKey:
+		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		if origin == "" {
+			return "Invalid key"
+		}
+		return fmt.Sprintf("Invalid key in %s", origin)
+
+	case core.InvalidUnion:
 		return "Invalid input"
-	case "invalid_element":
-		return fmt.Sprintf("Invalid value in %s", issue.GetOrigin())
+
+	case core.InvalidElement:
+		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		if origin == "" {
+			return "Invalid element"
+		}
+		return fmt.Sprintf("Invalid value in %s", origin)
+
+	case core.Custom:
+		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		if message != "" {
+			return message
+		}
+		return "Invalid input"
+
 	default:
 		return "Invalid input"
 	}
 }
 
-// En returns the default English locale error map function
-func En() func(gozod.ZodRawIssue) string {
-	return errorEn
+// =============================================================================
+// SIZE CONSTRAINT FORMATTING
+// =============================================================================
+
+// formatSizeConstraintEn formats size constraint messages
+func formatSizeConstraintEn(raw core.ZodRawIssue, isTooSmall bool) string {
+	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	if origin == "" {
+		origin = "value"
+	}
+
+	var threshold any
+	if isTooSmall {
+		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+	} else {
+		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+	}
+
+	if threshold == nil {
+		if isTooSmall {
+			return "Too small"
+		}
+		return "Too big"
+	}
+
+	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	adj := issues.GetComparisonOperator(inclusive, isTooSmall)
+	sizing := issues.GetSizing(origin)
+	thresholdStr := issues.FormatThreshold(threshold)
+
+	if sizing != nil {
+		if isTooSmall {
+			return fmt.Sprintf("Too small: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
+		} else {
+			return fmt.Sprintf("Too big: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
+		}
+	}
+
+	if isTooSmall {
+		return fmt.Sprintf("Too small: expected %s to be %s%s", origin, adj, thresholdStr)
+	} else {
+		return fmt.Sprintf("Too big: expected %s to be %s%s", origin, adj, thresholdStr)
+	}
+}
+
+// =============================================================================
+// STRING FORMAT VALIDATION
+// =============================================================================
+
+// formatStringValidationEn handles string format validation messages
+func formatStringValidationEn(raw core.ZodRawIssue, format string) string {
+	switch format {
+	case "starts_with":
+		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		if prefix == "" {
+			return "Invalid string: must start with specified prefix"
+		}
+		return fmt.Sprintf("Invalid string: must start with %s", issues.StringifyPrimitive(prefix))
+	case "ends_with":
+		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		if suffix == "" {
+			return "Invalid string: must end with specified suffix"
+		}
+		return fmt.Sprintf("Invalid string: must end with %s", issues.StringifyPrimitive(suffix))
+	case "includes":
+		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		if includes == "" {
+			return "Invalid string: must include specified substring"
+		}
+		return fmt.Sprintf("Invalid string: must include %s", issues.StringifyPrimitive(includes))
+	case "regex":
+		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		if pattern == "" {
+			return "Invalid string: must match pattern"
+		}
+		return fmt.Sprintf("Invalid string: must match pattern %s", pattern)
+	default:
+		noun := issues.GetFormatNoun(format)
+		return fmt.Sprintf("Invalid %s", noun)
+	}
 }
