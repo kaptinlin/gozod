@@ -135,36 +135,7 @@ func TestArrayTypeInference(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestArrayCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := Array(String(), Int(), core.SchemaParams{Coerce: true})
-
-		// Test with proper array input
-		result, err := schema.Parse([]any{"hello", 123})
-		require.NoError(t, err)
-		expected := []any{"hello", 123}
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Array(String(), Int(), core.SchemaParams{Coerce: true}).Min(2)
-
-		// Valid input should pass
-		result, err := schema.Parse([]any{"hello", 123})
-		require.NoError(t, err)
-		assert.Len(t, result, 2)
-
-		// Wrong length should fail
-		_, err = schema.Parse([]any{"hello"})
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestArrayValidations(t *testing.T) {
@@ -259,7 +230,7 @@ func TestArrayValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestArrayModifiers(t *testing.T) {
@@ -344,7 +315,7 @@ func TestArrayModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestArrayChaining(t *testing.T) {
@@ -389,7 +360,7 @@ func TestArrayChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestArrayTransform(t *testing.T) {
@@ -458,7 +429,7 @@ func TestArrayTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestArrayRefine(t *testing.T) {
@@ -540,7 +511,7 @@ func TestArrayRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestArrayErrorHandling(t *testing.T) {
@@ -879,5 +850,54 @@ func TestArrayDefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, 2, result2Map["length"])
 		assert.Equal(t, "hello", result2Map["first"])
 		assert.Equal(t, 123, result2Map["second"])
+	})
+}
+
+// =============================================================================
+// 10. Additional array-specific utility tests
+// =============================================================================
+
+// TestArrayElementAccessor validates Element() schema access and parsing behavior
+func TestArrayElementAccessor(t *testing.T) {
+	t.Run("get element", func(t *testing.T) {
+		// Tuple schema with string then int
+		schema := Array(String(), Int())
+
+		// Access element schemas by index
+		first := schema.Element(0)
+		second := schema.Element(1)
+
+		require.NotNil(t, first, "First element schema should not be nil")
+		require.NotNil(t, second, "Second element schema should not be nil")
+
+		// Parsing with correct types should succeed
+		_, err := first.Parse("asdf")
+		require.NoError(t, err)
+		_, err = second.Parse(12)
+		require.NoError(t, err)
+
+		// Parsing with incorrect type should fail
+		_, err = first.Parse(12)
+		assert.Error(t, err)
+	})
+}
+
+// TestArrayNonEmptyAndMax validates NonEmpty() combined with Max()
+func TestArrayNonEmptyAndMax(t *testing.T) {
+	t.Run("array.nonempty().max()", func(t *testing.T) {
+		// Tuple schema expects exactly two elements; NonEmpty forces at least one, Max(2) caps at two
+		schema := Array(String(), Int()).NonEmpty().Max(2)
+
+		// Valid case: two elements of correct types
+		_, err := schema.Parse([]any{"a", 1})
+		require.NoError(t, err)
+
+		// Invalid case: empty array – should fail length validation
+		_, err = schema.Parse([]any{})
+		assert.Error(t, err)
+
+		// Invalid case: too many elements – should fail with "too big"
+		_, err = schema.Parse([]any{"a", 1, 2})
+		assert.Error(t, err)
 	})
 }

@@ -229,17 +229,27 @@ result, err := safeValue.Parse("hi")  // "fallback" (too short, uses fallback)
 
 ### Type Coercion
 
+**Note**: In alignment with TypeScript Zod v4, coercion is now limited to primitive types only.
+
 ```go
-// Basic coercion
+// Basic primitive type coercion
 stringSchema := gozod.Coerce.String()
 result, _ := stringSchema.Parse(123)     // "123"
 
 numberSchema := gozod.Coerce.Number()
 result, _ = numberSchema.Parse("42")     // 42.0
 
-// Schema-level coercion
+boolSchema := gozod.Coerce.Bool()
+result, _ = boolSchema.Parse("true")     // true
+
+bigintSchema := gozod.Coerce.BigInt()
+result, _ = bigintSchema.Parse("123")    // *big.Int(123)
+
+// Schema-level coercion for primitives
 coerceSchema := gozod.String(gozod.SchemaParams{Coerce: true})
 result, _ := coerceSchema.Parse(123)  // "123"
+
+// Collection types (object, map, record, slice) no longer support coercion
 ```
 
 ### Custom Validation

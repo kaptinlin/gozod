@@ -113,7 +113,7 @@ func TestComplexBasicFunctionality(t *testing.T) {
 
 func TestComplexCoercion(t *testing.T) {
 	t.Run("basic coercion", func(t *testing.T) {
-		schema := Complex128(core.SchemaParams{Coerce: true})
+		schema := CoercedComplex128()
 		tests := []struct {
 			input    any
 			expected complex128
@@ -132,7 +132,7 @@ func TestComplexCoercion(t *testing.T) {
 	})
 
 	t.Run("failed coercion", func(t *testing.T) {
-		schema := Complex128(core.SchemaParams{Coerce: true})
+		schema := CoercedComplex128()
 		invalidInputs := []any{
 			"not a number",
 			true,                            // boolean
@@ -147,7 +147,7 @@ func TestComplexCoercion(t *testing.T) {
 
 	t.Run("cross-type coercion", func(t *testing.T) {
 		// Test complex64 to complex128 coercion
-		schema := Complex128(core.SchemaParams{Coerce: true})
+		schema := CoercedComplex128()
 		result, err := schema.Parse(complex64(complex(3.0, 4.0)))
 		require.NoError(t, err)
 		assert.IsType(t, complex128(0), result)
@@ -689,8 +689,8 @@ func TestComplexTypeSpecific(t *testing.T) {
 			input  any
 			want   any
 		}{
-			{"coerced complex64", Complex64(core.SchemaParams{Coerce: true}), "3+4i", complex64(complex(3.0, 4.0))},
-			{"coerced complex128", Complex128(core.SchemaParams{Coerce: true}), "3+4i", complex(3.0, 4.0)},
+			{"coerced complex64", CoercedComplex64(), "3+4i", complex64(complex(3.0, 4.0))},
+			{"coerced complex128", CoercedComplex128(), "3+4i", complex(3.0, 4.0)},
 		}
 
 		for _, tt := range tests {

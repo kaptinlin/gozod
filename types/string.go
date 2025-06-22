@@ -72,10 +72,6 @@ func (z *ZodString) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(v any) (string, bool) { str, ok := v.(string); return str, ok },
 		func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 		validateString,
-		func(v any) (string, bool) {
-			result, err := coerce.ToString(v)
-			return result, err == nil
-		},
 		parseCtx,
 	)
 }
@@ -441,7 +437,7 @@ func (z *ZodString) Refine(fn func(string) bool, params ...any) *ZodString {
 	return result.(*ZodString)
 }
 
-// RefineAny adds flexible custom validation logic - interface-compatible
+// RefineAny adds flexible custom validation logic
 func (z *ZodString) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
 	check := checks.NewCustom[any](fn, params...)
 	return engine.AddCheck(z, check)
@@ -863,7 +859,6 @@ func (z *ZodString) Prefault(value string) ZodStringPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -893,7 +888,6 @@ func (z *ZodString) PrefaultFunc(fn func() string) ZodStringPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -924,7 +918,6 @@ func (s ZodStringPrefault) Min(minLen int, params ...any) ZodStringPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -953,7 +946,6 @@ func (s ZodStringPrefault) Max(maxLen int, params ...any) ZodStringPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -982,7 +974,6 @@ func (s ZodStringPrefault) Email(params ...any) ZodStringPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -1011,7 +1002,6 @@ func (s ZodStringPrefault) Refine(fn func(string) bool, params ...any) ZodString
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -1090,10 +1080,6 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 			func(v any) (string, bool) { str, ok := v.(string); return str, ok },
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validateString,
-			func(v any) (string, bool) {
-				result, err := coerce.ToString(v)
-				return result, err == nil
-			},
 			ctx,
 		)
 
@@ -1149,11 +1135,6 @@ func String(params ...any) *ZodString {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
-
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap
 				if errStr, ok := p.Error.(string); ok {

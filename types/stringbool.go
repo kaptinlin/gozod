@@ -79,7 +79,7 @@ func (z *ZodStringBool) Parse(input any, ctx ...*core.ParseContext) (any, error)
 		parseCtx = ctx[0]
 	}
 
-	// Use engine.ParseType with custom checkers/coercers that adhere to zod behaviour
+	// Use engine.ParseType with custom checkers that adhere to zod behaviour
 	result, err := engine.ParseType[bool](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -135,20 +135,6 @@ func (z *ZodStringBool) Parse(input any, ctx ...*core.ParseContext) (any, error)
 				return issues.NewZodError(finalized)
 			}
 			return nil
-		},
-		// =========================
-		// Coercer – enabled only for non-bool values
-		// =========================
-		func(v any) (bool, bool) {
-			// Exclude bools from coercion behaviour (see tests)
-			switch v.(type) {
-			case bool, *bool:
-				return false, false
-			}
-			if str, err := coerce.ToString(v); err == nil {
-				return z.tryStringToBool(str)
-			}
-			return false, false
 		},
 		parseCtx,
 	)
@@ -453,10 +439,6 @@ func StringBool(args ...any) *ZodStringBool {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
 
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap

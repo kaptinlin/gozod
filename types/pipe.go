@@ -70,11 +70,6 @@ func (zp *ZodPipe[In, Out]) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (applies to pipeline behavior)
-func (zp *ZodPipe[In, Out]) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return zp.Parse(input, ctx...)
-}
-
 // Parse executes pipeline validation with smart type inference
 // - Pipe().Parse(value) → right.Parse(left.Parse(value))
 // - Maintains two-stage smart type inference: input → intermediate → output

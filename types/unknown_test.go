@@ -95,25 +95,7 @@ func TestUnknownBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestUnknownCoercion(t *testing.T) {
-	t.Run("coerce flag", func(t *testing.T) {
-		// Unknown with coerce flag (though Unknown doesn't need coercion)
-		schema := Unknown(core.SchemaParams{Coerce: true})
-
-		result, err := schema.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-
-		// Verify coerce flag is stored
-		assert.True(t, schema.GetZod().Bag["coerce"].(bool))
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestUnknownValidations(t *testing.T) {
@@ -153,7 +135,7 @@ func TestUnknownValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestUnknownModifiers(t *testing.T) {
@@ -218,7 +200,7 @@ func TestUnknownModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestUnknownChaining(t *testing.T) {
@@ -244,7 +226,7 @@ func TestUnknownChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestUnknownTransformPipe(t *testing.T) {
@@ -289,7 +271,7 @@ func TestUnknownTransformPipe(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestUnknownRefine(t *testing.T) {
@@ -341,7 +323,7 @@ func TestUnknownRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestUnknownErrorHandling(t *testing.T) {
@@ -385,7 +367,7 @@ func TestUnknownErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge cases and internals
+// 8. Edge cases and internals
 // =============================================================================
 
 func TestUnknownEdgeCases(t *testing.T) {
@@ -452,7 +434,7 @@ func TestUnknownEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestUnknownDefaultAndPrefault(t *testing.T) {
@@ -597,4 +579,29 @@ func TestUnknownDefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err4)
 		assert.Equal(t, 456, result4)
 	})
+}
+
+// =============================================================================
+// 10. Optional + Nilable chaining: ensure behaviour when modifiers are combined
+// =============================================================================
+
+func TestUnknownOptionalNilableChaining(t *testing.T) {
+	t.Run("optional then nilable", func(t *testing.T) {
+		// Chain Optional() first, then Nilable() to verify combined modifier semantics
+		schema := Unknown().Optional().Nilable()
+
+		// nil should succeed and return a typed nil pointer (\*any)(nil)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+		assert.IsType(t, (*any)(nil), result)
+
+		// Non-nil values should remain unchanged
+		value := map[string]any{"k": "v"}
+		parsed, err := schema.Parse(value)
+		require.NoError(t, err)
+		assert.Equal(t, value, parsed)
+	})
+
+	// Reverse order test skipped, see rationale in any_test.go
 }

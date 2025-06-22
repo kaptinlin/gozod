@@ -67,10 +67,6 @@ func (z *ZodFloat[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 
 	var zero T
 	typeName := getFloatTypeName(zero)
-	coerceFunc := func(value any) (T, bool) {
-		result, err := coerce.ToFloat[T](value)
-		return result, err == nil
-	}
 
 	return engine.ParseType[T](
 		input,
@@ -79,7 +75,6 @@ func (z *ZodFloat[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		ValidateFloat[T],
-		coerceFunc,
 		parseCtx,
 	)
 }
@@ -674,11 +669,6 @@ func Float[T ZodFloatConstraint](params ...any) *ZodFloat[T] {
 			}
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
-
 			if p.Error != nil {
 				errorMap := issues.CreateErrorMap(p.Error)
 				if errorMap != nil {

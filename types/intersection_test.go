@@ -94,8 +94,8 @@ func TestIntersectionCoercion(t *testing.T) {
 	t.Run("coercion not applicable", func(t *testing.T) {
 		// Intersection doesn't have its own coercion logic
 		// It relies on the constituent schemas
-		left := String(core.SchemaParams{Coerce: true})
-		right := String(core.SchemaParams{Coerce: true})
+		left := CoercedString()
+		right := CoercedString()
 		schema := Intersection(left, right)
 
 		// Both sides should coerce the number to string

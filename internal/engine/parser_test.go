@@ -40,33 +40,33 @@ func (m *mockStringSchema) Parse(input any, ctx ...*core.ParseContext) (any, err
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// 检查 Parse 函数是否为 nil
+	// check if parse function is nil
 	if m.internals.Parse == nil {
 		rawIssue := issues.CreateCustomIssue("schema has no parse function defined", nil, input)
 		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// 创建解析负载
+	// create parse payload
 	payload := &core.ParsePayload{
 		Value:  input,
 		Issues: []core.ZodRawIssue{},
 		Path:   []any{},
 	}
 
-	// 调用内部解析函数
+	// call internal parse function
 	result := m.internals.Parse(payload, context)
 
-	// 检查解析结果是否为 nil
+	// check if parse result is nil
 	if result == nil {
 		rawIssue := issues.CreateCustomIssue("parse function returned nil", nil, input)
 		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// 检查是否有错误
+	// check if there are any issues
 	if len(result.Issues) > 0 {
-		// 确保所有的 raw issues 都有正确的 input 字段
+		// ensure all raw issues have correct input field
 		for i := range result.Issues {
 			if result.Issues[i].Input == nil {
 				result.Issues[i].Input = input

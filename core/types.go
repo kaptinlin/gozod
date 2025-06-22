@@ -52,7 +52,6 @@ type ZodTypeDef struct {
 type SchemaParams struct {
 	Description   string         // Human-readable description
 	Error         any            // Error message or error map (string or ZodErrorMap)
-	Coerce        bool           // Enable type coercion
 	Abort         bool           // Abort on first validation failure
 	Path          []string       // Path for nested validation
 	Params        map[string]any // Additional parameters

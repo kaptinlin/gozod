@@ -45,17 +45,6 @@ func (z *ZodEnum[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Coerce implements Coercible interface for enum value conversion
-func (z *ZodEnum[T]) Coerce(input any) (any, bool) {
-	// For enum coercion, we just check if the input is one of the valid values
-	if value, ok := input.(T); ok {
-		if _, exists := z.internals.Values[value]; exists {
-			return value, true
-		}
-	}
-	return nil, false
-}
-
 // Parse validates and parses input using the unified engine.ParseType template
 func (z *ZodEnum[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	parseCtx := (*core.ParseContext)(nil)
@@ -101,17 +90,6 @@ func (z *ZodEnum[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 				}
 			}
 			return nil
-		},
-		// Coercer function
-		func(v any) (T, bool) {
-			// For enum, coercion is the same as type checking
-			if value, ok := v.(T); ok {
-				if _, exists := z.internals.Values[value]; exists {
-					return value, true
-				}
-			}
-			var zero T
-			return zero, false
 		},
 		parseCtx,
 	)
@@ -642,9 +620,6 @@ func EnumMap[T comparable](entries map[string]T, params ...any) *ZodEnum[T] {
 		if param, ok := params[0].(core.SchemaParams); ok {
 			engine.ApplySchemaParams(&def.ZodTypeDef, param)
 
-			if param.Coerce {
-				enum.internals.Bag["coerce"] = true
-			}
 			if param.Error != nil {
 				errorMap := issues.CreateErrorMap(param.Error)
 				if errorMap != nil {

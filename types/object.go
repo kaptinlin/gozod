@@ -7,7 +7,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
@@ -85,9 +84,6 @@ func Object(shape core.ObjectSchema, params ...any) *ZodObject {
 	if len(params) > 0 {
 		if param, ok := params[0].(core.SchemaParams); ok {
 			// Store coerce flag in bag
-			if param.Coerce {
-				schema.internals.Bag["coerce"] = true
-			}
 
 			// Handle schema-level error configuration
 			if param.Error != nil {
@@ -147,9 +143,6 @@ func createZodObjectFromDef(def *ZodObjectDef, params ...any) *ZodObject {
 	// Apply schema parameters following unified pattern
 	for _, p := range params {
 		if param, ok := p.(core.SchemaParams); ok {
-			if param.Coerce {
-				internals.Bag["coerce"] = true
-			}
 			if param.Error != nil {
 				errorMap := issues.CreateErrorMap(param.Error)
 				if errorMap != nil {
@@ -290,23 +283,19 @@ func (z *ZodObject) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		return (*map[string]any)(nil), nil
 	}
 
-	// 4. convert to map[string]any using mapx.FromAny
-	objectMap := mapx.FromAny(input)
-	if objectMap == nil {
-		// 5. try type coercion (if enabled)
-		if engine.ShouldCoerce(z.internals.Bag) {
-			if coerced, err := coerce.ToObject(input); err == nil {
-				objectMap = coerced
-			} else {
-				rawIssue := issues.CreateInvalidTypeIssue("object", input)
-				finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-				return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-			}
-		} else {
-			rawIssue := issues.CreateInvalidTypeIssue("object", input)
-			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+	// 4. strict type requirement: only map[string]any or *map[string]any accepted
+	var objectMap map[string]any
+	switch v := input.(type) {
+	case map[string]any:
+		objectMap = v
+	case *map[string]any:
+		if v != nil {
+			objectMap = *v
 		}
+	default:
+		rawIssue := issues.CreateInvalidTypeIssue("object", input)
+		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
+		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
 	// 6. use parseObjectCore for full object validation and field filtering
@@ -1179,25 +1168,13 @@ func (z *ZodObject) CloneFrom(source any) {
 
 // parseObjectCore handles object-specific parsing logic
 func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, ctx *core.ParseContext) *core.ParsePayload {
-	// 1. type check - only accept map[string]any
+	// 1. type check - only accept map[string]any (no coercion for object type)
 	objectData, ok := payload.Value.(map[string]any)
 	if !ok {
-		// check if coercion is enabled
-		if engine.ShouldCoerce(internals.Bag) {
-			if coerced := mapx.FromAny(payload.Value); coerced != nil {
-				objectData = coerced
-			} else {
-				issue := issues.CreateInvalidTypeIssue("object", payload.Value)
-				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
-				return payload
-			}
-		} else {
-			issue := issues.CreateInvalidTypeIssue("object", payload.Value)
-			issue.Inst = internals
-			payload.Issues = append(payload.Issues, issue)
-			return payload
-		}
+		issue := issues.CreateInvalidTypeIssue("object", payload.Value)
+		issue.Inst = internals
+		payload.Issues = append(payload.Issues, issue)
+		return payload
 	}
 
 	// 2. field validation - validate each field according to Shape definition
@@ -1237,11 +1214,8 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 			}
 		}
 
-		// if object-level coercion is enabled, enable it for field schemas too
+		// no coercion for object type (non-primitive)
 		actualFieldSchema := fieldSchema
-		if engine.ShouldCoerce(internals.Bag) {
-			actualFieldSchema = enableCoercionForFieldType(fieldSchema)
-		}
 
 		// fix nil pointer error: for wrapper types, use engine.Parse method directly
 		if actualFieldSchema == nil {
@@ -1349,31 +1323,6 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 	// update payload with validated object
 	payload.Value = result
 	return payload
-}
-
-// enableCoercionForFieldType enable coercion for field type
-func enableCoercionForFieldType(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	if schema == nil {
-		return schema
-	}
-
-	internals := schema.GetInternals()
-	if internals == nil {
-		return schema
-	}
-
-	// if coercion is already enabled, return directly
-	if engine.ShouldCoerce(internals.Bag) {
-		return schema
-	}
-
-	// set coercion flag
-	if internals.Bag == nil {
-		internals.Bag = make(map[string]any)
-	}
-	internals.Bag["coerce"] = true
-
-	return schema
 }
 
 // Unwrap returns the inner type (for basic types, return self)

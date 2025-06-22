@@ -2,6 +2,7 @@ package coerce
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -56,8 +57,18 @@ func ToString(v any) (string, error) {
 		return fmt.Sprintf("%g", x), nil
 	case complex128:
 		return fmt.Sprintf("%g", x), nil
+	case *big.Int:
+		if x == nil {
+			return "0", nil
+		}
+		return x.String(), nil
+	case big.Int:
+		return x.String(), nil
+	case time.Time:
+		// Convert time.Time to ISO string format for general string coercion
+		return x.Format(time.RFC3339), nil
 	default:
-		// for complex/uncommon types, return unsupported error
+		// Fallback to unsupported
 		return "", NewUnsupportedError(fmt.Sprintf("%T", derefed), "string")
 	}
 }

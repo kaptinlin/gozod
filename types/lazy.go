@@ -226,11 +226,6 @@ func (z *ZodLazy) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (delegates to inner type)
-func (z *ZodLazy) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Check adds a validation check to the lazy type
 func (z *ZodLazy) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {

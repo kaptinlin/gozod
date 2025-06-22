@@ -116,7 +116,7 @@ func TestIntegerBasicFunctionality(t *testing.T) {
 
 func TestIntegerCoercion(t *testing.T) {
 	t.Run("basic coercion int", func(t *testing.T) {
-		schema := Int(core.SchemaParams{Coerce: true})
+		schema := CoercedInt()
 		tests := []struct {
 			input    any
 			expected int
@@ -137,7 +137,7 @@ func TestIntegerCoercion(t *testing.T) {
 	})
 
 	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Int(core.SchemaParams{Coerce: true}).Min(10).Max(100)
+		schema := CoercedInt().Min(10).Max(100)
 		// Coercion then validation passes
 		result, err := schema.Parse("50")
 		require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestIntegerCoercion(t *testing.T) {
 	})
 
 	t.Run("failed coercion", func(t *testing.T) {
-		schema := Int(core.SchemaParams{Coerce: true})
+		schema := CoercedInt()
 		invalidInputs := []any{
 			"not a number",
 			3.14,     // non-integer float
@@ -777,7 +777,7 @@ func TestIntegerTypeSpecific(t *testing.T) {
 
 	t.Run("overflow protection", func(t *testing.T) {
 		// Test that coercion respects type bounds
-		schema := Int8(core.SchemaParams{Coerce: true})
+		schema := CoercedInt8()
 
 		// Should succeed within bounds
 		result, err := schema.Parse("127") // MaxInt8

@@ -8,7 +8,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
@@ -75,12 +74,6 @@ func (z *ZodSlice) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input to slice format using existing utilities
-func (z *ZodSlice) Coerce(input any) (any, bool) {
-	result, err := coerce.ToSlice(input)
-	return result, err == nil
-}
-
 // Parse validates input with smart type inference
 func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	parseCtx := (*core.ParseContext)(nil)
@@ -92,12 +85,6 @@ func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	validator := func(value []any, checks []core.ZodCheck, parsectx *core.ParseContext) error {
 		// Element validation is now handled separately to collect all issues
 		return nil
-	}
-
-	// Create coercer for element validation using existing utilities
-	coercer := func(v any) ([]any, bool) {
-		result, err := coerce.ToSlice(v)
-		return result, err == nil
 	}
 
 	// Collect all issues from both type/element validation and constraint validation
@@ -117,7 +104,6 @@ func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		},
 		func(v any) (*[]any, bool) { ptr, ok := v.(*[]any); return ptr, ok },
 		validator,
-		coercer,
 		parseCtx,
 	)
 
@@ -417,7 +403,6 @@ func (z *ZodSlice) Prefault(value []any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -448,7 +433,6 @@ func (z *ZodSlice) PrefaultFunc(fn func() []any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -566,7 +550,6 @@ func (s ZodSlicePrefault) Min(minimum int, params ...any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -596,7 +579,6 @@ func (s ZodSlicePrefault) Max(maximum int, params ...any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -626,7 +608,6 @@ func (s ZodSlicePrefault) Length(length int, params ...any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -656,7 +637,6 @@ func (s ZodSlicePrefault) NonEmpty(params ...any) ZodSlicePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -686,7 +666,6 @@ func (s ZodSlicePrefault) Refine(fn func([]any) bool, params ...any) ZodSlicePre
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -800,10 +779,6 @@ func Slice(elementSchema core.ZodType[any, any], params ...core.SchemaParams) *Z
 		param := params[0]
 
 		// Store coerce flag in bag
-		if param.Coerce {
-			schema.internals.Bag["coerce"] = true
-			schema.internals.ZodTypeInternals.Bag["coerce"] = true
-		}
 
 		// Handle schema-level error mapping
 		if param.Error != nil {

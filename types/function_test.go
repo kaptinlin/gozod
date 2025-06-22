@@ -104,9 +104,14 @@ func TestFunctionCoercion(t *testing.T) {
 			Output: String(),
 		})
 
-		impl, err := schema.Implement(strings.ToUpper)
+		wrapped, err := schema.Implement(strings.ToUpper)
 		require.NoError(t, err)
-		require.NotNil(t, impl)
+		require.NotNil(t, wrapped)
+
+		// Calling with invalid input type (int instead of string) should panic
+		assert.Panics(t, func() {
+			reflect.ValueOf(wrapped).Call([]reflect.Value{reflect.ValueOf(123)})
+		})
 	})
 }
 
@@ -126,6 +131,11 @@ func TestFunctionValidations(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.NotNil(t, impl)
+
+		// Runtime validation: passing non-string input should panic
+		assert.Panics(t, func() {
+			reflect.ValueOf(impl).Call([]reflect.Value{reflect.ValueOf(123)})
+		})
 	})
 
 	t.Run("output validation", func(t *testing.T) {
@@ -409,7 +419,10 @@ func TestFunctionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, impl)
 
-		// Here we only test implementation success, actual input validation is done when the function is called
+		// Runtime validation: passing non-string input should panic
+		assert.Panics(t, func() {
+			reflect.ValueOf(impl).Call([]reflect.Value{reflect.ValueOf(123)})
+		})
 	})
 
 	t.Run("output validation errors", func(t *testing.T) {
@@ -418,13 +431,16 @@ func TestFunctionErrorHandling(t *testing.T) {
 			Output: String().Min(10),
 		})
 
-		impl, err := schema.Implement(func(s string) string {
-			return "hi" // Too short for output validation
+		wrapped, err := schema.Implement(func(s string) any {
+			return len(s) // Return int while schema expects string, triggers runtime validation
 		})
 		require.NoError(t, err)
-		require.NotNil(t, impl)
+		require.NotNil(t, wrapped)
 
-		// Here we only test implementation success, actual output validation is done when the function is called
+		// Calling the wrapped function should panic due to output validation failure
+		assert.Panics(t, func() {
+			reflect.ValueOf(wrapped).Call([]reflect.Value{reflect.ValueOf("hello")})
+		})
 	})
 }
 
@@ -517,10 +533,16 @@ func TestFunctionEdgeCases(t *testing.T) {
 		})
 
 		// Wrong return type
-		_, err := schema.Implement(func(s string) int {
-			return 42
+		wrapped, err := schema.Implement(func(s string) int {
+			return 42 // Intentionally wrong type to trigger runtime validation
 		})
-		assert.Error(t, err)
+		require.NoError(t, err)
+		require.NotNil(t, wrapped)
+
+		// Executing the wrapped function should panic with a ZodError
+		assert.Panics(t, func() {
+			reflect.ValueOf(wrapped).Call([]reflect.Value{reflect.ValueOf("test")})
+		})
 	})
 
 	t.Run("nil function implementation", func(t *testing.T) {
@@ -738,4 +760,40 @@ func TestFunctionDefaultAndPrefault(t *testing.T) {
 		assert.NotNil(t, result3)
 		assert.IsType(t, prefaultFunc, result3)
 	})
+}
+
+// ---------------------------------------------------------------------
+// Additional runtime validation tests (aligned with reference behaviour)
+// ---------------------------------------------------------------------
+
+// Test: input schema expects a string but wrapped function called with int
+func TestRuntimeValidationInputSchemaExpectsStringButCalledWithInt(t *testing.T) {
+	runtimeSchema := Function(FunctionParams{
+		Input:  []core.ZodType[any, any]{String()},
+		Output: Int(),
+	})
+
+	wrappedFn, err := runtimeSchema.Implement(func(s string) int {
+		return len(s)
+	})
+	require.NoError(t, err)
+
+	assert.Panics(t, func() {
+		reflect.ValueOf(wrappedFn).Call([]reflect.Value{reflect.ValueOf(123)})
+	})
+}
+
+// Test: schema with zero inputs should validate correctly
+func TestRuntimeValidationSchemaWithZeroInputsShouldValidateCorrectly(t *testing.T) {
+	noInputSchema := Function(FunctionParams{
+		Input:  []core.ZodType[any, any]{},
+		Output: String(),
+	})
+
+	wrappedZero, err := noInputSchema.Implement(func() string { return "ok" })
+	require.NoError(t, err)
+	require.NotNil(t, wrappedZero)
+	resultVals := reflect.ValueOf(wrappedZero).Call(nil)
+	require.Equal(t, 1, len(resultVals))
+	require.Equal(t, "ok", resultVals[0].Interface())
 }

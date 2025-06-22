@@ -46,11 +46,6 @@ func (z *ZodPrefault[T]) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (with fallback behavior)
-func (z *ZodPrefault[T]) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse with smart type inference
 // try to validate, and use fallback value if failed
 // unlike Default (use default value when nil), Prefault always tries to validate first
@@ -249,7 +244,6 @@ func prefaultInternal[T core.ZodType[any, any]](innerType T, value any, fn func(
 		Version:  core.Version,
 		Type:     core.ZodTypePrefault,
 		Checks:   baseInternals.Checks,
-		Coerce:   baseInternals.Coerce,
 		Optional: baseInternals.Optional,
 		Nilable:  baseInternals.Nilable,
 		// Prefault doesn't change input optionality, only provides fallback on validation failure

@@ -2,16 +2,12 @@ package types
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/coerce"
-	"github.com/kaptinlin/gozod/pkg/mapx"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
 
@@ -78,48 +74,99 @@ func (z *ZodStruct) Shape() core.StructSchema {
 	return z.internals.Shape
 }
 
-// Coerce implements Coercible interface
-func (z *ZodStruct) Coerce(input any) (any, bool) {
-	if mapped, err := coerce.ToObject(input); err == nil {
-		return mapped, true
-	}
-	return input, false
-}
-
 // Parse validates and parses with smart type inference
 func (z *ZodStruct) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	// handle nil input
+	// ---------------------------------------------------------------------
+	// 1. nil check
+	// ---------------------------------------------------------------------
 	if input == nil {
-		if !z.internals.Nilable {
+		if z.internals.Nilable {
+			return nil, nil
+		}
+		rawIssue := issues.CreateInvalidTypeIssue("struct", input)
+		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
+		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// ---------------------------------------------------------------------
+	// 2. convert input to map[string]any for internal validation
+	// ---------------------------------------------------------------------
+	var (
+		objectMap         map[string]any
+		fromMapPointer    bool // input is *map[string]any
+		returnOriginalObj bool // input is struct or *struct, need to keep original return
+	)
+
+	// helper: convert nested struct to map[string]any
+	var convertNested func(any) any
+	convertNested = func(val any) any {
+		if val == nil {
+			return nil
+		}
+
+		// if map, recursively convert its value
+		if m, ok := val.(map[string]any); ok {
+			for k, v := range m {
+				m[k] = convertNested(v)
+			}
+			return m
+		}
+
+		rv := reflect.ValueOf(val)
+		if rv.Kind() == reflect.Ptr {
+			if rv.IsNil() {
+				return val
+			}
+			rv = rv.Elem()
+		}
+		if rv.Kind() == reflect.Struct {
+			nestedMap := structx.Marshal(val)
+			if nestedMap != nil {
+				return convertNested(nestedMap)
+			}
+		}
+
+		return val
+	}
+
+	switch v := input.(type) {
+	case map[string]any:
+		objectMap = v
+	case *map[string]any:
+		// *map[string]any needs special handling for nil
+		if v == nil {
+			if z.internals.Nilable {
+				return (*map[string]any)(nil), nil
+			}
 			rawIssue := issues.CreateInvalidTypeIssue("struct", input)
 			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
 			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 		}
-		return (*map[string]any)(nil), nil // return struct type nil pointer
-	}
-
-	// smart type inference: input type determines output type
-	inputType := reflect.TypeOf(input)
-	var objectValue any
-	var isNil bool
-	var err error
-
-	// Extract and validate the struct/object using pkg utilities
-	objectValue, isNil, err = extractStructValueUsingPkg(input)
-	if err != nil {
-		return nil, err
-	}
-	if isNil {
-		if !z.internals.Nilable {
+		objectMap = *v
+		fromMapPointer = true
+	default:
+		// Check if it is a struct pointer and is nil
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Ptr && rv.IsNil() {
+			if z.internals.Nilable {
+				return v, nil
+			}
 			rawIssue := issues.CreateInvalidTypeIssue("struct", input)
 			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
 			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 		}
-		return (*map[string]any)(nil), nil
-	}
 
-	// Convert to map for unified validation
-	objectMap := objectValue.(map[string]any)
+		// try to convert struct (value or pointer) to map[string]any
+		if m := structx.Marshal(v); m != nil {
+			objectMap = convertNested(m).(map[string]any)
+			returnOriginalObj = true
+		} else {
+			// non map/struct type, error
+			rawIssue := issues.CreateInvalidTypeIssue("struct", input)
+			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
+			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+		}
+	}
 
 	// Validate the object using unified parsing infrastructure
 	payload := &core.ParsePayload{
@@ -158,69 +205,19 @@ func (z *ZodStruct) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		}
 	}
 
-	// smart type inference: keep input type characteristics
 	validatedMap := result.Value.(map[string]any)
 
-	// if input was a struct, try to convert back to struct type
-	if reflectx.IsStruct(input) {
-		if reconstructed, err := structx.FromMap(validatedMap, inputType); err == nil {
-			return reconstructed, nil
-		}
-		// Fallback: return the validated map
-		return validatedMap, nil
-	}
-
-	// if input was a pointer to struct, try to reconstruct as pointer
-	if inputType.Kind() == reflect.Ptr && inputType.Elem().Kind() == reflect.Struct {
-		structType := inputType.Elem()
-		if reconstructed, err := structx.FromMap(validatedMap, structType); err == nil {
-			// Return as pointer to the reconstructed struct
-			result := reflect.New(structType)
-			result.Elem().Set(reflect.ValueOf(reconstructed))
-			return result.Interface(), nil
-		}
-		// Fallback: return pointer to map
+	// keep pointer return for *map[string]any
+	if fromMapPointer {
 		return &validatedMap, nil
 	}
 
-	// If input was a pointer to map, maintain pointer characteristics
-	if inputType.Kind() == reflect.Ptr {
-		if elemType := inputType.Elem(); elemType.Kind() == reflect.Map && elemType.Key().Kind() == reflect.String {
-			// Convert to specific map type and return as pointer
-			result := reflect.MakeMap(elemType)
-			for k, v := range validatedMap {
-				key := reflect.ValueOf(k)
-				value := reflect.ValueOf(v)
-				if value.Type().ConvertibleTo(elemType.Elem()) {
-					result.SetMapIndex(key.Convert(elemType.Key()), value.Convert(elemType.Elem()))
-				} else {
-					result.SetMapIndex(key.Convert(elemType.Key()), value)
-				}
-			}
-			ptr := reflect.New(elemType)
-			ptr.Elem().Set(result)
-			return ptr.Interface(), nil
-		}
-		// Default for pointer: return pointer to map[string]any
-		return &validatedMap, nil
+	// if input is struct or *struct, return original input (keep type consistency)
+	if returnOriginalObj {
+		return input, nil
 	}
 
-	// If input was a map, try to convert to original map type
-	if inputType.Kind() == reflect.Map && inputType.Key().Kind() == reflect.String {
-		result := reflect.MakeMap(inputType)
-		for k, v := range validatedMap {
-			key := reflect.ValueOf(k)
-			value := reflect.ValueOf(v)
-			if value.Type().ConvertibleTo(inputType.Elem()) {
-				result.SetMapIndex(key, value.Convert(inputType.Elem()))
-			} else {
-				result.SetMapIndex(key, value)
-			}
-		}
-		return result.Interface(), nil
-	}
-
-	// Default: return generic map[string]any
+	// default return map
 	return validatedMap, nil
 }
 
@@ -266,13 +263,13 @@ func (z *ZodStruct) Refine(fn func(map[string]any) bool, params ...any) *ZodStru
 	return result.(*ZodStruct)
 }
 
-// RefineAny adds flexible custom validation logic - interface-compatible
+// RefineAny adds flexible custom validation logic
 func (z *ZodStruct) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
 	check := checks.NewCustom[any](fn, params...)
 	return engine.AddCheck(z, check)
 }
 
-// TransformAny adds flexible transformation logic - interface-compatible
+// TransformAny adds flexible transformation logic
 func (z *ZodStruct) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
 	transform := Transform[any, any](fn)
 	return &ZodPipe[any, any]{
@@ -625,35 +622,16 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 			return payload
 		}
 
-		// Extract object value using pkg utilities
-		objectValue, isNil, err := extractStructValueUsingPkg(payload.Value)
-		if err != nil {
-			issue := issues.CreateInvalidTypeIssue("struct", payload.Value)
-			issue.Inst = internals
-			payload.Issues = append(payload.Issues, issue)
-			return payload
-		}
-
-		if isNil {
-			if !internals.Nilable {
-				issue := issues.CreateInvalidTypeIssue("struct", payload.Value)
-				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
-			}
-			return payload
-		}
-
-		objectMap := objectValue
-
 		// Validate and process each field
-		result := make(map[string]any)
+		objMap, _ := payload.Value.(map[string]any)
 		processedKeys := make(map[string]struct{})
+		result := make(map[string]any)
 
 		// Process defined fields
 		for fieldKey, fieldSchema := range internals.Shape {
 			processedKeys[fieldKey] = struct{}{}
 
-			if fieldValue, exists := objectMap[fieldKey]; exists {
+			if fieldValue, exists := objMap[fieldKey]; exists {
 				// Field exists, validate it
 				fieldPayload := &core.ParsePayload{
 					Value:  fieldValue,
@@ -690,7 +668,7 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 
 		// Handle unrecognized keys based on mode
 		var unrecognizedKeys []string
-		for key := range objectMap {
+		for key := range objMap {
 			if _, processed := processedKeys[key]; !processed {
 				unrecognizedKeys = append(unrecognizedKeys, key)
 			}
@@ -711,7 +689,7 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 					if internals.Catchall != nil {
 						// Validate with catchall schema
 						catchallPayload := &core.ParsePayload{
-							Value:  objectMap[key],
+							Value:  objMap[key],
 							Issues: make([]core.ZodRawIssue, 0),
 							Path:   append(payload.Path, key),
 						}
@@ -726,7 +704,7 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 							result[key] = catchallResult.Value
 						}
 					} else {
-						result[key] = objectMap[key]
+						result[key] = objMap[key]
 					}
 				}
 			}
@@ -770,9 +748,6 @@ func Struct(shape core.StructSchema, params ...any) *ZodStruct {
 			}
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-			}
 			if p.Error != nil {
 				errorMap := issues.CreateErrorMap(p.Error)
 				if errorMap != nil {
@@ -817,37 +792,3 @@ func LooseStruct(shape core.StructSchema, params ...any) *ZodStruct {
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
-
-// extractStructValueUsingPkg intelligently extracts struct values using pkg utilities
-func extractStructValueUsingPkg(input any) (map[string]any, bool, error) {
-	// Handle nil input
-	if input == nil {
-		return nil, true, nil
-	}
-
-	// Handle pointer to nil
-	if reflectx.IsNil(input) {
-		return nil, true, nil
-	}
-
-	// Try to extract as map[string]any directly
-	if m, ok := mapx.Extract(input); ok {
-		if stringMap, ok := m.(map[string]any); ok {
-			return stringMap, false, nil
-		}
-	}
-
-	// Try to convert struct to map using structx
-	if structx.Is(input) || structx.IsPointer(input) {
-		if structMap, err := structx.ToMap(input); err == nil {
-			return structMap, false, nil
-		}
-	}
-
-	// Try coercion to object
-	if objectMap, err := coerce.ToObject(input); err == nil {
-		return objectMap, false, nil
-	}
-
-	return nil, false, fmt.Errorf("%w, got %T", ErrExpectedStruct, input)
-}

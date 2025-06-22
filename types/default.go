@@ -48,11 +48,6 @@ func (z *ZodDefault[T]) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (delegates to inner type after default logic)
-func (z *ZodDefault[T]) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates and parses input with smart type inference
 func (z *ZodDefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	if input == nil {

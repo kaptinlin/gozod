@@ -105,6 +105,38 @@ var (
 var Coerce = types.Coerce
 
 // =============================================================================
+// DEDICATED COERCED CONSTRUCTORS – align with TypeScript Zod v4
+// =============================================================================
+
+var (
+	// Primary coerced types (aligned with TypeScript Zod v4)
+	CoercedString = types.CoercedString
+	CoercedNumber = types.CoercedNumber
+	CoercedBool   = types.CoercedBool
+	CoercedBigInt = types.CoercedBigInt
+
+	// Integer variants
+	CoercedInt    = types.CoercedInt
+	CoercedInt8   = types.CoercedInt8
+	CoercedInt16  = types.CoercedInt16
+	CoercedInt32  = types.CoercedInt32
+	CoercedInt64  = types.CoercedInt64
+	CoercedUint   = types.CoercedUint
+	CoercedUint8  = types.CoercedUint8
+	CoercedUint16 = types.CoercedUint16
+	CoercedUint32 = types.CoercedUint32
+	CoercedUint64 = types.CoercedUint64
+
+	// Floating-point variants
+	CoercedFloat32 = types.CoercedFloat32
+	CoercedFloat64 = types.CoercedFloat64
+
+	// Complex number variants
+	CoercedComplex64  = types.CoercedComplex64
+	CoercedComplex128 = types.CoercedComplex128
+)
+
+// =============================================================================
 // ERROR UTILITIES
 // =============================================================================
 

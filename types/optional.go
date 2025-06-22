@@ -82,11 +82,6 @@ func (z *ZodOptional[T]) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (delegates to inner type)
-func (z *ZodOptional[T]) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates and parses input with smart type inference
 // - undefined/nil returns nil (field is missing)
 // - otherwise delegates to inner type, preserving smart inference

@@ -234,7 +234,7 @@ func TestOptionalPipeOptionalityInObjects(t *testing.T) {
 
 func TestOptionalCoercion(t *testing.T) {
 	t.Run("coercion with optional", func(t *testing.T) {
-		schema := String(core.SchemaParams{Coerce: true}).Optional()
+		schema := CoercedString().Optional()
 
 		// nil should remain nil
 		result, err := schema.Parse(nil)

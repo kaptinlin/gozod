@@ -30,12 +30,6 @@ type Cloneable interface {
 	CloneFrom(source any)
 }
 
-// Coercible defines type coercion capability
-// Types implementing this can convert input values to their target type
-type Coercible interface {
-	Coerce(input any) (output any, success bool)
-}
-
 // =============================================================================
 // SPECIALIZED INTERFACES
 // =============================================================================

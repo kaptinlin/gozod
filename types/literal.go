@@ -12,7 +12,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
@@ -45,15 +44,6 @@ type ZodLiteral struct {
 // GetInternals returns the internal state of the schema
 func (z *ZodLiteral) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
-}
-
-// Coerce implements Coercible interface for literal type conversion
-func (z *ZodLiteral) Coerce(input any) (any, bool) {
-	// For literal coercion, we just check if the input is one of the valid values
-	if isValidLiteral(input, z.internals) {
-		return input, true
-	}
-	return nil, false
 }
 
 // Parse validates input with smart type inference
@@ -121,26 +111,7 @@ func (z *ZodLiteral) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		}
 	}
 
-	// Try type coercion (if enabled) - use unified engine.ShouldCoerce
-	if engine.ShouldCoerce(z.internals.Bag) {
-		// For literal coercion, we just check if the input can be converted to one of the valid values
-		if coerced, err := coerce.ToLiteral(input); err == nil {
-			if isValidLiteral(coerced, z.internals) {
-				// Run validation checks
-				if len(z.internals.Checks) > 0 {
-					payload := &core.ParsePayload{
-						Value:  coerced,
-						Issues: make([]core.ZodRawIssue, 0),
-					}
-					engine.RunChecksOnValue(coerced, z.internals.Checks, payload, parseCtx)
-					if len(payload.Issues) > 0 {
-						return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, parseCtx))
-					}
-				}
-				return coerced, nil
-			}
-		}
-	}
+	// No coercion for literal type (non-primitive)
 
 	// Create invalid value issue instead of invalid literal issue
 	rawIssue := issues.CreateInvalidValueIssue(z.internals.Def.Values, input)
@@ -585,10 +556,6 @@ func Literal(values ...any) *ZodLiteral {
 	// Apply schema parameters using standard pattern from type_string.go
 	if len(params) > 0 {
 		param := params[0]
-		// Store coerce flag in bag for parseLiteralCore to access
-		if param.Coerce {
-			schema.internals.Bag["coerce"] = true
-		}
 
 		// Handle schema-level error configuration
 		if param.Error != nil {

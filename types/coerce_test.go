@@ -108,6 +108,42 @@ func TestCoerceString(t *testing.T) {
 }
 
 // =============================================================================
+// 2.1 Additional string coercion edge-cases
+// =============================================================================
+
+func TestCoerceStringAdditionalCases(t *testing.T) {
+	schema := Coerce.String()
+
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+		wantErr  bool
+	}{
+		{"empty string", "", "", false},
+		{"NaN float", math.NaN(), "NaN", false},
+		{"+Inf", math.Inf(1), "+Inf", false},
+		{"-Inf", math.Inf(-1), "-Inf", false},
+		{"bigint", big.NewInt(15), "15", false},
+		{"slice unsupported", []string{"item", "another_item"}, "", true},
+		{"array empty unsupported", []int{}, "", true},
+		{"map object unsupported", map[string]string{"hello": "world!"}, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := schema.Parse(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// =============================================================================
 // 3. Number coercion
 // =============================================================================
 
@@ -131,7 +167,11 @@ func TestCoerceNumber(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				result, err := schema.Parse(tt.input)
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+				if math.IsNaN(tt.expected) {
+					assert.True(t, math.IsNaN(result.(float64)))
+				} else {
+					assert.Equal(t, tt.expected, result)
+				}
 			})
 		}
 	})
@@ -157,6 +197,43 @@ func TestCoerceNumber(t *testing.T) {
 		require.True(t, exists)
 		assert.True(t, coerceFlag)
 	})
+}
+
+// =============================================================================
+// 3.1 Additional number coercion edge-cases
+// =============================================================================
+
+func TestCoerceNumberAdditionalCases(t *testing.T) {
+	schema := Coerce.Number()
+
+	tests := []struct {
+		name     string
+		input    any
+		expected float64
+		wantErr  bool
+	}{
+		{"empty string", "", 0, false},
+		{"string negative", "-12", -12, false},
+		{"string float", "3.14", 3.14, false},
+		{"string NOT_A_NUMBER", "NOT_A_NUMBER", 0, true},
+		{"NaN", math.NaN(), math.NaN(), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := schema.Parse(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if math.IsNaN(tt.expected) {
+				assert.True(t, math.IsNaN(result.(float64)))
+			} else {
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
 }
 
 // =============================================================================
@@ -283,6 +360,40 @@ func TestCoerceBigInt(t *testing.T) {
 }
 
 // =============================================================================
+// 5.1 Additional bigint coercion edge-cases
+// =============================================================================
+
+func TestCoerceBigIntAdditionalCases(t *testing.T) {
+	schema := Coerce.BigInt()
+
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+		wantErr  bool
+	}{
+		{"empty string", "", "0", false},
+		{"string negative", "-5", "-5", false},
+		{"string float", "3.14", "", true},
+		{"NaN", math.NaN(), "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := schema.Parse(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			bigInt, ok := result.(*big.Int)
+			require.True(t, ok)
+			assert.Equal(t, tt.expected, bigInt.String())
+		})
+	}
+}
+
+// =============================================================================
 // 6. Complex number coercion
 // =============================================================================
 
@@ -331,492 +442,6 @@ func TestCoerceComplex(t *testing.T) {
 				assert.Equal(t, tt.expected, result)
 			})
 		}
-	})
-}
-
-// =============================================================================
-// 7. Record coercion
-// =============================================================================
-
-func TestCoerceRecord(t *testing.T) {
-	t.Run("basic record coercion", func(t *testing.T) {
-		// Create a record schema with string keys and int values, with coercion enabled
-		schema := Coerce.Record(String(), Int())
-
-		// Test coercion from map[string]any with string values that can be coerced to int
-		input := map[string]any{
-			"key1": "10", // String that can be coerced to int
-			"key2": "20", // String that can be coerced to int
-			"key3": 30,   // Already an int
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Now expecting type-safe map[string]int
-		resultMap, ok := result.(map[string]int)
-		require.True(t, ok)
-
-		// Verify values were coerced to integers
-		assert.Equal(t, 10, resultMap["key1"])
-		assert.Equal(t, 20, resultMap["key2"])
-		assert.Equal(t, 30, resultMap["key3"])
-	})
-
-	t.Run("record coercion with struct input", func(t *testing.T) {
-		schema := Coerce.Record(String(), String())
-
-		// Test struct to record coercion
-		type TestStruct struct {
-			Name string `json:"name"`
-			Age  int    `json:"age"`
-		}
-
-		input := TestStruct{
-			Name: "John",
-			Age:  25,
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Now expecting type-safe map[string]string
-		resultMap, ok := result.(map[string]string)
-		require.True(t, ok)
-
-		// Verify struct fields were converted to map entries
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, "25", resultMap["age"]) // Age coerced to string
-	})
-
-	t.Run("record coercion with validation", func(t *testing.T) {
-		// Create record with validation on values
-		schema := Coerce.Record(String(), Int().Min(0))
-
-		// Valid case - all values can be coerced and pass validation
-		validInput := map[string]any{
-			"positive": "10",
-			"zero":     "0",
-		}
-
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-
-		// Now expecting type-safe map[string]int
-		resultMap, ok := result.(map[string]int)
-		require.True(t, ok)
-		assert.Equal(t, 10, resultMap["positive"])
-		assert.Equal(t, 0, resultMap["zero"])
-
-		// Invalid case - value fails validation after coercion
-		invalidInput := map[string]any{
-			"negative": "-5", // Will be coerced to -5, but fails Min(0) validation
-		}
-
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-
-	t.Run("record coercion error handling", func(t *testing.T) {
-		schema := Coerce.Record(String(), Int())
-
-		// Test invalid value that cannot be coerced
-		invalidInput := map[string]any{
-			"valid":   "10",
-			"invalid": "not_a_number", // Cannot be coerced to int
-		}
-
-		_, err := schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-
-	t.Run("record coercion with different map types", func(t *testing.T) {
-		schema := Coerce.Record(String(), String())
-
-		// Test different map input types
-		tests := []struct {
-			name  string
-			input any
-		}{
-			{
-				"map[string]string",
-				map[string]string{"key": "value"},
-			},
-			{
-				"map[string]any",
-				map[string]any{"key": 42}, // Will be coerced to string
-			},
-			{
-				"map[any]any",
-				map[any]any{"key": true}, // Will be coerced to string
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-
-				// Now expecting type-safe map[string]string
-				resultMap, ok := result.(map[string]string)
-				require.True(t, ok)
-				assert.NotEmpty(t, resultMap)
-
-				// Verify all values are strings after coercion
-				for _, v := range resultMap {
-					// v is already string in map[string]string
-					assert.IsType(t, "", v, "Expected all values to be strings")
-				}
-			})
-		}
-	})
-
-	t.Run("record coercion flag verification", func(t *testing.T) {
-		schema := Coerce.Record(String(), Int())
-		internals := schema.GetInternals()
-
-		coerceFlag, exists := internals.Bag["coerce"].(bool)
-		require.True(t, exists)
-		assert.True(t, coerceFlag)
-	})
-
-	t.Run("record should return specific map type", func(t *testing.T) {
-		// According to user requirement: Coerce.Record(String(), Int()) should coerce to map[string]int
-		schema := Coerce.Record(String(), Int())
-
-		input := map[string]any{
-			"key1": "10",
-			"key2": "20",
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Check what type we actually get
-		t.Logf("Actual result type: %T", result)
-		t.Logf("Actual result value: %+v", result)
-
-		// Currently returns map[any]any, but user wants map[string]int
-		// This test documents the current behavior vs expected behavior
-		if resultMap, ok := result.(map[string]int); ok {
-			// This is what the user wants
-			assert.Equal(t, 10, resultMap["key1"])
-			assert.Equal(t, 20, resultMap["key2"])
-			t.Log("SUCCESS: Record returns map[string]int as expected")
-		} else if resultMap, ok := result.(map[any]any); ok {
-			// This is what we currently get
-			assert.Equal(t, 10, resultMap["key1"])
-			assert.Equal(t, 20, resultMap["key2"])
-			t.Log("CURRENT: Record returns map[any]any, but user wants map[string]int")
-		} else {
-			t.Fatalf("Unexpected result type: %T", result)
-		}
-	})
-}
-
-// =============================================================================
-// 8. Map coercion
-// =============================================================================
-
-func TestCoerceMap(t *testing.T) {
-	t.Run("basic map coercion", func(t *testing.T) {
-		// Create a map schema with string keys and int values, with coercion enabled
-		schema := Coerce.Map(String(), Int())
-
-		// Test coercion from map[string]any with string values that can be coerced to int
-		input := map[string]any{
-			"key1": "10", // String that can be coerced to int
-			"key2": "20", // String that can be coerced to int
-			"key3": 30,   // Already an int
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Debug: Show what type we actually get
-		t.Logf("Actual result type: %T", result)
-		t.Logf("Actual result value: %+v", result)
-
-		// Now expecting type-safe map[string]int
-		resultMap, ok := result.(map[string]int)
-		require.True(t, ok)
-
-		// Verify values were coerced to integers
-		assert.Equal(t, 10, resultMap["key1"])
-		assert.Equal(t, 20, resultMap["key2"])
-		assert.Equal(t, 30, resultMap["key3"])
-	})
-
-	t.Run("map coercion with struct input", func(t *testing.T) {
-		schema := Coerce.Map(String(), String())
-
-		// Test struct to map coercion
-		type TestStruct struct {
-			Name string `json:"name"`
-			Age  int    `json:"age"`
-		}
-
-		input := TestStruct{
-			Name: "John",
-			Age:  25,
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Now expecting type-safe map[string]string
-		resultMap, ok := result.(map[string]string)
-		require.True(t, ok)
-
-		// Verify struct fields were converted to map entries
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, "25", resultMap["age"]) // Age coerced to string
-	})
-
-	t.Run("map coercion with validation", func(t *testing.T) {
-		// Create map with validation on values
-		schema := Coerce.Map(String(), Int().Min(0))
-
-		// Valid case - all values can be coerced and pass validation
-		validInput := map[string]any{
-			"positive": "10",
-			"zero":     "0",
-		}
-
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-
-		// Now expecting type-safe map[string]int
-		resultMap, ok := result.(map[string]int)
-		require.True(t, ok)
-		assert.Equal(t, 10, resultMap["positive"])
-		assert.Equal(t, 0, resultMap["zero"])
-
-		// Invalid case - value fails validation after coercion
-		invalidInput := map[string]any{
-			"negative": "-5", // Will be coerced to -5, but fails Min(0) validation
-		}
-
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-
-	t.Run("map coercion with different input types", func(t *testing.T) {
-		schema := Coerce.Map(String(), String())
-
-		// Test different input types that can be coerced to map
-		tests := []struct {
-			name  string
-			input any
-		}{
-			{
-				"map[string]int",
-				map[string]int{"count": 42}, // Will be coerced to string
-			},
-			{
-				"map[int]string",
-				map[int]string{1: "value"}, // Key will be coerced to string
-			},
-			{
-				"map[any]any",
-				map[any]any{"key": true}, // Will be coerced to string
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-
-				// Now expecting type-safe map[string]string
-				resultMap, ok := result.(map[string]string)
-				require.True(t, ok)
-				assert.NotEmpty(t, resultMap)
-
-				// Verify all keys and values are strings after coercion
-				for k, v := range resultMap {
-					// k and v are already strings in map[string]string
-					assert.IsType(t, "", k, "Expected all keys to be strings")
-					assert.IsType(t, "", v, "Expected all values to be strings")
-				}
-			})
-		}
-	})
-
-	t.Run("map coercion flag verification", func(t *testing.T) {
-		schema := Coerce.Map(String(), Int())
-		internals := schema.GetInternals()
-
-		coerceFlag, exists := internals.Bag["coerce"].(bool)
-		require.True(t, exists)
-		assert.True(t, coerceFlag)
-	})
-}
-
-// =============================================================================
-// 9. Struct coercion
-// =============================================================================
-
-func TestCoerceStruct(t *testing.T) {
-	t.Run("basic struct coercion", func(t *testing.T) {
-		// Create a struct schema with coercion enabled
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-
-		// Test coercion from map[string]any with mixed types
-		input := map[string]any{
-			"name": "John", // Already a string
-			"age":  "25",   // String that can be coerced to int
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Struct should return map[string]any
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-
-		// Verify values were coerced correctly
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, 25, resultMap["age"]) // Coerced to int
-	})
-
-	t.Run("struct coercion with Go struct input", func(t *testing.T) {
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  String(), // Coerce age to string
-		})
-
-		// Test Go struct to map coercion
-		type Person struct {
-			Name string `json:"name"`
-			Age  int    `json:"age"`
-		}
-
-		input := Person{
-			Name: "Alice",
-			Age:  30,
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-
-		// Verify struct fields were converted and coerced
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, "30", resultMap["age"]) // Age coerced to string
-	})
-
-	t.Run("struct coercion with validation", func(t *testing.T) {
-		// Create struct with validation on fields
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String().Min(2),
-			"age":  Int().Min(0).Max(120),
-		})
-
-		// Valid case - all values can be coerced and pass validation
-		validInput := map[string]any{
-			"name": "Bob",
-			"age":  "25", // Will be coerced to 25
-		}
-
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "Bob", resultMap["name"])
-		assert.Equal(t, 25, resultMap["age"])
-
-		// Invalid case - field fails validation after coercion
-		invalidInput := map[string]any{
-			"name": "A", // Too short (fails Min(2))
-			"age":  "25",
-		}
-
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-
-	t.Run("struct coercion with missing fields", func(t *testing.T) {
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-
-		// Test with missing field
-		input := map[string]any{
-			"name": "Charlie",
-			// age is missing
-		}
-
-		_, err := schema.Parse(input)
-		assert.Error(t, err) // Should fail due to missing required field
-	})
-
-	t.Run("struct coercion with optional fields", func(t *testing.T) {
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int().Optional(),
-		})
-
-		// Test with missing optional field
-		input := map[string]any{
-			"name": "David",
-			// age is missing but optional
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "David", resultMap["name"])
-		// age should not be present in result
-		_, ageExists := resultMap["age"]
-		assert.False(t, ageExists)
-	})
-
-	t.Run("struct coercion with extra fields", func(t *testing.T) {
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-
-		// Test with extra field (should be stripped by default)
-		input := map[string]any{
-			"name":  "Eve",
-			"age":   "28",
-			"extra": "should be ignored",
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "Eve", resultMap["name"])
-		assert.Equal(t, 28, resultMap["age"])
-
-		// Extra field should be stripped
-		_, extraExists := resultMap["extra"]
-		assert.False(t, extraExists)
-	})
-
-	t.Run("struct coercion flag verification", func(t *testing.T) {
-		schema := Coerce.Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-		internals := schema.GetInternals()
-
-		coerceFlag, exists := internals.Bag["coerce"].(bool)
-		require.True(t, exists)
-		assert.True(t, coerceFlag)
 	})
 }
 

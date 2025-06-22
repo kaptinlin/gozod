@@ -207,37 +207,7 @@ func TestSliceTypeInference(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestSliceCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := Slice(String(), core.SchemaParams{Coerce: true})
-
-		// For now, coercion might not be fully implemented
-		// Test with proper slice input instead
-		result, err := schema.Parse([]string{"hello"})
-		require.NoError(t, err)
-		expected := []any{"hello"}
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Slice(String(), core.SchemaParams{Coerce: true}).Min(2)
-
-		// Single value coerced to slice should fail min length
-		_, err := schema.Parse("hello")
-		assert.Error(t, err)
-
-		// Multiple values should pass
-		result, err := schema.Parse([]string{"hello", "world"})
-		require.NoError(t, err)
-		assert.Len(t, result, 2)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestSliceValidations(t *testing.T) {
@@ -394,7 +364,7 @@ func TestSliceValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestSliceModifiers(t *testing.T) {
@@ -478,7 +448,7 @@ func TestSliceModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestSliceChaining(t *testing.T) {
@@ -518,7 +488,7 @@ func TestSliceChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestSliceTransform(t *testing.T) {
@@ -592,7 +562,7 @@ func TestSliceTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestSliceRefine(t *testing.T) {
@@ -668,7 +638,7 @@ func TestSliceRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestSliceErrorHandling(t *testing.T) {
@@ -768,7 +738,7 @@ func TestSliceErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestSliceEdgeCases(t *testing.T) {
@@ -837,7 +807,7 @@ func TestSliceEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestSliceDefaultAndPrefault(t *testing.T) {
@@ -947,5 +917,71 @@ func TestSliceDefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, []any{"hello", "world"}, result2Map["original"])
 		assert.Equal(t, 2, result2Map["length"])
 		assert.Equal(t, "hello", result2Map["first"])
+	})
+}
+
+// =============================================================================
+// 10. Additional slice behavior tests
+// =============================================================================
+
+// TestSliceContinueParsingDespiteSizeError ensures element errors are still reported when slice size constraints fail
+func TestSliceContinueParsingDespiteSizeError(t *testing.T) {
+	t.Run("continue parsing despite slice size error", func(t *testing.T) {
+		// Define object schema with people slice requiring at least 2 items
+		schema := Object(core.ObjectSchema{
+			"people": Slice(String()).Min(2),
+		})
+
+		// Input has only one element and of wrong type
+		input := map[string]any{
+			"people": []any{123},
+		}
+
+		result, err := schema.Parse(input)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		// Expect at least two issues: invalid type for element 0 and too small for slice
+		assert.GreaterOrEqual(t, len(zodErr.Issues), 2)
+
+		// Verify presence of specific codes
+		hasInvalidType := false
+		hasTooSmall := false
+		for _, issue := range zodErr.Issues {
+			if issue.Code == issues.InvalidType {
+				hasInvalidType = true
+			}
+			if issue.Code == issues.TooSmall {
+				hasTooSmall = true
+			}
+		}
+		assert.True(t, hasInvalidType, "Should report invalid element type")
+		assert.True(t, hasTooSmall, "Should report slice too small")
+	})
+}
+
+// TestSliceSparseArrayValidation ensures slices with nil elements fail element validation even if length constraints pass
+func TestSliceSparseArrayValidation(t *testing.T) {
+	t.Run("parse should fail given sparse slice", func(t *testing.T) {
+		schema := Slice(String()).NonEmpty().Min(1).Max(3)
+
+		// Create sparse slice of length 3 (all nil)
+		sparse := make([]any, 3)
+
+		_, err := schema.Parse(sparse)
+		assert.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		// Expect invalid type error for each element
+		invalidCount := 0
+		for _, issue := range zodErr.Issues {
+			if issue.Code == issues.InvalidType {
+				invalidCount++
+			}
+		}
+		assert.Equal(t, 3, invalidCount, "Each nil element should yield an invalid_type issue")
 	})
 }

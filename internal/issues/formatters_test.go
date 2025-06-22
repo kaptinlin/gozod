@@ -140,11 +140,11 @@ func TestGenerateDefaultMessage(t *testing.T) {
 }
 
 //////////////////////////////////////////
-//////////   Type Detection Tests (TypeScript Zod v4 compatible) ///
+//////////   Type Detection Compatibility Tests ///
 //////////////////////////////////////////
 
 func TestParsedTypeToString(t *testing.T) {
-	t.Run("matches TypeScript Zod v4 type detection", func(t *testing.T) {
+	t.Run("matches reference type detection behaviour", func(t *testing.T) {
 		// Create a big.Int for testing
 		bigIntValue := big.NewInt(123)
 
@@ -198,7 +198,7 @@ func TestParsedTypeToString(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				result := ParsedTypeToString(tc.input)
-				// For Go numeric types, they should all map to "number" to match TypeScript
+				// For Go numeric types, they should all map to "number" just like the original reference implementation
 				if strings.Contains(tc.expected, "number") {
 					assert.Equal(t, "number", result)
 				} else {
@@ -210,11 +210,11 @@ func TestParsedTypeToString(t *testing.T) {
 }
 
 //////////////////////////////////////////
-//////////   String Formatting Tests (TypeScript Zod v4 compatible) ///
+//////////   String Formatting Compatibility Tests ///
 //////////////////////////////////////////
 
 func TestStringifyPrimitive(t *testing.T) {
-	t.Run("formats primitives like TypeScript Zod v4", func(t *testing.T) {
+	t.Run("formats primitives like reference implementation", func(t *testing.T) {
 		testCases := []struct {
 			name     string
 			input    any
@@ -595,10 +595,10 @@ func TestIsZodError(t *testing.T) {
 }
 
 //////////////////////////////////////////
-//////////   Complete TypeScript Zod v4 Compatibility Tests ///
+//////////   Comprehensive Compatibility Tests ///
 //////////////////////////////////////////
 
-func TestTypeScriptZodV4Compatibility(t *testing.T) {
+func TestReferenceCompatibility(t *testing.T) {
 	t.Run("invalid_type messages match exactly", func(t *testing.T) {
 		testCases := []struct {
 			name         string
@@ -625,7 +625,7 @@ func TestTypeScriptZodV4Compatibility(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid_value messages match TypeScript format", func(t *testing.T) {
+	t.Run("invalid_value message format", func(t *testing.T) {
 		// Single value case
 		rawIssue := NewRawIssue("invalid_value", "invalid",
 			WithValues([]any{"valid"}),
@@ -641,7 +641,7 @@ func TestTypeScriptZodV4Compatibility(t *testing.T) {
 		assert.Equal(t, `Invalid option: expected one of "option1"|"option2"|"option3"`, message)
 	})
 
-	t.Run("array size constraints match TypeScript format", func(t *testing.T) {
+	t.Run("array size constraint messages", func(t *testing.T) {
 		// Array too small
 		rawIssue := NewRawIssue(core.TooSmall, []string{"a", "b"},
 			WithMinimum(3),
@@ -661,7 +661,7 @@ func TestTypeScriptZodV4Compatibility(t *testing.T) {
 		assert.Equal(t, "Too big: expected array to have <=2 items", message)
 	})
 
-	t.Run("unrecognized_keys messages match TypeScript format", func(t *testing.T) {
+	t.Run("unrecognized_keys message variations", func(t *testing.T) {
 		// Single key
 		rawIssue := NewRawIssue("unrecognized_keys", map[string]any{},
 			WithKeys([]string{"extra"}),

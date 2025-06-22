@@ -76,76 +76,7 @@ func TestLiteralBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestLiteralCoercion(t *testing.T) {
-	t.Run("coerce parameter API", func(t *testing.T) {
-		schema := Literal(42, core.SchemaParams{Coerce: true})
-
-		// Direct match
-		result, err := schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-
-		// Coerced match
-		result, err = schema.Parse("42")
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-
-		// Invalid coercion
-		_, err = schema.Parse("43")
-		assert.Error(t, err)
-	})
-
-	t.Run("string to number coercion", func(t *testing.T) {
-		schema := Literal(42, core.SchemaParams{Coerce: true})
-
-		tests := []struct {
-			input    any
-			expected any
-			valid    bool
-		}{
-			{"42", 42, true},
-			{"42.0", 42, true},
-			{42.0, 42, true},
-			{"43", 43, false}, // Wrong value
-			{"invalid", 42, false},
-		}
-
-		for _, tt := range tests {
-			result, err := schema.Parse(tt.input)
-			if tt.valid {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			} else {
-				assert.Error(t, err)
-			}
-		}
-	})
-
-	t.Run("boolean coercion", func(t *testing.T) {
-		schema := Literal(true, core.SchemaParams{Coerce: true})
-
-		// Valid coercions to true
-		trueInputs := []any{"true", "1", 1, 1.0}
-		for _, input := range trueInputs {
-			result, err := schema.Parse(input)
-			require.NoError(t, err)
-			assert.Equal(t, true, result)
-		}
-
-		// Invalid (wrong literal value)
-		falseInputs := []any{"false", "0", 0, false}
-		for _, input := range falseInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-		}
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestLiteralValidationMethods(t *testing.T) {
@@ -171,7 +102,7 @@ func TestLiteralValidationMethods(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestLiteralModifiers(t *testing.T) {
@@ -207,7 +138,7 @@ func TestLiteralModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestLiteralChaining(t *testing.T) {
@@ -245,7 +176,7 @@ func TestLiteralChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestLiteralTransform(t *testing.T) {
@@ -275,7 +206,7 @@ func TestLiteralTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Error handling
+// 6. Error handling
 // =============================================================================
 
 func TestLiteralErrorHandling(t *testing.T) {
@@ -304,7 +235,7 @@ func TestLiteralErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Edge and mutual exclusion cases
+// 7. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestLiteralEdgeCases(t *testing.T) {
@@ -361,7 +292,7 @@ func TestLiteralEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Default and Prefault tests
+// 8. Default and Prefault tests
 // =============================================================================
 
 func TestLiteralDefaultAndPrefault(t *testing.T) {

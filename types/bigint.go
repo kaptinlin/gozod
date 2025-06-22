@@ -88,7 +88,6 @@ func (z *ZodBigInt) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	}
 
 	typeName := "bigint"
-	coerceFunc := createBigIntCoerceFunc()
 
 	return engine.ParseType[*big.Int](
 		input,
@@ -107,7 +106,6 @@ func (z *ZodBigInt) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			return nil, false
 		},
 		validateBigInt,
-		coerceFunc,
 		parseCtx,
 	)
 }
@@ -543,7 +541,6 @@ func (z *ZodBigInt) Prefault(value *big.Int) ZodBigIntPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -573,7 +570,6 @@ func (z *ZodBigInt) PrefaultFunc(fn func() *big.Int) ZodBigIntPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -605,7 +601,6 @@ func (s ZodBigIntPrefault) Refine(fn func(*big.Int) bool, params ...any) ZodBigI
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -801,11 +796,6 @@ func BigInt(params ...any) *ZodBigInt {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
-
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap
 				if errStr, ok := p.Error.(string); ok {

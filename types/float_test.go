@@ -116,7 +116,7 @@ func TestFloatBasicFunctionality(t *testing.T) {
 
 func TestFloatCoercion(t *testing.T) {
 	t.Run("basic coercion", func(t *testing.T) {
-		schema := Float64(core.SchemaParams{Coerce: true})
+		schema := CoercedFloat64()
 		tests := []struct {
 			input    any
 			expected float64
@@ -140,7 +140,7 @@ func TestFloatCoercion(t *testing.T) {
 	})
 
 	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Float64(core.SchemaParams{Coerce: true}).Min(5.0).Max(100.0)
+		schema := CoercedFloat64().Min(5.0).Max(100.0)
 		// Coercion then validation passes
 		result, err := schema.Parse("50.5")
 		require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestFloatCoercion(t *testing.T) {
 	})
 
 	t.Run("failed coercion", func(t *testing.T) {
-		schema := Float64(core.SchemaParams{Coerce: true})
+		schema := CoercedFloat64()
 		invalidInputs := []any{
 			"not a number",
 			[]float64{1.0},                 // slice
@@ -164,7 +164,7 @@ func TestFloatCoercion(t *testing.T) {
 	})
 
 	t.Run("boolean coercion", func(t *testing.T) {
-		schema := Float64(core.SchemaParams{Coerce: true})
+		schema := CoercedFloat64()
 
 		// Boolean values should be coerced to numbers
 		result, err := schema.Parse(true)
@@ -178,7 +178,7 @@ func TestFloatCoercion(t *testing.T) {
 
 	t.Run("cross-type coercion", func(t *testing.T) {
 		// Test float32 to float64 coercion
-		schema := Float64(core.SchemaParams{Coerce: true})
+		schema := CoercedFloat64()
 		result, err := schema.Parse(float32(3.14))
 		require.NoError(t, err)
 		assert.IsType(t, float64(0), result)
@@ -980,9 +980,9 @@ func TestFloatTypeSpecific(t *testing.T) {
 			input  any
 			want   any
 		}{
-			{"coerced float32", Float32(core.SchemaParams{Coerce: true}), "3.14", float32(3.14)},
-			{"coerced float64", Float64(core.SchemaParams{Coerce: true}), "3.14", float64(3.14)},
-			{"coerced number", Number(core.SchemaParams{Coerce: true}), "3.14", float64(3.14)},
+			{"coerced float32", CoercedFloat32(), "3.14", float32(3.14)},
+			{"coerced float64", CoercedFloat64(), "3.14", float64(3.14)},
+			{"coerced number", CoercedNumber(), "3.14", float64(3.14)},
 		}
 
 		for _, tt := range tests {
@@ -996,7 +996,7 @@ func TestFloatTypeSpecific(t *testing.T) {
 
 	t.Run("precision overflow protection", func(t *testing.T) {
 		// Test that coercion respects type bounds
-		schema := Float32(core.SchemaParams{Coerce: true})
+		schema := CoercedFloat32()
 
 		// Should succeed within bounds
 		result, err := schema.Parse("3.14")

@@ -93,30 +93,7 @@ func TestMapBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestMapCoerce(t *testing.T) {
-	t.Run("coerce enabled", func(t *testing.T) {
-		schema := Map(String(), Int(), core.SchemaParams{Coerce: true})
-
-		// Test with valid map
-		result, err := schema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("coerce namespace", func(t *testing.T) {
-		// Test Coerce.Map method
-		schema := Coerce.Map(String(), Int())
-		result, err := schema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestMapValidationMethods(t *testing.T) {
@@ -231,7 +208,7 @@ func TestMapValidationMethods(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestMapModifiers(t *testing.T) {
@@ -301,7 +278,7 @@ func TestMapModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestMapChaining(t *testing.T) {
@@ -345,7 +322,7 @@ func TestMapChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestMapTransformPipe(t *testing.T) {
@@ -384,7 +361,7 @@ func TestMapTransformPipe(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestMapRefine(t *testing.T) {
@@ -555,7 +532,7 @@ func TestMapRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestMapErrorHandling(t *testing.T) {
@@ -618,7 +595,7 @@ func TestMapErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge cases and internals
+// 8. Edge cases and internals
 // =============================================================================
 
 func TestMapEdgeCases(t *testing.T) {
@@ -686,14 +663,14 @@ func TestMapEdgeCases(t *testing.T) {
 
 	t.Run("parameters storage", func(t *testing.T) {
 		params := core.SchemaParams{
-			Coerce: true,
 			Params: map[string]any{
 				"custom": "value",
 			},
 		}
 
 		schema := Map(String(), Int(), params)
-		assert.True(t, schema.GetZod().Bag["coerce"].(bool))
+		// Coercion is no longer supported for collection types
+		assert.NotNil(t, schema.GetZod().Bag)
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
@@ -738,7 +715,7 @@ func TestMapEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestMapDefaultAndPrefault(t *testing.T) {

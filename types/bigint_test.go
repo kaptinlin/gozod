@@ -107,7 +107,7 @@ func TestBigIntBasicFunctionality(t *testing.T) {
 
 func TestBigIntCoercion(t *testing.T) {
 	t.Run("basic coercion", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true})
+		schema := CoercedBigInt()
 		tests := []struct {
 			input    any
 			expected string // Use string representation for comparison
@@ -128,7 +128,7 @@ func TestBigIntCoercion(t *testing.T) {
 	})
 
 	t.Run("string coercion with large numbers", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true})
+		schema := CoercedBigInt()
 		largeNumber := "123456789012345678901234567890"
 		result, err := schema.Parse(largeNumber)
 		require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestBigIntCoercion(t *testing.T) {
 	})
 
 	t.Run("coercion with validation", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true}).Min(big.NewInt(5))
+		schema := CoercedBigInt().Min(big.NewInt(5))
 		// Coercion then validation passes
 		result, err := schema.Parse("50")
 		require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestBigIntCoercion(t *testing.T) {
 	})
 
 	t.Run("failed coercion", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true})
+		schema := CoercedBigInt()
 		invalidInputs := []any{
 			"not a number",
 			[]int{1},                 // slice
@@ -252,6 +252,30 @@ func TestBigIntValidations(t *testing.T) {
 
 		// Invalid small number
 		_, err = schema.Parse(big.NewInt(42))
+		assert.Error(t, err)
+	})
+
+	// Additional tests to ensure that consecutive Min/Max calls apply the strictest
+	// bounds. GoZod accumulates checks instead of replacing them, but the effective
+	// behaviour should match expectations: the tightest constraints decide whether
+	// validation passes or fails.
+
+	// -----------------------------------------------------------------------------
+	// 3.1 Min/Max override semantics
+	// -----------------------------------------------------------------------------
+	t.Run("min/max override semantics", func(t *testing.T) {
+		// Min override: second Min(10) should make 10 the effective lower bound.
+		minSchema := BigInt().Min(big.NewInt(5)).Min(big.NewInt(10))
+		_, err := minSchema.Parse(big.NewInt(10)) // boundary should succeed
+		require.NoError(t, err)
+		_, err = minSchema.Parse(big.NewInt(6)) // below 10 should fail
+		assert.Error(t, err)
+
+		// Max override: second Max(1) should make 1 the effective upper bound.
+		maxSchema := BigInt().Max(big.NewInt(5)).Max(big.NewInt(1))
+		_, err = maxSchema.Parse(big.NewInt(1)) // boundary should succeed
+		require.NoError(t, err)
+		_, err = maxSchema.Parse(big.NewInt(4)) // above 1 should fail
 		assert.Error(t, err)
 	})
 }
@@ -613,7 +637,7 @@ func TestBigIntErrorHandling(t *testing.T) {
 	})
 
 	t.Run("coercion error handling", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true})
+		schema := CoercedBigInt()
 		invalidInputs := []any{
 			"not a number",
 			3.14, // non-integer float
@@ -983,7 +1007,7 @@ func TestBigIntTypeSpecific(t *testing.T) {
 	})
 
 	t.Run("coerce constructor", func(t *testing.T) {
-		schema := BigInt(core.SchemaParams{Coerce: true})
+		schema := CoercedBigInt()
 		result, err := schema.Parse("42")
 		require.NoError(t, err)
 		resultBig, ok := result.(*big.Int)

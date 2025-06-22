@@ -7,20 +7,25 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// =============================================================================
-// TYPE PARSING FUNCTIONS
-// =============================================================================
-
-// GetParsedType returns the parsed type string for a given value
-// This is a direct wrapper around reflectx.ParsedType for internal consistency
-func GetParsedType(value any) core.ParsedType {
-	return reflectx.ParsedType(value)
-}
-
-// GetTypeCategory returns a general category for the given value type
-// This is a direct wrapper around reflectx.ParsedCategory for internal consistency
-func GetTypeCategory(value any) string {
-	return reflectx.ParsedCategory(value)
+// IsPrimitiveType checks if a schema type is a primitive type that supports coercion
+// Only primitive types should support coercion according to TypeScript Zod v4 alignment
+func IsPrimitiveType(typeName string) bool {
+	switch typeName {
+	case "string", "bool", "boolean":
+		return true
+	case "int", "int8", "int16", "int32", "int64":
+		return true
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return true
+	case "float32", "float64", "number":
+		return true
+	case "complex64", "complex128":
+		return true
+	case "bigint":
+		return true
+	default:
+		return false
+	}
 }
 
 // =============================================================================

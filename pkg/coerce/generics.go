@@ -1,7 +1,6 @@
 package coerce
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"reflect"
@@ -44,8 +43,78 @@ func To[T any](v any) (T, error) {
 		}
 		return any(result).(T), nil
 
+	case int:
+		result, err := ToInteger[int](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case int8:
+		result, err := ToInteger[int8](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case int16:
+		result, err := ToInteger[int16](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case int32:
+		result, err := ToInteger[int32](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
 	case int64:
 		result, err := ToInt64(v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case uint:
+		result, err := ToInteger[uint](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case uint8:
+		result, err := ToInteger[uint8](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case uint16:
+		result, err := ToInteger[uint16](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case uint32:
+		result, err := ToInteger[uint32](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case uint64:
+		result, err := ToInteger[uint64](v)
+		if err != nil {
+			return zero, err
+		}
+		return any(result).(T), nil
+
+	case float32:
+		result, err := ToFloat[float32](v)
 		if err != nil {
 			return zero, err
 		}
@@ -65,22 +134,15 @@ func To[T any](v any) (T, error) {
 		}
 		return any(result).(T), nil
 
-	case map[any]any:
-		result, err := ToMap(v)
+	case complex64:
+		result, err := ToComplex64(v)
 		if err != nil {
 			return zero, err
 		}
 		return any(result).(T), nil
 
-	case map[string]any:
-		result, err := ToObject(v)
-		if err != nil {
-			return zero, err
-		}
-		return any(result).(T), nil
-
-	case []any:
-		result, err := ToSlice(v)
+	case complex128:
+		result, err := ToComplex128(v)
 		if err != nil {
 			return zero, err
 		}
@@ -95,24 +157,6 @@ func To[T any](v any) (T, error) {
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
-
-// ToValueSet converts a slice to a set (map[any]bool) for enum validation
-func ToValueSet(slice any) (map[any]bool, error) {
-	if slice == nil {
-		return nil, NewUnsupportedError("nil", "value set")
-	}
-
-	sliceAny, err := ToSlice(slice)
-	if err != nil {
-		return nil, fmt.Errorf("cannot convert to slice for value set: %w", err)
-	}
-
-	result := make(map[any]bool)
-	for _, value := range sliceAny {
-		result[value] = true
-	}
-	return result, nil
-}
 
 // ToLiteral attempts to coerce common textual representations into their primitive literal values.
 // For example "42" -> 42, "3.14" -> 3.14, "true" -> true.

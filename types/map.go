@@ -8,7 +8,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
@@ -56,15 +55,6 @@ func (z *ZodMap) GetInternals() *core.ZodTypeInternals {
 // GetZod returns the map-specific internals for framework usage
 func (z *ZodMap) GetZod() *ZodMapInternals {
 	return z.internals
-}
-
-// Coerce coerce input to map[any]any
-func (z *ZodMap) Coerce(input any) (any, bool) {
-	// Use coerce package for map conversion
-	if result, err := coerce.ToMap(input); err == nil {
-		return result, true
-	}
-	return input, false
 }
 
 // Parse parse map with smart type inference
@@ -284,11 +274,6 @@ func (z *ZodMap) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 
 			return nil
 		},
-		func(input any) (map[any]any, bool) {
-			// Use coerce package for type coercion
-			result, err := coerce.ToMap(input)
-			return result, err == nil
-		},
 		parseCtx,
 	)
 
@@ -469,7 +454,6 @@ func (z *ZodMap) Prefault(value any) ZodMapPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -497,7 +481,6 @@ func (z *ZodMap) PrefaultFunc(fn func() any) ZodMapPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -561,9 +544,6 @@ func createZodMapFromDef(def *ZodMapDef, params ...any) *ZodMap {
 	// Apply schema parameters following unified pattern
 	for _, p := range params {
 		if param, ok := p.(core.SchemaParams); ok {
-			if param.Coerce {
-				internals.Bag["coerce"] = true
-			}
 			if param.Error != nil {
 				errorMap := issues.CreateErrorMap(param.Error)
 				if errorMap != nil {

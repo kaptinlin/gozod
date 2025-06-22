@@ -51,16 +51,6 @@ func TestBoolBasicFunctionality(t *testing.T) {
 		require.NotNil(t, schema)
 		assert.Equal(t, "bool", schema.internals.Def.Type)
 	})
-
-	t.Run("coerce flag", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
-		require.NotNil(t, schema)
-
-		// Verify coercion flag is set
-		coerce, exists := schema.internals.Bag["coerce"].(bool)
-		require.True(t, exists, "Coerce flag should exist in bag")
-		assert.True(t, coerce, "Coerce flag should be true")
-	})
 }
 
 // =============================================================================
@@ -69,17 +59,7 @@ func TestBoolBasicFunctionality(t *testing.T) {
 
 func TestBoolCoercion(t *testing.T) {
 	t.Run("string coercion", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
-
-		// Debug: Check if coercion flag is set
-		internals := schema.GetInternals()
-		t.Logf("Bag contents: %+v", internals.Bag)
-		t.Logf("Bag coerce value: %v", internals.Bag["coerce"])
-
-		// Check the specific bag used by ZodBoolInternals
-		zodInternals := schema.GetZod()
-		t.Logf("ZodBoolInternals.Bag contents: %+v", zodInternals.Bag)
-		t.Logf("ZodBoolInternals.ZodTypeInternals.Bag contents: %+v", zodInternals.ZodTypeInternals.Bag)
+		schema := CoercedBool()
 
 		// Test coerce.ToBool directly
 		if result, err := coerce.ToBool("true"); err == nil {
@@ -93,7 +73,7 @@ func TestBoolCoercion(t *testing.T) {
 		// For now, let's manually check the Bag
 
 		// Compare with String coercion - does it work?
-		stringSchema := String(core.SchemaParams{Coerce: true})
+		stringSchema := CoercedString()
 		stringResult, stringErr := stringSchema.Parse(123)
 		if stringErr != nil {
 			t.Logf("String coercion failed: %v", stringErr)
@@ -126,7 +106,7 @@ func TestBoolCoercion(t *testing.T) {
 	})
 
 	t.Run("numeric coercion", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
+		schema := CoercedBool()
 
 		// Zero values should be false
 		zeroValues := []any{
@@ -152,7 +132,7 @@ func TestBoolCoercion(t *testing.T) {
 	})
 
 	t.Run("pointer coercion", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
+		schema := CoercedBool()
 
 		trueVal := true
 		falseVal := false
@@ -311,7 +291,7 @@ func TestBoolChaining(t *testing.T) {
 	})
 
 	t.Run("coercion with chaining", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true}).
+		schema := CoercedBool().
 			Refine(func(val bool) bool { return val == true }).
 			Optional()
 
@@ -432,7 +412,7 @@ func TestBoolErrorHandling(t *testing.T) {
 	})
 
 	t.Run("coercion error", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
+		schema := CoercedBool()
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
 	})
@@ -470,7 +450,7 @@ func TestBoolEdgeCases(t *testing.T) {
 	})
 
 	t.Run("coercion edge cases", func(t *testing.T) {
-		schema := Bool(core.SchemaParams{Coerce: true})
+		schema := CoercedBool()
 
 		tests := []struct {
 			name     string

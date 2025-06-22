@@ -79,37 +79,8 @@ func TestStringBoolBasicFunctionality(t *testing.T) {
 // 2. Coerce (type coercion)
 // =============================================================================
 
-func TestStringBoolCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := StringBool(nil, core.SchemaParams{Coerce: true})
-
-		// Numbers to strings
-		result1, err := schema.Parse(1)
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse(0)
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		// Boolean to string (should fail - booleans are not coerced to strings)
-		_, err = schema.Parse(true)
-		assert.Error(t, err)
-	})
-
-	t.Run("coercion with validation", func(t *testing.T) {
-		schema := StringBool(nil, core.SchemaParams{Coerce: true})
-
-		// Valid coerced values
-		result, err := schema.Parse(1)
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-
-		// Invalid coerced values
-		_, err = schema.Parse(123)
-		assert.Error(t, err)
-	})
-}
+// StringBool coercion is no longer supported as it's not a primitive type
+// Tests removed in alignment with TypeScript Zod v4 coercion strategy
 
 // =============================================================================
 // 3. Validation methods

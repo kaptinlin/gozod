@@ -9,7 +9,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
 // Error definitions for function validations
@@ -179,22 +179,15 @@ func (z *ZodFunction) Implement(fn any) (any, error) {
 
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
-		receivedType := string(utils.GetParsedType(fn))
+		receivedType := string(reflectx.ParsedType(fn))
 		return nil, fmt.Errorf("expected function, got %s", receivedType)
 	}
 
 	fnType := fnValue.Type()
 
-	// Validate function signature against input schema
+	// Validate function signature against input schema (parameter count only)
 	if z.def.Input != nil {
 		if err := z.validateFunctionSignature(fnType); err != nil {
-			return nil, err
-		}
-	}
-
-	// Validate function return type against output schema
-	if z.def.Output != nil {
-		if err := z.validateFunctionReturnType(fnType); err != nil {
 			return nil, err
 		}
 	}
@@ -228,55 +221,25 @@ func (z *ZodFunction) Implement(fn any) (any, error) {
 
 // validateFunctionSignature validates that the function signature matches the input schema
 func (z *ZodFunction) validateFunctionSignature(fnType reflect.Type) error {
-	// Check if input schema is an Array (multiple parameters)
+	// Only ensure the number of parameters matches the input schema definition.
+
+	// Case 1: the input schema is an Array -> multiple positional parameters expected.
 	if arraySchema, ok := z.def.Input.(*ZodArray); ok {
 		expectedParamCount := len(arraySchema.internals.Items)
-		actualParamCount := fnType.NumIn()
-
-		if expectedParamCount != actualParamCount {
-			return fmt.Errorf("function signature mismatch: expected %d parameters, got %d", expectedParamCount, actualParamCount)
+		if fnType.NumIn() != expectedParamCount {
+			return fmt.Errorf("function signature mismatch: expected %d parameters, got %d", expectedParamCount, fnType.NumIn())
 		}
 		return nil
 	}
 
-	// For single parameter schema, expect exactly one parameter
+	// Case 2: single parameter schema -> exactly one parameter expected.
 	if fnType.NumIn() != 1 {
 		return fmt.Errorf("%w: expected 1 parameter, got %d", ErrFunctionSignatureMismatch, fnType.NumIn())
 	}
 
-	// Check parameter type compatibility for common cases
-	paramType := fnType.In(0)
-
-	// First check if the schema is nilable - if so, be more permissive
-	if internals := z.def.Input.GetInternals(); internals != nil && internals.Nilable {
-		// For nilable types, we expect either the base type or a pointer to it
-		// This is a simplified check - in practice, nilable types are more complex
-		// We'll be permissive here and allow any type for nilable schemas
-		return nil
-	}
-
-	// Check if the input schema expects a specific Go type (for non-nilable types)
-	switch z.def.Input.(type) {
-	case *ZodString:
-		// String schema expects string parameter
-		if paramType.Kind() != reflect.String {
-			return fmt.Errorf("%w: expected string parameter, got %s", ErrFunctionParameterMismatch, paramType.Kind())
-		}
-	case *ZodInt:
-		// Int schema expects int parameter
-		if paramType.Kind() != reflect.Int {
-			return fmt.Errorf("%w: expected int parameter, got %s", ErrFunctionParameterMismatch, paramType.Kind())
-		}
-	case *ZodBool:
-		// Bool schema expects bool parameter
-		if paramType.Kind() != reflect.Bool {
-			return fmt.Errorf("%w: expected bool parameter, got %s", ErrFunctionParameterMismatch, paramType.Kind())
-		}
-	default:
-		// For Union, Any, and other complex types, accept any parameter type
-		// This allows for flexible typing when needed
-	}
-
+	// We intentionally DO NOT enforce parameter type matching here to stay consistent with
+	// the relaxed behaviour of the reference implementation. Input type correctness will
+	// be ensured at invocation time via schema parsing.
 	return nil
 }
 
@@ -373,46 +336,6 @@ func (z *ZodFunction) validateOutputResults(results []reflect.Value) []core.ZodR
 	return payload.Issues
 }
 
-// validateFunctionReturnType validates that the function return type matches the output schema
-func (z *ZodFunction) validateFunctionReturnType(fnType reflect.Type) error {
-	// For functions with no return values, expect no output validation
-	if fnType.NumOut() == 0 {
-		return nil
-	}
-
-	// For functions with single return value, check type compatibility
-	if fnType.NumOut() == 1 {
-		returnType := fnType.Out(0)
-
-		// Check if the output schema expects a specific Go type
-		switch z.def.Output.(type) {
-		case *ZodString:
-			// String schema expects string return type
-			if returnType.Kind() != reflect.String {
-				return fmt.Errorf("%w: expected string return, got %s", ErrFunctionReturnTypeMismatch, returnType.Kind())
-			}
-		case *ZodInt:
-			// Int schema expects int return type
-			if returnType.Kind() != reflect.Int {
-				return fmt.Errorf("%w: expected int return, got %s", ErrFunctionReturnTypeMismatch, returnType.Kind())
-			}
-		case *ZodBool:
-			// Bool schema expects bool return type
-			if returnType.Kind() != reflect.Bool {
-				return fmt.Errorf("%w: expected bool return, got %s", ErrFunctionReturnTypeMismatch, returnType.Kind())
-			}
-		default:
-			// For Union, Any, Object, and other complex types, accept any return type
-			// This allows for flexible typing when needed
-		}
-		return nil
-	}
-
-	// For functions with multiple return values, we're more permissive
-	// This could be enhanced in the future to validate each return value
-	return nil
-}
-
 // =============================================================================
 // CORE PARSE LOGIC WITH SMART TYPE INFERENCE
 // =============================================================================
@@ -474,8 +397,7 @@ func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals
 			}
 		}
 
-		// 3. Type coercion (if enabled) - functions typically don't coerce
-		// Functions generally don't support coercion, skip this section
+		// 3. No coercion for function type (non-primitive)
 
 		// 4. Unified error creation
 		rawIssue := issues.CreateInvalidTypeIssue("function", input)
@@ -568,12 +490,7 @@ func (z *ZodFunction) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			}
 		}
 
-		// 3. Type coercion (if enabled) - functions typically don't support coercion
-		if engine.ShouldCoerce(z.internals.Bag) {
-			// Functions generally don't support coercion, but keep for future extensibility
-			// Currently no coercion logic implemented for functions
-			_ = z.internals.Bag // Acknowledge the condition to avoid empty branch warning
-		}
+		// 3. No coercion for function type (non-primitive)
 
 		// 4. Unified error creation
 		rawIssue := issues.CreateInvalidTypeIssue("function", input)
@@ -790,7 +707,6 @@ func (z *ZodFunction) Prefault(value any) ZodFunctionPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -821,7 +737,6 @@ func (z *ZodFunction) PrefaultFunc(fn func() any) ZodFunctionPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -852,7 +767,6 @@ func (s ZodFunctionPrefault) Input(inputSchema any) ZodFunctionPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -883,7 +797,6 @@ func (s ZodFunctionPrefault) Output(outputSchema core.ZodType[any, any]) ZodFunc
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -914,7 +827,6 @@ func (s ZodFunctionPrefault) Refine(fn func(any) bool, params ...any) ZodFunctio
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,

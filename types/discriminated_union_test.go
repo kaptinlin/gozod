@@ -59,23 +59,7 @@ func TestDiscriminatedUnionBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestDiscriminatedUnionCoercion(t *testing.T) {
-	t.Run("basic coercion with invalid options", func(t *testing.T) {
-		// Test that even with Coerce parameter set, invalid options will still panic
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}, core.SchemaParams{Coerce: true})
-		})
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestDiscriminatedUnionValidations(t *testing.T) {
@@ -188,7 +172,7 @@ func TestDiscriminatedUnionValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestDiscriminatedUnionModifiers(t *testing.T) {
@@ -233,7 +217,7 @@ func TestDiscriminatedUnionModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestDiscriminatedUnionChaining(t *testing.T) {
@@ -292,7 +276,7 @@ func TestDiscriminatedUnionChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestDiscriminatedUnionTransform(t *testing.T) {
@@ -323,7 +307,7 @@ func TestDiscriminatedUnionTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestDiscriminatedUnionRefine(t *testing.T) {
@@ -361,7 +345,7 @@ func TestDiscriminatedUnionRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestDiscriminatedUnionErrorHandling(t *testing.T) {
@@ -434,7 +418,7 @@ func TestDiscriminatedUnionErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestDiscriminatedUnionEdgeCases(t *testing.T) {
@@ -502,7 +486,7 @@ func TestDiscriminatedUnionEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestDiscriminatedUnionDefaultAndPrefault(t *testing.T) {
@@ -750,5 +734,90 @@ func TestDiscriminatedUnionDefaultAndPrefault(t *testing.T) {
 		result3, err3 := schema.Parse(invalidInput)
 		require.NoError(t, err3)
 		assert.Equal(t, prefaultValue, result3)
+	})
+}
+
+// ------------------------------------------------------------------
+// Optional discriminator key – discriminator may be omitted
+// ------------------------------------------------------------------
+func TestDiscriminatedUnionOptionalDiscriminator(t *testing.T) {
+	schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
+		Object(core.ObjectSchema{
+			"type": Literal("a").Optional(), // discriminator may be absent
+			"a":    String(),
+		}),
+		Object(core.ObjectSchema{
+			"type": Literal("b"),
+			"b":    String(),
+		}),
+	}, core.SchemaParams{UnionFallback: true})
+
+	// Discriminator present
+	_, err := schema.Parse(map[string]any{"type": "a", "a": "hello"})
+	require.NoError(t, err)
+
+	// Discriminator omitted – still matches first option via fallback
+	_, err = schema.Parse(map[string]any{"a": "hello"})
+	require.NoError(t, err)
+}
+
+// ------------------------------------------------------------------
+// Nil discriminator literal value
+// ------------------------------------------------------------------
+func TestDiscriminatedUnionNilDiscriminator(t *testing.T) {
+	schema := DiscriminatedUnion("kind", []core.ZodType[any, any]{
+		Object(core.ObjectSchema{"kind": Literal("foo"), "v": String()}),
+		Object(core.ObjectSchema{"kind": Nil(), "v": String()}),
+	})
+
+	// Match nil discriminator value
+	_, err := schema.Parse(map[string]any{"kind": nil, "v": "bar"})
+	require.NoError(t, err)
+}
+
+// =============================================================================
+// 10. Additional discriminated union behavior tests (safe subset)
+// =============================================================================
+
+func TestDiscriminatedUnionAdditionalBehavior(t *testing.T) {
+	// ------------------------------------------------------------------
+	// invalid discriminator value with unionFallback enabled
+	// ------------------------------------------------------------------
+	t.Run("invalid discriminator unionFallback", func(t *testing.T) {
+		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
+			Object(core.ObjectSchema{"type": Literal("a"), "a": String()}),
+			Object(core.ObjectSchema{"type": Literal("b"), "b": String()}),
+		}, core.SchemaParams{UnionFallback: true})
+
+		// Expect an error because discriminator value "x" is unknown
+		_, err := schema.Parse(map[string]any{"type": "x", "a": "abc"})
+		assert.Error(t, err)
+
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		// Should report invalid_union
+		assert.Equal(t, core.InvalidUnion, zErr.Issues[0].Code)
+	})
+
+	// ------------------------------------------------------------------
+	// single-element discriminated union still validates inner schema
+	// ------------------------------------------------------------------
+	t.Run("single element union still validates", func(t *testing.T) {
+		singleOption := Object(core.ObjectSchema{
+			"a": Literal("discKey"),
+			"b": Enum("apple", "banana"),
+			"c": Object(core.ObjectSchema{"id": String()}),
+		})
+
+		schema := DiscriminatedUnion("a", []core.ZodType[any, any]{singleOption})
+
+		// Provide invalid nested data (missing c.id) -> should error
+		input := map[string]any{
+			"a": "discKey",
+			"b": "apple",
+			"c": map[string]any{},
+		}
+		_, err := schema.Parse(input)
+		assert.Error(t, err)
 	})
 }

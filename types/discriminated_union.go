@@ -314,7 +314,6 @@ func (z *ZodDiscriminatedUnion) Prefault(value any) ZodDiscriminatedUnionPrefaul
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -344,7 +343,6 @@ func (z *ZodDiscriminatedUnion) PrefaultFunc(fn func() any) ZodDiscriminatedUnio
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -528,6 +526,41 @@ func extractPropValues(schema core.ZodType[any, any]) map[string]map[any]struct{
 				for value := range fieldInternals.Values {
 					result[fieldName][value] = struct{}{}
 				}
+			} else if _, isNil := fieldSchema.(*ZodNil); isNil {
+				// Nil discriminator literal
+				if result[fieldName] == nil {
+					result[fieldName] = make(map[any]struct{})
+				}
+				result[fieldName][nil] = struct{}{}
+			} else if unwrapper, ok := fieldSchema.(interface{ Unwrap() core.ZodType[any, any] }); ok {
+				inner := unwrapper.Unwrap()
+				// Handle inner literal
+				if innerLit, ok2 := inner.(*ZodLiteral); ok2 {
+					innerInternals := innerLit.GetInternals()
+					if len(innerInternals.Values) > 0 {
+						if result[fieldName] == nil {
+							result[fieldName] = make(map[any]struct{})
+						}
+						for v := range innerInternals.Values {
+							result[fieldName][v] = struct{}{}
+						}
+					}
+				} else if _, ok2 := inner.(*ZodNil); ok2 {
+					if result[fieldName] == nil {
+						result[fieldName] = make(map[any]struct{})
+					}
+					result[fieldName][nil] = struct{}{}
+				} else {
+					// Fallback merge inner values recursively
+					for prop, values := range extractPropValues(inner) {
+						if result[prop] == nil {
+							result[prop] = make(map[any]struct{})
+						}
+						for val := range values {
+							result[prop][val] = struct{}{}
+						}
+					}
+				}
 			} else {
 				// Merge the property values of the field
 				for prop, values := range fieldValues {
@@ -568,6 +601,31 @@ func extractPropValues(schema core.ZodType[any, any]) map[string]map[any]struct{
 			// This value should be handled at the Object level
 			return result
 		}
+	}
+
+	// Support Optional/Nilable/Default/Prefault wrappers by unwrapping when available
+	if unwrapper, ok := schema.(interface{ Unwrap() core.ZodType[any, any] }); ok {
+		inner := unwrapper.Unwrap()
+		if inner == schema {
+			return result
+		}
+		innerVals := extractPropValues(inner)
+		for prop, values := range innerVals {
+			if result[prop] == nil {
+				result[prop] = make(map[any]struct{})
+			}
+			for v := range values {
+				result[prop][v] = struct{}{}
+			}
+		}
+		return result
+	}
+
+	// Handle Nil literal as valid discriminator value (value == nil)
+	if _, ok := schema.(*ZodNil); ok {
+		// Nil does not expose Values; represent as literal nil placeholder
+		// The property name should be resolved by caller (Object branch)
+		return result
 	}
 
 	// Check general Values information
@@ -616,9 +674,7 @@ func DiscriminatedUnion(discriminator string, options []core.ZodType[any, any], 
 	schema := createZodDiscriminatedUnionFromDef(def)
 
 	// Apply schema parameters
-	if finalParams.Coerce {
-		schema.internals.Bag["coerce"] = true
-	}
+	// Note: Coerce is not supported for discriminated unions (non-primitive type)
 
 	// Handle schema-level error mapping
 	if finalParams.Error != nil {

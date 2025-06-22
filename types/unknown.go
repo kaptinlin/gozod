@@ -67,10 +67,6 @@ func (z *ZodUnknown) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(v any) (any, bool) { return v, true },                       // Direct acceptance extractor
 		func(v any) (*any, bool) { ptr, ok := v.(*any); return ptr, ok }, // Pointer extractor
 		validateUnknown,
-		func(v any) (any, bool) {
-			// Unknown type accepts any value as-is
-			return v, true
-		},
 		parseCtx,
 	)
 }
@@ -417,9 +413,6 @@ func createZodUnknownFromDef(def *ZodUnknownDef) *ZodUnknown {
 			func(v any) (any, bool) { return v, true },
 			func(v any) (*any, bool) { ptr, ok := v.(*any); return ptr, ok },
 			validateUnknown,
-			func(v any) (any, bool) {
-				return v, true
-			},
 			ctx,
 		)
 
@@ -476,10 +469,6 @@ func Unknown(params ...any) *ZodUnknown {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
 
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap

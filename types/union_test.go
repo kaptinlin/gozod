@@ -109,26 +109,7 @@ func TestUnionBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestUnionCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}, core.SchemaParams{Coerce: true})
-
-		// Test with proper input
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		result, err = schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestUnionValidations(t *testing.T) {
@@ -194,7 +175,7 @@ func TestUnionValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestUnionModifiers(t *testing.T) {
@@ -266,7 +247,7 @@ func TestUnionModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestUnionChaining(t *testing.T) {
@@ -292,7 +273,7 @@ func TestUnionChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestUnionTransform(t *testing.T) {
@@ -344,7 +325,7 @@ func TestUnionTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestUnionRefine(t *testing.T) {
@@ -410,7 +391,7 @@ func TestUnionRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestUnionErrorHandling(t *testing.T) {
@@ -467,7 +448,7 @@ func TestUnionErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestUnionEdgeCases(t *testing.T) {
@@ -537,7 +518,7 @@ func TestUnionEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestUnionDefaultAndPrefault(t *testing.T) {
@@ -628,5 +609,63 @@ func TestUnionDefaultAndPrefault(t *testing.T) {
 		require.True(t, ok2)
 		assert.Equal(t, "hello", result2Map["original"])
 		assert.Equal(t, "union_value", result2Map["type"])
+	})
+}
+
+// =============================================================================
+// 10. Union values metadata tests
+// =============================================================================
+
+func TestUnionValuesMetadata(t *testing.T) {
+	schema := Union([]core.ZodType[any, any]{
+		Literal("a"),
+		Literal("b"),
+		Literal("c"),
+	})
+
+	internals := schema.GetInternals()
+	require.NotNil(t, internals)
+
+	// Collect values set from internals
+	values := make(map[any]struct{})
+	for v := range internals.Values {
+		values[v] = struct{}{}
+	}
+
+	// Expect exactly three literal values
+	assert.Len(t, values, 3)
+	for _, v := range []any{"a", "b", "c"} {
+		_, ok := values[v]
+		assert.True(t, ok, "missing value %v", v)
+	}
+}
+
+// =============================================================================
+// 11. Inferred types & empty object/array handling
+// =============================================================================
+
+func TestUnionInferredTypes(t *testing.T) {
+	// Union between an empty object and an array of empty objects
+	objectSchema := Object(core.ObjectSchema{})
+	arraySchema := Slice(objectSchema)
+
+	schema := Union([]core.ZodType[any, any]{objectSchema, arraySchema})
+
+	t.Run("parse empty object", func(t *testing.T) {
+		result, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+		assert.IsType(t, map[string]any{}, result)
+	})
+
+	t.Run("parse array of objects", func(t *testing.T) {
+		input := []map[string]any{{}}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.IsType(t, []any{}, result)
+		// Ensure inner element is object
+		if slice, ok := result.([]any); ok {
+			require.Len(t, slice, 1)
+			assert.IsType(t, map[string]any{}, slice[0])
+		}
 	})
 }

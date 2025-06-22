@@ -72,10 +72,6 @@ func (z *ZodBool) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(v any) (bool, bool) { b, ok := v.(bool); return b, ok },
 		func(v any) (*bool, bool) { ptr, ok := v.(*bool); return ptr, ok },
 		validateBool,
-		func(v any) (bool, bool) {
-			result, err := coerce.ToBool(v)
-			return result, err == nil
-		},
 		parseCtx,
 	)
 }
@@ -317,7 +313,6 @@ func (z *ZodBool) Prefault(value bool) ZodBoolPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -347,7 +342,6 @@ func (z *ZodBool) PrefaultFunc(fn func() bool) ZodBoolPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -378,7 +372,6 @@ func (b ZodBoolPrefault) Refine(fn func(bool) bool, params ...any) ZodBoolPrefau
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -465,10 +458,6 @@ func createZodBoolFromDef(def *ZodBoolDef) *ZodBool {
 			func(v any) (bool, bool) { b, ok := v.(bool); return b, ok },
 			func(v any) (*bool, bool) { ptr, ok := v.(*bool); return ptr, ok },
 			validateBool,
-			func(v any) (bool, bool) {
-				result, err := coerce.ToBool(v)
-				return result, err == nil
-			},
 			ctx,
 		)
 
@@ -524,11 +513,6 @@ func Bool(params ...any) *ZodBool {
 			}
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
-
 			if p.Error != nil {
 				errorMap := issues.CreateErrorMap(p.Error)
 				if errorMap != nil {

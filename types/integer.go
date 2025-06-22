@@ -91,7 +91,6 @@ func (z *ZodInteger[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 
 	var zero T
 	typeName := getIntegerTypeName(zero)
-	coerceFunc := createIntegerCoerceFunc[T]()
 
 	return engine.ParseType[T](
 		input,
@@ -100,7 +99,6 @@ func (z *ZodInteger[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		validateInteger[T],
-		coerceFunc,
 		parseCtx,
 	)
 }
@@ -436,7 +434,6 @@ func (z *ZodInteger[T]) Prefault(value T) ZodIntegerPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -466,7 +463,6 @@ func (z *ZodInteger[T]) PrefaultFunc(fn func() T) ZodIntegerPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -498,7 +494,6 @@ func (s ZodIntegerPrefault[T]) Min(minimum T, params ...any) ZodIntegerPrefault[
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -528,7 +523,6 @@ func (s ZodIntegerPrefault[T]) Max(maximum T, params ...any) ZodIntegerPrefault[
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -558,7 +552,6 @@ func (s ZodIntegerPrefault[T]) Gt(value T, params ...any) ZodIntegerPrefault[T] 
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -588,7 +581,6 @@ func (s ZodIntegerPrefault[T]) Gte(value T, params ...any) ZodIntegerPrefault[T]
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -618,7 +610,6 @@ func (s ZodIntegerPrefault[T]) Lt(value T, params ...any) ZodIntegerPrefault[T] 
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -648,7 +639,6 @@ func (s ZodIntegerPrefault[T]) Lte(value T, params ...any) ZodIntegerPrefault[T]
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -678,7 +668,6 @@ func (s ZodIntegerPrefault[T]) Positive(params ...any) ZodIntegerPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -708,7 +697,6 @@ func (s ZodIntegerPrefault[T]) Negative(params ...any) ZodIntegerPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -738,7 +726,6 @@ func (s ZodIntegerPrefault[T]) NonNegative(params ...any) ZodIntegerPrefault[T] 
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -768,7 +755,6 @@ func (s ZodIntegerPrefault[T]) NonPositive(params ...any) ZodIntegerPrefault[T] 
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -798,7 +784,6 @@ func (s ZodIntegerPrefault[T]) MultipleOf(value T, params ...any) ZodIntegerPref
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -828,7 +813,6 @@ func (s ZodIntegerPrefault[T]) Refine(fn func(T) bool, params ...any) ZodInteger
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -1181,11 +1165,6 @@ func Integer[T ZodIntegerConstraint](params ...any) *ZodInteger[T] {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
-
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap
 				if errStr, ok := p.Error.(string); ok {

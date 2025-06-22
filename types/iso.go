@@ -112,6 +112,14 @@ func (z *ZodISODate) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = core.NewParseContext()
 	}
 
+	// Special coercion handling for ISO dates
+	if z.internals.Bag != nil && z.internals.Bag["coerce"] == true {
+		// Try to coerce input to ISO date string using ToISODate
+		if coercedStr, err := coerce.ToISODate(input); err == nil {
+			input = coercedStr
+		}
+	}
+
 	return engine.ParseType(
 		input,
 		&z.internals.ZodTypeInternals,
@@ -141,13 +149,6 @@ func (z *ZodISODate) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			}
 			return nil
 		},
-		func(v any) (string, bool) {
-			// Use pkg/coerce for type coercion
-			if result, err := coerce.ToISODate(v); err == nil {
-				return result, true
-			}
-			return "", false
-		},
 		parseCtx,
 	)
 }
@@ -159,15 +160,6 @@ func (z *ZodISODate) MustParse(input any, ctx ...*core.ParseContext) any {
 		panic(err)
 	}
 	return result
-}
-
-// Coerce implements Coercible interface for ISO date coercion
-func (z *ZodISODate) Coerce(input any) (any, bool) {
-	// Use pkg/coerce instead of custom coerceToISODate
-	if result, err := coerce.ToISODate(input); err == nil {
-		return result, true
-	}
-	return nil, false
 }
 
 // Min adds minimum date validation using existing checks system
@@ -470,11 +462,11 @@ func (ZodISO) Time(options ...any) core.ZodType[any, any] {
 
 	var schema *ZodString
 	if opts.Error != nil && opts.Coerce {
-		schema = String(core.SchemaParams{Error: opts.Error, Coerce: true}).Regex(regexp.MustCompile(pattern))
+		schema = CoercedString(core.SchemaParams{Error: opts.Error}).Regex(regexp.MustCompile(pattern))
 	} else if opts.Error != nil {
 		schema = String(core.SchemaParams{Error: opts.Error}).Regex(regexp.MustCompile(pattern))
 	} else if opts.Coerce {
-		schema = String(core.SchemaParams{Coerce: true}).Regex(regexp.MustCompile(pattern))
+		schema = CoercedString().Regex(regexp.MustCompile(pattern))
 	} else {
 		schema = String().Regex(regexp.MustCompile(pattern))
 	}
@@ -524,11 +516,11 @@ func (ZodISO) DateTime(options ...any) core.ZodType[any, any] {
 
 	var schema *ZodString
 	if opts.Error != nil && opts.Coerce {
-		schema = String(core.SchemaParams{Error: opts.Error, Coerce: true}).Regex(regexp.MustCompile(pattern))
+		schema = CoercedString(core.SchemaParams{Error: opts.Error}).Regex(regexp.MustCompile(pattern))
 	} else if opts.Error != nil {
 		schema = String(core.SchemaParams{Error: opts.Error}).Regex(regexp.MustCompile(pattern))
 	} else if opts.Coerce {
-		schema = String(core.SchemaParams{Coerce: true}).Regex(regexp.MustCompile(pattern))
+		schema = CoercedString().Regex(regexp.MustCompile(pattern))
 	} else {
 		schema = String().Regex(regexp.MustCompile(pattern))
 	}
@@ -545,7 +537,7 @@ func (ZodISO) Duration(options ...any) core.ZodType[any, any] {
 	opts := parseISODurationOptions(options...)
 
 	// Build base String schema with coercion/error options
-	base := String(core.SchemaParams{Error: opts.Error, Coerce: opts.Coerce})
+	base := CoercedString(core.SchemaParams{Error: opts.Error})
 
 	// Re-use existing duration validator from ZodString to leverage validate.ISODuration logic
 	schema := base.Duration()
@@ -649,7 +641,7 @@ func parseISODateOptions(options ...any) ISODateOptions {
 	case ISODateOptions:
 		return opt
 	case core.SchemaParams:
-		return ISODateOptions{Error: opt.Error, Coerce: opt.Coerce}
+		return ISODateOptions{Error: opt.Error}
 	default:
 		return ISODateOptions{}
 	}
@@ -667,7 +659,7 @@ func parseISOTimeOptions(options ...any) ISOTimeOptions {
 	case ISOTimeOptions:
 		return opt
 	case core.SchemaParams:
-		return ISOTimeOptions{Error: opt.Error, Coerce: opt.Coerce}
+		return ISOTimeOptions{Error: opt.Error}
 	default:
 		return ISOTimeOptions{}
 	}
@@ -685,7 +677,7 @@ func parseISODateTimeOptions(options ...any) ISODateTimeOptions {
 	case ISODateTimeOptions:
 		return opt
 	case core.SchemaParams:
-		return ISODateTimeOptions{Error: opt.Error, Coerce: opt.Coerce}
+		return ISODateTimeOptions{Error: opt.Error}
 	default:
 		return ISODateTimeOptions{}
 	}
@@ -703,7 +695,7 @@ func parseISODurationOptions(options ...any) ISODurationOptions {
 	case ISODurationOptions:
 		return opt
 	case core.SchemaParams:
-		return ISODurationOptions{Error: opt.Error, Coerce: opt.Coerce}
+		return ISODurationOptions{Error: opt.Error}
 	default:
 		return ISODurationOptions{}
 	}
@@ -779,13 +771,6 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 					}
 				}
 				return nil
-			},
-			func(v any) (string, bool) {
-				// Use pkg/coerce for type coercion
-				if result, err := coerce.ToISODate(v); err == nil {
-					return result, true
-				}
-				return "", false
 			},
 			ctx,
 		)

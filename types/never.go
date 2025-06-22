@@ -67,11 +67,6 @@ func (z *ZodNever) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (always fails for never type)
-func (z *ZodNever) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates input (always fails except for Nilable never with nil input)
 func (z *ZodNever) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	parseCtx := (*core.ParseContext)(nil)

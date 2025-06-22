@@ -1,6 +1,7 @@
 package types
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
@@ -24,13 +25,10 @@ func TestRecordBasicFunctionality(t *testing.T) {
 
 	t.Run("constructor with params", func(t *testing.T) {
 		schema := Record(String(), Int(), core.SchemaParams{
-			Coerce: true,
-			Error:  "core.Custom record error",
+			Error: "core.Custom record error",
 		})
 		require.NotNil(t, schema)
-		coerceFlag, exists := schema.internals.Bag["coerce"]
-		require.True(t, exists)
-		assert.True(t, coerceFlag.(bool))
+		// Coercion is no longer supported for collection types
 	})
 
 	t.Run("smart type inference", func(t *testing.T) {
@@ -90,47 +88,7 @@ func TestRecordBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestRecordCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		// Use Coerce.Record to enable coercion for both keys and values
-		// This should automatically enable coercion for the Int() value type
-		schema := Coerce.Record(String(), Int())
-
-		// Test coercion from different map types
-		input := map[string]any{
-			"key1": "10", // String that can be coerced to int
-			"key2": "20", // String that can be coerced to int
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		// Coerce.Record(String(), Int()) should return map[string]int
-		resultMap, ok := result.(map[string]int)
-		require.True(t, ok)
-		assert.Equal(t, 10, resultMap["key1"])
-		assert.Equal(t, 20, resultMap["key2"])
-	})
-
-	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Record(String(), String(), core.SchemaParams{Coerce: true})
-
-		// Should coerce and validate
-		input := map[string]any{
-			"key1": "value1",
-			"key2": 123, // Should fail validation even with coercion
-		}
-
-		_, err := schema.Parse(input)
-		assert.Error(t, err) // Value validation should fail
-	})
-}
-
-// =============================================================================
-// 3. Validation methods (Record-specific key/value validation)
+// 2. Validation methods (Record-specific key/value validation)
 // =============================================================================
 
 func TestRecordValidations(t *testing.T) {
@@ -246,7 +204,7 @@ func TestRecordValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestRecordModifiers(t *testing.T) {
@@ -346,7 +304,7 @@ func TestRecordModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestRecordChaining(t *testing.T) {
@@ -385,7 +343,7 @@ func TestRecordChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestRecordTransform(t *testing.T) {
@@ -472,7 +430,7 @@ func TestRecordTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestRecordRefine(t *testing.T) {
@@ -534,7 +492,7 @@ func TestRecordRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestRecordErrorHandling(t *testing.T) {
@@ -602,7 +560,7 @@ func TestRecordErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestRecordEdgeCases(t *testing.T) {
@@ -705,7 +663,7 @@ func TestRecordEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestRecordDefaultAndPrefault(t *testing.T) {
@@ -863,10 +821,10 @@ func TestRecordDefaultAndPrefault(t *testing.T) {
 }
 
 // =============================================================================
-// TypeScript Zod v4 Compatibility Tests
+// 10. Compatibility tests
 // =============================================================================
 
-func TestRecordTypeScriptCompatibility(t *testing.T) {
+func TestRecordCompatibility(t *testing.T) {
 	t.Run("enum exhaustiveness", func(t *testing.T) {
 		schema := Record(Enum("Tuna", "Salmon"), String())
 
@@ -892,14 +850,15 @@ func TestRecordTypeScriptCompatibility(t *testing.T) {
 		_, err = schema.Parse(invalidInput)
 		assert.Error(t, err)
 
-		// Partial case: missing required key
+		// Partial case: missing keys are allowed; should parse successfully.
 		partialInput := map[string]any{
 			"Tuna": "asdf",
-			// Missing "Salmon"
 		}
-		_, _ = schema.Parse(partialInput)
-		// Note: In Go implementation, missing keys might be handled differently
-		// This depends on the enum validation logic
+		resultPartial, err := schema.Parse(partialInput)
+		require.NoError(t, err)
+		resultMapPartial, ok := resultPartial.(map[any]any)
+		require.True(t, ok)
+		assert.Equal(t, "asdf", resultMapPartial["Tuna"])
 	})
 
 	t.Run("literal exhaustiveness", func(t *testing.T) {
@@ -1161,29 +1120,7 @@ func TestPartialRecord(t *testing.T) {
 		assert.Equal(t, expected, result)
 	})
 
-	t.Run("Coerce support", func(t *testing.T) {
-		// Combine PartialRecord with Coerce
-		schema := PartialRecord(String(), Int(), core.SchemaParams{Coerce: true})
-
-		// Test string-to-int coercion
-		result, err := schema.Parse(map[any]any{
-			"number": "42", // string should be coerced to int
-		})
-
-		if err != nil {
-			t.Logf("Coerce test failed (expected for now): %v", err)
-			// This test may fail because Record's coercion implementation still has issues,
-			// but at least we verify the basic structure of PartialRecord is correct
-			return
-		}
-
-		if result != nil {
-			resultMap, ok := result.(map[any]any)
-			if ok && resultMap != nil {
-				assert.Equal(t, 42, resultMap["number"]) // should be int, not string
-			}
-		}
-	})
+	// Coercion is no longer supported for collection types - test removed
 
 	t.Run("error handling", func(t *testing.T) {
 		schema := PartialRecord(String(), Int())
@@ -1291,4 +1228,64 @@ func TestZodRecord(t *testing.T) {
 		_, err := schema.Parse("not a map")
 		assert.Error(t, err)
 	})
+}
+
+// =============================================================================
+// 11. Additional exhaustiveness tests
+// =============================================================================
+
+// TestRecordPipeExhaustiveness validates that piping the key schema still enforces key constraints
+func TestRecordPipeExhaustiveness(t *testing.T) {
+	t.Run("pipe exhaustiveness", func(t *testing.T) {
+		keySchema := Enum("Tuna", "Salmon").Pipe(Any())
+		schema := Record(keySchema, String())
+
+		// Valid input with recognized keys
+		validInput := map[string]any{
+			"Tuna":   "asdf",
+			"Salmon": "asdf",
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// Invalid input with unrecognized key should fail
+		invalidInput := map[string]any{
+			"Tuna":   "asdf",
+			"Salmon": "asdf",
+			"Trout":  "asdf",
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+}
+
+// TestRecordAllowNilValues ensures record schema can accept nil values when value type is Nil()
+func TestRecordAllowNilValues(t *testing.T) {
+	t.Run("allow nil values", func(t *testing.T) {
+		schema := Record(String(), Nil())
+
+		input := map[string]any{
+			"_test": nil,
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		resultMap, ok := result.(map[any]any)
+		require.True(t, ok)
+		assert.Equal(t, []string{"_test"}, keysSorted(resultMap))
+		assert.Nil(t, resultMap["_test"])
+	})
+}
+
+// keysSorted returns sorted keys of a map for deterministic assertions
+func keysSorted(m map[any]any) []string {
+	// Preallocate slice capacity to avoid reallocations under lint prealloc check
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k.(string))
+	}
+	sort.Strings(ks)
+	return ks
 }

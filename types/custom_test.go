@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -99,24 +100,8 @@ func TestCustomBasicFunctionality(t *testing.T) {
 // 2. Coerce (type coercion)
 // =============================================================================
 
-func TestCustomCoerce(t *testing.T) {
-	t.Run("coerce enabled", func(t *testing.T) {
-		schema := Custom(func(x any) bool {
-			_, ok := x.(string)
-			return ok
-		}, core.SchemaParams{Coerce: true})
-
-		// Should coerce and then validate
-		result, err := schema.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("coerce parameter storage", func(t *testing.T) {
-		schema := Custom(nil, core.SchemaParams{Coerce: true})
-		assert.True(t, schema.GetZod().Bag["coerce"].(bool))
-	})
-}
+// TestCustomCoerce is removed as Custom type no longer supports coercion (non-primitive type)
+// Coercion is now limited to primitive types only (string, bool, int*, uint*, float*, complex*, bigint)
 
 // =============================================================================
 // 3. Validation methods
@@ -652,5 +637,42 @@ func TestCustomDefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "fallback-2", result)
 		assert.Equal(t, 2, counter)
+	})
+}
+
+// =============================================================================
+// 11. Additional pipeline tests inspired by upstream behavior
+// =============================================================================
+
+func TestCustomStringToNumberPipe(t *testing.T) {
+	t.Run("string to number pipe", func(t *testing.T) {
+		numberValidator := func(x any) bool {
+			if s, ok := x.(string); ok {
+				_, err := strconv.Atoi(s)
+				return err == nil
+			}
+			return false
+		}
+
+		schema := Custom(numberValidator).
+			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
+				if s, ok := val.(string); ok {
+					return strconv.Atoi(s)
+				}
+				return nil, fmt.Errorf("input must be string")
+			}).
+			Pipe(Int())
+
+		result, err := schema.Parse("1234")
+		require.NoError(t, err)
+		assert.Equal(t, 1234, result)
+
+		// Non-numeric string should fail at custom validator or transform
+		_, err = schema.Parse("abc")
+		assert.Error(t, err)
+
+		// Wrong type should fail immediately
+		_, err = schema.Parse(1234)
+		assert.Error(t, err)
 	})
 }

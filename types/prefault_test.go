@@ -93,7 +93,7 @@ func TestPrefaultBasicFunctionality(t *testing.T) {
 
 func TestPrefaultCoercion(t *testing.T) {
 	t.Run("coerced input with prefault", func(t *testing.T) {
-		schema := String(core.SchemaParams{Coerce: true}).Prefault("fallback")
+		schema := CoercedString().Prefault("fallback")
 
 		// Coercible input
 		result1, err1 := schema.Parse(123)
@@ -513,7 +513,7 @@ func TestPrefaultDefaultAndPrefault(t *testing.T) {
 		assert.Error(t, err6, "Default: type validation fails, no fallback for non-nil")
 	})
 
-	t.Run("prefault inside object - TypeScript compatibility", func(t *testing.T) {
+	t.Run("prefault inside object", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name":  String().Optional(),
 			"age":   Int().Default(1234),

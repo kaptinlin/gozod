@@ -96,7 +96,7 @@ func TestPipeBasicFunctionality(t *testing.T) {
 func TestPipeCoercion(t *testing.T) {
 	t.Run("coerce in pipe", func(t *testing.T) {
 		// Coerce string to number, then validate as positive
-		schema := String(core.SchemaParams{Coerce: true}).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+		schema := CoercedString().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
 			num, err := strconv.Atoi(s)
 			if err != nil {
 				return nil, fmt.Errorf("%w: %w", ErrInvalidNumber, err)
@@ -440,29 +440,18 @@ func TestPipeRefine(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1234, result)
 
-		// Invalid case - should collect both errors
+		// Invalid case – expect both refine steps to fail and produce two issues
 		_, err = schema.Parse("4321")
 		assert.Error(t, err)
 
 		var zodErr *issues.ZodError
-		if issues.IsZodError(err, &zodErr) {
-			// Should have multiple issues (both A and B fail)
-			// Note: Implementation may vary on error collection
-			assert.Greater(t, len(zodErr.Issues), 0)
-
-			// Check if both error messages are present
-			errorStr := err.Error()
-			containsA := strings.Contains(errorStr, "A")
-			containsB := strings.Contains(errorStr, "B")
-
-			switch {
-			case containsA && containsB:
-				t.Logf("Both errors collected as expected")
-			case containsA || containsB:
-				t.Logf("Partial error collection (expected for early abort)")
-			default:
-				t.Logf("core.Custom error handling: %v", err)
-			}
+		require.True(t, issues.IsZodError(err, &zodErr))
+		// Implementation may report one or multiple issues; ensure at least first error is captured
+		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
+		errorStr := err.Error()
+		assert.Contains(t, errorStr, "A")
+		if len(zodErr.Issues) >= 2 {
+			assert.Contains(t, errorStr, "B")
 		}
 	})
 
@@ -491,23 +480,15 @@ func TestPipeRefine(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1234, result)
 
-		// Invalid case - first refine fails, should not execute transform
+		// Invalid case – first refine fails, transform should not execute, second refine should not run
 		_, err = schema.Parse("4321")
 		assert.Error(t, err)
 
 		var zodErr *issues.ZodError
-		if issues.IsZodError(err, &zodErr) {
-			// Should have at least one error
-			assert.Greater(t, len(zodErr.Issues), 0)
-
-			// Check error message
-			errorStr := err.Error()
-			if strings.Contains(errorStr, "A") {
-				t.Logf("First error detected as expected")
-			} else {
-				t.Logf("Error handling: %v", err)
-			}
-		}
+		require.True(t, issues.IsZodError(err, &zodErr))
+		// Only the first error should be reported
+		assert.Equal(t, 1, len(zodErr.Issues))
+		assert.Contains(t, zodErr.Issues[0].Message, "A")
 	})
 }
 

@@ -155,17 +155,6 @@ func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 			}
 			return nil
 		},
-		func(input any) (T, bool) {
-			// Create coercion function with correct signature
-			result, ok := z.Coerce(input)
-			if !ok {
-				return *new(T), false
-			}
-			if val, ok := result.(T); ok {
-				return val, true
-			}
-			return *new(T), false
-		},
 		parseCtx,
 	)
 }
@@ -460,7 +449,6 @@ func (z *ZodComplex[T]) Prefault(value T) ZodComplexPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -491,7 +479,6 @@ func (z *ZodComplex[T]) PrefaultFunc(fn func() T) ZodComplexPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -606,7 +593,6 @@ func (s ZodComplexPrefault[T]) Min(minimum float64, params ...any) ZodComplexPre
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -636,7 +622,6 @@ func (s ZodComplexPrefault[T]) Max(maximum float64, params ...any) ZodComplexPre
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -666,7 +651,6 @@ func (s ZodComplexPrefault[T]) Positive(params ...any) ZodComplexPrefault[T] {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -696,7 +680,6 @@ func (s ZodComplexPrefault[T]) Refine(fn func(T) bool, params ...any) ZodComplex
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -833,12 +816,7 @@ func Complex[T ZodComplexConstraint](params ...any) *ZodComplex[T] {
 		// Convert any params to core.SchemaParams format
 		if param, ok := params[0].(core.SchemaParams); ok {
 			engine.ApplySchemaParams(&def.ZodTypeDef, param)
-
-			// Handle coerce flag in bag for parseType to access
-			if param.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
+			// Note: Coerce handling is now done via dedicated constructors
 		}
 	}
 

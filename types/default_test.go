@@ -84,7 +84,7 @@ func TestDefaultBasicFunctionality(t *testing.T) {
 
 func TestDefaultCoerce(t *testing.T) {
 	t.Run("coerce with default", func(t *testing.T) {
-		schema := String(core.SchemaParams{Coerce: true}).Default("default")
+		schema := CoercedString().Default("default")
 
 		// Nil uses default
 		result, err := schema.Parse(nil)
@@ -449,4 +449,69 @@ func TestDefaultEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, false, result) // false is not nil, so no default
 	})
+}
+
+// =============================================================================
+// 10. Order-specific behaviour (Optional ↔ Default, Transform ↔ Default)
+// =============================================================================
+
+func TestDefaultOrderSpecificBehaviour(t *testing.T) {
+	t.Run("optional_then_default", func(t *testing.T) {
+		// Optional wrapper applied first, then Default on top.
+		schema := Default(Optional(String()), "fallback")
+
+		// nil triggers Default because Optional has already wrapped the inner type.
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "fallback", result)
+
+		// Unwrap should return the *outer* Optional wrapper which, when parsed with nil, returns generic nil.
+		unwrapped := schema.Unwrap()
+		parsedNil, err := unwrapped.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, parsedNil)
+	})
+
+	t.Run("default_then_optional", func(t *testing.T) {
+		// Default applied first, then Optional on top.
+		schema := Optional(Default(String(), "fallback"))
+
+		// nil is caught by the outer Optional – should therefore return generic nil (no default).
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// The wrapped Default is now inside Optional.
+		// Unwrap removes Optional, exposing ZodDefault again – nil should now use default.
+		unwrapped := schema.Unwrap()
+		parsedNil, err := unwrapped.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "fallback", parsedNil)
+	})
+
+	t.Run("transform_then_default", func(t *testing.T) {
+		// Transform returns nil to intentionally trigger Default wrapper.
+		schema := Default(String().Transform(func(val string, _ *core.RefinementContext) (any, error) {
+			return nil, nil
+		}), "transformed_default")
+
+		result, err := schema.Parse("irrelevant") // Input becomes nil inside Transform
+		require.NoError(t, err)
+		// According to GoZod semantics, Default only applies to initial nil input.
+		// Since the original input is non-nil, the outer Default wrapper
+		// delegates directly to the inner Transform, which returns nil.
+		assert.Nil(t, result)
+	})
+}
+
+// =============================================================================
+// 11. Chained defaults precedence
+// =============================================================================
+
+func TestDefaultChainedPrecedence(t *testing.T) {
+	schema := Default(Default(String(), "inner"), "outer")
+
+	result, err := schema.Parse(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "outer", result)
 }

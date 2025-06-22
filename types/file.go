@@ -10,7 +10,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 //////////////////////////////
@@ -189,15 +188,6 @@ func File(params ...any) *ZodFile {
 				}
 			}
 
-			// Handle coercion configuration
-			if param.Coerce {
-				schema.internals.Coerce = true
-				if schema.internals.Bag == nil {
-					schema.internals.Bag = make(map[string]any)
-				}
-				schema.internals.Bag["coerce"] = true
-			}
-
 			// Handle description
 			if param.Description != "" {
 				if schema.internals.Bag == nil {
@@ -311,8 +301,7 @@ func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		return v, nil
 
 	default:
-		// 3. Type coercion (if enabled) - files typically don't support coercion
-		// Files generally don't support coercion, skip this section
+		// 3. No coercion for file type (non-primitive)
 
 		// 4. Unified error creation
 		rawIssue := issues.CreateInvalidTypeIssue("file", input)
@@ -359,98 +348,81 @@ func (z *ZodFile) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, 
 // FILE-SPECIFIC VALIDATION METHODS
 // =============================================================================
 
-// Min adds minimum file size validation using pkg utilities
+// Min adds minimum file size validation using checks.NewCustom and TooSmall issue
 func (z *ZodFile) Min(minimum int64, params ...any) *ZodFile {
-	check := checks.NewCustom[any](func(v any) bool {
-		if fileHeader, ok := v.(*multipart.FileHeader); ok {
-			return fileHeader.Size >= minimum
+	// CheckFn variant allows pushing custom issue codes
+	checkFn := func(payload *core.ParsePayload) {
+		size := getFileSize(payload.Value)
+		if size < minimum {
+			raw := issues.CreateTooSmallIssue(minimum, true, "file", payload.Value)
+			payload.Issues = append(payload.Issues, raw)
 		}
-		if file, ok := v.(*os.File); ok {
-			if stat, err := file.Stat(); err == nil {
-				return stat.Size() >= minimum
-			}
-		}
-		if fileValue, ok := v.(multipart.FileHeader); ok {
-			return fileValue.Size >= minimum
-		}
-		if fileValue, ok := v.(os.File); ok {
-			if stat, err := fileValue.Stat(); err == nil {
-				return stat.Size() >= minimum
-			}
-		}
-		return false
-	}, params...)
+	}
+
+	check := checks.NewCustom[any](checkFn, params...)
 	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 	return result.(*ZodFile)
 }
 
-// Max adds maximum file size validation using pkg utilities
+// Max adds maximum file size validation
 func (z *ZodFile) Max(maximum int64, params ...any) *ZodFile {
-	check := checks.NewCustom[any](func(v any) bool {
-		if fileHeader, ok := v.(*multipart.FileHeader); ok {
-			return fileHeader.Size <= maximum
+	checkFn := func(payload *core.ParsePayload) {
+		size := getFileSize(payload.Value)
+		if size > maximum {
+			raw := issues.CreateTooBigIssue(maximum, true, "file", payload.Value)
+			payload.Issues = append(payload.Issues, raw)
 		}
-		if file, ok := v.(*os.File); ok {
-			if stat, err := file.Stat(); err == nil {
-				return stat.Size() <= maximum
-			}
-		}
-		if fileValue, ok := v.(multipart.FileHeader); ok {
-			return fileValue.Size <= maximum
-		}
-		if fileValue, ok := v.(os.File); ok {
-			if stat, err := fileValue.Stat(); err == nil {
-				return stat.Size() <= maximum
-			}
-		}
-		return false
-	}, params...)
+	}
+
+	check := checks.NewCustom[any](checkFn, params...)
 	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 	return result.(*ZodFile)
 }
 
-// Size adds exact file size validation using pkg utilities
-func (z *ZodFile) Size(size int64, params ...any) *ZodFile {
-	check := checks.NewCustom[any](func(v any) bool {
-		if fileHeader, ok := v.(*multipart.FileHeader); ok {
-			return fileHeader.Size == size
-		}
-		if file, ok := v.(*os.File); ok {
-			if stat, err := file.Stat(); err == nil {
-				return stat.Size() == size
+// Size enforces exact file size validation
+func (z *ZodFile) Size(expect int64, params ...any) *ZodFile {
+	checkFn := func(payload *core.ParsePayload) {
+		size := getFileSize(payload.Value)
+		if size != expect {
+			var raw core.ZodRawIssue
+			if size > expect {
+				raw = issues.CreateTooBigIssue(expect, true, "file", payload.Value)
+			} else {
+				raw = issues.CreateTooSmallIssue(expect, true, "file", payload.Value)
 			}
+			payload.Issues = append(payload.Issues, raw)
 		}
-		if fileValue, ok := v.(multipart.FileHeader); ok {
-			return fileValue.Size == size
-		}
-		if fileValue, ok := v.(os.File); ok {
-			if stat, err := fileValue.Stat(); err == nil {
-				return stat.Size() == size
-			}
-		}
-		return false
-	}, params...)
+	}
+
+	check := checks.NewCustom[any](checkFn, params...)
 	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 	return result.(*ZodFile)
 }
 
-// Mime adds MIME type validation using pkg utilities
+// Mime validates allowed MIME types
 func (z *ZodFile) Mime(mimeTypes []string, params ...any) *ZodFile {
-	check := checks.NewCustom[any](func(v any) bool {
-		var contentType string
-		if fileHeader, ok := v.(*multipart.FileHeader); ok {
-			contentType = fileHeader.Header.Get("Content-Type")
-		} else if fileValue, ok := v.(multipart.FileHeader); ok {
-			contentType = fileValue.Header.Get("Content-Type")
-		} else {
-			return false
-		}
-
-		// Use slicex.Contains for efficient slice searching
-		return slicex.Contains(mimeTypes, contentType)
-	}, params...)
+	check := checks.Mime(mimeTypes, params...)
 	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 	return result.(*ZodFile)
+}
+
+// getFileSize is an internal helper returning file size in bytes (0 if unknown)
+func getFileSize(v any) int64 {
+	switch f := v.(type) {
+	case *multipart.FileHeader:
+		return f.Size
+	case multipart.FileHeader:
+		return f.Size
+	case *os.File:
+		if stat, err := f.Stat(); err == nil {
+			return stat.Size()
+		}
+	case os.File:
+		if stat, err := f.Stat(); err == nil {
+			return stat.Size()
+		}
+	}
+	return 0
 }
 
 // =============================================================================
@@ -701,13 +673,12 @@ type ZodFilePrefault struct {
 
 // Prefault adds a prefault value to the file
 func (z *ZodFile) Prefault(value any) ZodFilePrefault {
-	// construct Prefault's internals, Type = "prefault", copy inner type's checks/coerce/optional/nilable
+	// construct Prefault's internals, Type = "prefault", copy inner type's checks/optional/nilable
 	baseInternals := z.GetInternals()
 	internals := &core.ZodTypeInternals{
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -730,13 +701,12 @@ func (z *ZodFile) Prefault(value any) ZodFilePrefault {
 
 // PrefaultFunc adds a prefault function to the file
 func (z *ZodFile) PrefaultFunc(fn func() any) ZodFilePrefault {
-	// construct Prefault's internals, Type = "prefault", copy inner type's checks/coerce/optional/nilable
+	// construct Prefault's internals, Type = "prefault", copy inner type's checks/optional/nilable
 	baseInternals := z.GetInternals()
 	internals := &core.ZodTypeInternals{
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -771,7 +741,6 @@ func (f ZodFilePrefault) Min(minimum int64, params ...any) ZodFilePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -802,7 +771,6 @@ func (f ZodFilePrefault) Max(maximum int64, params ...any) ZodFilePrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -833,7 +801,6 @@ func (f ZodFilePrefault) Mime(mimeTypes []string, params ...any) ZodFilePrefault
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -864,7 +831,6 @@ func (f ZodFilePrefault) Refine(fn func(any) bool, params ...any) ZodFilePrefaul
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,

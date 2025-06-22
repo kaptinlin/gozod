@@ -519,6 +519,66 @@ func TestISOValidations(t *testing.T) {
 			})
 		}
 	})
+
+	// Additional DateTime validations for offset with precision 0 and 4
+	t.Run("datetime with offset and precision 0", func(t *testing.T) {
+		schema := ISO.DateTime(ISODateTimeOptions{Offset: true, Precision: intPtr(0)})
+
+		validInputs := []string{
+			"1970-01-01T00:00:00Z",
+			"2022-10-13T09:52:31Z",
+			"2020-10-14T17:42:29+00:00",
+		}
+
+		for _, dt := range validInputs {
+			result, err := schema.Parse(dt)
+			require.NoError(t, err, "Datetime %s should be valid with offset & precision 0", dt)
+			assert.Equal(t, dt, result)
+		}
+
+		invalidInputs := []string{
+			"2020-10-14T17:42:29+0000",      // missing colon
+			"2020-10-14T17:42:29+00",        // incomplete offset
+			"tuna",                          // random string
+			"1970-01-01T00:00:00.000Z",      // milliseconds not allowed
+			"1970-01-01T00:00:00.Z",         // dot before Z
+			"2022-10-13T09:52:31.816Z",      // milliseconds not allowed
+			"2020-10-14T17:42:29.124+00:00", // milliseconds
+		}
+
+		for _, dt := range invalidInputs {
+			_, err := schema.Parse(dt)
+			assert.Error(t, err, "Datetime %s should be invalid with offset & precision 0", dt)
+		}
+	})
+
+	t.Run("datetime with offset and precision 4", func(t *testing.T) {
+		schema := ISO.DateTime(ISODateTimeOptions{Offset: true, Precision: intPtr(4)})
+
+		validInputs := []string{
+			"1970-01-01T00:00:00.1234Z",
+			"2020-10-14T17:42:29.1234+00:00",
+		}
+
+		for _, dt := range validInputs {
+			result, err := schema.Parse(dt)
+			require.NoError(t, err, "Datetime %s should be valid with offset & precision 4", dt)
+			assert.Equal(t, dt, result)
+		}
+
+		invalidInputs := []string{
+			"2020-10-14T17:42:29.1234+0000", // missing colon
+			"2020-10-14T17:42:29.1234+00",   // incomplete offset
+			"tuna",
+			"1970-01-01T00:00:00.123Z",      // only 3 decimals
+			"2020-10-14T17:42:29.124+00:00", // invalid decimals
+		}
+
+		for _, dt := range invalidInputs {
+			_, err := schema.Parse(dt)
+			assert.Error(t, err, "Datetime %s should be invalid with offset & precision 4", dt)
+		}
+	})
 }
 
 // =============================================================================

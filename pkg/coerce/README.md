@@ -59,10 +59,5 @@ coerce.ToFloat[F](val)          // float type F
 coerce.ToComplex64(val)         // complex64
 coerce.ToComplex128(val)        // complex128
 coerce.ToComplexFromString(str) // parse complex from string
-
-// Collections
-coerce.ToSlice(val)             // []any
-coerce.ToMap(val)               // map[string]any
-coerce.ToObject(val)            // struct from map
 ```
 

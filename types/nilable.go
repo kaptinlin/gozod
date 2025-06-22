@@ -103,11 +103,6 @@ func (z *ZodNilable[T]) GetZod() *ZodNilableInternals[T] {
 	}
 }
 
-// Coerce attempts to coerce input (delegates to inner type)
-func (z *ZodNilable[T]) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates and parses input with smart type inference
 // Core: only handles nil, delegates everything else to inner type
 func (z *ZodNilable[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {

@@ -87,20 +87,7 @@ func TestNeverBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestNeverCoercion(t *testing.T) {
-	t.Run("no coercion available", func(t *testing.T) {
-		// Never type doesn't support coercion - it always fails
-		schema := Never(core.SchemaParams{Coerce: true})
-		_, err := schema.Parse("test")
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestNeverValidations(t *testing.T) {
@@ -119,7 +106,7 @@ func TestNeverValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestNeverModifiers(t *testing.T) {
@@ -164,7 +151,7 @@ func TestNeverModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestNeverChaining(t *testing.T) {
@@ -192,7 +179,7 @@ func TestNeverChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestNeverTransformPipe(t *testing.T) {
@@ -230,7 +217,7 @@ func TestNeverTransformPipe(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestNeverRefine(t *testing.T) {
@@ -266,7 +253,7 @@ func TestNeverRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestNeverErrorHandling(t *testing.T) {
@@ -323,7 +310,7 @@ func TestNeverErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge cases and internals
+// 8. Edge cases and internals
 // =============================================================================
 
 func TestNeverEdgeCases(t *testing.T) {
@@ -377,7 +364,7 @@ func TestNeverEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestNeverDefaultAndPrefault(t *testing.T) {

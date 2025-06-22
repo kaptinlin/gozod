@@ -107,6 +107,25 @@ func TestNilableBasicFunctionality(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
+
+	// Additional validation: ensure schema created via method call is a ZodNilable wrapper
+	// and Unwrap() returns the original inner schema.
+	t.Run("instance type and unwrap", func(t *testing.T) {
+		schema := String().Nilable()
+
+		// Confirm that the wrapper's internal type is marked as "nilable".
+		assert.Equal(t, "nilable", schema.GetInternals().Type)
+
+		// Unwrap should return the underlying ZodString schema.
+		unwrapped := schema.Unwrap()
+		assert.IsType(t, &ZodString{}, unwrapped, "unwrap should return *ZodString")
+
+		// Validate core behaviour remains consistent after unwrap.
+		_, err := unwrapped.Parse("example")
+		require.NoError(t, err)
+		_, err = unwrapped.Parse(nil)
+		assert.Error(t, err)
+	})
 }
 
 // =============================================================================
@@ -115,7 +134,7 @@ func TestNilableBasicFunctionality(t *testing.T) {
 
 func TestNilableCoercion(t *testing.T) {
 	t.Run("coercion with nilable", func(t *testing.T) {
-		schema := String(core.SchemaParams{Coerce: true}).Nilable()
+		schema := CoercedString().Nilable()
 
 		// nil should remain nil
 		result, err := schema.Parse(nil)

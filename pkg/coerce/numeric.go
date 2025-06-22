@@ -80,7 +80,8 @@ func ToInt64(v any) (int64, error) {
 func stringToInt64(s string) (int64, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
-		return 0, NewEmptyInputError("int64")
+		// Empty string treated as zero (align with coercion semantics)
+		return 0, nil
 	}
 
 	i, err := strconv.ParseInt(trimmed, 10, 64)
@@ -105,8 +106,14 @@ func ToFloat64(v any) (float64, error) {
 	// Fast path for numeric types
 	switch x := derefed.(type) {
 	case float64:
+		if math.IsNaN(x) {
+			return 0, NewFormatError("NaN", "float64")
+		}
 		return x, nil
 	case float32:
+		if math.IsNaN(float64(x)) {
+			return 0, NewFormatError("NaN", "float64")
+		}
 		return float64(x), nil
 	case int:
 		return float64(x), nil
@@ -163,7 +170,8 @@ func ToFloat64(v any) (float64, error) {
 func stringToFloat64(s string) (float64, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
-		return 0, NewEmptyInputError("float64")
+		// Empty string coerces to zero
+		return 0, nil
 	}
 
 	f, err := strconv.ParseFloat(trimmed, 64)
@@ -238,7 +246,7 @@ func ToBigInt(v any) (*big.Int, error) {
 func stringToBigInt(s string) (*big.Int, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
-		return nil, NewEmptyInputError("*big.Int")
+		return big.NewInt(0), nil
 	}
 
 	bigInt := new(big.Int)

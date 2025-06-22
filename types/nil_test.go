@@ -97,37 +97,7 @@ func TestNilBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestNilCoercion(t *testing.T) {
-	t.Run("coercion with nil type", func(t *testing.T) {
-		schema := Nil(core.SchemaParams{Coerce: true})
-
-		// Nil type doesn't support coercion - only accepts nil
-		_, err := schema.Parse("null")
-		if err == nil {
-			t.Error("Expected error - nil type should not coerce strings")
-		}
-
-		_, err = schema.Parse(0)
-		if err == nil {
-			t.Error("Expected error - nil type should not coerce numbers")
-		}
-
-		// Only nil should work
-		result, err := schema.Parse(nil)
-		if err != nil {
-			t.Errorf("Expected nil to work: %v", err)
-		}
-		if result != nil {
-			t.Errorf("Expected nil result, got: %v", result)
-		}
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods
 // =============================================================================
 
 func TestNilValidations(t *testing.T) {
@@ -164,7 +134,7 @@ func TestNilValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestNilModifiers(t *testing.T) {
@@ -220,7 +190,7 @@ func TestNilModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestNilChaining(t *testing.T) {
@@ -262,7 +232,7 @@ func TestNilChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestNilTransform(t *testing.T) {
@@ -310,7 +280,7 @@ func TestNilTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestNilRefine(t *testing.T) {
@@ -369,7 +339,7 @@ func TestNilRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestNilErrorHandling(t *testing.T) {
@@ -412,7 +382,7 @@ func TestNilErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestNilEdgeCases(t *testing.T) {
@@ -471,7 +441,7 @@ func TestNilEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestNilDefaultAndPrefault(t *testing.T) {

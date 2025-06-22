@@ -300,7 +300,6 @@ func (z *ZodUnion) Prefault(value any) ZodUnionPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -330,7 +329,6 @@ func (z *ZodUnion) PrefaultFunc(fn func() any) ZodUnionPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -364,7 +362,6 @@ func (u ZodUnionPrefault) Refine(fn func(any) bool, params ...any) ZodUnionPrefa
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -436,6 +433,16 @@ func createZodUnionFromDef(def *ZodUnionDef) *ZodUnion {
 		Options:          def.Options, // Set options from definition
 		Isst:             issues.ZodIssueInvalidUnion{ZodIssueBase: issues.ZodIssueBase{}, Errors: [][]core.ZodIssue{}},
 		Bag:              make(map[string]any),
+	}
+
+	// Aggregate literal "values" information for union of literals/enums
+	for _, opt := range def.Options {
+		optInternals := opt.GetInternals()
+		if optInternals != nil && len(optInternals.Values) > 0 {
+			for v := range optInternals.Values {
+				internals.Values[v] = struct{}{}
+			}
+		}
 	}
 
 	// Set up simplified constructor for cloning
@@ -533,9 +540,6 @@ func Union(options []core.ZodType[any, any], params ...any) *ZodUnion {
 			}
 		case core.SchemaParams:
 			// Store coerce flag in bag for parseUnionCore to access
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-			}
 
 			// Handle schema-level error mapping using utility function
 			if p.Error != nil {

@@ -5,6 +5,9 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
@@ -60,9 +63,9 @@ func MustParse[In, Out any](schema core.ZodType[In, Out], value any, ctx *core.P
 // PARSEYPE TEMPLATE SYSTEM
 // =============================================================================
 
-// ParseType provides unified type parsing logic with smart type inference
-// T: target type (e.g. string, []any, map[any]any)
-// This template eliminates code duplication across all schema type implementations
+// ParseType is the unified parsing engine for all schema types
+// Handles type checking, coercion, validation, and error reporting
+// T represents the expected value type
 func ParseType[T any](
 	input any,
 	internals *core.ZodTypeInternals,
@@ -70,7 +73,6 @@ func ParseType[T any](
 	typeChecker func(any) (T, bool),
 	pointerChecker func(any) (*T, bool),
 	validator func(T, []core.ZodCheck, *core.ParseContext) error,
-	coercer func(any) (T, bool),
 	ctx *core.ParseContext,
 ) (any, error) {
 	// 1. Unified nil handling
@@ -89,9 +91,10 @@ func ParseType[T any](
 	}
 
 	// 2. Try type coercion (if enabled) - prioritize over pointer type inference
-	if ShouldCoerce(internals.Bag) {
-		// First try direct coercion
-		if coerced, ok := coercer(input); ok {
+	// RESTRICTION: Only allow coercion for primitive types
+	if mapx.GetBoolDefault(internals.Bag, "coerce", false) && utils.IsPrimitiveType(expectedType) {
+		// Use coerce package for generic type conversion
+		if coerced, err := coerce.To[T](input); err == nil {
 			// Always run validator when provided to allow nested validations (e.g., Map key/value)
 			if validator != nil {
 				if err := validator(coerced, internals.Checks, ctx); err != nil {
@@ -103,7 +106,7 @@ func ParseType[T any](
 		}
 		// Try dereferencing pointer then coercion (but don't handle nil pointers)
 		if ptr, ok := pointerChecker(input); ok && ptr != nil {
-			if coerced, ok := coercer(*ptr); ok {
+			if coerced, err := coerce.To[T](*ptr); err == nil {
 				if validator != nil {
 					if err := validator(coerced, internals.Checks, ctx); err != nil {
 						return nil, err

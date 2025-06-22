@@ -63,11 +63,6 @@ func (z *ZodCustom) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (for custom validation, passes through)
-func (z *ZodCustom) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates input with smart type inference using reflectx package
 func (z *ZodCustom) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	// 1. Unified nil handling using reflectx.IsNil - the only effect of Nilable
@@ -384,9 +379,6 @@ func Custom(fn any, params ...any) *ZodCustom {
 			param = core.SchemaParams{}
 		}
 
-		if param.Coerce {
-			schema.internals.Bag["coerce"] = true
-		}
 		if param.Error != nil {
 			// Create error map manually since CreateErrorMap doesn't exist
 			var errorMap core.ZodErrorMap
@@ -592,7 +584,6 @@ func (z *ZodCustom) Prefault(value any) ZodCustomPrefault {
 		Version:     baseInternals.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -620,7 +611,6 @@ func (z *ZodCustom) PrefaultFunc(fn func() any) ZodCustomPrefault {
 		Version:     baseInternals.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,

@@ -7,7 +7,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
@@ -74,15 +73,6 @@ func (z *ZodRecord) CloneFrom(source any) {
 	}
 }
 
-// Coerce implements Coercible interface for record type conversion
-func (z *ZodRecord) Coerce(input any) (any, bool) {
-	// Use pkg/coerce for type conversion
-	if mapped, err := coerce.ToMap(input); err == nil {
-		return mapped, true
-	}
-	return input, false
-}
-
 // Parse validates input using unified parsing template
 func (z *ZodRecord) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	parseCtx := (*core.ParseContext)(nil)
@@ -111,13 +101,6 @@ func (z *ZodRecord) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			// Validate record and run checks
 			_, err := z.validateRecordAndRunChecks(value, ctx)
 			return err
-		},
-		func(v any) (map[any]any, bool) {
-			// Coercion using pkg/coerce
-			if mapped, err := coerce.ToMap(v); err == nil {
-				return mapped, true
-			}
-			return nil, false
 		},
 		parseCtx,
 	)
@@ -154,12 +137,7 @@ func (z *ZodRecord) validateRecordAndRunChecks(recordMap map[any]any, ctx *core.
 		var validatedKey any
 		var err error
 
-		coercedKey, coerceErr := engine.TryApplyCoercion(z.internals.KeyType, key)
-		if coerceErr == nil {
-			validatedKey, err = z.internals.KeyType.Parse(coercedKey, ctx)
-		} else {
-			validatedKey, err = z.internals.KeyType.Parse(key, ctx)
-		}
+		validatedKey, err = z.internals.KeyType.Parse(key, ctx)
 
 		if err != nil {
 			// Use issues.CreateInvalidKeyIssue with correct parameters
@@ -176,12 +154,7 @@ func (z *ZodRecord) validateRecordAndRunChecks(recordMap map[any]any, ctx *core.
 		// Validate value - use engine.TryApplyCoercion
 		var validatedValue any
 
-		coercedValue, coerceErr := engine.TryApplyCoercion(z.internals.ValueType, value)
-		if coerceErr == nil {
-			validatedValue, err = z.internals.ValueType.Parse(coercedValue, ctx)
-		} else {
-			validatedValue, err = z.internals.ValueType.Parse(value, ctx)
-		}
+		validatedValue, err = z.internals.ValueType.Parse(value, ctx)
 
 		if err != nil {
 			rawIssue := issues.NewRawIssue("invalid_value", recordMap)
@@ -461,12 +434,6 @@ func Record(keyType, valueType core.ZodType[any, any], params ...any) *ZodRecord
 		if param, ok := params[0].(core.SchemaParams); ok {
 			// Apply parameters using engine.ApplySchemaParams
 			engine.ApplySchemaParams(&def.ZodTypeDef, param)
-
-			// Set coercion flag in bag
-			if param.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
 
 			// Handle additional parameters
 			if param.Description != "" {

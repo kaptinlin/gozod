@@ -91,10 +91,6 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.coerce.number()` | `gozod.CoerceNumber()` | `gozod.Coerce.Number()` | ✅ | Force numeric conversion, supports string, bool, etc. |
 | `z.coerce.boolean()` | `gozod.CoerceBool()` | `gozod.Coerce.Bool()` | ✅ | Force boolean conversion, supports string, number, etc. |
 | `z.coerce.bigint()` | `gozod.CoerceBigInt()` | `gozod.Coerce.BigInt()` | ✅ | Force big integer conversion, supports string, number, etc. |
-| `z.coerce.record()` | `gozod.CoerceRecord()` | `gozod.Coerce.Record()` | ✅ | Force record conversion, returns type-safe `map[string]T` |
-| - | `gozod.CoerceMap()` | `gozod.Coerce.Map()` | ✅ | Go unique: Force map conversion, returns type-safe `map[K]V` |
-| `z.coerce.object()` | `gozod.CoerceObject()` | `gozod.Coerce.Object()` | ✅ | Force object conversion, supports struct to map conversion |
-| - | `gozod.CoerceStruct()` | `gozod.Coerce.Struct()` | ✅ | Go unique: Force struct conversion, supports map to struct conversion |
 | - | `gozod.CoerceComplex64()` | `gozod.Coerce.Complex64()` | ✅ | Go unique: Force single precision complex conversion |
 | - | `gozod.CoerceComplex128()` | `gozod.Coerce.Complex128()` | ✅ | Go unique: Force double precision complex conversion |
 

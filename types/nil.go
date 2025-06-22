@@ -267,9 +267,6 @@ func createZodNilFromDef(def *ZodNilDef) *ZodNil {
 			},
 			func(v any) (*any, bool) { return nil, false },
 			validateNil,
-			func(v any) (any, bool) {
-				return nil, reflectx.IsNil(v)
-			},
 			ctx,
 		)
 
@@ -326,10 +323,6 @@ func Nil(params ...any) *ZodNil {
 			schema.internals.Error = &errorMap
 		case core.SchemaParams:
 			// Handle core.SchemaParams
-			if p.Coerce {
-				schema.internals.Bag["coerce"] = true
-				schema.internals.ZodTypeInternals.Bag["coerce"] = true
-			}
 
 			if p.Error != nil {
 				// Handle string error messages by converting to ZodErrorMap

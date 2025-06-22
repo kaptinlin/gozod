@@ -9,7 +9,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
-	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
@@ -44,16 +43,6 @@ func (z *ZodArray) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Coerce implements Coercible interface for array type conversion
-func (z *ZodArray) Coerce(input any) (any, bool) {
-	// Use the coerce package's ToSlice method
-	slice, err := coerce.ToSlice(input)
-	if err != nil {
-		return nil, false
-	}
-	return slice, true
-}
-
 // Parse validates and parses input with array element validation
 func (z *ZodArray) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	parseCtx := (*core.ParseContext)(nil)
@@ -69,15 +58,6 @@ func (z *ZodArray) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	// use reflectx extractor directly as type checker
 	typeChecker := reflectx.ExtractSlice
 
-	// create coercer using coerce package
-	coercer := func(v any) ([]any, bool) {
-		slice, err := coerce.ToSlice(v)
-		if err != nil {
-			return nil, false
-		}
-		return slice, true
-	}
-
 	return engine.ParseType[[]any](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -85,7 +65,6 @@ func (z *ZodArray) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		typeChecker,
 		func(v any) (*[]any, bool) { ptr, ok := v.(*[]any); return ptr, ok },
 		validator,
-		coercer,
 		parseCtx,
 	)
 }
@@ -327,7 +306,6 @@ func (z *ZodArray) Prefault(value []any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -357,7 +335,6 @@ func (z *ZodArray) PrefaultFunc(fn func() []any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -477,7 +454,6 @@ func (s ZodArrayPrefault) Min(minimum int, params ...any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -504,7 +480,6 @@ func (s ZodArrayPrefault) Max(maximum int, params ...any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -531,7 +506,6 @@ func (s ZodArrayPrefault) Length(length int, params ...any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -558,7 +532,6 @@ func (s ZodArrayPrefault) NonEmpty(params ...any) ZodArrayPrefault {
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -585,7 +558,6 @@ func (s ZodArrayPrefault) Refine(fn func([]any) bool, params ...any) ZodArrayPre
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -632,7 +604,6 @@ func createZodArrayFromDef(def *ZodArrayDef) *ZodArray {
 	internals := &ZodArrayInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
 			Type:     "array",
-			Coerce:   def.Coerce,
 			Optional: false,
 			Nilable:  false,
 		},
@@ -749,8 +720,7 @@ func Array(args ...any) *ZodArray {
 
 	def := &ZodArrayDef{
 		ZodTypeDef: core.ZodTypeDef{
-			Type:   "array",
-			Coerce: params.Coerce,
+			Type: "array",
 		},
 		Type:   "array",
 		Items:  items,

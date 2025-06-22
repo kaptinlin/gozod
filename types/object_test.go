@@ -30,14 +30,11 @@ func TestObjectBasicFunctionality(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"email": String().Email(),
 		}, core.SchemaParams{
-			Coerce: true,
-			Error:  "core.Custom object error",
+			Error: "core.Custom object error",
 		})
 
 		require.NotNil(t, schema)
-		coerceFlag, exists := schema.internals.Bag["coerce"]
-		require.True(t, exists)
-		assert.True(t, coerceFlag.(bool))
+		// Coercion is no longer supported for collection types
 	})
 
 	t.Run("smart type inference", func(t *testing.T) {
@@ -121,53 +118,7 @@ func TestObjectBasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestObjectCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}, core.SchemaParams{Coerce: true})
-
-		// Test map coercion with wrong types
-		input := map[string]any{
-			"name": "Alice",
-			"age":  "30", // String that should be coerced to int
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-	})
-
-	t.Run("coercion with validation", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"email": String().Email(),
-		}, core.SchemaParams{Coerce: true})
-
-		// Valid email
-		input := map[string]any{
-			"email": "test@example.com",
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Invalid email
-		invalidInput := map[string]any{
-			"email": "not-an-email",
-		}
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 3. Validation methods
+// 2. Validation methods (coercion no longer supported for collection types)
 // =============================================================================
 
 func TestObjectValidations(t *testing.T) {
@@ -294,7 +245,7 @@ func TestObjectValidations(t *testing.T) {
 }
 
 // =============================================================================
-// 4. Modifiers and wrappers
+// 3. Modifiers and wrappers
 // =============================================================================
 
 func TestObjectModifiers(t *testing.T) {
@@ -394,7 +345,7 @@ func TestObjectModifiers(t *testing.T) {
 }
 
 // =============================================================================
-// 5. Chaining and method composition
+// 4. Chaining and method composition
 // =============================================================================
 
 func TestObjectChaining(t *testing.T) {
@@ -452,7 +403,7 @@ func TestObjectChaining(t *testing.T) {
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// 5. Transform/Pipe
 // =============================================================================
 
 func TestObjectTransform(t *testing.T) {
@@ -510,7 +461,7 @@ func TestObjectTransform(t *testing.T) {
 }
 
 // =============================================================================
-// 7. Refine
+// 6. Refine
 // =============================================================================
 
 func TestObjectRefine(t *testing.T) {
@@ -570,7 +521,7 @@ func TestObjectRefine(t *testing.T) {
 }
 
 // =============================================================================
-// 8. Error handling
+// 7. Error handling
 // =============================================================================
 
 func TestObjectErrorHandling(t *testing.T) {
@@ -640,7 +591,7 @@ func TestObjectErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// 8. Edge and mutual exclusion cases
 // =============================================================================
 
 func TestObjectEdgeCases(t *testing.T) {
@@ -867,7 +818,7 @@ func TestObjectEdgeCases(t *testing.T) {
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// 9. Default and Prefault tests
 // =============================================================================
 
 func TestObjectDefaultAndPrefault(t *testing.T) {

@@ -629,6 +629,103 @@ func TestFileDefaultAndPrefault(t *testing.T) {
 }
 
 // =============================================================================
+// 11. Consistency and boundary tests
+// =============================================================================
+
+func TestFileBoundaryConditions(t *testing.T) {
+	t.Run("inclusive min size", func(t *testing.T) {
+		schema := File().Min(5)
+
+		// Size exactly at the lower boundary should succeed
+		exact := createTestFileHeader("exact_min.txt", 5, "text/plain")
+		result, err := schema.Parse(exact)
+		require.NoError(t, err)
+		assert.Equal(t, exact, result)
+
+		// Size below the boundary should fail
+		tooSmall := createTestFileHeader("too_small.txt", 4, "text/plain")
+		_, err = schema.Parse(tooSmall)
+		assert.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Equal(t, issues.TooSmall, zodErr.Issues[0].Code)
+	})
+
+	t.Run("inclusive max size", func(t *testing.T) {
+		schema := File().Max(8)
+
+		// Size exactly at the upper boundary should succeed
+		exact := createTestFileHeader("exact_max.txt", 8, "text/plain")
+		result, err := schema.Parse(exact)
+		require.NoError(t, err)
+		assert.Equal(t, exact, result)
+
+		// Size above the boundary should fail
+		tooLarge := createTestFileHeader("too_large.txt", 9, "text/plain")
+		_, err = schema.Parse(tooLarge)
+		assert.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Equal(t, issues.TooBig, zodErr.Issues[0].Code)
+	})
+}
+
+// =============================================================================
+// 12. Exact size validation
+// =============================================================================
+
+func TestFileExactSizeValidation(t *testing.T) {
+	t.Run("exact size pass and fail", func(t *testing.T) {
+		schema := File().Size(100)
+
+		// Matching size should pass
+		exact := createTestFileHeader("exact_size.txt", 100, "application/json")
+		result, err := schema.Parse(exact)
+		require.NoError(t, err)
+		assert.Equal(t, exact, result)
+
+		// Non-matching size should fail
+		mismatch := createTestFileHeader("mismatch.txt", 120, "application/json")
+		_, err = schema.Parse(mismatch)
+		assert.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		// Either TooSmall or TooBig are acceptable depending on the direction of the mismatch
+		hasSizeIssue := zodErr.Issues[0].Code == issues.TooSmall || zodErr.Issues[0].Code == issues.TooBig
+		assert.True(t, hasSizeIssue, "Expected size constraint issue")
+	})
+}
+
+// =============================================================================
+// 13. Multiple MIME type validation
+// =============================================================================
+
+func TestFileMimeValidationMultipleTypes(t *testing.T) {
+	schema := File().Mime([]string{"text/plain", "application/json"})
+
+	// Valid MIME types
+	validPlain := createTestFileHeader("plain.txt", 10, "text/plain")
+	_, err := schema.Parse(validPlain)
+	require.NoError(t, err)
+
+	validJSON := createTestFileHeader("data.json", 10, "application/json")
+	_, err = schema.Parse(validJSON)
+	require.NoError(t, err)
+
+	// Invalid MIME type
+	invalid := createTestFileHeader("image.jpg", 10, "image/jpeg")
+	_, err = schema.Parse(invalid)
+	assert.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	assert.Equal(t, issues.InvalidValue, zodErr.Issues[0].Code)
+}
+
+// =============================================================================
 // Test helper functions
 // =============================================================================
 

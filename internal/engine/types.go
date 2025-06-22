@@ -88,17 +88,17 @@ func NewBaseZodTypeInternals(typeName string) core.ZodTypeInternals {
 func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, check core.ZodCheck) core.ZodType[any, any] {
 	internals := schema.GetInternals()
 
-	// 1. 直接复制旧 checks 并追加新 check，避免 slicex.Append 类型转换问题
+	// 1. copy old checks and append new check
 	newChecks := append(append([]core.ZodCheck(nil), internals.Checks...), check)
 
-	// 2. 构造新的类型定义
+	// 2. construct new type definition
 	newDef := &core.ZodTypeDef{
 		Type:   internals.Type,
 		Error:  internals.Error,
 		Checks: newChecks,
 	}
 
-	// 3. 通过原 Constructor 生成新 schema
+	// 3. generate new schema by original Constructor
 	if internals.Constructor == nil {
 		panic(fmt.Sprintf("No constructor found for type: %T", schema))
 	}
@@ -106,13 +106,12 @@ func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, ch
 	newSchema := internals.Constructor(newDef)
 	newInternals := newSchema.GetInternals()
 
-	// 4. 继承关键状态位
+	// 4. inherit critical state flags
 	newInternals.Nilable = internals.Nilable
 	newInternals.Optional = internals.Optional
-	newInternals.Coerce = internals.Coerce
 	newInternals.Pattern = internals.Pattern
 
-	// 5. 深拷贝 Values 与 Bag
+	// 5. deep copy Values and Bag
 	if len(internals.Values) > 0 {
 		newInternals.Values = make(map[any]struct{}, len(internals.Values))
 		for k, v := range internals.Values {
@@ -126,14 +125,14 @@ func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, ch
 		newInternals.Bag = mapx.Merge(newInternals.Bag, internals.Bag)
 	}
 
-	// 6. 如果实现 Cloneable，复制特定状态
+	// 6. if implements Cloneable, copy specific state
 	if cloneable, ok := newSchema.(core.Cloneable); ok {
 		if source, ok := any(schema).(core.Cloneable); ok {
 			cloneable.CloneFrom(source)
 		}
 	}
 
-	// 7. 执行 OnAttach 回调
+	// 7. execute OnAttach callbacks
 	if check != nil {
 		if ci := check.GetZod(); ci != nil {
 			for _, fn := range ci.OnAttach {
@@ -181,7 +180,6 @@ func Clone[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, modif
 		// Preserve important state flags
 		newInternals.Nilable = internals.Nilable
 		newInternals.Optional = internals.Optional
-		newInternals.Coerce = internals.Coerce
 
 		// Preserve pattern state
 		if internals.Pattern != nil {

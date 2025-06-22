@@ -18,12 +18,6 @@ func WithError(message string) core.SchemaParams {
 	return core.SchemaParams{Error: message}
 }
 
-// WithCoercion creates a SchemaParams with coercion enabled
-// Convenient helper for enabling type coercion in schemas
-func WithCoercion() core.SchemaParams {
-	return core.SchemaParams{Coerce: true}
-}
-
 // WithDescription creates a SchemaParams with description
 // Convenient helper for adding documentation to schemas
 func WithDescription(description string) core.SchemaParams {

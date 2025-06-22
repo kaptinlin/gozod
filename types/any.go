@@ -54,11 +54,6 @@ func (z *ZodAny) CloneFrom(source any) {
 	}
 }
 
-// Coerce attempts to coerce input (any accepts all values without coercion)
-func (z *ZodAny) Coerce(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
-}
-
 // Parse validates that input can be any value with smart type inference
 // Any vs Unknown distinction:
 // - Any: explicitly accepts "any type", used for intentionally generic scenarios
@@ -271,13 +266,12 @@ type ZodAnyPrefault struct {
 
 // Prefault adds a prefault value to the any schema, returns ZodAnyPrefault support chain call
 func (z *ZodAny) Prefault(value any) ZodAnyPrefault {
-	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/coerce/optional/nilable
+	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/optional/nilable
 	baseInternals := z.GetInternals()
 	internals := &core.ZodTypeInternals{
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -300,13 +294,12 @@ func (z *ZodAny) Prefault(value any) ZodAnyPrefault {
 
 // PrefaultFunc adds a prefault function to the any schema, returns ZodAnyPrefault support chain call
 func (z *ZodAny) PrefaultFunc(fn func() any) ZodAnyPrefault {
-	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/coerce/optional/nilable
+	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/optional/nilable
 	baseInternals := z.GetInternals()
 	internals := &core.ZodTypeInternals{
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -341,7 +334,6 @@ func (a ZodAnyPrefault) Refine(fn func(any) bool, params ...any) ZodAnyPrefault 
 		Version:     core.Version,
 		Type:        core.ZodTypePrefault,
 		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
 		Optional:    baseInternals.Optional,
 		Nilable:     baseInternals.Nilable,
 		Constructor: baseInternals.Constructor,
@@ -470,14 +462,6 @@ func Any(params ...any) *ZodAny {
 					zodSchema.internals.Bag = make(map[string]any)
 				}
 				zodSchema.internals.Bag["description"] = p.Description
-			}
-
-			// Handle coercion flag
-			if p.Coerce {
-				if zodSchema.internals.Bag == nil {
-					zodSchema.internals.Bag = make(map[string]any)
-				}
-				zodSchema.internals.Bag["coerce"] = true
 			}
 
 			// Handle custom parameters

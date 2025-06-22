@@ -89,7 +89,6 @@ func (z *ZodIPv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			}
 			return nil
 		},
-		func(v any) (string, bool) { return "", false }, // no coercion for ipv4
 		parseCtx,
 	)
 }
@@ -205,11 +204,6 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 			return "", false
 		}
 
-		coercer := func(v any) (string, bool) {
-			// IPv4 does not support coercion, only accepts strings
-			return "", false
-		}
-
 		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// run basic checks
 			if len(checks) > 0 {
@@ -244,7 +238,6 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
-			coercer,
 			parseCtx,
 		)
 
@@ -359,7 +352,6 @@ func (z *ZodIPv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 
 			return nil
 		},
-		func(v any) (string, bool) { return "", false }, // no coercion for ipv6
 		parseCtx,
 	)
 }
@@ -480,11 +472,6 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 			return "", false
 		}
 
-		coercer := func(v any) (string, bool) {
-			// IPv6 does not support coercion, only accepts strings
-			return "", false
-		}
-
 		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// run basic checks
 			if len(checks) > 0 {
@@ -520,7 +507,6 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
-			coercer,
 			parseCtx,
 		)
 
@@ -769,11 +755,6 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 			return "", false
 		}
 
-		coercer := func(v any) (string, bool) {
-			// CIDRv4 does not support coercion, only accepts strings
-			return "", false
-		}
-
 		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// run basic checks
 			if len(checks) > 0 {
@@ -808,7 +789,6 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
-			coercer,
 			parseCtx,
 		)
 
@@ -1052,11 +1032,6 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 			return "", false
 		}
 
-		coercer := func(v any) (string, bool) {
-			// CIDRv6 does not support coercion, only accepts strings
-			return "", false
-		}
-
 		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// run basic checks
 			if len(checks) > 0 {
@@ -1120,7 +1095,6 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
-			coercer,
 			parseCtx,
 		)
 
