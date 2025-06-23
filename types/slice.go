@@ -24,8 +24,9 @@ var (
 // ZodSliceDef defines the configuration for slice validation
 type ZodSliceDef struct {
 	core.ZodTypeDef
-	Type    string // "slice"
-	Element any    // The element schema (type-erased)
+	Type    core.ZodTypeCode       // "slice"
+	Element core.ZodType[any, any] // Element validation schema
+	Checks  []core.ZodCheck        // Slice-specific validation checks
 }
 
 // ZodSliceInternals contains slice validator internal state
@@ -337,14 +338,10 @@ func (z *ZodSlice) Optional() core.ZodType[any, any] {
 
 // Nilable creates a new slice schema that accepts nil values
 func (z *ZodSlice) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodSlice) setNilable() core.ZodType[any, any] {
 	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// Clone operates on ZodTypeDef level
 	})
-	cloned.(*ZodSlice).internals.Nilable = true
+	cloned.(*ZodSlice).internals.SetNilable()
 	return cloned
 }
 

@@ -20,7 +20,7 @@ func TestRecordBasicFunctionality(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "record", internals.Type)
+		assert.Equal(t, core.ZodTypeRecord, internals.Type)
 	})
 
 	t.Run("constructor with params", func(t *testing.T) {

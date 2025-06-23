@@ -21,8 +21,8 @@ var (
 // ZodUnknownDef defines the configuration for unknown validation
 type ZodUnknownDef struct {
 	core.ZodTypeDef
-	Type   string          // "unknown"
-	Checks []core.ZodCheck // Unknown-specific validation checks
+	Type   core.ZodTypeCode // "unknown"
+	Checks []core.ZodCheck  // Unknown-specific validation checks
 }
 
 // ZodUnknownInternals contains unknown validator internal state

@@ -79,7 +79,7 @@ func (z *ZodPrefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error
 			return result, nil
 		} else {
 			// For stringbool schema, nil should not trigger prefault fallback – propagate the error.
-			if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == "stringbool" {
+			if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == core.ZodTypeStringBool {
 				return nil, err
 			}
 
@@ -91,7 +91,7 @@ func (z *ZodPrefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error
 			}
 
 			// Special-case: stringbool's fallback value is bool and should be returned without re-validation
-			if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == "stringbool" {
+			if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == core.ZodTypeStringBool {
 				if _, ok := fallbackValue.(bool); ok {
 					return fallbackValue, nil
 				}
@@ -114,7 +114,7 @@ func (z *ZodPrefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error
 		fallbackValue = z.prefaultValue
 	}
 
-	if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == "stringbool" {
+	if innerInternals := z.innerType.GetInternals(); innerInternals != nil && innerInternals.Type == core.ZodTypeStringBool {
 		if _, ok := fallbackValue.(bool); ok {
 			return fallbackValue, nil
 		}

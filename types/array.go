@@ -19,7 +19,7 @@ import (
 // ZodArrayDef defines the configuration for fixed-length array schemas
 type ZodArrayDef struct {
 	core.ZodTypeDef
-	Type   string                   // "array"
+	Type   core.ZodTypeCode         // "array"
 	Items  []core.ZodType[any, any] // Fixed array element schemas
 	Checks []core.ZodCheck          // Array-specific validation checks
 }
@@ -174,7 +174,9 @@ func (z *ZodArray) Optional() core.ZodType[any, any] {
 
 // Nilable makes the array schema nilable
 func (z *ZodArray) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {})
+	cloned.(*ZodArray).internals.SetNilable()
+	return cloned
 }
 
 // Nullable is an alias for Nilable (for TypeScript compatibility)
@@ -856,10 +858,4 @@ func validateArray(value []any, checks []core.ZodCheck, z *ZodArray, ctx *core.P
 	}
 
 	return nil
-}
-
-func (z *ZodArray) setNilable() core.ZodType[any, any] {
-	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {})
-	cloned.(*ZodArray).internals.Nilable = true
-	return cloned
 }

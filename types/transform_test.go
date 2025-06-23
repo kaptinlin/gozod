@@ -40,7 +40,7 @@ func TestTransformBasicFunctionality(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "transform", internals.Type)
+		assert.Equal(t, core.ZodTypeTransform, internals.Type)
 	})
 
 	t.Run("string Transform method", func(t *testing.T) {
@@ -52,7 +52,7 @@ func TestTransformBasicFunctionality(t *testing.T) {
 		require.NotNil(t, transformSchema)
 		internals := transformSchema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "pipe", internals.Type) // Transform creates a pipe
+		assert.Equal(t, core.ZodTypePipe, internals.Type) // Transform creates a pipe
 	})
 
 	t.Run("transform flag verification", func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestTransformBasicFunctionality(t *testing.T) {
 
 		// Transform creates a pipe, so we check the pipe structure
 		internals := schema.GetInternals()
-		assert.Equal(t, "pipe", internals.Type)
+		assert.Equal(t, core.ZodTypePipe, internals.Type)
 	})
 }
 

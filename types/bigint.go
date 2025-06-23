@@ -25,7 +25,7 @@ var (
 // ZodBigIntDef defines the configuration for big.Int validation
 type ZodBigIntDef struct {
 	core.ZodTypeDef
-	Type string // "bigint"
+	Type core.ZodTypeCode // Type identifier using type-safe constants
 }
 
 // ZodBigIntInternals contains big.Int validator internal state

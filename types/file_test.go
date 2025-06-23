@@ -21,11 +21,11 @@ func TestFileBasicFunctionality(t *testing.T) {
 	t.Run("constructors", func(t *testing.T) {
 		schema := File()
 		require.NotNil(t, schema)
-		assert.Equal(t, "file", schema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeFile, schema.GetInternals().Type)
 
 		schema2 := File()
 		require.NotNil(t, schema2)
-		assert.Equal(t, "file", schema2.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeFile, schema2.GetInternals().Type)
 	})
 
 	t.Run("accepts valid file types", func(t *testing.T) {
@@ -317,12 +317,12 @@ func TestFileEdgeCases(t *testing.T) {
 		schema := File()
 		internals := schema.GetInternals()
 
-		assert.Equal(t, "file", internals.Type)
+		assert.Equal(t, core.ZodTypeFile, internals.Type)
 		assert.Equal(t, core.Version, internals.Version)
 
 		zodInternals := schema.GetZod()
 		assert.NotNil(t, zodInternals)
-		assert.Equal(t, "file", zodInternals.Def.Type)
+		assert.Equal(t, core.ZodTypeFile, zodInternals.Def.Type)
 	})
 
 	t.Run("nil file header", func(t *testing.T) {

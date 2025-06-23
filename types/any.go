@@ -16,7 +16,7 @@ import (
 // ZodAnyDef defines the configuration for any validation
 type ZodAnyDef struct {
 	core.ZodTypeDef
-	Type string // "any"
+	Type core.ZodTypeCode // Type identifier using type-safe constants
 }
 
 // ZodAnyInternals contains any validator internal state

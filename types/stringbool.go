@@ -24,13 +24,14 @@ var (
 //////////////////////////////////////////
 //////////////////////////////////////////
 
-// ZodStringBoolDef defines the configuration for stringbool validation
+// ZodStringBoolDef defines the configuration for string boolean validation
 type ZodStringBoolDef struct {
 	core.ZodTypeDef
-	Type   string   // "stringbool"
-	Truthy []string // Truthy string values
-	Falsy  []string // Falsy string values
-	Case   string   // "sensitive" or "insensitive"
+	Type   core.ZodTypeCode // "stringbool"
+	Truthy []string         // Truthy string values
+	Falsy  []string         // Falsy string values
+	Case   string           // "sensitive" or "insensitive"
+	Checks []core.ZodCheck  // StringBool-specific validation checks
 }
 
 // ZodStringBoolInternals contains stringbool validator internal state

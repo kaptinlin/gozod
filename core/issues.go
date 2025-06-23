@@ -41,8 +41,8 @@ type ZodRawIssue struct {
 // This is the final form of validation issues after processing
 type ZodIssue struct {
 	ZodIssueBase
-	Expected  string         `json:"expected,omitempty"`  // Expected type or value
-	Received  string         `json:"received,omitempty"`  // Actual type or value
+	Expected  ZodTypeCode    `json:"expected,omitempty"`  // Expected type or value
+	Received  ZodTypeCode    `json:"received,omitempty"`  // Actual type or value
 	Minimum   any            `json:"minimum,omitempty"`   // Minimum value for range checks
 	Maximum   any            `json:"maximum,omitempty"`   // Maximum value for range checks
 	Inclusive bool           `json:"inclusive,omitempty"` // Whether range bounds are inclusive
@@ -71,8 +71,8 @@ type ZodIssue struct {
 // Used when the input type doesn't match the expected type
 type ZodIssueInvalidType struct {
 	ZodIssueBase
-	Expected string `json:"expected"` // Expected type name
-	Received string `json:"received"` // Actual type name
+	Expected ZodTypeCode `json:"expected"` // Expected type name
+	Received ZodTypeCode `json:"received"` // Actual type name
 }
 
 // ZodIssueInvalidValue represents invalid value error
@@ -141,7 +141,7 @@ func (z ZodIssue) String() string {
 }
 
 // GetExpected returns the expected type for invalid_type issues
-func (i ZodIssue) GetExpected() (string, bool) {
+func (i ZodIssue) GetExpected() (ZodTypeCode, bool) {
 	if i.Code != InvalidType {
 		return "", false
 	}
@@ -149,7 +149,7 @@ func (i ZodIssue) GetExpected() (string, bool) {
 }
 
 // GetReceived returns the received type for invalid_type issues
-func (i ZodIssue) GetReceived() (string, bool) {
+func (i ZodIssue) GetReceived() (ZodTypeCode, bool) {
 	if i.Code != InvalidType {
 		return "", false
 	}
@@ -187,14 +187,28 @@ func getStringProperty(properties map[string]any, key string) string {
 	return ""
 }
 
+// getZodTypeCodeProperty safely gets a ZodTypeCode property from the properties map
+func getZodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
+	if properties == nil {
+		return ""
+	}
+	if value, ok := properties[key].(ZodTypeCode); ok {
+		return value
+	}
+	if value, ok := properties[key].(string); ok {
+		return ZodTypeCode(value)
+	}
+	return ""
+}
+
 // GetExpected returns the expected value from properties map
-func (r ZodRawIssue) GetExpected() string {
-	return getStringProperty(r.Properties, "expected")
+func (r ZodRawIssue) GetExpected() ZodTypeCode {
+	return getZodTypeCodeProperty(r.Properties, "expected")
 }
 
 // GetReceived returns the received value from properties map
-func (r ZodRawIssue) GetReceived() string {
-	return getStringProperty(r.Properties, "received")
+func (r ZodRawIssue) GetReceived() ZodTypeCode {
+	return getZodTypeCodeProperty(r.Properties, "received")
 }
 
 // GetOrigin returns the origin value from properties map

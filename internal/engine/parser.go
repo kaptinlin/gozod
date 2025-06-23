@@ -13,6 +13,33 @@ import (
 )
 
 // =============================================================================
+// INPUT PREPROCESSING
+// =============================================================================
+
+// PreprocessInput performs input preprocessing to reduce repeated reflection calls
+// Returns the dereferenced value and metadata about the input
+func PreprocessInput(input any) (dereferenced any, isNil bool, isPointer bool) {
+	if input == nil {
+		return nil, true, false
+	}
+
+	// Use reflectx.Deref to handle pointer dereferencing
+	dereferenced, derefSuccess := reflectx.Deref(input)
+
+	// Check if original input was a pointer
+	isPointer = reflectx.IsPointer(input)
+
+	// Check if dereferenced value is nil (for nil pointers)
+	if !derefSuccess {
+		isNil = true
+	} else {
+		isNil = reflectx.IsNil(dereferenced)
+	}
+
+	return dereferenced, isNil, isPointer
+}
+
+// =============================================================================
 // CORE PARSING FUNCTIONS
 // =============================================================================
 

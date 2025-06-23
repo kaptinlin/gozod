@@ -24,9 +24,10 @@ var (
 // ZodRecordDef defines the configuration for record validation
 type ZodRecordDef struct {
 	core.ZodTypeDef
-	Type      string                 // "record"
+	Type      core.ZodTypeCode       // "record"
 	KeyType   core.ZodType[any, any] // Schema for validating keys
 	ValueType core.ZodType[any, any] // Schema for validating values
+	Checks    []core.ZodCheck        // Record-specific validation checks
 }
 
 // ZodRecordInternals contains record validator internal state
@@ -225,15 +226,11 @@ func (z *ZodRecord) Optional() core.ZodType[any, any] {
 
 // Nilable makes the record nilable
 func (z *ZodRecord) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodRecord) setNilable() core.ZodType[any, any] {
 	cloned := engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
 		// setNilable only changes nil handling, not other logic
 	})
 	internals := cloned.GetInternals()
-	internals.Nilable = true
+	internals.SetNilable()
 	return cloned
 }
 

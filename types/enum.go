@@ -20,8 +20,8 @@ import (
 // ZodEnumDef defines the configuration for enum validation
 type ZodEnumDef[T comparable] struct {
 	core.ZodTypeDef
-	Type    string       // "enum"
-	Entries map[string]T // Enum entries (key-value pairs)
+	Type    core.ZodTypeCode // Type identifier using type-safe constants
+	Entries map[string]T     // Enum entries (key-value pairs)
 }
 
 // ZodEnumInternals contains enum validator internal state

@@ -32,19 +32,19 @@ func TestNetworkBasicFunctionality(t *testing.T) {
 				case "IPv4":
 					ipv4Schema, ok := schema.(*ZodIPv4)
 					require.True(t, ok)
-					assert.Equal(t, "ipv4", ipv4Schema.GetZod().Def.Type)
+					assert.Equal(t, core.ZodTypeIPv4, ipv4Schema.GetZod().Def.Type)
 				case "IPv6":
 					ipv6Schema, ok := schema.(*ZodIPv6)
 					require.True(t, ok)
-					assert.Equal(t, "ipv6", ipv6Schema.GetZod().Def.Type)
+					assert.Equal(t, core.ZodTypeIPv6, ipv6Schema.GetZod().Def.Type)
 				case "CIDRv4":
 					cidrv4Schema, ok := schema.(*ZodCIDRv4)
 					require.True(t, ok)
-					assert.Equal(t, "cidrv4", cidrv4Schema.GetZod().Def.Type)
+					assert.Equal(t, core.ZodTypeCIDRv4, cidrv4Schema.GetZod().Def.Type)
 				case "CIDRv6":
 					cidrv6Schema, ok := schema.(*ZodCIDRv6)
 					require.True(t, ok)
-					assert.Equal(t, "cidrv6", cidrv6Schema.GetZod().Def.Type)
+					assert.Equal(t, core.ZodTypeCIDRv6, cidrv6Schema.GetZod().Def.Type)
 				}
 			})
 		}
@@ -659,35 +659,35 @@ func TestNetworkErrorHandling(t *testing.T) {
 				case *ZodIPv4:
 					internals := s.GetInternals()
 					require.NotNil(t, internals)
-					assert.Equal(t, "ipv4", internals.Type)
+					assert.Equal(t, core.ZodTypeIPv4, internals.Type)
 
 					zod := s.GetZod()
 					require.NotNil(t, zod)
-					assert.Equal(t, "ipv4", zod.Def.Type)
+					assert.Equal(t, core.ZodTypeIPv4, zod.Def.Type)
 				case *ZodIPv6:
 					internals := s.GetInternals()
 					require.NotNil(t, internals)
-					assert.Equal(t, "ipv6", internals.Type)
+					assert.Equal(t, core.ZodTypeIPv6, internals.Type)
 
 					zod := s.GetZod()
 					require.NotNil(t, zod)
-					assert.Equal(t, "ipv6", zod.Def.Type)
+					assert.Equal(t, core.ZodTypeIPv6, zod.Def.Type)
 				case *ZodCIDRv4:
 					internals := s.GetInternals()
 					require.NotNil(t, internals)
-					assert.Equal(t, "cidrv4", internals.Type)
+					assert.Equal(t, core.ZodTypeCIDRv4, internals.Type)
 
 					zod := s.GetZod()
 					require.NotNil(t, zod)
-					assert.Equal(t, "cidrv4", zod.Def.Type)
+					assert.Equal(t, core.ZodTypeCIDRv4, zod.Def.Type)
 				case *ZodCIDRv6:
 					internals := s.GetInternals()
 					require.NotNil(t, internals)
-					assert.Equal(t, "cidrv6", internals.Type)
+					assert.Equal(t, core.ZodTypeCIDRv6, internals.Type)
 
 					zod := s.GetZod()
 					require.NotNil(t, zod)
-					assert.Equal(t, "cidrv6", zod.Def.Type)
+					assert.Equal(t, core.ZodTypeCIDRv6, zod.Def.Type)
 				}
 			})
 		}

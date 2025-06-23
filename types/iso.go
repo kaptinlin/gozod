@@ -35,8 +35,8 @@ var ISO = ZodISO{}
 // ZodISODateDef defines the configuration for ISO date validation
 type ZodISODateDef struct {
 	core.ZodTypeDef
-	Type   string          // "string"
-	Checks []core.ZodCheck // ISO date-specific validation checks
+	Type   core.ZodTypeCode // "string"
+	Checks []core.ZodCheck  // ISO date-specific validation checks
 }
 
 // ZodISODateInternals contains ISO date internal state

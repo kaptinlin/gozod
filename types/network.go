@@ -26,8 +26,8 @@ import (
 // ZodIPv4Def defines the configuration for IPv4 address validation
 type ZodIPv4Def struct {
 	core.ZodTypeDef
-	Type    string // "ipv4"
-	Version string // "v4"
+	Type    core.ZodTypeCode // "ipv4"
+	Version string           // "v4"
 }
 
 // ZodIPv4Internals contains IPv4 validator internal state
@@ -137,18 +137,14 @@ func (z *ZodIPv4) Optional() core.ZodType[any, any] {
 
 // Nilable makes the IPv4 address nilable
 // - Only changes nil handling, not type inference
-// - Uses standard Clone + setNilable pattern like type_string.go
+// - Uses standard Clone + SetNilable pattern like type_string.go
 func (z *ZodIPv4) Nilable() core.ZodType[any, any] {
 	// use Clone method to create a new instance, avoid manual state copying
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodIPv4).setNilable()
-}
-
-// setNilable set the Nilable flag internal method
-func (z *ZodIPv4) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodIPv4)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // TransformAny creates a transform with given function
@@ -184,7 +180,7 @@ func (z *ZodIPv4) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 // createZodIPv4FromDef creates a ZodIPv4 from definition
 func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 	internals := &ZodIPv4Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals("ipv4"),
+		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv4),
 		Def:              def,
 		Isst:             issues.ZodIssueInvalidType{Expected: "IPv4 address"},
 	}
@@ -268,7 +264,7 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
 		ipv4Def := &ZodIPv4Def{
 			ZodTypeDef: *def,
-			Type:       "ipv4",
+			Type:       core.ZodTypeIPv4,
 			Version:    "v4",
 		}
 		return any(createZodIPv4FromDef(ipv4Def)).(core.ZodType[any, any])
@@ -287,8 +283,8 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 // ZodIPv6Def defines the configuration for IPv6 address validation
 type ZodIPv6Def struct {
 	core.ZodTypeDef
-	Type    string // "ipv6"
-	Version string // "v6"
+	Type    core.ZodTypeCode // "ipv6"
+	Version string           // "v6"
 }
 
 // ZodIPv6Internals contains IPv6 validator internal state
@@ -400,18 +396,14 @@ func (z *ZodIPv6) Optional() core.ZodType[any, any] {
 
 // Nilable makes the IPv6 address nilable
 // - Only changes nil handling, not type inference
-// - Uses standard Clone + setNilable pattern like type_string.go
+// - Uses standard Clone + SetNilable pattern like type_string.go
 func (z *ZodIPv6) Nilable() core.ZodType[any, any] {
 	// use Clone method to create a new instance, avoid manual state copying
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodIPv6).setNilable()
-}
-
-// setNilable set the Nilable flag internal method
-func (z *ZodIPv6) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodIPv6)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Transform creates a transform with given function
@@ -452,7 +444,7 @@ func (z *ZodIPv6) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 // createZodIPv6FromDef creates a ZodIPv6 from definition
 func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 	internals := &ZodIPv6Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals("ipv6"),
+		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv6),
 		Def:              def,
 		Isst:             issues.ZodIssueInvalidType{Expected: "IPv6 address"},
 	}
@@ -556,8 +548,8 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 // ZodCIDRv4Def defines the configuration for IPv4 CIDR validation
 type ZodCIDRv4Def struct {
 	core.ZodTypeDef
-	Type    string // "cidrv4"
-	Version string // "v4"
+	Type    core.ZodTypeCode // "cidrv4"
+	Version string           // "v4"
 }
 
 // ZodCIDRv4Internals contains IPv4 CIDR validator internal state
@@ -683,18 +675,14 @@ func (z *ZodCIDRv4) Optional() core.ZodType[any, any] {
 // Nilable makes the CIDRv4 nilable
 // Nilable makes the CIDRv4 address nilable
 // - Only changes nil handling, not type inference
-// - Uses standard Clone + setNilable pattern like type_string.go
+// - Uses standard Clone + SetNilable pattern like type_string.go
 func (z *ZodCIDRv4) Nilable() core.ZodType[any, any] {
 	// use Clone method to create a new instance, avoid manual state copying
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodCIDRv4).setNilable()
-}
-
-// setNilable set the Nilable flag internal method
-func (z *ZodCIDRv4) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodCIDRv4)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Transform creates a transform with given function
@@ -735,7 +723,7 @@ func (z *ZodCIDRv4) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 // createZodCIDRv4FromDef creates a ZodCIDRv4 from definition
 func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 	internals := &ZodCIDRv4Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals("cidrv4"),
+		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv4),
 		Def:              def,
 		Isst:             issues.ZodIssueInvalidType{Expected: "IPv4 CIDR"},
 	}
@@ -838,8 +826,8 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 // ZodCIDRv6Def defines the configuration for IPv6 CIDR validation
 type ZodCIDRv6Def struct {
 	core.ZodTypeDef
-	Type    string // "cidrv6"
-	Version string // "v6"
+	Type    core.ZodTypeCode // "cidrv6"
+	Version string           // "v6"
 }
 
 // ZodCIDRv6Internals contains IPv6 CIDR validator internal state
@@ -970,18 +958,14 @@ func (z *ZodCIDRv6) Optional() core.ZodType[any, any] {
 
 // Nilable makes the CIDRv6 address nilable
 // - Only changes nil handling, not type inference
-// - Uses standard Clone + setNilable pattern like type_string.go
+// - Uses standard Clone + SetNilable pattern like type_string.go
 func (z *ZodCIDRv6) Nilable() core.ZodType[any, any] {
 	// use Clone method to create a new instance, avoid manual state copying
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodCIDRv6).setNilable()
-}
-
-// setNilable set the Nilable flag internal method
-func (z *ZodCIDRv6) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodCIDRv6)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Transform creates a transform with given function
@@ -1012,7 +996,7 @@ func (z *ZodCIDRv6) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
 // createZodCIDRv6FromDef creates a ZodCIDRv6 from definition
 func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 	internals := &ZodCIDRv6Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals("cidrv6"),
+		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv6),
 		Def:              def,
 		Isst:             issues.ZodIssueInvalidType{Expected: "IPv6 CIDR"},
 	}
@@ -1144,8 +1128,8 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 // IPv4 creates a new IPv4 address schema
 func IPv4(params ...any) *ZodIPv4 {
 	def := &ZodIPv4Def{
-		ZodTypeDef: core.ZodTypeDef{Type: "ipv4"},
-		Type:       "ipv4",
+		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeIPv4},
+		Type:       core.ZodTypeIPv4,
 		Version:    "v4",
 	}
 
@@ -1170,8 +1154,8 @@ func IPv4(params ...any) *ZodIPv4 {
 // IPv6 creates a new IPv6 address schema
 func IPv6(params ...any) *ZodIPv6 {
 	def := &ZodIPv6Def{
-		ZodTypeDef: core.ZodTypeDef{Type: "ipv6"},
-		Type:       "ipv6",
+		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeIPv6},
+		Type:       core.ZodTypeIPv6,
 		Version:    "v6",
 	}
 
@@ -1196,8 +1180,8 @@ func IPv6(params ...any) *ZodIPv6 {
 // CIDRv4 creates a new IPv4 CIDR schema
 func CIDRv4(params ...any) *ZodCIDRv4 {
 	def := &ZodCIDRv4Def{
-		ZodTypeDef: core.ZodTypeDef{Type: "cidrv4"},
-		Type:       "cidrv4",
+		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeCIDRv4},
+		Type:       core.ZodTypeCIDRv4,
 		Version:    "v4",
 	}
 
@@ -1222,8 +1206,8 @@ func CIDRv4(params ...any) *ZodCIDRv4 {
 // CIDRv6 creates a new IPv6 CIDR schema
 func CIDRv6(params ...any) *ZodCIDRv6 {
 	def := &ZodCIDRv6Def{
-		ZodTypeDef: core.ZodTypeDef{Type: "cidrv6"},
-		Type:       "cidrv6",
+		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeCIDRv6},
+		Type:       core.ZodTypeCIDRv6,
 		Version:    "v6",
 	}
 

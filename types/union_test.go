@@ -19,7 +19,7 @@ func TestUnionBasicFunctionality(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "union", internals.Type)
+		assert.Equal(t, core.ZodTypeUnion, internals.Type)
 	})
 
 	t.Run("constructor with params", func(t *testing.T) {

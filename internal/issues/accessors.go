@@ -97,7 +97,7 @@ func GetRawIssueValues(r core.ZodRawIssue) []any {
 // =============================================================================
 
 // GetIssueExpected returns the expected type for invalid_type issues
-func GetIssueExpected(i core.ZodIssue) (string, bool) {
+func GetIssueExpected(i core.ZodIssue) (core.ZodTypeCode, bool) {
 	if i.Code != core.InvalidType {
 		return "", false
 	}
@@ -105,7 +105,7 @@ func GetIssueExpected(i core.ZodIssue) (string, bool) {
 }
 
 // GetIssueReceived returns the received type for invalid_type issues
-func GetIssueReceived(i core.ZodIssue) (string, bool) {
+func GetIssueReceived(i core.ZodIssue) (core.ZodTypeCode, bool) {
 	if i.Code != core.InvalidType {
 		return "", false
 	}

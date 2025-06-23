@@ -3,6 +3,7 @@ package issues
 import (
 	"testing"
 
+	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -184,8 +185,8 @@ func TestTypeDefinitions(t *testing.T) {
 		}
 
 		assert.Equal(t, InvalidType, issue.Code)
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 		assert.Equal(t, 5, issue.Minimum)
 		assert.Equal(t, 100, issue.Maximum)
 		assert.True(t, issue.Inclusive)

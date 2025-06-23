@@ -73,11 +73,11 @@ func TestAnyBasicFunctionality(t *testing.T) {
 	t.Run("constructors", func(t *testing.T) {
 		schema1 := Any()
 		require.NotNil(t, schema1)
-		assert.Equal(t, "any", schema1.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeAny, schema1.GetInternals().Type)
 
 		schema2 := Any()
 		require.NotNil(t, schema2)
-		assert.Equal(t, "any", schema2.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeAny, schema2.GetInternals().Type)
 	})
 
 	t.Run("MustParse success", func(t *testing.T) {
@@ -429,8 +429,8 @@ func TestAnyEdgeCases(t *testing.T) {
 		assert.Equal(t, testValue, unknownResult)
 
 		// But they have different type identifiers
-		assert.Equal(t, "any", anySchema.GetInternals().Type)
-		assert.Equal(t, "unknown", unknownSchema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeAny, anySchema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeUnknown, unknownSchema.GetInternals().Type)
 	})
 }
 

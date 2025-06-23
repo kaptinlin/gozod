@@ -18,12 +18,12 @@ func TestLiteralBasicFunctionality(t *testing.T) {
 		// Single value literal
 		schema := Literal("hello")
 		require.NotNil(t, schema)
-		assert.Equal(t, "literal", schema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeLiteral, schema.GetInternals().Type)
 
 		// Multiple values literal
 		schema2 := Literal("red", "green", "blue")
 		require.NotNil(t, schema2)
-		assert.Equal(t, "literal", schema2.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeLiteral, schema2.GetInternals().Type)
 	})
 
 	t.Run("basic validation", func(t *testing.T) {

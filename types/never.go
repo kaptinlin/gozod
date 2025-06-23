@@ -17,7 +17,7 @@ import (
 // ZodNeverDef defines the configuration for never validation that always fails
 type ZodNeverDef struct {
 	core.ZodTypeDef
-	Type string // "never"
+	Type core.ZodTypeCode // "never"
 }
 
 // ZodNeverInternals contains never validator internal state

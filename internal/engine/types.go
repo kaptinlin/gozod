@@ -68,7 +68,7 @@ func InitZodType[T core.ZodType[any, any]](schema T, def *core.ZodTypeDef) {
 
 // NewBaseZodTypeInternals creates basic ZodTypeInternals structure
 // Provides a foundation for custom schema type implementations
-func NewBaseZodTypeInternals(typeName string) core.ZodTypeInternals {
+func NewBaseZodTypeInternals(typeName core.ZodTypeCode) core.ZodTypeInternals {
 	return core.ZodTypeInternals{
 		Version: core.Version,
 		Type:    typeName,

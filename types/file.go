@@ -19,7 +19,7 @@ import (
 // ZodFileDef defines the configuration for file validation
 type ZodFileDef struct {
 	core.ZodTypeDef
-	Type string // "file"
+	Type core.ZodTypeCode // Type identifier using type-safe constants
 }
 
 // ZodFileInternals contains file validator internal state
@@ -450,14 +450,10 @@ func (z *ZodFile) TransformAny(fn func(any, *core.RefinementContext) (any, error
 
 // Nilable creates a new file schema that accepts nil values
 func (z *ZodFile) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodFile) setNilable() core.ZodType[any, any] {
 	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// Clone operates on ZodTypeDef level
 	})
-	cloned.(*ZodFile).internals.Nilable = true
+	cloned.(*ZodFile).internals.SetNilable()
 	return cloned
 }
 

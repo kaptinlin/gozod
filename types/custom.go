@@ -15,12 +15,12 @@ import (
 // ZodCustomDef defines the configuration for custom validation schema
 type ZodCustomDef struct {
 	core.ZodTypeDef
-	Type   string         // "custom"
-	Check  string         // "custom"
-	Path   []any          // PropertyKey[]
-	Params map[string]any // Custom parameters
-	Fn     any            // Custom validation function (RefineFn or CheckFn)
-	FnType string         // Function type: "refine" or "check"
+	Type   core.ZodTypeCode // "custom"
+	Check  string           // "custom"
+	Path   []any            // PropertyKey[]
+	Params map[string]any   // Custom parameters
+	Fn     any              // Custom validation function (RefineFn or CheckFn)
+	FnType string           // Function type: "refine" or "check"
 }
 
 // ZodCustomInternals contains custom validator internal state
@@ -183,10 +183,6 @@ func (z *ZodCustom) Optional() core.ZodType[any, any] {
 
 // Nilable implements ZodType[any, any] interface: Nilable() core.ZodType[any, any]
 func (z *ZodCustom) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodCustom) setNilable() core.ZodType[any, any] {
 	// Create a new ZodCustom with Nilable flag set instead of using Clone
 	newInternals := &ZodCustomInternals{
 		ZodTypeInternals: z.internals.ZodTypeInternals,
@@ -199,8 +195,8 @@ func (z *ZodCustom) setNilable() core.ZodType[any, any] {
 		newInternals.Bag = mapx.Copy(z.internals.Bag)
 	}
 
-	// Set nilable flag
-	newInternals.Nilable = true
+	// Set nilable flag using convenience method
+	newInternals.SetNilable()
 
 	// Copy the parse function
 	newInternals.Parse = z.internals.Parse

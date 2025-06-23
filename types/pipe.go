@@ -23,7 +23,7 @@ func (zp *ZodPipe[In, Out]) GetInternals() *core.ZodTypeInternals {
 	outInternals := zp.out.GetInternals()
 
 	return &core.ZodTypeInternals{
-		Type:    "pipe",
+		Type:    core.ZodTypePipe,
 		Version: core.Version,
 		Checks:  make([]core.ZodCheck, 0),
 		OptIn:   inInternals.OptIn,
@@ -125,7 +125,7 @@ func (zp *ZodPipe[In, Out]) Check(fn core.CheckFn) core.ZodType[any, any] {
 		return &ZodPipe[any, any]{
 			in:  any(zp.in).(core.ZodType[any, any]),
 			out: any(newOut).(core.ZodType[any, any]),
-			def: core.ZodTypeDef{Type: "pipe"},
+			def: core.ZodTypeDef{Type: core.ZodTypePipe},
 		}
 	}
 
@@ -169,7 +169,7 @@ func (zp *ZodPipe[In, Out]) TransformAny(fn func(any, *core.RefinementContext) (
 	return &ZodPipe[any, any]{
 		in:  any(zp).(core.ZodType[any, any]),
 		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+		def: core.ZodTypeDef{Type: core.ZodTypePipe},
 	}
 }
 
@@ -178,7 +178,7 @@ func (zp *ZodPipe[In, Out]) Pipe(out core.ZodType[any, any]) core.ZodType[any, a
 	return &ZodPipe[any, any]{
 		in:  any(zp).(core.ZodType[any, any]),
 		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
+		def: core.ZodTypeDef{Type: core.ZodTypePipe},
 	}
 }
 
@@ -309,7 +309,7 @@ func Pipe[In, Out any](from core.ZodType[In, any], to core.ZodType[any, Out]) co
 	pipe := &ZodPipe[In, Out]{
 		in:  from,
 		out: to,
-		def: core.ZodTypeDef{Type: "pipe"},
+		def: core.ZodTypeDef{Type: core.ZodTypePipe},
 	}
 	return any(pipe).(core.ZodType[any, any])
 }

@@ -22,8 +22,8 @@ var (
 // ZodNilDef defines the configuration for nil validation
 type ZodNilDef struct {
 	core.ZodTypeDef
-	Type   string          // "nil"
-	Checks []core.ZodCheck // Nil-specific validation checks
+	Type   core.ZodTypeCode // "nil"
+	Checks []core.ZodCheck  // Nil-specific validation checks
 }
 
 // ZodNilInternals contains nil validator internal state

@@ -41,10 +41,10 @@ type ZodIntegerConstraint interface {
 // ZodIntegerDef defines the configuration for generic integer validation
 type ZodIntegerDef[T ZodIntegerConstraint] struct {
 	core.ZodTypeDef
-	Type     string          // "int", "int8", "uint32", etc.
-	MinValue T               // Type minimum value
-	MaxValue T               // Type maximum value
-	Checks   []core.ZodCheck // Integer-specific validation checks
+	Type     core.ZodTypeCode // "int", "int8", "uint32", etc.
+	MinValue T                // Type minimum value
+	MaxValue T                // Type maximum value
+	Checks   []core.ZodCheck  // Integer-specific validation checks
 }
 
 // ZodIntegerInternals contains generic integer validator internal state
@@ -95,7 +95,7 @@ func (z *ZodInteger[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 	return engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		typeName,
+		string(typeName),
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		validateInteger[T],
@@ -953,7 +953,7 @@ func createZodIntegerFromDef[T ZodIntegerConstraint](def *ZodIntegerDef[T]) *Zod
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: def.Type},
+		Isst:             issues.ZodIssueInvalidType{Expected: string(def.Type)},
 		Pattern:          nil,
 		Bag:              make(map[string]any),
 	}
@@ -1074,28 +1074,28 @@ func getIntegerTypeBounds[T ZodIntegerConstraint]() (T, T) {
 }
 
 // getIntegerTypeName returns the type name for integer type T
-func getIntegerTypeName[T ZodIntegerConstraint](zero T) string {
+func getIntegerTypeName[T ZodIntegerConstraint](zero T) core.ZodTypeCode {
 	switch any(zero).(type) {
 	case int:
-		return "int"
+		return core.ZodTypeInt
 	case int8:
-		return "int8"
+		return core.ZodTypeInt8
 	case int16:
-		return "int16"
+		return core.ZodTypeInt16
 	case int32:
-		return "int32"
+		return core.ZodTypeInt32
 	case int64:
-		return "int64"
+		return core.ZodTypeInt64
 	case uint:
-		return "uint"
+		return core.ZodTypeUint
 	case uint8:
-		return "uint8"
+		return core.ZodTypeUint8
 	case uint16:
-		return "uint16"
+		return core.ZodTypeUint16
 	case uint32:
-		return "uint32"
+		return core.ZodTypeUint32
 	case uint64:
-		return "uint64"
+		return core.ZodTypeUint64
 	default:
 		return "unknown"
 	}
@@ -1110,29 +1110,29 @@ func Integer[T ZodIntegerConstraint](params ...any) *ZodInteger[T] {
 	minValue, maxValue := getIntegerTypeBounds[T]()
 
 	// Determine type name
-	var typeName string
+	var typeName core.ZodTypeCode
 	var zero T
 	switch any(zero).(type) {
 	case int:
-		typeName = "int"
+		typeName = core.ZodTypeInt
 	case int8:
-		typeName = "int8"
+		typeName = core.ZodTypeInt8
 	case int16:
-		typeName = "int16"
+		typeName = core.ZodTypeInt16
 	case int32:
-		typeName = "int32"
+		typeName = core.ZodTypeInt32
 	case int64:
-		typeName = "int64"
+		typeName = core.ZodTypeInt64
 	case uint:
-		typeName = "uint"
+		typeName = core.ZodTypeUint
 	case uint8:
-		typeName = "uint8"
+		typeName = core.ZodTypeUint8
 	case uint16:
-		typeName = "uint16"
+		typeName = core.ZodTypeUint16
 	case uint32:
-		typeName = "uint32"
+		typeName = core.ZodTypeUint32
 	case uint64:
-		typeName = "uint64"
+		typeName = core.ZodTypeUint64
 	default:
 		typeName = "unknown"
 	}

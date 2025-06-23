@@ -12,7 +12,7 @@ import (
 // Contains all the internal configuration and state for a schema type
 type ZodTypeInternals struct {
 	Version string                                                       // Library version for compatibility
-	Type    string                                                       // Type identifier (e.g., "string", "number")
+	Type    ZodTypeCode                                                  // Type identifier using type-safe constants
 	Checks  []ZodCheck                                                   // List of validation checks to apply
 	Parse   func(payload *ParsePayload, ctx *ParseContext) *ParsePayload // Parse function
 
@@ -33,10 +33,44 @@ type ZodTypeInternals struct {
 	Bag         map[string]any                          // Additional configuration storage
 }
 
+// =============================================================================
+// ZODTYPEINTERNALS CONVENIENCE METHODS
+// =============================================================================
+
+// IsOptional returns true if the field is optional
+func (z *ZodTypeInternals) IsOptional() bool {
+	return z.Optional
+}
+
+// IsNilable returns true if nil values are allowed
+func (z *ZodTypeInternals) IsNilable() bool {
+	return z.Nilable
+}
+
+// IsCoerce returns true if type coercion is enabled
+func (z *ZodTypeInternals) IsCoerce() bool {
+	return z.Coerce
+}
+
+// SetOptional marks the field as optional
+func (z *ZodTypeInternals) SetOptional() {
+	z.Optional = true
+}
+
+// SetNilable allows nil values for this field
+func (z *ZodTypeInternals) SetNilable() {
+	z.Nilable = true
+}
+
+// SetCoerce enables type coercion for this field
+func (z *ZodTypeInternals) SetCoerce() {
+	z.Coerce = true
+}
+
 // ZodTypeDef represents type definition
 // Basic configuration for creating schema types
 type ZodTypeDef struct {
-	Type     string       // Type name
+	Type     ZodTypeCode  // Type name using type-safe constants
 	Coerce   bool         // Enable coercion
 	Required bool         // Field is required
 	Error    *ZodErrorMap // Custom error handler

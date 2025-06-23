@@ -22,7 +22,7 @@ func TestSliceConstructor(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "slice", internals.Type)
+		assert.Equal(t, core.ZodTypeSlice, internals.Type)
 	})
 
 	t.Run("constructor with params", func(t *testing.T) {

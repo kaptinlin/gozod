@@ -27,9 +27,9 @@ var (
 // ZodBoolDef defines the configuration for boolean validation
 type ZodBoolDef struct {
 	core.ZodTypeDef
-	Type     string          // "boolean"
-	Checks   []core.ZodCheck // Boolean-specific validation checks
-	AllowNil bool            // Nilable modifier flag
+	Type     core.ZodTypeCode // Type identifier using type-safe constants
+	Checks   []core.ZodCheck  // Boolean-specific validation checks
+	AllowNil bool             // Nilable modifier flag
 }
 
 // ZodBoolInternals contains boolean validator internal state

@@ -343,14 +343,10 @@ func (z *ZodMap) Optional() core.ZodType[any, any] {
 
 // Nilable make the map nilable
 func (z *ZodMap) Nilable() core.ZodType[any, any] {
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
-	}).(*ZodMap).setNilable()
-}
-
-// setNilable set nilable flag
-func (z *ZodMap) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
+	}).(*ZodMap)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Nullish makes the map both optional and nilable

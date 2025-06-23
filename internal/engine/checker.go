@@ -18,6 +18,17 @@ func RunChecksOnValue(value any, checkList []core.ZodCheck, payload *core.ParseP
 		return
 	}
 
+	// Pre-allocate Issues slice capacity based on number of checks
+	// This reduces memory allocations during validation
+	if cap(payload.Issues) < len(checkList) {
+		// Allocate with some extra capacity (2x) to handle multiple issues per check
+		newCapacity := len(checkList) * 2
+		if newCapacity < 4 {
+			newCapacity = 4 // Minimum reasonable capacity
+		}
+		payload.Issues = make([]core.ZodRawIssue, len(payload.Issues), newCapacity)
+	}
+
 	// Use slicex.Filter to preprocess valid checks
 	validChecks, _ := slicex.Filter(checkList, func(item any) bool {
 		if check, ok := item.(core.ZodCheck); ok {

@@ -19,7 +19,7 @@ func TestBoolBasicFunctionality(t *testing.T) {
 		// Test Bool constructor
 		schema := Bool()
 		require.NotNil(t, schema)
-		assert.Equal(t, "bool", schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeBool, schema.internals.Def.Type)
 	})
 
 	t.Run("basic validation", func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestBoolBasicFunctionality(t *testing.T) {
 		customError := "core.Custom boolean validation error"
 		schema := Bool(core.SchemaParams{Error: customError})
 		require.NotNil(t, schema)
-		assert.Equal(t, "bool", schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeBool, schema.internals.Def.Type)
 	})
 }
 

@@ -11,10 +11,10 @@ import (
 // CORE TYPE DEFINITIONS
 //////////////////////////
 
-// ZodLazyDef defines the configuration for lazy validation, enabling deferred schema evaluation for recursive types
+// ZodLazyDef defines a lazy schema that gets its inner type from a function
 type ZodLazyDef struct {
 	core.ZodTypeDef
-	Type   string                        // "lazy"
+	Type   core.ZodTypeCode              // "lazy"
 	Getter func() core.ZodType[any, any] // Schema getter function
 }
 

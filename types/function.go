@@ -558,14 +558,10 @@ func (z *ZodFunction) TransformAny(fn func(any, *core.RefinementContext) (any, e
 
 // Nilable creates a new function schema that accepts nil values
 func (z *ZodFunction) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodFunction) setNilable() core.ZodType[any, any] {
 	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// Clone operates on ZodTypeDef level
 	})
-	cloned.(*ZodFunction).internals.Nilable = true
+	cloned.(*ZodFunction).internals.SetNilable()
 	return cloned
 }
 

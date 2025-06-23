@@ -353,7 +353,7 @@ func TestDefaultEdgeCases(t *testing.T) {
 
 		// Default wrapper returns the inner type's internals
 		// So the type should be "string", not "default"
-		assert.Equal(t, "string", internals.Type)
+		assert.Equal(t, core.ZodTypeString, internals.Type)
 		assert.Equal(t, core.Version, internals.Version)
 	})
 

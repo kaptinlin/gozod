@@ -26,10 +26,10 @@ type ZodFloatConstraint interface {
 // ZodFloatDef defines the configuration for generic floating-point validation
 type ZodFloatDef[T ZodFloatConstraint] struct {
 	core.ZodTypeDef
-	Type     string          // "float32" or "float64"
-	MinValue T               // Type minimum value
-	MaxValue T               // Type maximum value
-	Checks   []core.ZodCheck // Float-specific validation checks
+	Type     core.ZodTypeCode // Type identifier using type-safe constants
+	MinValue T                // Type minimum value
+	MaxValue T                // Type maximum value
+	Checks   []core.ZodCheck  // Float-specific validation checks
 }
 
 // ZodFloatInternals contains generic floating-point validator internal state
@@ -71,7 +71,7 @@ func (z *ZodFloat[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		typeName,
+		string(typeName),
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		ValidateFloat[T],
@@ -593,7 +593,7 @@ func createZodFloatFromDef[T ZodFloatConstraint](def *ZodFloatDef[T]) *ZodFloat[
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: def.Type},
+		Isst:             issues.ZodIssueInvalidType{Expected: string(def.Type)},
 		Pattern:          nil,
 		Bag:              make(map[string]any),
 	}
@@ -726,14 +726,14 @@ func (z *ZodFloat[T]) CloneFrom(source any) {
 }
 
 // getFloatTypeName returns the type name for floating-point type T
-func getFloatTypeName[T ZodFloatConstraint](zero T) string {
+func getFloatTypeName[T ZodFloatConstraint](zero T) core.ZodTypeCode {
 	switch any(zero).(type) {
 	case float32:
-		return "float32"
+		return core.ZodTypeFloat32
 	case float64:
-		return "float64"
+		return core.ZodTypeFloat64
 	default:
-		return "unknown"
+		return core.ZodTypeFloat64 // Default fallback
 	}
 }
 

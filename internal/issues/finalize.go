@@ -200,8 +200,14 @@ func GetLocaleError(config *core.ZodConfig) core.ZodErrorMap {
 func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 	// Use mapx for safer property access with zero value defaults
 	// This ensures that missing or wrong-type properties result in zero values
-	issue.Expected = mapx.GetStringDefault(properties, "expected", "")
-	issue.Received = mapx.GetStringDefault(properties, "received", "")
+
+	// Handle ZodTypeCode fields with proper type conversion
+	// Always set these fields, even if empty (to overwrite existing values)
+	expectedStr := mapx.GetStringDefault(properties, "expected", "")
+	issue.Expected = core.ZodTypeCode(expectedStr)
+	receivedStr := mapx.GetStringDefault(properties, "received", "")
+	issue.Received = core.ZodTypeCode(receivedStr)
+
 	issue.Origin = mapx.GetStringDefault(properties, "origin", "")
 	issue.Format = mapx.GetStringDefault(properties, "format", "")
 	issue.Pattern = mapx.GetStringDefault(properties, "pattern", "")
@@ -211,6 +217,7 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 	issue.Algorithm = mapx.GetStringDefault(properties, "algorithm", "")
 
 	// Handle numeric and any values with nil defaults
+	// Always set these fields to ensure existing values are overwritten
 	issue.Minimum = mapx.GetAnyDefault(properties, "minimum", nil)
 	issue.Maximum = mapx.GetAnyDefault(properties, "maximum", nil)
 	issue.Divisor = mapx.GetAnyDefault(properties, "divisor", nil)

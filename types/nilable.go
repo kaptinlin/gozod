@@ -15,8 +15,8 @@ import (
 // ZodNilableDef defines the configuration for nilable validation
 type ZodNilableDef[T core.ZodType[any, any]] struct {
 	core.ZodTypeDef
-	Type      string // "nilable"
-	InnerType T      // The wrapped type - using generic parameter
+	Type      core.ZodTypeCode // "nilable"
+	InnerType T                // The wrapped type - using generic parameter
 }
 
 // ZodNilableInternals contains nilable validator internal state
@@ -40,7 +40,7 @@ func (z *ZodNilable[T]) GetInternals() *core.ZodTypeInternals {
 	if z.internals == nil {
 		innerInternals := z.innerType.GetInternals()
 		z.internals = &core.ZodTypeInternals{
-			Type:   "nilable",
+			Type:   core.ZodTypeNilable,
 			OptIn:  innerInternals.OptIn,  // Preserve input optionality
 			OptOut: innerInternals.OptOut, // Preserve output optionality
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
@@ -48,29 +48,101 @@ func (z *ZodNilable[T]) GetInternals() *core.ZodTypeInternals {
 					innerTypeInternals := z.innerType.GetInternals()
 					if innerTypeInternals != nil {
 						switch innerTypeInternals.Type {
-						case "nil":
+						case core.ZodTypeNil:
 							payload.Value = nil
 							return payload
-						case "string":
+						case core.ZodTypeString:
 							payload.Value = (*string)(nil)
-						case "bool", "boolean":
+						case core.ZodTypeBool:
 							payload.Value = (*bool)(nil)
-						case "stringbool":
+						case core.ZodTypeStringBool:
 							payload.Value = (*bool)(nil) // StringBool outputs bool, so nil returns *bool(nil)
-						case "bigint":
+						case core.ZodTypeBigInt:
 							payload.Value = (*big.Int)(nil)
-						case "int", "int8", "int16", "int32", "int64":
+						case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
 							payload.Value = (*int)(nil)
-						case "uint", "uint8", "uint16", "uint32", "uint64":
+						case core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64:
 							payload.Value = (*uint)(nil)
-						case "float32", "float64", "number":
+						case core.ZodTypeFloat32, core.ZodTypeFloat64, core.ZodTypeNumber:
 							payload.Value = (*float64)(nil)
-						case "complex64":
+						case core.ZodTypeComplex64:
 							payload.Value = (*complex64)(nil)
-						case "complex128":
+						case core.ZodTypeComplex128:
 							payload.Value = (*complex128)(nil)
-						case "any":
+						case core.ZodTypeAny:
 							payload.Value = (*any)(nil)
+						case core.ZodTypeNaN:
+							payload.Value = (*float64)(nil)
+						case core.ZodTypeInteger:
+							payload.Value = (*int)(nil)
+						case core.ZodTypeDate:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeUnknown:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeNever:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeArray:
+							payload.Value = (*[]any)(nil)
+						case core.ZodTypeSlice:
+							payload.Value = (*[]any)(nil)
+						case core.ZodTypeObject:
+							payload.Value = (*map[string]any)(nil)
+						case core.ZodTypeStruct:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeRecord:
+							payload.Value = (*map[string]any)(nil)
+						case core.ZodTypeMap:
+							payload.Value = (*map[string]any)(nil)
+						case core.ZodTypeUnion:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeDiscriminated:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeIntersection:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeFunction:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeLazy:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeLiteral:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeEnum:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeOptional:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeNilable:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeDefault:
+							payload.Value = (*any)(nil)
+						case core.ZodTypePrefault:
+							payload.Value = (*any)(nil)
+						case core.ZodTypePipeline:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeTransform:
+							payload.Value = (*any)(nil)
+						case core.ZodTypePipe:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeCustom:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeCheck:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeRefine:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeIPv4:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeIPv6:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeCIDRv4:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeCIDRv6:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeEmail:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeURL:
+							payload.Value = (*string)(nil)
+						case core.ZodTypeFile:
+							payload.Value = (*any)(nil)
+						case core.ZodTypeUintptr:
+							payload.Value = (*uintptr)(nil)
 						default:
 							// For other types, return generic nil pointer
 							payload.Value = (*any)(nil)
@@ -96,8 +168,8 @@ func (z *ZodNilable[T]) GetZod() *ZodNilableInternals[T] {
 	return &ZodNilableInternals[T]{
 		ZodTypeInternals: *z.GetInternals(),
 		Def: &ZodNilableDef[T]{
-			ZodTypeDef: core.ZodTypeDef{Type: "nilable"},
-			Type:       "nilable",
+			ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeNilable},
+			Type:       core.ZodTypeNilable,
 			InnerType:  z.innerType,
 		},
 	}
@@ -112,28 +184,78 @@ func (z *ZodNilable[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 		innerTypeInternals := z.innerType.GetInternals()
 		if innerTypeInternals != nil {
 			switch innerTypeInternals.Type {
-			case "nil":
+			case core.ZodTypeNil:
 				// For nil type, return true nil
 				return nil, nil
-			case "string":
+			case core.ZodTypeString:
 				return (*string)(nil), nil
-			case "bool", "boolean":
+			case core.ZodTypeBool:
 				return (*bool)(nil), nil
-			case "stringbool":
+			case core.ZodTypeStringBool:
 				return (*bool)(nil), nil // StringBool outputs bool, so nil returns *bool(nil)
-			case "bigint":
+			case core.ZodTypeBigInt:
 				return (*big.Int)(nil), nil
-			case "int", "int8", "int16", "int32", "int64":
+			case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
 				return (*int)(nil), nil
-			case "uint", "uint8", "uint16", "uint32", "uint64":
+			case core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64:
 				return (*uint)(nil), nil
-			case "float32", "float64", "number":
+			case core.ZodTypeFloat32, core.ZodTypeFloat64, core.ZodTypeNumber:
 				return (*float64)(nil), nil
-			case "complex64":
+			case core.ZodTypeComplex64:
 				return (*complex64)(nil), nil
-			case "complex128":
+			case core.ZodTypeComplex128:
 				return (*complex128)(nil), nil
-			case "any":
+			case core.ZodTypeAny:
+				return (*any)(nil), nil
+			case core.ZodTypeNaN:
+				return (*float64)(nil), nil
+			case core.ZodTypeInteger:
+				return (*int)(nil), nil
+			case core.ZodTypeDate:
+				// Date type returns nil pointer to time.Time
+				return (*any)(nil), nil
+			case core.ZodTypeUnknown:
+				return (*any)(nil), nil
+			case core.ZodTypeNever:
+				return (*any)(nil), nil
+			case core.ZodTypeArray, core.ZodTypeSlice:
+				// Collection types return nil pointer to slice
+				return (*[]any)(nil), nil
+			case core.ZodTypeObject, core.ZodTypeStruct, core.ZodTypeRecord, core.ZodTypeMap:
+				// Object types return nil pointer to map
+				return (*map[string]any)(nil), nil
+			case core.ZodTypeUnion, core.ZodTypeDiscriminated, core.ZodTypeIntersection:
+				// Composite types return generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeLiteral, core.ZodTypeEnum:
+				// Value types return generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeOptional, core.ZodTypeNilable, core.ZodTypeDefault, core.ZodTypePrefault:
+				// Modifier types return generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypePipeline, core.ZodTypeTransform, core.ZodTypePipe:
+				// Processing types return generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeCustom, core.ZodTypeCheck, core.ZodTypeRefine:
+				// Custom validation types return generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeCIDRv4, core.ZodTypeCIDRv6:
+				// Network types return string nil pointer
+				return (*string)(nil), nil
+			case core.ZodTypeEmail, core.ZodTypeURL:
+				// Format types return string nil pointer
+				return (*string)(nil), nil
+			case core.ZodTypeFile:
+				// File type returns generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeUintptr:
+				// Uintptr type returns uintptr nil pointer
+				return (*uintptr)(nil), nil
+			case core.ZodTypeFunction:
+				// Function type returns generic nil pointer
+				return (*any)(nil), nil
+			case core.ZodTypeLazy:
+				// Lazy type returns generic nil pointer
 				return (*any)(nil), nil
 			default:
 				// For other types, return generic nil pointer

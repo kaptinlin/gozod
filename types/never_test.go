@@ -29,7 +29,7 @@ func TestNeverBasicFunctionality(t *testing.T) {
 			var zodErr *issues.ZodError
 			require.True(t, issues.IsZodError(err, &zodErr))
 			assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-			assert.Equal(t, "never", zodErr.Issues[0].Expected)
+			assert.Equal(t, core.ZodTypeNever, zodErr.Issues[0].Expected)
 		}
 	})
 
@@ -50,11 +50,11 @@ func TestNeverBasicFunctionality(t *testing.T) {
 	t.Run("constructors", func(t *testing.T) {
 		schema1 := Never()
 		require.NotNil(t, schema1)
-		assert.Equal(t, "never", schema1.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeNever, schema1.GetInternals().Type)
 
 		schema2 := Never()
 		require.NotNil(t, schema2)
-		assert.Equal(t, "never", schema2.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeNever, schema2.GetInternals().Type)
 	})
 
 	t.Run("MustParse panics", func(t *testing.T) {
@@ -304,7 +304,7 @@ func TestNeverErrorHandling(t *testing.T) {
 		require.True(t, issues.IsZodError(err, &zodErr))
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-		assert.Equal(t, "never", zodErr.Issues[0].Expected)
+		assert.Equal(t, core.ZodTypeNever, zodErr.Issues[0].Expected)
 		assert.Contains(t, zodErr.Issues[0].Message, "never type should never receive any value")
 	})
 }

@@ -21,7 +21,7 @@ var (
 // ZodUnionDef defines the configuration for union validation
 type ZodUnionDef struct {
 	core.ZodTypeDef
-	Type    string                   // "union"
+	Type    core.ZodTypeCode         // Type identifier using type-safe constants
 	Options []core.ZodType[any, any] // Union options to validate against
 }
 
@@ -138,13 +138,9 @@ func (z *ZodUnion) Optional() core.ZodType[any, any] {
 
 // Nilable modifier: only changes nil handling, not type inference logic
 func (z *ZodUnion) Nilable() core.ZodType[any, any] {
-	return engine.Clone(z, func(def *core.ZodTypeDef) {}).(*ZodUnion).setNilable()
-}
-
-// setNilable sets the Nilable flag - internal method
-func (z *ZodUnion) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {}).(*ZodUnion)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Pipe creates a validation pipeline

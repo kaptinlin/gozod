@@ -563,7 +563,7 @@ func TestPipeEdgeCases(t *testing.T) {
 		pipe := String().Pipe(String().Min(3))
 		internals := pipe.GetInternals()
 
-		assert.Equal(t, "pipe", internals.Type)
+		assert.Equal(t, core.ZodTypePipe, internals.Type)
 		assert.Equal(t, core.Version, internals.Version)
 	})
 

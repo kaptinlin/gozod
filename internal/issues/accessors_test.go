@@ -151,18 +151,18 @@ func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 	t.Run("GetIssueExpected for InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.InvalidType},
-			Expected:     "string",
+			Expected:     core.ZodTypeString,
 		}
 
 		expected, ok := GetIssueExpected(issue)
 		require.True(t, ok)
-		assert.Equal(t, "string", expected)
+		assert.Equal(t, core.ZodTypeString, expected)
 	})
 
 	t.Run("GetIssueExpected for non-InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.TooBig},
-			Expected:     "string",
+			Expected:     core.ZodTypeString,
 		}
 
 		expected, ok := GetIssueExpected(issue)
@@ -173,12 +173,12 @@ func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 	t.Run("GetIssueReceived for InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.InvalidType},
-			Received:     "number",
+			Received:     core.ZodTypeNumber,
 		}
 
 		received, ok := GetIssueReceived(issue)
 		require.True(t, ok)
-		assert.Equal(t, "number", received)
+		assert.Equal(t, core.ZodTypeNumber, received)
 	})
 
 	t.Run("GetIssueMinimum for TooSmall", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestAccessorEdgeCases(t *testing.T) {
 			WithOrigin(unicodeString),
 		)
 
-		assert.Equal(t, unicodeString, issue.GetExpected())
+		assert.Equal(t, core.ZodTypeCode(unicodeString), issue.GetExpected())
 		assert.Equal(t, unicodeString, issue.GetOrigin())
 	})
 }
@@ -409,8 +409,8 @@ func TestAccessorIntegration(t *testing.T) {
 		finalizedIssue := FinalizeIssue(rawIssue, nil, nil)
 
 		// Check that properties are preserved correctly
-		assert.Equal(t, GetRawIssueExpected(rawIssue), finalizedIssue.Expected)
-		assert.Equal(t, GetRawIssueReceived(rawIssue), finalizedIssue.Received)
+		assert.Equal(t, core.ZodTypeCode(GetRawIssueExpected(rawIssue)), finalizedIssue.Expected)
+		assert.Equal(t, core.ZodTypeCode(GetRawIssueReceived(rawIssue)), finalizedIssue.Received)
 		assert.Equal(t, GetRawIssueMinimum(rawIssue), finalizedIssue.Minimum)
 		assert.Equal(t, GetRawIssueMaximum(rawIssue), finalizedIssue.Maximum)
 		assert.Equal(t, GetRawIssueInclusive(rawIssue), finalizedIssue.Inclusive)
@@ -419,11 +419,11 @@ func TestAccessorIntegration(t *testing.T) {
 		// Check type-specific accessors work on finalized issue
 		expected, ok := GetIssueExpected(finalizedIssue)
 		require.True(t, ok)
-		assert.Equal(t, "string", expected)
+		assert.Equal(t, core.ZodTypeString, expected)
 
 		received, ok := GetIssueReceived(finalizedIssue)
 		require.True(t, ok)
-		assert.Equal(t, "number", received)
+		assert.Equal(t, core.ZodTypeNumber, received)
 	})
 
 	t.Run("accessor methods work with creation helpers", func(t *testing.T) {

@@ -819,8 +819,8 @@ func TestISOErrorHandling(t *testing.T) {
 		assert.Len(t, zodErr.Issues, 1)
 		issue := zodErr.Issues[0]
 		assert.Equal(t, core.InvalidType, issue.Code)
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 	})
 
 	t.Run("error structure for invalid format", func(t *testing.T) {

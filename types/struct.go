@@ -27,7 +27,7 @@ var (
 // ZodStructDef defines the configuration for struct/object validation
 type ZodStructDef struct {
 	core.ZodTypeDef
-	Type     string                 // "struct"
+	Type     core.ZodTypeCode       // "struct"
 	Shape    core.StructSchema      // Field schemas
 	Catchall core.ZodType[any, any] // Schema for unrecognized keys
 	Mode     string                 // "strict", "strip", "loose"
@@ -297,12 +297,7 @@ func (z *ZodStruct) Optional() core.ZodType[any, any] {
 
 // Nilable makes the struct nilable while preserving type inference
 func (z *ZodStruct) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-// setNilable sets the Nilable flag internally
-func (z *ZodStruct) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
+	z.internals.SetNilable()
 	return z
 }
 
@@ -365,7 +360,6 @@ func (z *ZodStruct) Pick(keys []string) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    newShape,
 		Catchall: z.internals.Catchall,
-		Mode:     z.internals.Mode,
 	}
 
 	return createZodStructFromDef(def)
@@ -393,7 +387,6 @@ func (z *ZodStruct) Omit(keys []string) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    newShape,
 		Catchall: z.internals.Catchall,
-		Mode:     z.internals.Mode,
 	}
 
 	return createZodStructFromDef(def)
@@ -421,7 +414,6 @@ func (z *ZodStruct) Extend(augmentation core.StructSchema) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    newShape,
 		Catchall: z.internals.Catchall,
-		Mode:     z.internals.Mode,
 	}
 
 	return createZodStructFromDef(def)
@@ -461,7 +453,6 @@ func (z *ZodStruct) Partial(keys ...[]string) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    newShape,
 		Catchall: z.internals.Catchall,
-		Mode:     z.internals.Mode,
 	}
 
 	return createZodStructFromDef(def)
@@ -489,7 +480,6 @@ func (z *ZodStruct) Merge(other *ZodStruct) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    newShape,
 		Catchall: z.internals.Catchall,
-		Mode:     z.internals.Mode,
 	}
 
 	return createZodStructFromDef(def)
@@ -505,7 +495,7 @@ func (z *ZodStruct) Catchall(catchallSchema core.ZodType[any, any]) *ZodStruct {
 		Type:     core.ZodTypeStruct,
 		Shape:    z.internals.Shape,
 		Catchall: catchallSchema,
-		Mode:     LOOSE_MODE, // Catchall implies loose mode
+		Mode:     LOOSE_MODE,
 	}
 
 	return createZodStructFromDef(def)
@@ -687,21 +677,29 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 				// Allow unrecognized keys
 				for _, key := range unrecognizedKeys {
 					if internals.Catchall != nil {
-						// Validate with catchall schema
-						catchallPayload := &core.ParsePayload{
-							Value:  objMap[key],
-							Issues: make([]core.ZodRawIssue, 0),
-							Path:   append(payload.Path, key),
-						}
-						catchallResult := internals.Catchall.GetInternals().Parse(catchallPayload, parseCtx)
-						if len(catchallResult.Issues) > 0 {
-							for _, issue := range catchallResult.Issues {
-								fieldIssue := issue
-								fieldIssue.Path = append(payload.Path, key)
-								payload.Issues = append(payload.Issues, fieldIssue)
+						// Validate unknown key value using catchall schema's full Parse to preserve wrapper behaviour
+						parsedVal, err := internals.Catchall.Parse(objMap[key], parseCtx)
+						if err != nil {
+							var zodErr *issues.ZodError
+							if errors.As(err, &zodErr) {
+								for _, issue := range zodErr.Issues {
+									raw := core.ZodRawIssue{
+										Code:    issue.Code,
+										Input:   issue.Input,
+										Path:    append(payload.Path, append([]any{key}, issue.Path...)...),
+										Message: issue.Message,
+										Inst:    internals,
+									}
+									payload.Issues = append(payload.Issues, raw)
+								}
+							} else {
+								raw := issues.CreateInvalidTypeIssue("unknown", objMap[key])
+								raw.Path = append(payload.Path, key)
+								raw.Inst = internals
+								payload.Issues = append(payload.Issues, raw)
 							}
 						} else {
-							result[key] = catchallResult.Value
+							result[key] = parsedVal
 						}
 					} else {
 						result[key] = objMap[key]

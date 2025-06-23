@@ -27,8 +27,8 @@ var (
 // ZodStringDef defines the configuration for string validation
 type ZodStringDef struct {
 	core.ZodTypeDef
-	Type   string          // "string"
-	Checks []core.ZodCheck // String-specific validation checks
+	Type   core.ZodTypeCode // Type identifier using type-safe constants
+	Checks []core.ZodCheck  // String-specific validation checks
 }
 
 // ZodStringInternals contains string validator internal state
@@ -65,10 +65,18 @@ func (z *ZodString) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
+	// Try fast path first for basic string validation
+	if len(z.internals.Checks) == 0 && !z.internals.IsCoerce() {
+		if result, err := engine.ParseStringFast(input, &z.internals.ZodTypeInternals); err == nil {
+			return result, nil
+		}
+	}
+
+	// Fall back to generic path for complex validation or coercion
 	return engine.ParseType[string](
 		input,
 		&z.internals.ZodTypeInternals,
-		"string",
+		string(core.ZodTypeString),
 		func(v any) (string, bool) { str, ok := v.(string); return str, ok },
 		func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 		validateString,
@@ -1189,12 +1197,6 @@ func convertToSchemaParams(params ...any) []core.SchemaParams {
 		}
 	}
 	return result
-}
-
-//nolint:unused // future API feature
-func (z *ZodString) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
 }
 
 // GetZod returns the string-specific internals

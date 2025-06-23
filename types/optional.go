@@ -14,8 +14,8 @@ import (
 // ZodOptionalDef defines the configuration for optional validation
 type ZodOptionalDef[T core.ZodType[any, any]] struct {
 	core.ZodTypeDef
-	Type      string // "optional"
-	InnerType T      // The wrapped type - using generic parameter
+	Type      core.ZodTypeCode // "optional"
+	InnerType T                // The wrapped type - using generic parameter
 }
 
 // ZodOptionalInternals contains optional validator internal state
@@ -40,7 +40,7 @@ func (z *ZodOptional[T]) GetInternals() *core.ZodTypeInternals {
 	// Optional needs its own internals to properly handle nil values
 	if z.internals == nil {
 		z.internals = &core.ZodTypeInternals{
-			Type:   "optional",
+			Type:   core.ZodTypeOptional,
 			OptIn:  "optional",
 			OptOut: "optional",
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
@@ -65,8 +65,8 @@ func (z *ZodOptional[T]) GetZod() *ZodOptionalInternals[T] {
 	return &ZodOptionalInternals[T]{
 		ZodTypeInternals: *z.GetInternals(),
 		Def: &ZodOptionalDef[T]{
-			ZodTypeDef: core.ZodTypeDef{Type: "optional"},
-			Type:       "optional",
+			ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeOptional},
+			Type:       core.ZodTypeOptional,
 			InnerType:  z.innerType,
 		},
 		OptIn:  "optional",

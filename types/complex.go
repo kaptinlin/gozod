@@ -34,7 +34,7 @@ type ZodComplexConstraint interface {
 // ZodComplexDef defines the configuration for generic complex number validation
 type ZodComplexDef[T ZodComplexConstraint] struct {
 	core.ZodTypeDef
-	Type string // "complex64" or "complex128"
+	Type core.ZodTypeCode // Type identifier using type-safe constants
 }
 
 // ZodComplexInternals contains generic complex number validator internal state
@@ -383,14 +383,10 @@ func (z *ZodComplex[T]) Optional() core.ZodType[any, any] {
 
 // Nilable creates a new complex schema that accepts nil values
 func (z *ZodComplex[T]) Nilable() core.ZodType[any, any] {
-	return z.setNilable()
-}
-
-func (z *ZodComplex[T]) setNilable() core.ZodType[any, any] {
 	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// Clone operates on ZodTypeDef level
 	})
-	cloned.(*ZodComplex[T]).internals.Nilable = true
+	cloned.(*ZodComplex[T]).internals.SetNilable()
 	return cloned
 }
 
@@ -790,15 +786,15 @@ func createZodComplexFromDef[T ZodComplexConstraint](def *ZodComplexDef[T]) *Zod
 // Complex creates a new generic complex schema
 func Complex[T ZodComplexConstraint](params ...any) *ZodComplex[T] {
 	// Determine type name from generic parameter
-	var typeName string
+	var typeName core.ZodTypeCode
 	var zero T
 	switch any(zero).(type) {
 	case complex64:
-		typeName = "complex64"
+		typeName = core.ZodTypeComplex64
 	case complex128:
-		typeName = "complex128"
+		typeName = core.ZodTypeComplex128
 	default:
-		typeName = "complex"
+		typeName = core.ZodTypeComplex64 // Default fallback
 	}
 
 	def := &ZodComplexDef[T]{

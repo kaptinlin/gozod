@@ -26,8 +26,8 @@ func TestFinalizeIssue(t *testing.T) {
 		require.Equal(t, core.InvalidType, issue.Code)
 		require.Equal(t, "Custom error message", issue.Message)
 		assert.Empty(t, issue.Path)
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 		assert.Equal(t, "test_input", issue.Input)
 	})
 
@@ -152,8 +152,8 @@ func TestMapPropertiesToIssue(t *testing.T) {
 		MapPropertiesToIssue(&issue, props)
 
 		// Verify all properties were mapped correctly
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 		assert.Equal(t, 5, issue.Minimum)
 		assert.Equal(t, 100, issue.Maximum)
 		assert.True(t, issue.Inclusive)
@@ -181,7 +181,7 @@ func TestMapPropertiesToIssue(t *testing.T) {
 		issue := core.ZodIssue{}
 		MapPropertiesToIssue(&issue, props)
 
-		assert.Equal(t, "string", issue.Expected)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
 		assert.Equal(t, 10, issue.Minimum)
 		assert.Equal(t, "email", issue.Format)
 
@@ -254,11 +254,11 @@ func TestMapPropertiesToIssue(t *testing.T) {
 		MapPropertiesToIssue(&issue, props)
 
 		// Existing values should be overwritten by empty values from utils
-		assert.Empty(t, issue.Expected) // Utils returns empty string for missing property
-		assert.Nil(t, issue.Minimum)    // Utils returns nil for missing property
+		assert.Empty(t, string(issue.Expected)) // Utils returns empty string for missing property
+		assert.Nil(t, issue.Minimum)            // Utils returns nil for missing property
 
 		// New values should be set
-		assert.Equal(t, "new_value", issue.Received)
+		assert.Equal(t, core.ZodTypeCode("new_value"), issue.Received)
 		assert.Equal(t, 100, issue.Maximum)
 	})
 }
@@ -521,8 +521,8 @@ func TestFinalizationIntegration(t *testing.T) {
 		assert.Equal(t, "invalid@email", issue.Input)
 		assert.Equal(t, []any{"user", "contact", "email"}, issue.Path)
 		assert.NotEmpty(t, issue.Message)
-		assert.Equal(t, "valid_email", issue.Expected)
-		assert.Equal(t, "invalid_string", issue.Received)
+		assert.Equal(t, core.ZodTypeCode("valid_email"), issue.Expected)
+		assert.Equal(t, core.ZodTypeCode("invalid_string"), issue.Received)
 		assert.Equal(t, "string", issue.Origin)
 		assert.Equal(t, "email", issue.Format)
 		assert.Equal(t, ".*@.*\\..*", issue.Pattern)
@@ -541,7 +541,7 @@ func TestFinalizationIntegration(t *testing.T) {
 		assert.Equal(t, core.InvalidType, issue.Code)
 		assert.Nil(t, issue.Input) // Should be excluded due to ReportInput: false
 		assert.Equal(t, []any{"data", "field"}, issue.Path)
-		assert.Equal(t, "string", issue.Expected)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
 	})
 
 	t.Run("finalization preserves all property types", func(t *testing.T) {
@@ -567,8 +567,8 @@ func TestFinalizationIntegration(t *testing.T) {
 		issue := FinalizeIssue(rawIssue, nil, nil)
 
 		// Verify all properties are preserved
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 		assert.Equal(t, 0, issue.Minimum)
 		assert.Equal(t, 100, issue.Maximum)
 		assert.True(t, issue.Inclusive)
@@ -641,6 +641,6 @@ func TestFinalizationEdgeCases(t *testing.T) {
 		issue := FinalizeIssue(rawIssue, nil, nil)
 
 		assert.Equal(t, unicodeMessage, issue.Message)
-		assert.Equal(t, unicodeProperty, issue.Expected)
+		assert.Equal(t, core.ZodTypeCode(unicodeProperty), issue.Expected)
 	})
 }

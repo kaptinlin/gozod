@@ -605,7 +605,7 @@ func TestMapEdgeCases(t *testing.T) {
 		schema := Map(keySchema, valueSchema)
 
 		internals := schema.GetInternals()
-		assert.Equal(t, "map", internals.Type)
+		assert.Equal(t, core.ZodTypeMap, internals.Type)
 		assert.Equal(t, core.Version, internals.Version)
 
 		mapInternals := schema.GetZod()

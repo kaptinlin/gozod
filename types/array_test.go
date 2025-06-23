@@ -22,7 +22,7 @@ func TestArrayConstructor(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "array", internals.Type)
+		assert.Equal(t, core.ZodTypeArray, internals.Type)
 	})
 
 	t.Run("constructor with params", func(t *testing.T) {
@@ -30,6 +30,12 @@ func TestArrayConstructor(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals.Error)
+	})
+
+	t.Run("constructor with single element", func(t *testing.T) {
+		schema := Array(String(), 3)
+		require.NotNil(t, schema)
+		assert.Equal(t, core.ZodTypeArray, schema.GetInternals().Type)
 	})
 }
 

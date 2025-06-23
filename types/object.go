@@ -37,7 +37,7 @@ const (
 // ZodObjectDef defines object validation configuration
 type ZodObjectDef struct {
 	core.ZodTypeDef
-	Type        string                 // "object"
+	Type        core.ZodTypeCode       // "object"
 	Shape       core.ObjectSchema      // Field definitions
 	Catchall    core.ZodType[any, any] // Catchall schema for unknown keys
 	UnknownKeys ObjectMode             // How to handle unknown keys
@@ -74,7 +74,6 @@ func Object(shape core.ObjectSchema, params ...any) *ZodObject {
 		},
 		Type:        "object",
 		Shape:       shape,
-		Catchall:    nil,
 		UnknownKeys: OBJECT_STRIP_MODE, // Default mode
 	}
 
@@ -171,7 +170,6 @@ func createZodObjectFromDef(def *ZodObjectDef, params ...any) *ZodObject {
 			ZodTypeDef:  *newDef,
 			Type:        "object",
 			Shape:       def.Shape,
-			Catchall:    def.Catchall,
 			UnknownKeys: def.UnknownKeys,
 		}
 		newSchema := createZodObjectFromDef(objectDef)
@@ -391,7 +389,6 @@ func (z *ZodObject) Pick(keys []string) *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    z.internals.Def.Catchall,
 		UnknownKeys: z.internals.Def.UnknownKeys,
 	}
 
@@ -423,7 +420,6 @@ func (z *ZodObject) Omit(keys []string) *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    z.internals.Def.Catchall,
 		UnknownKeys: z.internals.Def.UnknownKeys,
 	}
 
@@ -455,7 +451,6 @@ func (z *ZodObject) Extend(extension core.ObjectSchema) *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    z.internals.Def.Catchall,
 		UnknownKeys: z.internals.Def.UnknownKeys,
 	}
 
@@ -480,7 +475,6 @@ func (z *ZodObject) Partial() *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    z.internals.Def.Catchall,
 		UnknownKeys: z.internals.Def.UnknownKeys,
 	}
 
@@ -534,7 +528,6 @@ func (z *ZodObject) Required(fields ...[]string) *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    z.internals.Def.Catchall,
 		UnknownKeys: z.internals.Def.UnknownKeys,
 	}
 
@@ -566,8 +559,7 @@ func (z *ZodObject) Merge(other *ZodObject) *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       newShape,
-		Catchall:    other.internals.Def.Catchall,    // Use other's catchall
-		UnknownKeys: other.internals.Def.UnknownKeys, // Use other's mode
+		UnknownKeys: other.internals.Def.UnknownKeys,
 	}
 
 	newSchema := createZodObjectFromDef(newDef)
@@ -609,7 +601,7 @@ func (z *ZodObject) Passthrough() *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       z.internals.Shape,
-		Catchall:    Unknown(), // Use Unknown for passthrough
+		Catchall:    Unknown(),
 		UnknownKeys: OBJECT_LOOSE_MODE,
 	}
 
@@ -629,7 +621,6 @@ func (z *ZodObject) Strict() *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       z.internals.Shape,
-		Catchall:    nil,
 		UnknownKeys: OBJECT_STRICT_MODE,
 	}
 
@@ -649,7 +640,6 @@ func (z *ZodObject) Strip() *ZodObject {
 		ZodTypeDef:  z.internals.Def.ZodTypeDef,
 		Type:        z.internals.Def.Type,
 		Shape:       z.internals.Shape,
-		Catchall:    nil,
 		UnknownKeys: OBJECT_STRIP_MODE,
 	}
 
@@ -713,13 +703,10 @@ func (z *ZodObject) Optional() core.ZodType[any, any] {
 
 // Nilable makes the object nilable
 func (z *ZodObject) Nilable() core.ZodType[any, any] {
-	return engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
-	}).(*ZodObject).setNilable()
-}
-
-func (z *ZodObject) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return any(z).(core.ZodType[any, any])
+	cloned := engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
+	}).(*ZodObject)
+	cloned.internals.SetNilable()
+	return any(cloned).(core.ZodType[any, any])
 }
 
 // Check adds modern validation using direct payload access
@@ -1156,7 +1143,6 @@ func (z *ZodObject) CloneFrom(source any) {
 
 		// Copy object definition fields
 		if src.internals.Def != nil {
-			z.internals.Def.Catchall = src.internals.Def.Catchall
 			z.internals.Def.UnknownKeys = src.internals.Def.UnknownKeys
 		}
 	}
@@ -1289,17 +1275,32 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 			case OBJECT_LOOSE_MODE:
 				// loose mode: allow unknown keys to pass through
 				if internals.Def.Catchall != nil {
-					// validate with catchall schema
-					catchallPayload := &core.ParsePayload{
-						Value:  value,
-						Path:   append(payload.Path, key),
-						Issues: make([]core.ZodRawIssue, 0),
-					}
-					catchallResult := internals.Def.Catchall.GetInternals().Parse(catchallPayload, ctx)
-					if len(catchallResult.Issues) > 0 {
-						payload.Issues = append(payload.Issues, catchallResult.Issues...)
+					// Validate unknown key value with catchall schema using full Parse to preserve wrapper behaviour
+					parsedVal, err := internals.Def.Catchall.Parse(value, ctx)
+					if err != nil {
+						// Convert ZodError to raw issues with correct path
+						var zodErr *issues.ZodError
+						if errors.As(err, &zodErr) {
+							for _, issue := range zodErr.Issues {
+								raw := core.ZodRawIssue{
+									Code:    issue.Code,
+									Input:   issue.Input,
+									Path:    append(payload.Path, append([]any{key}, issue.Path...)...),
+									Message: issue.Message,
+									Inst:    internals,
+								}
+								payload.Issues = append(payload.Issues, raw)
+							}
+						} else {
+							// Fallback generic invalid type issue
+							raw := issues.CreateInvalidTypeIssue("unknown", value)
+							raw.Path = append(payload.Path, key)
+							raw.Inst = internals
+							payload.Issues = append(payload.Issues, raw)
+						}
 					} else {
-						result[key] = catchallResult.Value
+						// Successful validation – adopt transformed value
+						result[key] = parsedVal
 					}
 				} else {
 					// no catchall, pass through as-is

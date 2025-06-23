@@ -114,7 +114,7 @@ func TestNilableBasicFunctionality(t *testing.T) {
 		schema := String().Nilable()
 
 		// Confirm that the wrapper's internal type is marked as "nilable".
-		assert.Equal(t, "nilable", schema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeNilable, schema.GetInternals().Type)
 
 		// Unwrap should return the underlying ZodString schema.
 		unwrapped := schema.Unwrap()

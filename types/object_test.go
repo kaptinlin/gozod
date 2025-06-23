@@ -23,7 +23,7 @@ func TestObjectBasicFunctionality(t *testing.T) {
 		require.NotNil(t, schema)
 		internals := schema.GetInternals()
 		require.NotNil(t, internals)
-		assert.Equal(t, "object", internals.Type)
+		assert.Equal(t, core.ZodTypeObject, internals.Type)
 	})
 
 	t.Run("constructor with params", func(t *testing.T) {

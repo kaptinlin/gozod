@@ -178,15 +178,11 @@ func (z *ZodDiscriminatedUnion) Optional() core.ZodType[any, any] {
 
 // Nilable modifier: only changes nil handling, does not change type inference logic
 func (z *ZodDiscriminatedUnion) Nilable() core.ZodType[any, any] {
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// No need to modify def, because Nilable is a runtime flag
-	}).(*ZodDiscriminatedUnion).setNilable()
-}
-
-// setNilable internal method to set Nilable flag
-func (z *ZodDiscriminatedUnion) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodDiscriminatedUnion)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Pipe creates a validation pipeline
@@ -473,7 +469,7 @@ func createZodDiscriminatedUnionFromDef(def *ZodDiscriminatedUnionDef) *ZodDiscr
 		discUnionDef := &ZodDiscriminatedUnionDef{
 			ZodUnionDef: ZodUnionDef{
 				ZodTypeDef: *newDef,
-				Type:       core.ZodTypeUnion,
+				Type:       core.ZodTypeDiscriminated,
 				Options:    def.Options,
 			},
 			Discriminator: def.Discriminator,

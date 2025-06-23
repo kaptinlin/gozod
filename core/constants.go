@@ -41,90 +41,93 @@ const (
 // ZOD TYPE CONSTANTS
 // =============================================================================
 
+// ZodTypeCode represents a type-safe wrapper for schema type identifiers
+// This provides compile-time type safety and better IDE support
+type ZodTypeCode string
+
 // ZodType constants define the type identifiers for all schema types
 // These are used internally to identify and categorize schema types
 const (
 	// Primitive types
-	ZodTypeString  = "string"  // String validation schema
-	ZodTypeNumber  = "number"  // Generic number validation
-	ZodTypeNaN     = "nan"     // NaN value validation
-	ZodTypeInteger = "integer" // Integer validation
-	ZodTypeBigInt  = "bigint"  // Big integer validation
-	ZodTypeBool    = "bool"    // Boolean validation
-	ZodTypeDate    = "date"    // Date validation
-	ZodTypeNil     = "nil"     // Nil/null validation
+	ZodTypeString  ZodTypeCode = "string"  // String validation schema
+	ZodTypeNumber  ZodTypeCode = "number"  // Generic number validation
+	ZodTypeNaN     ZodTypeCode = "nan"     // NaN value validation
+	ZodTypeInteger ZodTypeCode = "integer" // Integer validation
+	ZodTypeBigInt  ZodTypeCode = "bigint"  // Big integer validation
+	ZodTypeBool    ZodTypeCode = "bool"    // Boolean validation
+	ZodTypeDate    ZodTypeCode = "date"    // Date validation
+	ZodTypeNil     ZodTypeCode = "nil"     // Nil/null validation
 
 	// Special types
-	ZodTypeAny     = "any"     // Accept any value
-	ZodTypeUnknown = "unknown" // Unknown type (safer any)
-	ZodTypeNever   = "never"   // Never accepts values
-	ZodTypeVoid    = "void"    // Void return type
+	ZodTypeAny     ZodTypeCode = "any"     // Accept any value
+	ZodTypeUnknown ZodTypeCode = "unknown" // Unknown type (safer any)
+	ZodTypeNever   ZodTypeCode = "never"   // Never accepts value
 
 	// Collection types
-	ZodTypeArray  = "array"  // Fixed-length array
-	ZodTypeSlice  = "slice"  // Dynamic array/slice
-	ZodTypeObject = "object" // Object with known shape
-	ZodTypeStruct = "struct" // Go struct validation
-	ZodTypeRecord = "record" // Key-value record
-	ZodTypeMap    = "map"    // Go map validation
-	ZodTypeSet    = "set"    // Set validation
-	ZodTypeTuple  = "tuple"  // Fixed-length tuple
+	ZodTypeArray  ZodTypeCode = "array"  // Fixed-length array
+	ZodTypeSlice  ZodTypeCode = "slice"  // Dynamic array/slice
+	ZodTypeObject ZodTypeCode = "object" // Object with known shape
+	ZodTypeStruct ZodTypeCode = "struct" // Go struct validation
+	ZodTypeRecord ZodTypeCode = "record" // Key-value record
+	ZodTypeMap    ZodTypeCode = "map"    // Go map validation
 
 	// Composite types
-	ZodTypeUnion         = "union"               // Union of multiple types
-	ZodTypeDiscriminated = "discriminated_union" // Discriminated union
-	ZodTypeIntersection  = "intersection"        // Intersection of types
+	ZodTypeUnion         ZodTypeCode = "union"               // Union of multiple types
+	ZodTypeDiscriminated ZodTypeCode = "discriminated_union" // Discriminated union
+	ZodTypeIntersection  ZodTypeCode = "intersection"        // Intersection of types
 
 	// Special string types
-	ZodTypeStringBool = "stringbool" // String representation of boolean
+	ZodTypeStringBool ZodTypeCode = "stringbool" // String representation of boolean
 
 	// Function and lazy types
-	ZodTypeFunction = "function" // Function validation
-	ZodTypeLazy     = "lazy"     // Lazy evaluation schema
+	ZodTypeFunction ZodTypeCode = "function" // Function validation
+	ZodTypeLazy     ZodTypeCode = "lazy"     // Lazy evaluation schema
 
 	// Value types
-	ZodTypeLiteral = "literal" // Literal value validation
-	ZodTypeEnum    = "enum"    // Enumeration validation
+	ZodTypeLiteral ZodTypeCode = "literal" // Literal value validation
+	ZodTypeEnum    ZodTypeCode = "enum"    // Enumeration validation
 
 	// Modifier types
-	ZodTypeOptional = "optional" // Optional field modifier
-	ZodTypeNilable  = "nilable"  // Nilable field modifier
-	ZodTypeDefault  = "default"  // Default value wrapper
-	ZodTypePrefault = "prefault" // Fallback value wrapper
+	ZodTypeOptional ZodTypeCode = "optional" // Optional field modifier
+	ZodTypeNilable  ZodTypeCode = "nilable"  // Nilable field modifier
+	ZodTypeDefault  ZodTypeCode = "default"  // Default value wrapper
+	ZodTypePrefault ZodTypeCode = "prefault" // Fallback value wrapper
 
 	// Processing types
-	ZodTypePipeline  = "pipeline"  // Processing pipeline
-	ZodTypeTransform = "transform" // Value transformation
-	ZodTypePipe      = "pipe"      // Schema piping
-	ZodTypeCustom    = "custom"    // Custom validation
-	ZodTypeCheck     = "check"     // Validation check
-	ZodTypeRefine    = "refine"    // Refinement validation
+	ZodTypePipeline  ZodTypeCode = "pipeline"  // Processing pipeline
+	ZodTypeTransform ZodTypeCode = "transform" // Value transformation
+	ZodTypePipe      ZodTypeCode = "pipe"      // Schema piping
+	ZodTypeCustom    ZodTypeCode = "custom"    // Custom validation
+	ZodTypeCheck     ZodTypeCode = "check"     // Validation check
+	ZodTypeRefine    ZodTypeCode = "refine"    // Refinement validation
 
 	// Network and format types
-	ZodTypeIPv4   = "ipv4"   // IPv4 address validation
-	ZodTypeIPv6   = "ipv6"   // IPv6 address validation
-	ZodTypeCIDRv4 = "cidrv4" // IPv4 CIDR validation
-	ZodTypeCIDRv6 = "cidrv6" // IPv6 CIDR validation
-	ZodTypeEmail  = "email"  // Email address validation
-	ZodTypeURL    = "url"    // URL validation
+	ZodTypeIPv4   ZodTypeCode = "ipv4"   // IPv4 address validation
+	ZodTypeIPv6   ZodTypeCode = "ipv6"   // IPv6 address validation
+	ZodTypeCIDRv4 ZodTypeCode = "cidrv4" // IPv4 CIDR validation
+	ZodTypeCIDRv6 ZodTypeCode = "cidrv6" // IPv6 CIDR validation
+	ZodTypeEmail  ZodTypeCode = "email"  // Email address validation
+	ZodTypeURL    ZodTypeCode = "url"    // URL validation
 
 	// File and binary types
-	ZodTypeFile = "file" // File validation
+	ZodTypeFile ZodTypeCode = "file" // File validation
 
 	// Numeric subtypes
-	ZodTypeFloat32    = "float32"    // 32-bit float
-	ZodTypeFloat64    = "float64"    // 64-bit float
-	ZodTypeInt8       = "int8"       // 8-bit signed integer
-	ZodTypeInt16      = "int16"      // 16-bit signed integer
-	ZodTypeInt32      = "int32"      // 32-bit signed integer
-	ZodTypeInt64      = "int64"      // 64-bit signed integer
-	ZodTypeUint8      = "uint8"      // 8-bit unsigned integer
-	ZodTypeUint16     = "uint16"     // 16-bit unsigned integer
-	ZodTypeUint32     = "uint32"     // 32-bit unsigned integer
-	ZodTypeUint64     = "uint64"     // 64-bit unsigned integer
-	ZodTypeUintptr    = "uintptr"    // Pointer-sized unsigned integer
-	ZodTypeComplex64  = "complex64"  // 64-bit complex number
-	ZodTypeComplex128 = "complex128" // 128-bit complex number
+	ZodTypeFloat32    ZodTypeCode = "float32"    // 32-bit float
+	ZodTypeFloat64    ZodTypeCode = "float64"    // 64-bit float
+	ZodTypeInt        ZodTypeCode = "int"        // Platform-dependent signed integer
+	ZodTypeInt8       ZodTypeCode = "int8"       // 8-bit signed integer
+	ZodTypeInt16      ZodTypeCode = "int16"      // 16-bit signed integer
+	ZodTypeInt32      ZodTypeCode = "int32"      // 32-bit signed integer
+	ZodTypeInt64      ZodTypeCode = "int64"      // 64-bit signed integer
+	ZodTypeUint       ZodTypeCode = "uint"       // Platform-dependent unsigned integer
+	ZodTypeUint8      ZodTypeCode = "uint8"      // 8-bit unsigned integer
+	ZodTypeUint16     ZodTypeCode = "uint16"     // 16-bit unsigned integer
+	ZodTypeUint32     ZodTypeCode = "uint32"     // 32-bit unsigned integer
+	ZodTypeUint64     ZodTypeCode = "uint64"     // 64-bit unsigned integer
+	ZodTypeUintptr    ZodTypeCode = "uintptr"    // Pointer-sized unsigned integer
+	ZodTypeComplex64  ZodTypeCode = "complex64"  // 64-bit complex number
+	ZodTypeComplex128 ZodTypeCode = "complex128" // 128-bit complex number
 )
 
 // =============================================================================

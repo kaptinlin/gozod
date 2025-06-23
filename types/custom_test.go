@@ -460,7 +460,7 @@ func TestCustomEdgeCases(t *testing.T) {
 		schema := Custom(func(x any) bool { return true })
 
 		internals := schema.GetInternals()
-		assert.Equal(t, "custom", internals.Type)
+		assert.Equal(t, core.ZodTypeCustom, internals.Type)
 		assert.Equal(t, core.Version, internals.Version)
 
 		customInternals := schema.GetZod()

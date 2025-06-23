@@ -24,8 +24,8 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 
 		// Verify raw issue properties
 		require.Equal(t, core.InvalidType, rawIssue.Code)
-		require.Equal(t, "string", rawIssue.GetExpected())
-		require.Equal(t, "number", rawIssue.GetReceived())
+		require.Equal(t, core.ZodTypeString, rawIssue.GetExpected())
+		require.Equal(t, core.ZodTypeNumber, rawIssue.GetReceived())
 
 		// Finalize issue
 		ctx := &core.ParseContext{ReportInput: true}
@@ -36,13 +36,13 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 		require.Equal(t, core.InvalidType, finalIssue.Code)
 		require.Equal(t, "123", finalIssue.Input)
 		require.Equal(t, []any{"user", "name"}, finalIssue.Path)
-		assert.Equal(t, "string", finalIssue.Expected)
-		assert.Equal(t, "number", finalIssue.Received)
+		assert.Equal(t, core.ZodTypeString, finalIssue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, finalIssue.Received)
 
 		// Verify type-specific accessors work
 		expected, ok := finalIssue.GetExpected()
 		require.True(t, ok)
-		assert.Equal(t, "string", expected)
+		assert.Equal(t, core.ZodTypeString, expected)
 	})
 
 	t.Run("issue creation with all helper functions", func(t *testing.T) {
@@ -478,8 +478,8 @@ func TestEdgeCasesIntegration(t *testing.T) {
 		})
 
 		// Verify all properties were mapped correctly
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 		assert.Equal(t, 5, issue.Minimum)
 		assert.Equal(t, 100, issue.Maximum)
 		assert.True(t, issue.Inclusive)

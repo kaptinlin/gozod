@@ -22,8 +22,8 @@ import (
 // ZodLiteralDef defines the configuration for literal value validation
 type ZodLiteralDef struct {
 	core.ZodTypeDef
-	Type   string // "literal"
-	Values []any  // Allowed literal values
+	Type   core.ZodTypeCode // "literal"
+	Values []any            // Allowed literal values
 }
 
 // ZodLiteralInternals represents the internal state for literal validation
@@ -172,15 +172,11 @@ func (z *ZodLiteral) Optional() core.ZodType[any, any] {
 // Nilable makes the literal schema nilable
 func (z *ZodLiteral) Nilable() core.ZodType[any, any] {
 	// Use Clone method to create new instance, avoiding manual state copying
-	return engine.Clone(z, func(def *core.ZodTypeDef) {
+	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
 		// No need to modify def, as Nilable is a runtime flag
-	}).(*ZodLiteral).setNilable()
-}
-
-// setNilable internal method to set Nilable flag
-func (z *ZodLiteral) setNilable() core.ZodType[any, any] {
-	z.internals.Nilable = true
-	return z
+	}).(*ZodLiteral)
+	cloned.internals.SetNilable()
+	return cloned
 }
 
 // Nullish makes the literal schema optional and nilable
