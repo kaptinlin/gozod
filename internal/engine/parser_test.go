@@ -207,35 +207,6 @@ func TestParseContextFunctionality(t *testing.T) {
 }
 
 // =============================================================================
-// CONVENIENCE FUNCTION TESTS
-// =============================================================================
-
-func TestConvenienceFunctions(t *testing.T) {
-	t.Run("ParseWithDefaults works correctly", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result, err := ParseWithDefaults[any, any](schema, "test")
-
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("MustParseWithDefaults works correctly", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result := MustParseWithDefaults[any, any](schema, "test")
-
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("MustParseWithDefaults panics on error", func(t *testing.T) {
-		schema := newMockStringSchema()
-
-		assert.Panics(t, func() {
-			MustParseWithDefaults[any, any](schema, 123)
-		})
-	})
-}
-
-// =============================================================================
 // INTERNAL HELPER TESTS
 // =============================================================================
 
