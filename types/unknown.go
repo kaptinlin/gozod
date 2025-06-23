@@ -392,7 +392,7 @@ func createZodUnknownFromDef(def *ZodUnknownDef) *ZodUnknown {
 	internals := &ZodUnknownInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "unknown"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeUnknown},
 		Bag:              make(map[string]any),
 	}
 

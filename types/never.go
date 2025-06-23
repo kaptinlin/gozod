@@ -174,7 +174,7 @@ func createZodNeverFromDef(def *ZodNeverDef) *ZodNever {
 	internals := &ZodNeverInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "never"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeNever},
 		Bag:              make(map[string]any),
 	}
 

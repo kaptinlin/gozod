@@ -399,7 +399,7 @@ func createZodLiteralFromDef(def *ZodLiteralDef) *ZodLiteral {
 		Def:              def,
 		Values:           make(map[any]struct{}),
 		Pattern:          nil,
-		Isst:             issues.ZodIssueInvalidType{Expected: "literal"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeLiteral},
 		Bag:              make(map[string]any),
 	}
 

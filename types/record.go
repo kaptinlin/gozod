@@ -366,7 +366,7 @@ func createZodRecordFromDef(def *ZodRecordDef) *ZodRecord {
 		Def:              def,
 		KeyType:          def.KeyType,
 		ValueType:        def.ValueType,
-		Isst:             issues.ZodIssueInvalidType{Expected: "record"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeRecord},
 		Bag:              make(map[string]any),
 	}
 

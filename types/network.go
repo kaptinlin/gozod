@@ -3,7 +3,6 @@ package types
 import (
 	"errors"
 	"net"
-	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/engine"
@@ -59,13 +58,11 @@ func (z *ZodIPv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	// Use unified ParseType template similar to other scalar types
-	return engine.ParseType[string](
+	// Use ParsePrimitive fast path with custom validator.
+	return engine.ParsePrimitive[string](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeString,
-		func(v any) (string, bool) { s, ok := v.(string); return s, ok },
-		func(v any) (*string, bool) { p, ok := v.(*string); return p, ok },
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// Execute any attached validation checks first (none by default)
 			if len(checks) > 0 {
@@ -182,79 +179,28 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 	internals := &ZodIPv4Internals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv4),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "IPv4 address"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeIPv4},
 	}
 
-	// Set up parse function
+	// Simplified parse: delegate to schema.Parse (which already includes IPv4 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		parseCtx := (*core.ParseContext)(nil)
-		if ctx != nil {
-			parseCtx = ctx
-		}
-
-		// use parseType template, including smart type inference and IPv4 format validation
-		typeChecker := func(v any) (string, bool) {
-			if str, ok := v.(string); ok {
-				return str, true
-			}
-			return "", false
-		}
-
-		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// run basic checks
-			if len(checks) > 0 {
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return &core.ZodError{Issues: payload.Issues}
-				}
-			}
-
-			// IPv4 format validation
-			if !regexes.IPv4.MatchString(value) {
-				issue := issues.CreateInvalidFormatIssue("ipv4", value, nil)
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			// use Go's net package for additional validation
-			ip := net.ParseIP(value)
-			if ip == nil || ip.To4() == nil {
-				issue := issues.CreateInvalidFormatIssue("ipv4", value, nil)
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			return nil
-		}
-
-		result, err := engine.ParseType[string](
-			payload.Value,
-			&internals.ZodTypeInternals,
-			"ipv4",
-			typeChecker,
-			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
-			validator,
-			parseCtx,
-		)
-
+		res, err := (&ZodIPv4{internals: internals}).Parse(payload.Value, ctx)
 		if err != nil {
-			// convert error to ParsePayload format
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
+			var zErr *issues.ZodError
+			if errors.As(err, &zErr) {
+				for _, issue := range zErr.Issues {
+					payload.Issues = append(payload.Issues, core.ZodRawIssue{
 						Code:    issue.Code,
 						Input:   issue.Input,
 						Path:    issue.Path,
 						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					})
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.Value = res
 		return payload
 	}
 
@@ -316,14 +262,11 @@ func (z *ZodIPv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	// Use unified ParseType template (same pattern as IPv4) to avoid recursive
-	// calls into engine.Parse which previously caused stack overflow.
-	return engine.ParseType[string](
+	// Use ParsePrimitive fast path with custom validator.
+	return engine.ParsePrimitive[string](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeString,
-		func(v any) (string, bool) { s, ok := v.(string); return s, ok },
-		func(v any) (*string, bool) { p, ok := v.(*string); return p, ok },
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// Execute any attached validation checks first
 			if len(checks) > 0 {
@@ -446,80 +389,28 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 	internals := &ZodIPv6Internals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv6),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "IPv6 address"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeIPv6},
 	}
 
-	// Set up parse function
+	// Simplified parse: delegate to schema.Parse (which already includes IPv6 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		parseCtx := (*core.ParseContext)(nil)
-		if ctx != nil {
-			parseCtx = ctx
-		}
-
-		// use parseType template, including smart type inference and IPv6 format validation
-		typeChecker := func(v any) (string, bool) {
-			if str, ok := v.(string); ok {
-				return str, true
-			}
-			return "", false
-		}
-
-		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// run basic checks
-			if len(checks) > 0 {
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return &core.ZodError{Issues: payload.Issues}
-				}
-			}
-
-			// IPv6 format validation
-			if !regexes.IPv6.MatchString(value) {
-				issue := issues.CreateInvalidFormatIssue("ipv6", value, nil)
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			// use Go's net package for additional validation
-			ip := net.ParseIP(value)
-			if ip == nil || ip.To4() != nil {
-				// ip.To4() != nil means it's an IPv4 address, not IPv6
-				issue := issues.CreateInvalidFormatIssue("ipv6", value, nil)
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			return nil
-		}
-
-		result, err := engine.ParseType[string](
-			payload.Value,
-			&internals.ZodTypeInternals,
-			core.ZodTypeString,
-			typeChecker,
-			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
-			validator,
-			parseCtx,
-		)
-
+		res, err := (&ZodIPv6{internals: internals}).Parse(payload.Value, ctx)
 		if err != nil {
-			// convert error to ParsePayload format
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
+			var zErr *issues.ZodError
+			if errors.As(err, &zErr) {
+				for _, issue := range zErr.Issues {
+					payload.Issues = append(payload.Issues, core.ZodRawIssue{
 						Code:    issue.Code,
 						Input:   issue.Input,
 						Path:    issue.Path,
 						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					})
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.Value = res
 		return payload
 	}
 
@@ -725,79 +616,28 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 	internals := &ZodCIDRv4Internals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv4),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "IPv4 CIDR"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeCIDRv4},
 	}
 
-	// Set up parse function
+	// Simplified parse: delegate to schema.Parse (which already includes CIDRv4 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		parseCtx := (*core.ParseContext)(nil)
-		if ctx != nil {
-			parseCtx = ctx
-		}
-
-		// use parseType template, including smart type inference and CIDRv4 format validation
-		typeChecker := func(v any) (string, bool) {
-			if str, ok := v.(string); ok {
-				return str, true
-			}
-			return "", false
-		}
-
-		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// run basic checks
-			if len(checks) > 0 {
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return &core.ZodError{Issues: payload.Issues}
-				}
-			}
-
-			// CIDRv4 format validation
-			if !regexes.CIDRv4.MatchString(value) {
-				issue := issues.CreateInvalidFormatIssue("cidrv4", value, map[string]any{"pattern": regexes.CIDRv4.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			// use Go's net package for additional validation
-			_, _, err := net.ParseCIDR(value)
-			if err != nil {
-				issue := issues.CreateInvalidFormatIssue("cidrv4", value, map[string]any{"pattern": regexes.CIDRv4.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			return nil
-		}
-
-		result, err := engine.ParseType[string](
-			payload.Value,
-			&internals.ZodTypeInternals,
-			core.ZodTypeString,
-			typeChecker,
-			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
-			validator,
-			parseCtx,
-		)
-
+		res, err := (&ZodCIDRv4{internals: internals}).Parse(payload.Value, ctx)
 		if err != nil {
-			// convert error to ParsePayload format
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
+			var zErr *issues.ZodError
+			if errors.As(err, &zErr) {
+				for _, issue := range zErr.Issues {
+					payload.Issues = append(payload.Issues, core.ZodRawIssue{
 						Code:    issue.Code,
 						Input:   issue.Input,
 						Path:    issue.Path,
 						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					})
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.Value = res
 		return payload
 	}
 
@@ -998,108 +838,28 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 	internals := &ZodCIDRv6Internals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv6),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "IPv6 CIDR"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeCIDRv6},
 	}
 
-	// Set up parse function
+	// Simplified parse: delegate to schema.Parse (which already includes CIDRv6 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		parseCtx := (*core.ParseContext)(nil)
-		if ctx != nil {
-			parseCtx = ctx
-		}
-
-		// use parseType template, including smart type inference and CIDRv6 format validation
-		typeChecker := func(v any) (string, bool) {
-			if str, ok := v.(string); ok {
-				return str, true
-			}
-			return "", false
-		}
-
-		validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// run basic checks
-			if len(checks) > 0 {
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return &core.ZodError{Issues: payload.Issues}
-				}
-			}
-
-			// split address and prefix
-			parts := strings.Split(value, "/")
-			if len(parts) != 2 {
-				issue := issues.CreateInvalidFormatIssue("cidrv6", value, map[string]any{"pattern": regexes.CIDRv6.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			address := parts[0]
-			prefix := parts[1]
-
-			// validate prefix length (must be 0-128)
-			prefixNum := 0
-			if _, network, err := net.ParseCIDR(value); err != nil || network == nil {
-				issue := issues.CreateInvalidFormatIssue("cidrv6", value, map[string]any{"pattern": regexes.CIDRv6.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			// manually parse prefix length for range check
-			for _, char := range prefix {
-				if char < '0' || char > '9' {
-					issue := issues.CreateInvalidFormatIssue("cidrv6", value, map[string]any{"pattern": regexes.CIDRv6.String()})
-					payload.Issues = append(payload.Issues, issue)
-					return &core.ZodError{Issues: payload.Issues}
-				}
-				prefixNum = prefixNum*10 + int(char-'0')
-			}
-
-			if prefixNum < 0 || prefixNum > 128 {
-				issue := issues.CreateInvalidFormatIssue("cidrv6", value, map[string]any{"pattern": regexes.CIDRv6.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			// validate IPv6 address part
-			ip := net.ParseIP(address)
-			if ip == nil || ip.To4() != nil {
-				// ip.To4() != nil means it's an IPv4 address, not IPv6
-				issue := issues.CreateInvalidFormatIssue("cidrv6", value, map[string]any{"pattern": regexes.CIDRv6.String()})
-				payload.Issues = append(payload.Issues, issue)
-				return &core.ZodError{Issues: payload.Issues}
-			}
-
-			return nil
-		}
-
-		result, err := engine.ParseType[string](
-			payload.Value,
-			&internals.ZodTypeInternals,
-			core.ZodTypeString,
-			typeChecker,
-			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
-			validator,
-			parseCtx,
-		)
-
+		res, err := (&ZodCIDRv6{internals: internals}).Parse(payload.Value, ctx)
 		if err != nil {
-			// convert error to ParsePayload format
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
+			var zErr *issues.ZodError
+			if errors.As(err, &zErr) {
+				for _, issue := range zErr.Issues {
+					payload.Issues = append(payload.Issues, core.ZodRawIssue{
 						Code:    issue.Code,
 						Input:   issue.Input,
 						Path:    issue.Path,
 						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					})
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.Value = res
 		return payload
 	}
 

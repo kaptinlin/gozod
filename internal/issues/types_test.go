@@ -165,8 +165,8 @@ func TestTypeDefinitions(t *testing.T) {
 				Message: "Test message",
 				Path:    []any{"field"},
 			},
-			Expected:  "string",
-			Received:  "number",
+			Expected:  core.ZodTypeString,
+			Received:  core.ZodTypeNumber,
 			Minimum:   5,
 			Maximum:   100,
 			Inclusive: true,
@@ -216,13 +216,13 @@ func TestIssueSubtypes(t *testing.T) {
 				Code:    InvalidType,
 				Message: "Type error",
 			},
-			Expected: "string",
-			Received: "number",
+			Expected: core.ZodTypeString,
+			Received: core.ZodTypeNumber,
 		}
 
 		assert.Equal(t, InvalidType, issue.Code)
-		assert.Equal(t, "string", issue.Expected)
-		assert.Equal(t, "number", issue.Received)
+		assert.Equal(t, core.ZodTypeString, issue.Expected)
+		assert.Equal(t, core.ZodTypeNumber, issue.Received)
 	})
 
 	t.Run("ZodIssueTooBig structure", func(t *testing.T) {

@@ -92,12 +92,10 @@ func (z *ZodInteger[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 	var zero T
 	typeName := getIntegerTypeName(zero)
 
-	return engine.ParseType[T](
+	return engine.ParsePrimitive[T](
 		input,
 		&z.internals.ZodTypeInternals,
 		typeName,
-		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
-		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		validateInteger[T],
 		parseCtx,
 	)
@@ -953,7 +951,7 @@ func createZodIntegerFromDef[T ZodIntegerConstraint](def *ZodIntegerDef[T]) *Zod
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: string(def.Type)},
+		Isst:             issues.ZodIssueInvalidType{Expected: def.Type},
 		Pattern:          nil,
 		Bag:              make(map[string]any),
 	}

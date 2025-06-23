@@ -381,7 +381,7 @@ func createZodAnyFromDef(def *ZodAnyDef) *ZodAny {
 	internals := &ZodAnyInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{ZodIssueBase: issues.ZodIssueBase{}, Expected: "any", Received: ""}, // Never used but consistent
+		Isst:             issues.ZodIssueInvalidType{ZodIssueBase: issues.ZodIssueBase{}, Expected: core.ZodTypeAny}, // Never used but consistent
 		Bag:              make(map[string]any),
 	}
 

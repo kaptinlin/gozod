@@ -87,22 +87,10 @@ func (z *ZodBigInt) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	return engine.ParseType[*big.Int](
+	return engine.ParsePrimitive[*big.Int](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeBigInt,
-		func(v any) (*big.Int, bool) {
-			if bi, ok := v.(*big.Int); ok {
-				return bi, true
-			}
-			return nil, false
-		},
-		func(v any) (**big.Int, bool) {
-			if bi, ok := v.(**big.Int); ok {
-				return bi, true
-			}
-			return nil, false
-		},
 		validateBigInt,
 		parseCtx,
 	)

@@ -65,12 +65,10 @@ func (z *ZodString) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	return engine.ParseType[string](
+	return engine.ParsePrimitive[string](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeString,
-		func(v any) (string, bool) { str, ok := v.(string); return str, ok },
-		func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 		validateString,
 		parseCtx,
 	)
@@ -1057,7 +1055,7 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: "string"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeString},
 		Pattern:          nil,
 		Values:           make(map[string]struct{}),
 		Bag:              make(map[string]any),
@@ -1073,12 +1071,10 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 	}
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := engine.ParseType[string](
+		result, err := engine.ParsePrimitive[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
 			core.ZodTypeString,
-			func(v any) (string, bool) { str, ok := v.(string); return str, ok },
-			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validateString,
 			ctx,
 		)

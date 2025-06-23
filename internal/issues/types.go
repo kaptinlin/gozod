@@ -40,8 +40,9 @@ type ZodIssue = core.ZodIssue
 // ZodIssueInvalidType represents a type validation error
 type ZodIssueInvalidType struct {
 	ZodIssueBase
-	Expected string `json:"expected"`
-	Received string `json:"received"`
+	// TODO: consider switching to core.ParsedType for better type-safety
+	Expected core.ZodTypeCode `json:"expected"`
+	Received core.ZodTypeCode `json:"received"`
 }
 
 // ZodIssueTooBig represents a value exceeding maximum constraint error

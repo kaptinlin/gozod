@@ -726,7 +726,7 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           make([]core.ZodCheck, 0),
-		Isst:             issues.ZodIssueInvalidType{Expected: "string"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeString},
 		Pattern:          nil,
 		Values:           make(map[string]struct{}),
 		Bag:              make(map[string]any),

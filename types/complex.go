@@ -121,37 +121,26 @@ func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 		typeCode = core.ZodTypeComplex128 // Default to complex128
 	}
 
-	return engine.ParseType[T](
+	return engine.ParsePrimitive[T](
 		input,
 		&z.internals.ZodTypeInternals,
 		typeCode,
-		func(v any) (T, bool) {
-			if val, ok := v.(T); ok {
-				return val, true
-			}
-			return *new(T), false
-		},
-		func(v any) (*T, bool) {
-			if ptr, ok := v.(*T); ok {
-				return ptr, true
-			}
-			return nil, false
-		},
 		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// Use engine.RunChecksOnValue for validation
-			if len(checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  value,
-					Issues: make([]core.ZodRawIssue, 0),
+			// Run attached checks, if any
+			if len(checks) == 0 {
+				return nil
+			}
+			payload := &core.ParsePayload{
+				Value:  value,
+				Issues: make([]core.ZodRawIssue, 0),
+			}
+			engine.RunChecksOnValue(value, checks, payload, ctx)
+			if len(payload.Issues) > 0 {
+				finalized := make([]core.ZodIssue, len(payload.Issues))
+				for i, raw := range payload.Issues {
+					finalized[i] = issues.FinalizeIssue(raw, ctx, core.GetConfig())
 				}
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-					for i, rawIssue := range payload.Issues {
-						finalizedIssues[i] = issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-					}
-					return issues.NewZodError(finalizedIssues)
-				}
+				return issues.NewZodError(finalized)
 			}
 			return nil
 		},

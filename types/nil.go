@@ -238,7 +238,7 @@ func createZodNilFromDef(def *ZodNilDef) *ZodNil {
 	internals := &ZodNilInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "nil"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeNil},
 		Bag:              make(map[string]any),
 	}
 

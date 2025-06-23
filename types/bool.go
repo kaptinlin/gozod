@@ -60,17 +60,16 @@ func (z *ZodBool) Coerce(input any) (any, bool) {
 
 // Parse implements intelligent type inference and validation
 func (z *ZodBool) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
+	// Reuse the first context if supplied; otherwise allocate lazily inside ParsePrimitive.
+	var parseCtx *core.ParseContext
 	if len(ctx) > 0 {
 		parseCtx = ctx[0]
 	}
 
-	return engine.ParseType[bool](
+	return engine.ParsePrimitive[bool](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeBool,
-		func(v any) (bool, bool) { b, ok := v.(bool); return b, ok },
-		func(v any) (*bool, bool) { ptr, ok := v.(*bool); return ptr, ok },
 		validateBool,
 		parseCtx,
 	)
@@ -437,7 +436,7 @@ func createZodBoolFromDef(def *ZodBoolDef) *ZodBool {
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{ZodIssueBase: issues.ZodIssueBase{}, Expected: "boolean", Received: ""},
+		Isst:             issues.ZodIssueInvalidType{ZodIssueBase: issues.ZodIssueBase{}, Expected: core.ZodTypeBool},
 		Bag:              make(map[string]any),
 	}
 

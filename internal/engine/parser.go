@@ -16,27 +16,22 @@ import (
 // INPUT PREPROCESSING
 // =============================================================================
 
-// PreprocessInput performs input preprocessing to reduce repeated reflection calls
-// Returns the dereferenced value and metadata about the input
-func PreprocessInput(input any) (dereferenced any, isNil bool, isPointer bool) {
+// PreprocessInput dereferences one pointer layer (if any) and returns whether
+// the original value is a nil pointer. The helper is intentionally minimal so
+// that callers can keep full control over pointer semantics.
+func PreprocessInput(input any) (dereferenced any, isNilPtr bool) {
 	if input == nil {
-		return nil, true, false
+		return nil, true
 	}
 
-	// Use reflectx.Deref to handle pointer dereferencing
-	dereferenced, derefSuccess := reflectx.Deref(input)
-
-	// Check if original input was a pointer
-	isPointer = reflectx.IsPointer(input)
-
-	// Check if dereferenced value is nil (for nil pointers)
-	if !derefSuccess {
-		isNil = true
-	} else {
-		isNil = reflectx.IsNil(dereferenced)
+	if reflectx.IsNilPointer(input) {
+		return nil, true
 	}
 
-	return dereferenced, isNil, isPointer
+	// reflectx.Deref returns (v,true) for non-pointers, so it's zero-cost in
+	// the common case where the user passes a value.
+	dereferenced, _ = reflectx.Deref(input)
+	return dereferenced, false
 }
 
 // =============================================================================
@@ -86,6 +81,110 @@ func MustParse[In, Out any](schema core.ZodType[In, Out], value any, ctx *core.P
 	return result
 }
 
+// ParsePrimitive provides a zero-reflection, zero-allocation parsing path for
+// primitive Go types (string, bool, numeric, …). It supports both value and
+// pointer inputs while preserving the input shape in the returned value.
+//
+//	T        – concrete Go type to parse (bool, string, int64 …)
+//	input    – raw user input, may be T or *T or anything that can be coerced
+//	intr     – pointer to the schema internals (nilable, checks, bag …)
+//	expected – constant describing the expected Zod type, purely for error msgs
+//	validate – optional extra validator that applies Zod checks after type match
+//	ctx      – parsing context for error path tracking (may be nil)
+func ParsePrimitive[T any](
+	input any,
+	intr *core.ZodTypeInternals,
+	expected core.ZodTypeCode,
+	validate func(T, []core.ZodCheck, *core.ParseContext) error,
+	ctx *core.ParseContext,
+) (any, error) {
+	if ctx == nil {
+		ctx = core.NewParseContext()
+	}
+
+	// 1. Cheap nil / pointer preprocessing.
+	deref, isNilPtr := PreprocessInput(input)
+	if isNilPtr {
+		if !intr.Nilable {
+			raw := issues.CreateInvalidTypeIssue(string(expected), input)
+			fin := issues.FinalizeIssue(raw, ctx, nil)
+			return nil, issues.NewZodError([]core.ZodIssue{fin})
+		}
+		// Keep original nil form – pointer nil stays pointer nil so that
+		// callers comparing against (*T)(nil) don't break.
+		switch v := input.(type) {
+		case *T:
+			return v, nil
+		default:
+			var nilPtr *T = nil
+			return nilPtr, nil
+		}
+	}
+
+	// 2. Generic coercion when the schema opted-in via Bag["coerce"]. This
+	// step intentionally precedes pointer/value assertions to mirror the
+	// original ParseType semantics (coercion wins over inference).
+	if intr != nil && mapx.GetBoolDefault(intr.Bag, "coerce", false) && utils.IsPrimitiveType(expected) {
+		if coerced, err := coerce.To[T](input); err == nil {
+			if validate != nil {
+				if err := validate(coerced, intr.Checks, ctx); err != nil {
+					return nil, err
+				}
+			}
+			return coerced, nil
+		}
+		// If input is a pointer, try dereferencing before coercion.
+		if ptr, ok := input.(*T); ok && ptr != nil {
+			if coerced, err := coerce.To[T](*ptr); err == nil {
+				if validate != nil {
+					if err := validate(coerced, intr.Checks, ctx); err != nil {
+						return nil, err
+					}
+				}
+				return coerced, nil
+			}
+		}
+	}
+
+	// 3. Direct match: if the input already has type T (covers pointer types
+	// like *big.Int as well as base scalars). This must precede the **ptr
+	// path to avoid missing single-pointer matches.
+	if val, ok := input.(T); ok {
+		if validate != nil {
+			if err := validate(val, intr.Checks, ctx); err != nil {
+				return nil, err
+			}
+		}
+		return val, nil
+	}
+
+	// 4. Try direct pointer assertion to preserve identity (handles **T where
+	// T itself is a pointer type, e.g., **big.Int).
+	if ptr, ok := input.(*T); ok {
+		if validate != nil {
+			if err := validate(*ptr, intr.Checks, ctx); err != nil {
+				return nil, err
+			}
+		}
+		return ptr, nil
+	}
+
+	// 5. Try value assertion using the dereferenced value.
+	if val, ok := deref.(T); ok {
+		if validate != nil {
+			if err := validate(val, intr.Checks, ctx); err != nil {
+				return nil, err
+			}
+		}
+		return val, nil
+	}
+
+	// 6. All attempts failed – create a unified invalid-type error.
+	raw := issues.CreateInvalidTypeIssue(string(expected), input)
+	fin := issues.FinalizeIssue(raw, ctx, nil)
+	return nil, issues.NewZodError([]core.ZodIssue{fin})
+}
+
 // =============================================================================
 // PARSEYPE TEMPLATE SYSTEM
 // =============================================================================
@@ -117,36 +216,7 @@ func ParseType[T any](
 		return (*T)(nil), nil
 	}
 
-	// 2. Try type coercion (if enabled) - prioritize over pointer type inference
-	// RESTRICTION: Only allow coercion for primitive types
-	if mapx.GetBoolDefault(internals.Bag, "coerce", false) && utils.IsPrimitiveType(expectedType) {
-		// Use coerce package for generic type conversion
-		if coerced, err := coerce.To[T](input); err == nil {
-			// Always run validator when provided to allow nested validations (e.g., Map key/value)
-			if validator != nil {
-				if err := validator(coerced, internals.Checks, ctx); err != nil {
-					return nil, err
-				}
-			}
-			// Always return the coerced base value instead of a pointer
-			return coerced, nil // coercion produced a new base value
-		}
-		// Try dereferencing pointer then coercion (but don't handle nil pointers)
-		if ptr, ok := pointerChecker(input); ok && ptr != nil {
-			if coerced, err := coerce.To[T](*ptr); err == nil {
-				// Always run validator when provided to allow nested validations (e.g., Map key/value)
-				if validator != nil {
-					if err := validator(coerced, internals.Checks, ctx); err != nil {
-						return nil, err
-					}
-				}
-				return coerced, nil // coercion always returns base type
-			}
-		}
-		// If coercion fails, continue to next step (don't return error directly)
-	}
-
-	// 3. Smart type inference: check pointer type matching
+	// 2. Smart type inference: check pointer type matching
 	if ptr, ok := pointerChecker(input); ok {
 		if ptr == nil {
 			if !internals.Nilable {
@@ -174,7 +244,7 @@ func ParseType[T any](
 		return ptr, nil // Return original pointer to preserve identity as expected in tests
 	}
 
-	// 4. Smart type inference: check direct type matching
+	// 3. Smart type inference: check direct type matching
 	if value, ok := typeChecker(input); ok {
 		if validator != nil {
 			if err := validator(value, internals.Checks, ctx); err != nil {
@@ -184,7 +254,7 @@ func ParseType[T any](
 		return value, nil // T → T (keep original type)
 	}
 
-	// 5. Unified error creation
+	// 4. Unified error creation
 	rawIssue := issues.CreateInvalidTypeIssue(string(expectedType), input)
 	finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 	return nil, issues.NewZodError([]core.ZodIssue{finalIssue})

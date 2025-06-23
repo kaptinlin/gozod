@@ -321,7 +321,7 @@ func createZodStringBoolFromDef(def *ZodStringBoolDef) *ZodStringBool {
 	internals := &ZodStringBoolInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: "stringbool"},
+		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeStringBool},
 		Truthy:           make(map[string]struct{}),
 		Falsy:            make(map[string]struct{}),
 		Bag:              make(map[string]any),
