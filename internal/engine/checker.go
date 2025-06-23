@@ -9,96 +9,142 @@ import (
 // CHECK EXECUTION ENGINE
 // =============================================================================
 
-// runChecksOnValue executes all validation checks on a given value
-// This is the central validation execution engine that applies all checks
-// Enhanced version using slicex for safer slice operations
-func RunChecksOnValue(value any, checkList []core.ZodCheck, payload *core.ParsePayload, ctx *core.ParseContext) {
-	// Use slicex to safely check for empty
-	if slicex.IsEmpty(checkList) {
-		return
+// RunChecks executes all validation checks on a payload's value
+// This is the primary method for running checks within the parsing pipeline
+// Returns the payload for method chaining and consistent API
+func RunChecks(checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.ParseContext) *core.ParsePayload {
+	if payload == nil || slicex.IsEmpty(checks) {
+		return payload
 	}
 
-	// Pre-allocate Issues slice capacity based on number of checks
-	// This reduces memory allocations during validation
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 {
+		parseCtx = ctx[0]
+	}
+
+	return executeChecks(payload.GetValue(), checks, payload, parseCtx)
+}
+
+// RunChecksOnValue executes all validation checks on a specific value
+// Returns the payload for consistent API and error checking
+func RunChecksOnValue(value any, checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.ParseContext) *core.ParsePayload {
+	if payload == nil || slicex.IsEmpty(checks) {
+		return payload
+	}
+
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 {
+		parseCtx = ctx[0]
+	}
+
+	return executeChecks(value, checks, payload, parseCtx)
+}
+
+// executeChecks is the core implementation that runs all checks
+// Manages memory allocation and executes validation logic
+func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
+	checksLen := len(checks)
+	if checksLen == 0 {
+		return payload
+	}
+
+	// Prepare issues slice with appropriate capacity
 	currentIssues := payload.GetIssues()
-	if cap(currentIssues) < len(checkList) {
-		// Allocate with some extra capacity (2x) to handle multiple issues per check
-		newCapacity := len(checkList) * 2
-		if newCapacity < 4 {
-			newCapacity = 4 // Minimum reasonable capacity
+	currentLen := len(currentIssues)
+
+	// Expand capacity if needed
+	if cap(currentIssues) < currentLen+checksLen {
+		// Calculate new capacity based on current needs
+		newCapacity := currentLen + checksLen
+		if newCapacity < 8 {
+			newCapacity = 8 // Reasonable minimum
+		} else if newCapacity > 64 {
+			newCapacity = currentLen + checksLen/2 + 8 // Moderate growth for large slices
 		}
-		newIssues := make([]core.ZodRawIssue, len(currentIssues), newCapacity)
+
+		newIssues := make([]core.ZodRawIssue, currentLen, newCapacity)
 		copy(newIssues, currentIssues)
 		payload.SetIssues(newIssues)
 	}
 
-	// Use slicex.Filter to preprocess valid checks
-	validChecks, _ := slicex.Filter(checkList, func(item any) bool {
-		if check, ok := item.(core.ZodCheck); ok {
-			return check != nil && check.GetZod() != nil
+	// Store payload path to avoid repeated calls
+	payloadPath := payload.GetPath()
+
+	// Execute each check sequentially
+	for i := 0; i < checksLen; i++ {
+		check := checks[i]
+		if check == nil {
+			continue
 		}
-		return false
-	})
 
-	// Convert to typed slice for safer iteration
-	if checks, err := slicex.ToTyped[core.ZodCheck](validChecks); err == nil {
-		for _, check := range checks {
-			// Get check internals and validate they exist
-			if checkInternals := check.GetZod(); checkInternals != nil && checkInternals.Check != nil {
-				// Create independent payload for each check to avoid interference
-				checkPayload := core.NewParsePayloadWithPath(value, payload.GetPath())
+		checkInternals := check.GetZod()
+		if checkInternals == nil || checkInternals.Check == nil {
+			continue
+		}
 
-				// Execute the check function
-				checkInternals.Check(checkPayload)
+		// Create independent payload for each check
+		checkPayload := core.NewParsePayloadWithPath(value, payloadPath)
 
-				// If the check has custom error mapping, apply it to all produced issues
-				if checkInternals.Def != nil && checkInternals.Def.Error != nil {
-					checkIssues := checkPayload.GetIssues()
-					for i := range checkIssues {
-						checkIssues[i].Message = (*checkInternals.Def.Error)(checkIssues[i])
-						checkIssues[i].Inst = checkInternals // attach for downstream resolution
-					}
-					checkPayload.SetIssues(checkIssues)
-				}
+		// Execute the check function
+		checkInternals.Check(checkPayload)
 
-				// Merge any issues found into the main payload
-				checkIssues := checkPayload.GetIssues()
-				if !slicex.IsEmpty(checkIssues) {
-					// Use slicex.Merge to safely combine issue slices
-					if mergedIssues, err := slicex.Merge(payload.GetIssues(), checkIssues); err == nil {
-						if typedIssues, err := slicex.ToTyped[core.ZodRawIssue](mergedIssues); err == nil {
-							payload.SetIssues(typedIssues)
-						}
-					}
-				}
+		// Process check results
+		checkIssues := checkPayload.GetIssues()
+		checkIssuesLen := len(checkIssues)
 
-				// Support for early exit on Abort flag
-				if !slicex.IsEmpty(checkIssues) && checkInternals.Def.Abort {
-					break
-				}
+		if checkIssuesLen == 0 {
+			continue // No issues found, continue to next check
+		}
+
+		// Apply custom error mapping if configured
+		if checkInternals.Def != nil && checkInternals.Def.Error != nil {
+			errorFn := *checkInternals.Def.Error
+			for j := 0; j < checkIssuesLen; j++ {
+				checkIssues[j].Message = errorFn(checkIssues[j])
+				checkIssues[j].Inst = checkInternals
 			}
+			checkPayload.SetIssues(checkIssues)
+		}
+
+		// Merge issues into main payload
+		mainIssues := payload.GetIssues()
+		mainIssuesLen := len(mainIssues)
+
+		// Append issues to main payload
+		if cap(mainIssues) >= mainIssuesLen+checkIssuesLen {
+			// Sufficient capacity, extend existing slice
+			newIssues := mainIssues[:mainIssuesLen+checkIssuesLen]
+			copy(newIssues[mainIssuesLen:], checkIssues)
+			payload.SetIssues(newIssues)
+		} else {
+			// Need to allocate new slice
+			mergedIssues := make([]core.ZodRawIssue, mainIssuesLen+checkIssuesLen)
+			copy(mergedIssues, mainIssues)
+			copy(mergedIssues[mainIssuesLen:], checkIssues)
+			payload.SetIssues(mergedIssues)
+		}
+
+		// Stop execution if abort flag is set
+		if checkInternals.Def.Abort {
+			break
 		}
 	}
-}
 
-// RunChecks executes all checks on a payload synchronously
-// This is the core validation engine that processes all validation checks
-func RunChecks(payload *core.ParsePayload, checks []core.ZodCheck, ctx *core.ParseContext) *core.ParsePayload {
-	RunChecksOnValue(payload.GetValue(), checks, payload, ctx)
 	return payload
 }
 
 // CheckAborted checks if parsing should be aborted
-// Examines issues starting from a specific index to determine if validation should stop
+// Returns true if any issue from startIndex onwards has Continue set to false
 func CheckAborted(x core.ParsePayload, startIndex int) bool {
-	// Use slicex to safely handle slice bounds
 	issues := x.GetIssues()
-	if slicex.IsEmpty(issues) || startIndex >= len(issues) {
+	issuesLen := len(issues)
+
+	if issuesLen == 0 || startIndex >= issuesLen {
 		return false
 	}
 
-	// Check issues from startIndex onwards
-	for i := startIndex; i < len(issues); i++ {
+	// Check issues from startIndex onwards for abort signals
+	for i := startIndex; i < issuesLen; i++ {
 		if !issues[i].Continue {
 			return true
 		}

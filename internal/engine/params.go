@@ -30,30 +30,6 @@ func WithAbort() core.SchemaParams {
 	return core.SchemaParams{Abort: true}
 }
 
-// =============================================================================
-// UTILITY FUNCTIONS FOR SCHEMA MANAGEMENT
-// =============================================================================
-
-//nolint:unused // helper kept for future use
-func createErrorMap(message any) map[string]any {
-	if message == nil {
-		return nil
-	}
-
-	// Use mapx to create a safe map
-	errorMap := make(map[string]any)
-	mapx.Set(errorMap, "message", message)
-
-	// If message is a map, merge its contents
-	if msgMap, ok := mapx.Extract(message); ok {
-		if typedMap, ok := msgMap.(map[string]any); ok {
-			return mapx.Merge(errorMap, typedMap)
-		}
-	}
-
-	return errorMap
-}
-
 // ProcessSchemaParams processes schema parameters and returns a configuration map
 // Uses structx to handle parameter conversion and mapx for merging
 func ProcessSchemaParams(params ...core.SchemaParams) map[string]any {

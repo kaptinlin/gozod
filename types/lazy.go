@@ -77,7 +77,7 @@ func createZodLazyFromDef(def *ZodLazyDef) core.ZodType[any, any] {
 		}
 
 		// Run lazy-level checks first
-		payload = engine.RunChecks(payload, internals.Checks, ctx)
+		payload = engine.RunChecks(internals.Checks, payload, ctx)
 		if len(payload.GetIssues()) > 0 {
 			return payload
 		}
