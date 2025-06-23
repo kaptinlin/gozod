@@ -15,8 +15,6 @@ import (
 // =============================================================================
 
 // PreprocessInput performs pointer dereferencing and nil checking in a single reflect operation.
-// This optimization reduces reflect.ValueOf calls from 2 to 1 per parse operation.
-// Returns: (dereferenced value, isNilPointer)
 func PreprocessInput(input any) (dereferenced any, isNilPtr bool) {
 	if input == nil {
 		return nil, true

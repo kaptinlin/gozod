@@ -1145,7 +1145,7 @@ func Integer[T ZodIntegerConstraint](params ...any) *ZodInteger[T] {
 
 	schema := createZodIntegerFromDef(def)
 
-	// Apply schema parameters using the same pattern as string.go
+	// Apply schema parameters
 	if len(params) > 0 {
 		param := params[0]
 

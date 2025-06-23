@@ -757,7 +757,7 @@ func BigInt(params ...any) *ZodBigInt {
 
 	schema := createZodBigIntFromDef(def)
 
-	// Apply schema parameters using the same pattern as string.go
+	// Apply schema parameters
 	if len(params) > 0 {
 		param := params[0]
 

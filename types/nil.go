@@ -305,7 +305,7 @@ func Nil(params ...any) *ZodNil {
 
 	schema := createZodNilFromDef(def)
 
-	// Apply schema parameters using the same pattern as string.go
+	// Apply schema parameters
 	if len(params) > 0 {
 		param := params[0]
 
