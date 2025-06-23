@@ -66,10 +66,10 @@ func (z *ZodIPv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// Execute any attached validation checks first (none by default)
 			if len(checks) > 0 {
-				payload := &core.ParsePayload{Value: value, Issues: make([]core.ZodRawIssue, 0)}
+				payload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, ctx))
+				if len(payload.GetIssues()) > 0 {
+					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
 				}
 			}
 
@@ -109,16 +109,12 @@ func (z *ZodIPv4) Check(fn core.CheckFn) core.ZodType[any, any] {
 	custom := Custom(fn, core.SchemaParams{})
 	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		// first execute the original parse
-		result, err := z.Parse(payload.Value, ctx)
+		result, err := z.Parse(payload.GetValue(), ctx)
 		if err != nil {
-			payload.Issues = append(payload.Issues, issues.ZodRawIssue{
-				Code:    core.InvalidType,
-				Message: err.Error(),
-				Input:   payload.Value,
-			})
+			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeIPv4, err.Error(), payload.GetValue()))
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 
 		// then execute the check function
 		fn(payload)
@@ -184,23 +180,20 @@ func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
 
 	// Simplified parse: delegate to schema.Parse (which already includes IPv4 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodIPv4{internals: internals}).Parse(payload.Value, ctx)
+		res, err := (&ZodIPv4{internals: internals}).Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zErr *issues.ZodError
 			if errors.As(err, &zErr) {
 				for _, issue := range zErr.Issues {
-					payload.Issues = append(payload.Issues, core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					})
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = res
+		payload.SetValue(res)
 		return payload
 	}
 
@@ -270,10 +263,10 @@ func (z *ZodIPv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// Execute any attached validation checks first
 			if len(checks) > 0 {
-				payload := &core.ParsePayload{Value: value, Issues: make([]core.ZodRawIssue, 0)}
+				payload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, ctx))
+				if len(payload.GetIssues()) > 0 {
+					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
 				}
 			}
 
@@ -314,16 +307,12 @@ func (z *ZodIPv6) Check(fn core.CheckFn) core.ZodType[any, any] {
 	custom := Custom(fn, core.SchemaParams{})
 	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		// first execute the original parse
-		result, err := z.Parse(payload.Value, ctx)
+		result, err := z.Parse(payload.GetValue(), ctx)
 		if err != nil {
-			payload.Issues = append(payload.Issues, issues.ZodRawIssue{
-				Code:    core.InvalidType,
-				Message: err.Error(),
-				Input:   payload.Value,
-			})
+			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeIPv6, err.Error(), payload.GetValue()))
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 
 		// then execute the check function
 		fn(payload)
@@ -394,23 +383,20 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 
 	// Simplified parse: delegate to schema.Parse (which already includes IPv6 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodIPv6{internals: internals}).Parse(payload.Value, ctx)
+		res, err := (&ZodIPv6{internals: internals}).Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zErr *issues.ZodError
 			if errors.As(err, &zErr) {
 				for _, issue := range zErr.Issues {
-					payload.Issues = append(payload.Issues, core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					})
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = res
+		payload.SetValue(res)
 		return payload
 	}
 
@@ -540,16 +526,12 @@ func (z *ZodCIDRv4) Check(fn core.CheckFn) core.ZodType[any, any] {
 	custom := Custom(fn, core.SchemaParams{})
 	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		// first execute the original parse
-		result, err := z.Parse(payload.Value, ctx)
+		result, err := z.Parse(payload.GetValue(), ctx)
 		if err != nil {
-			payload.Issues = append(payload.Issues, issues.ZodRawIssue{
-				Code:    core.InvalidType,
-				Message: err.Error(),
-				Input:   payload.Value,
-			})
+			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeCIDRv4, err.Error(), payload.GetValue()))
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 
 		// then execute the check function
 		fn(payload)
@@ -621,23 +603,20 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 
 	// Simplified parse: delegate to schema.Parse (which already includes CIDRv4 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodCIDRv4{internals: internals}).Parse(payload.Value, ctx)
+		res, err := (&ZodCIDRv4{internals: internals}).Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zErr *issues.ZodError
 			if errors.As(err, &zErr) {
 				for _, issue := range zErr.Issues {
-					payload.Issues = append(payload.Issues, core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					})
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = res
+		payload.SetValue(res)
 		return payload
 	}
 
@@ -773,16 +752,12 @@ func (z *ZodCIDRv6) Check(fn core.CheckFn) core.ZodType[any, any] {
 	custom := Custom(fn, core.SchemaParams{})
 	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		// first execute the original parse
-		result, err := z.Parse(payload.Value, ctx)
+		result, err := z.Parse(payload.GetValue(), ctx)
 		if err != nil {
-			payload.Issues = append(payload.Issues, issues.ZodRawIssue{
-				Code:    core.InvalidType,
-				Message: err.Error(),
-				Input:   payload.Value,
-			})
+			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeCIDRv6, err.Error(), payload.GetValue()))
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 
 		// then execute the check function
 		fn(payload)
@@ -843,23 +818,20 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 
 	// Simplified parse: delegate to schema.Parse (which already includes CIDRv6 validation)
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodCIDRv6{internals: internals}).Parse(payload.Value, ctx)
+		res, err := (&ZodCIDRv6{internals: internals}).Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zErr *issues.ZodError
 			if errors.As(err, &zErr) {
 				for _, issue := range zErr.Issues {
-					payload.Issues = append(payload.Issues, core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					})
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = res
+		payload.SetValue(res)
 		return payload
 	}
 

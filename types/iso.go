@@ -138,13 +138,12 @@ func (z *ZodISODate) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			// Run all checks including date format validation
 			if len(checks) > 0 {
-				checkPayload := &core.ParsePayload{
-					Value:  value,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				checkPayload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, checks, checkPayload, ctx)
-				if len(checkPayload.Issues) > 0 {
-					return &issues.ZodError{Issues: issues.ConvertRawIssuesToIssues(checkPayload.Issues, ctx)}
+				// Use getter method instead of direct field access
+				if len(checkPayload.GetIssues()) > 0 {
+					return &issues.ZodError{Issues: issues.ConvertRawIssuesToIssues(checkPayload.GetIssues(), ctx)}
 				}
 			}
 			return nil
@@ -191,7 +190,7 @@ func (z *ZodISODate) Min(minDate string, params ...any) *ZodISODate {
 		Def: &core.ZodCheckDef{Check: "iso_date_min"},
 	}
 	check.Check = func(payload *core.ParsePayload) {
-		str, ok := reflectx.ExtractString(payload.Value)
+		str, ok := reflectx.ExtractString(payload.GetValue())
 		if !ok {
 			return // non-string handled by type check earlier
 		}
@@ -209,7 +208,7 @@ func (z *ZodISODate) Min(minDate string, params ...any) *ZodISODate {
 				iss.Message = message
 			}
 			iss.Inst = check
-			payload.Issues = append(payload.Issues, iss)
+			payload.AddIssue(iss)
 		}
 	}
 
@@ -250,7 +249,7 @@ func (z *ZodISODate) Max(maxDate string, params ...any) *ZodISODate {
 		Def: &core.ZodCheckDef{Check: "iso_date_max"},
 	}
 	check.Check = func(payload *core.ParsePayload) {
-		str, ok := reflectx.ExtractString(payload.Value)
+		str, ok := reflectx.ExtractString(payload.GetValue())
 		if !ok {
 			return
 		}
@@ -265,7 +264,7 @@ func (z *ZodISODate) Max(maxDate string, params ...any) *ZodISODate {
 				iss.Message = message
 			}
 			iss.Inst = check
-			payload.Issues = append(payload.Issues, iss)
+			payload.AddIssue(iss)
 		}
 	}
 
@@ -744,7 +743,7 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		result, err := engine.ParseType[string](
-			payload.Value,
+			payload.GetValue(),
 			&internals.ZodTypeInternals,
 			core.ZodTypeString,
 			reflectx.ExtractString,
@@ -761,13 +760,12 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 			func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 				// Run all checks including date format validation
 				if len(checks) > 0 {
-					checkPayload := &core.ParsePayload{
-						Value:  value,
-						Issues: make([]core.ZodRawIssue, 0),
-					}
+					// Use constructor instead of direct struct literal to respect private fields
+					checkPayload := core.NewParsePayload(value)
 					engine.RunChecksOnValue(value, checks, checkPayload, ctx)
-					if len(checkPayload.Issues) > 0 {
-						return &issues.ZodError{Issues: issues.ConvertRawIssuesToIssues(checkPayload.Issues, ctx)}
+					// Use getter method instead of direct field access
+					if len(checkPayload.GetIssues()) > 0 {
+						return &issues.ZodError{Issues: issues.ConvertRawIssuesToIssues(checkPayload.GetIssues(), ctx)}
 					}
 				}
 				return nil
@@ -779,19 +777,16 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

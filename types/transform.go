@@ -45,24 +45,18 @@ func (z *ZodTransform[Out, In]) Parse(input any, ctx ...*core.ParseContext) (any
 	}
 
 	// Create parse payload
-	payload := &core.ParsePayload{
-		Value:  input,
-		Issues: make([]core.ZodRawIssue, 0),
-		Path:   []any{},
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(input, []any{})
 
 	// Create enhanced context, support error reporting
 	refinementCtx := &core.RefinementContext{
 		ParseContext: parseCtx,
 		Value:        input,
 		AddIssue: func(issue core.ZodIssue) {
-			// Convert ZodIssue to ZodRawIssue and add to payload
-			rawIssue := core.ZodRawIssue{
-				Code:    issue.Code,
-				Message: issue.Message,
-				Path:    payload.Path,
-			}
-			payload.Issues = append(payload.Issues, rawIssue)
+			// Convert ZodIssue to RawIssue using standardized converter
+			rawIssue := issues.ConvertZodIssueToRaw(issue)
+			rawIssue.Path = payload.GetPath()
+			payload.AddIssue(rawIssue)
 		},
 	}
 
@@ -80,29 +74,29 @@ func (z *ZodTransform[Out, In]) Parse(input any, ctx ...*core.ParseContext) (any
 	}
 	if !castOk {
 		issue := issues.CreateInvalidTypeIssue("transform input", input)
-		payload.Issues = append(payload.Issues, issue)
+		payload.AddIssue(issue)
 	}
 
 	transformedGeneric, err := z.internals.Def.TransformFn(inVal, refinementCtx)
 	if err != nil {
 		// Conversion failed: add error, do not modify data
 		issue := issues.CreateCustomIssue(err.Error(), nil, input)
-		payload.Issues = append(payload.Issues, issue)
+		payload.AddIssue(issue)
 	} else {
-		// Conversion successful: directly modify payload.Value
-		payload.Value = transformedGeneric
+		// Conversion successful: directly modify payload.GetValue()
+		payload.SetValue(transformedGeneric)
 	}
 
 	// Check if there are errors reported through AddIssue
-	if len(payload.Issues) > 0 {
-		finalIssues := make([]core.ZodIssue, len(payload.Issues))
-		for i, rawIssue := range payload.Issues {
+	if len(payload.GetIssues()) > 0 {
+		finalIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+		for i, rawIssue := range payload.GetIssues() {
 			finalIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 		}
 		return nil, issues.NewZodError(finalIssues)
 	}
 
-	return payload.Value, nil
+	return payload.GetValue(), nil
 }
 
 // MustParse executes conversion, panics on failure
@@ -145,9 +139,9 @@ func (z *ZodTransform[Out, In]) RefineAny(fn func(any) bool, params ...any) core
 func (z *ZodTransform[Out, In]) Check(fn func(*core.ParsePayload) error) core.ZodType[any, any] {
 	checkFn := func(payload *core.ParsePayload) {
 		if err := fn(payload); err != nil {
-			issue := issues.NewRawIssue("custom", payload.Value, issues.WithOrigin("transform"))
+			issue := issues.NewRawIssue("custom", payload.GetValue(), issues.WithOrigin("transform"))
 			issue.Message = err.Error()
-			payload.Issues = append(payload.Issues, issue)
+			payload.AddIssue(issue)
 		}
 	}
 
@@ -205,14 +199,12 @@ func createZodTransformFromDef[Out, In any](def *ZodTransformDef[Out, In]) *ZodT
 		// Create enhanced context, support error reporting
 		refinementCtx := &core.RefinementContext{
 			ParseContext: ctx,
-			Value:        payload.Value,
+			Value:        payload.GetValue(),
 			AddIssue: func(issue core.ZodIssue) {
-				rawIssue := core.ZodRawIssue{
-					Code:    issue.Code,
-					Message: issue.Message,
-					Path:    payload.Path,
-				}
-				payload.Issues = append(payload.Issues, rawIssue)
+				// Convert ZodIssue to RawIssue using standardized converter
+				rawIssue := issues.ConvertZodIssueToRaw(issue)
+				rawIssue.Path = payload.GetPath()
+				payload.AddIssue(rawIssue)
 			},
 		}
 
@@ -220,8 +212,8 @@ func createZodTransformFromDef[Out, In any](def *ZodTransformDef[Out, In]) *ZodT
 		// Attempt to cast to expected input type
 		var inVal In
 		castOk := false
-		if payload.Value != nil {
-			if v, ok := payload.Value.(In); ok {
+		if payload.GetValue() != nil {
+			if v, ok := payload.GetValue().(In); ok {
 				inVal = v
 				castOk = true
 			}
@@ -230,17 +222,17 @@ func createZodTransformFromDef[Out, In any](def *ZodTransformDef[Out, In]) *ZodT
 			castOk = true
 		}
 		if !castOk {
-			issue := issues.CreateInvalidTypeIssue("transform input", payload.Value)
-			payload.Issues = append(payload.Issues, issue)
+			issue := issues.CreateInvalidTypeIssue("transform input", payload.GetValue())
+			payload.AddIssue(issue)
 		}
 		result, err := def.TransformFn(inVal, refinementCtx)
 		if err != nil {
 			// Conversion failed: add error, keep original value
-			issue := issues.CreateCustomIssue(err.Error(), nil, payload.Value)
-			payload.Issues = append(payload.Issues, issue)
+			issue := issues.CreateCustomIssue(err.Error(), nil, payload.GetValue())
+			payload.AddIssue(issue)
 		} else {
-			// Conversion successful: directly modify payload.Value
-			payload.Value = result
+			// Conversion successful: directly modify payload.GetValue()
+			payload.SetValue(result)
 		}
 		return payload
 	}

@@ -123,14 +123,12 @@ func (z *ZodStringBool) Parse(input any, ctx ...*core.ParseContext) (any, error)
 			if len(checks) == 0 {
 				return nil
 			}
-			payload := &core.ParsePayload{
-				Value:  value,
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			payload := core.NewParsePayload(value)
 			engine.RunChecksOnValue(value, checks, payload, ctx)
-			if len(payload.Issues) > 0 {
-				finalized := make([]core.ZodIssue, len(payload.Issues))
-				for i, raw := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalized := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, raw := range payload.GetIssues() {
 					finalized[i] = issues.FinalizeIssue(raw, ctx, core.GetConfig())
 				}
 				return issues.NewZodError(finalized)

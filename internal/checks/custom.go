@@ -137,8 +137,9 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 	}
 
 	// Construct error path by combining payload path with custom path - use slicex for safe operations
-	path := make([]any, len(payload.Path))
-	copy(path, payload.Path)
+	payloadPath := payload.GetPath()
+	path := make([]any, len(payloadPath))
+	copy(path, payloadPath)
 
 	// Append custom path if provided using slicex
 	if !slicex.IsEmpty(internals.Def.Path) {
@@ -178,16 +179,12 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 	// Use CreateCustomIssue directly
 	issue := issues.CreateCustomIssue(errorMessage, properties, input)
 
-	// Set the path directly on the issue (not in properties)
-	issue.Path = path
-
-	// Set the Input field manually since CreateCustomIssue doesn't set it
+	// Set the Input and Inst for downstream processing
 	issue.Input = input
-
-	// Set Inst field for schema-level error mapping access
 	issue.Inst = internals
 
-	payload.Issues = append(payload.Issues, issue)
+	// Attach issue with explicit path
+	payload.AddIssueWithPath(issue, path)
 }
 
 // executeCustomCheck executes custom validation check with strong typing support
@@ -199,73 +196,82 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 		// Support common concrete signatures first for performance
 		switch fn := internals.Def.Fn.(type) {
 		case func([]any) bool:
-			if arr, ok := payload.Value.([]any); ok {
+			value := payload.GetValue()
+			if arr, ok := value.([]any); ok {
 				result := fn(arr)
-				handleRefineResult(result, payload, payload.Value, internals)
+				handleRefineResult(result, payload, value, internals)
 			} else {
-				handleRefineResult(false, payload, payload.Value, internals)
+				handleRefineResult(false, payload, value, internals)
 			}
 		case func(string) bool:
-			if str, ok := payload.Value.(string); ok {
+			value := payload.GetValue()
+			if str, ok := value.(string); ok {
 				result := fn(str)
-				handleRefineResult(result, payload, payload.Value, internals)
+				handleRefineResult(result, payload, value, internals)
 			} else {
 				// Type mismatch: create validation error instead of panic
-				handleRefineResult(false, payload, payload.Value, internals)
+				handleRefineResult(false, payload, value, internals)
 			}
 		case func(map[string]any) bool:
 			// Use mapx to safely handle map type checking
-			if mapData, ok := payload.Value.(map[string]any); ok {
+			value := payload.GetValue()
+			if mapData, ok := value.(map[string]any); ok {
 				result := fn(mapData)
-				handleRefineResult(result, payload, payload.Value, internals)
+				handleRefineResult(result, payload, value, internals)
 			} else {
 				// Type mismatch: create validation error instead of panic
-				handleRefineResult(false, payload, payload.Value, internals)
+				handleRefineResult(false, payload, value, internals)
 			}
 		case func(any) bool:
 			// Handle any type - accepts any value
-			result := fn(payload.Value)
-			handleRefineResult(result, payload, payload.Value, internals)
+			value := payload.GetValue()
+			result := fn(value)
+			handleRefineResult(result, payload, value, internals)
 		case RefineFn[string]:
-			if str, ok := payload.Value.(string); ok {
+			value := payload.GetValue()
+			if str, ok := value.(string); ok {
 				result := fn(str)
-				handleRefineResult(result, payload, payload.Value, internals)
+				handleRefineResult(result, payload, value, internals)
 			} else {
 				// Type mismatch: create validation error instead of panic
-				handleRefineResult(false, payload, payload.Value, internals)
+				handleRefineResult(false, payload, value, internals)
 			}
 		case RefineFn[map[string]any]:
 			// Use mapx to safely handle map type checking
-			if mapData, ok := payload.Value.(map[string]any); ok {
+			value := payload.GetValue()
+			if mapData, ok := value.(map[string]any); ok {
 				result := fn(mapData)
-				handleRefineResult(result, payload, payload.Value, internals)
+				handleRefineResult(result, payload, value, internals)
 			} else {
 				// Type mismatch: create validation error instead of panic
-				handleRefineResult(false, payload, payload.Value, internals)
+				handleRefineResult(false, payload, value, internals)
 			}
 		case RefineFn[any]:
 			// Handle any type - accepts any value
-			result := fn(payload.Value)
-			handleRefineResult(result, payload, payload.Value, internals)
+			value := payload.GetValue()
+			result := fn(value)
+			handleRefineResult(result, payload, value, internals)
 		default:
 			// Fallback: attempt to invoke arbitrary func via reflection if it
 			// matches signature func(T) bool where T is assignable from the
-			// actual payload.Value type. This provides support for additional
+			// actual payload.GetValue() type. This provides support for additional
 			// composite types without enumerating each one.
 			fv := reflect.ValueOf(internals.Def.Fn)
 			if fv.Kind() == reflect.Func && fv.Type().NumIn() == 1 && fv.Type().NumOut() == 1 && fv.Type().Out(0).Kind() == reflect.Bool {
 				// Ensure the input parameter is compatible.
 				argType := fv.Type().In(0)
-				val := reflect.ValueOf(payload.Value)
+				value := payload.GetValue()
+				val := reflect.ValueOf(value)
 				if val.IsValid() && val.Type().AssignableTo(argType) {
 					resultVals := fv.Call([]reflect.Value{val})
 					result := resultVals[0].Bool()
-					handleRefineResult(result, payload, payload.Value, internals)
+					handleRefineResult(result, payload, value, internals)
 					break
 				}
 			}
 			// Unknown refine function type or incompatible value: treat as validation failure
-			handleRefineResult(false, payload, payload.Value, internals)
+			value := payload.GetValue()
+			handleRefineResult(false, payload, value, internals)
 		}
 
 	case "check":
@@ -277,12 +283,14 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 			checkFn(payload)
 		} else {
 			// Invalid check function type: create validation error
-			handleRefineResult(false, payload, payload.Value, internals)
+			value := payload.GetValue()
+			handleRefineResult(false, payload, value, internals)
 		}
 
 	default:
 		// Unknown custom function type: create validation error
-		handleRefineResult(false, payload, payload.Value, internals)
+		value := payload.GetValue()
+		handleRefineResult(false, payload, value, internals)
 	}
 }
 
@@ -336,7 +344,9 @@ func NewZodCheckOverwrite(transform func(any) any, params ...core.SchemaParams) 
 	// Set up the transformation function
 	internals.Check = func(payload *core.ParsePayload) {
 		// Apply transformation to payload value
-		payload.Value = def.Transform(payload.Value)
+		value := payload.GetValue()
+		transformedValue := def.Transform(value)
+		payload.SetValue(transformedValue)
 	}
 
 	return &ZodCheckOverwrite{Internals: internals}

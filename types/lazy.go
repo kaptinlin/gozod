@@ -72,13 +72,13 @@ func createZodLazyFromDef(def *ZodLazyDef) core.ZodType[any, any] {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		// Handle Nilable nil values
-		if payload.Value == nil && internals.Nilable {
+		if payload.GetValue() == nil && internals.Nilable {
 			return payload
 		}
 
 		// Run lazy-level checks first
 		payload = engine.RunChecks(payload, internals.Checks, ctx)
-		if len(payload.Issues) > 0 {
+		if len(payload.GetIssues()) > 0 {
 			return payload
 		}
 
@@ -87,9 +87,9 @@ func createZodLazyFromDef(def *ZodLazyDef) core.ZodType[any, any] {
 		if inner == nil {
 			issue := issues.CreateInvalidTypeIssue(
 				"lazy",
-				payload.Value,
+				payload.GetValue(),
 			)
-			payload.Issues = append(payload.Issues, issue)
+			payload.AddIssue(issue)
 			return payload
 		}
 
@@ -119,22 +119,22 @@ func (z *ZodLazy) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	payload := &core.ParsePayload{
-		Value:  input,
-		Issues: make([]core.ZodRawIssue, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayload(input)
 
 	result := z.internals.Parse(payload, parseCtx)
-	if len(result.Issues) > 0 {
+	// Use getter method instead of direct field access
+	if len(result.GetIssues()) > 0 {
 		config := core.GetConfig()
-		finalizedIssues := make([]core.ZodIssue, len(result.Issues))
-		for i, rawIssue := range result.Issues {
+		finalizedIssues := make([]core.ZodIssue, len(result.GetIssues()))
+		for i, rawIssue := range result.GetIssues() {
 			finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, config)
 		}
 		return nil, issues.NewZodError(finalizedIssues)
 	}
 
-	return result.Value, nil
+	// Use getter method instead of direct field access
+	return result.GetValue(), nil
 }
 
 // MustParse validates a value and panics on failure
@@ -229,9 +229,9 @@ func (z *ZodLazy) CloneFrom(source any) {
 // Check adds a validation check to the lazy type
 func (z *ZodLazy) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+		payload := core.NewParsePayload(v)
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	}, core.SchemaParams{})
 	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 }

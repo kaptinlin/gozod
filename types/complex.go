@@ -130,14 +130,12 @@ func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 			if len(checks) == 0 {
 				return nil
 			}
-			payload := &core.ParsePayload{
-				Value:  value,
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			payload := core.NewParsePayload(value)
 			engine.RunChecksOnValue(value, checks, payload, ctx)
-			if len(payload.Issues) > 0 {
-				finalized := make([]core.ZodIssue, len(payload.Issues))
-				for i, raw := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalized := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, raw := range payload.GetIssues() {
 					finalized[i] = issues.FinalizeIssue(raw, ctx, core.GetConfig())
 				}
 				return issues.NewZodError(finalized)
@@ -300,13 +298,10 @@ func (z *ZodComplex[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType
 // Check adds modern validation using direct payload access
 func (z *ZodComplex[T]) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{
-			Value:  v,
-			Issues: make([]core.ZodRawIssue, 0),
-			Path:   make([]any, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(v, make([]any, 0))
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	})
 	return engine.AddCheck(z, check)
 }
@@ -744,23 +739,20 @@ func createZodComplexFromDef[T ZodComplexConstraint](def *ZodComplexDef[T]) *Zod
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodComplex[T]{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

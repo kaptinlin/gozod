@@ -44,108 +44,108 @@ func (z *ZodNilable[T]) GetInternals() *core.ZodTypeInternals {
 			OptIn:  innerInternals.OptIn,  // Preserve input optionality
 			OptOut: innerInternals.OptOut, // Preserve output optionality
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-				if payload.Value == nil || (reflect.ValueOf(payload.Value).Kind() == reflect.Ptr && reflect.ValueOf(payload.Value).IsNil()) {
+				if payload.GetValue() == nil || (reflect.ValueOf(payload.GetValue()).Kind() == reflect.Ptr && reflect.ValueOf(payload.GetValue()).IsNil()) {
 					innerTypeInternals := z.innerType.GetInternals()
 					if innerTypeInternals != nil {
 						switch innerTypeInternals.Type {
 						case core.ZodTypeNil:
-							payload.Value = nil
+							payload.SetValue(nil)
 							return payload
 						case core.ZodTypeString:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeBool:
-							payload.Value = (*bool)(nil)
+							payload.SetValue((*bool)(nil))
 						case core.ZodTypeStringBool:
-							payload.Value = (*bool)(nil) // StringBool outputs bool, so nil returns *bool(nil)
+							payload.SetValue((*bool)(nil)) // StringBool outputs bool, so nil returns *bool(nil)
 						case core.ZodTypeBigInt:
-							payload.Value = (*big.Int)(nil)
+							payload.SetValue((*big.Int)(nil))
 						case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
-							payload.Value = (*int)(nil)
+							payload.SetValue((*int)(nil))
 						case core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64:
-							payload.Value = (*uint)(nil)
+							payload.SetValue((*uint)(nil))
 						case core.ZodTypeFloat32, core.ZodTypeFloat64, core.ZodTypeNumber:
-							payload.Value = (*float64)(nil)
+							payload.SetValue((*float64)(nil))
 						case core.ZodTypeComplex64:
-							payload.Value = (*complex64)(nil)
+							payload.SetValue((*complex64)(nil))
 						case core.ZodTypeComplex128:
-							payload.Value = (*complex128)(nil)
+							payload.SetValue((*complex128)(nil))
 						case core.ZodTypeAny:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeNaN:
-							payload.Value = (*float64)(nil)
+							payload.SetValue((*float64)(nil))
 						case core.ZodTypeInteger:
-							payload.Value = (*int)(nil)
+							payload.SetValue((*int)(nil))
 						case core.ZodTypeDate:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeUnknown:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeNever:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeArray:
-							payload.Value = (*[]any)(nil)
+							payload.SetValue((*[]any)(nil))
 						case core.ZodTypeSlice:
-							payload.Value = (*[]any)(nil)
+							payload.SetValue((*[]any)(nil))
 						case core.ZodTypeObject:
-							payload.Value = (*map[string]any)(nil)
+							payload.SetValue((*map[string]any)(nil))
 						case core.ZodTypeStruct:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeRecord:
-							payload.Value = (*map[string]any)(nil)
+							payload.SetValue((*map[string]any)(nil))
 						case core.ZodTypeMap:
-							payload.Value = (*map[string]any)(nil)
+							payload.SetValue((*map[string]any)(nil))
 						case core.ZodTypeUnion:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeDiscriminated:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeIntersection:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeFunction:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeLazy:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeLiteral:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeEnum:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeOptional:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeNilable:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeDefault:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypePrefault:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypePipeline:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeTransform:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypePipe:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeCustom:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeCheck:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeRefine:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeIPv4:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeIPv6:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeCIDRv4:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeCIDRv6:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeEmail:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeURL:
-							payload.Value = (*string)(nil)
+							payload.SetValue((*string)(nil))
 						case core.ZodTypeFile:
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						case core.ZodTypeUintptr:
-							payload.Value = (*uintptr)(nil)
+							payload.SetValue((*uintptr)(nil))
 						default:
 							// For other types, return generic nil pointer
-							payload.Value = (*any)(nil)
+							payload.SetValue((*any)(nil))
 						}
 						return payload
 					}
@@ -396,7 +396,7 @@ func (z *ZodNilable[T]) Check(fn func(*core.ParsePayload) error) core.ZodType[an
 	// For nilable values, special handling is required for nil values
 	wrappedFn := func(payload *core.ParsePayload) error {
 		// Nilable check: nil values skip check (indicates value can be explicitly null)
-		if payload.Value == nil {
+		if payload.GetValue() == nil {
 			return nil
 		}
 		// Validate existing values

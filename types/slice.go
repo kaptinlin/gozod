@@ -138,9 +138,9 @@ func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 
 	// Run checks
 	if len(z.internals.Checks) > 0 {
-		payload := &core.ParsePayload{Value: valueToCheck, Issues: make([]core.ZodRawIssue, 0)}
+		payload := core.NewParsePayload(valueToCheck)
 		engine.RunChecksOnValue(valueToCheck, z.internals.Checks, payload, parseCtx)
-		allRawIssues = append(allRawIssues, payload.Issues...)
+		allRawIssues = append(allRawIssues, payload.GetIssues()...)
 	}
 
 	// Also include any type conversion errors
@@ -148,41 +148,36 @@ func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		var zodErr *issues.ZodError
 		if errors.As(err, &zodErr) {
 			for _, issue := range zodErr.Issues {
-				properties := make(map[string]any)
+				// Convert ZodError to RawIssue using standardized converter
+				rawIssue := issues.ConvertZodIssueToRaw(issue)
+				rawIssue.Path = issue.Path
+
+				// Preserve any additional properties from the original issue
 				if issue.Expected != "" {
-					properties["expected"] = issue.Expected
+					rawIssue.Properties["expected"] = issue.Expected
 				}
 				if issue.Received != "" {
-					properties["received"] = issue.Received
+					rawIssue.Properties["received"] = issue.Received
 				}
-				rawIssue := core.ZodRawIssue{
-					Code:       issue.Code,
-					Input:      issue.Input,
-					Properties: properties,
-					Path:       issue.Path,
-					Message:    issue.Message,
-				}
+
 				allRawIssues = append(allRawIssues, rawIssue)
 			}
 		} else if zodErrorInterface, ok := err.(interface {
 			GetIssues() []core.ZodIssue
 		}); ok {
-			// Convert ZodIssue to ZodRawIssue
+			// Convert ZodIssue to ZodRawIssue using standardized converter
 			for _, issue := range zodErrorInterface.GetIssues() {
-				properties := make(map[string]any)
+				rawIssue := issues.ConvertZodIssueToRaw(issue)
+				rawIssue.Path = issue.Path
+
+				// Preserve any additional properties from the original issue
 				if issue.Expected != "" {
-					properties["expected"] = issue.Expected
+					rawIssue.Properties["expected"] = issue.Expected
 				}
 				if issue.Received != "" {
-					properties["received"] = issue.Received
+					rawIssue.Properties["received"] = issue.Received
 				}
-				rawIssue := core.ZodRawIssue{
-					Code:       issue.Code,
-					Input:      issue.Input,
-					Properties: properties,
-					Path:       issue.Path,
-					Message:    issue.Message,
-				}
+
 				allRawIssues = append(allRawIssues, rawIssue)
 			}
 		}
@@ -277,13 +272,10 @@ func (z *ZodSlice) RefineAny(fn func(any) bool, params ...any) core.ZodType[any,
 // Check adds modern validation using direct payload access
 func (z *ZodSlice) Check(fn core.CheckFn) *ZodSlice {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{
-			Value:  v,
-			Issues: make([]core.ZodRawIssue, 0),
-			Path:   make([]any, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(v, make([]any, 0))
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	})
 	result := engine.AddCheck(z, check)
 	return result.(*ZodSlice)
@@ -730,23 +722,20 @@ func createZodSliceFromDef(def *ZodSliceDef) *ZodSlice {
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodSlice{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 
@@ -830,12 +819,13 @@ func validateSliceElements(slice []any, elementSchema any, basePath []any, ctx a
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Message: issue.Message,
-						Path:    append(elementPath, issue.Path...),
-						Input:   originalInput,
-					}
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+
+					// Prepend element path to issue path for slice element errors
+					rawIssue.Path = append(elementPath, issue.Path...)
+					rawIssue.Input = originalInput
+
 					allIssues = append(allIssues, rawIssue)
 				}
 			} else {

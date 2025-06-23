@@ -1,0 +1,35 @@
+# Version control
+.git
+
+# Binary / build outputs
+bin/
+*.out
+*.test
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+
+# Coverage reports
+coverage.*
+*.coverprofile
+
+# Editor & IDE settings
+.idea/
+.vscode/
+*.code-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Dependency caches / vendored packages
+vendor/
+
+# Reference
+.renference
+
+# Logs
+*.log
+

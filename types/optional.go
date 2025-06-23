@@ -45,9 +45,9 @@ func (z *ZodOptional[T]) GetInternals() *core.ZodTypeInternals {
 			OptOut: "optional",
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 				// Implement Optional's nil handling logic
-				if reflectx.IsNil(payload.Value) {
+				if reflectx.IsNil(payload.GetValue()) {
 					// Optional allows missing values, return generic nil
-					payload.Value = nil
+					payload.SetValue(nil)
 					return payload
 				}
 
@@ -205,7 +205,7 @@ func (z *ZodOptional[T]) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 // Check is a modifier that returns a proper Check wrapper around the Optional
 func (z *ZodOptional[T]) Check(fn func(*core.ParsePayload) error) core.ZodType[any, any] {
 	wrappedFn := func(payload *core.ParsePayload) error {
-		if reflectx.IsNil(payload.Value) {
+		if reflectx.IsNil(payload.GetValue()) {
 			return nil
 		}
 		return fn(payload)

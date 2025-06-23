@@ -269,15 +269,12 @@ func (z *ZodFunction) validateInputArguments(args []reflect.Value) []core.ZodRaw
 
 		// Validate each argument individually against its schema
 		for i, arg := range inputArgs {
-			payload := &core.ParsePayload{
-				Value:  arg,
-				Path:   []any{fmt.Sprintf("arg[%d]", i)},
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			payload := core.NewParsePayloadWithPath(arg, []any{fmt.Sprintf("arg[%d]", i)})
 
 			elementSchemas[i].GetInternals().Parse(payload, nil)
-			if len(payload.Issues) > 0 {
-				validationIssues = append(validationIssues, payload.Issues...)
+			if len(payload.GetIssues()) > 0 {
+				validationIssues = append(validationIssues, payload.GetIssues()...)
 			}
 		}
 		return validationIssues
@@ -285,39 +282,30 @@ func (z *ZodFunction) validateInputArguments(args []reflect.Value) []core.ZodRaw
 
 	// Direct schema case: single parameter or custom schema
 	if len(inputArgs) == 1 {
-		payload := &core.ParsePayload{
-			Value:  inputArgs[0],
-			Path:   []any{"input"},
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(inputArgs[0], []any{"input"})
 
 		z.def.Input.GetInternals().Parse(payload, nil)
-		return payload.Issues
+		return payload.GetIssues()
 	}
 
 	// For multiple parameters with direct schema, validate as array
-	payload := &core.ParsePayload{
-		Value:  inputArgs,
-		Path:   []any{"input"},
-		Issues: make([]core.ZodRawIssue, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(inputArgs, []any{"input"})
 
 	z.def.Input.GetInternals().Parse(payload, nil)
-	return payload.Issues
+	return payload.GetIssues()
 }
 
 // validateOutputResults validates function output results against the output schema
 func (z *ZodFunction) validateOutputResults(results []reflect.Value) []core.ZodRawIssue {
 	// For functions with single return value, validate directly
 	if len(results) == 1 {
-		payload := &core.ParsePayload{
-			Value:  results[0].Interface(),
-			Path:   []any{"output"},
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(results[0].Interface(), []any{"output"})
 
 		z.def.Output.GetInternals().Parse(payload, nil)
-		return payload.Issues
+		return payload.GetIssues()
 	}
 
 	// For functions with multiple return values, validate as slice
@@ -326,14 +314,11 @@ func (z *ZodFunction) validateOutputResults(results []reflect.Value) []core.ZodR
 		outputSlice[i] = result.Interface()
 	}
 
-	payload := &core.ParsePayload{
-		Value:  outputSlice,
-		Path:   []any{"output"},
-		Issues: make([]core.ZodRawIssue, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(outputSlice, []any{"output"})
 
 	z.def.Output.GetInternals().Parse(payload, nil)
-	return payload.Issues
+	return payload.GetIssues()
 }
 
 // =============================================================================
@@ -342,16 +327,16 @@ func (z *ZodFunction) validateOutputResults(results []reflect.Value) []core.ZodR
 
 // parseZodFunction implements the core parsing logic for function type
 func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals *core.ZodTypeInternals, ctx *core.ParseContext) *core.ParsePayload {
-	input := payload.Value
+	input := payload.GetValue()
 
 	// 1. Unified nil handling
 	if input == nil {
 		if !internals.Nilable {
 			rawIssue := issues.CreateInvalidTypeIssue("function", input)
-			payload.Issues = append(payload.Issues, rawIssue)
+			payload.AddIssue(rawIssue)
 			return payload
 		}
-		payload.Value = (*any)(nil) // Return typed nil pointer
+		payload.SetValue((*any)(nil)) // Return typed nil pointer
 		return payload
 	}
 
@@ -361,11 +346,11 @@ func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals
 		// No-argument, no-return function
 		if len(internals.Checks) > 0 {
 			engine.RunChecksOnValue(v, internals.Checks, payload, ctx)
-			if len(payload.Issues) > 0 {
+			if len(payload.GetIssues()) > 0 {
 				return payload
 			}
 		}
-		payload.Value = v
+		payload.SetValue(v)
 		return payload
 
 	default:
@@ -374,11 +359,11 @@ func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals
 			// Any kind of function type - preserve original type
 			if len(internals.Checks) > 0 {
 				engine.RunChecksOnValue(input, internals.Checks, payload, ctx)
-				if len(payload.Issues) > 0 {
+				if len(payload.GetIssues()) > 0 {
 					return payload
 				}
 			}
-			payload.Value = input // Keep original function type
+			payload.SetValue(input) // Keep original function type
 			return payload
 		}
 
@@ -388,11 +373,11 @@ func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals
 				// Pointer to function - preserve pointer type
 				if len(internals.Checks) > 0 {
 					engine.RunChecksOnValue(input, internals.Checks, payload, ctx)
-					if len(payload.Issues) > 0 {
+					if len(payload.GetIssues()) > 0 {
 						return payload
 					}
 				}
-				payload.Value = input // Keep original pointer to function
+				payload.SetValue(input) // Keep original pointer to function
 				return payload
 			}
 		}
@@ -401,7 +386,7 @@ func parseZodFunction(payload *core.ParsePayload, def *ZodFunctionDef, internals
 
 		// 4. Unified error creation
 		rawIssue := issues.CreateInvalidTypeIssue("function", input)
-		payload.Issues = append(payload.Issues, rawIssue)
+		payload.AddIssue(rawIssue)
 		return payload
 	}
 }
@@ -452,10 +437,10 @@ func (z *ZodFunction) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	case func():
 		// No-argument, no-return function
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+			payload := core.NewParsePayload(v)
 			engine.RunChecksOnValue(v, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				return nil, &core.ZodError{Issues: payload.Issues}
+			if len(payload.GetIssues()) > 0 {
+				return nil, &core.ZodError{Issues: payload.GetIssues()}
 			}
 		}
 		return v, nil
@@ -466,10 +451,10 @@ func (z *ZodFunction) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		if fnValue.Kind() == reflect.Func {
 			// Any function type - preserve original type
 			if len(z.internals.Checks) > 0 {
-				payload := &core.ParsePayload{Value: input, Issues: make([]core.ZodRawIssue, 0)}
+				payload := core.NewParsePayload(input)
 				engine.RunChecksOnValue(input, z.internals.Checks, payload, parseCtx)
-				if len(payload.Issues) > 0 {
-					return nil, &core.ZodError{Issues: payload.Issues}
+				if len(payload.GetIssues()) > 0 {
+					return nil, &core.ZodError{Issues: payload.GetIssues()}
 				}
 			}
 			return input, nil
@@ -480,10 +465,10 @@ func (z *ZodFunction) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			if fnValue.Elem().Kind() == reflect.Func {
 				// Pointer to function - preserve pointer type
 				if len(z.internals.Checks) > 0 {
-					payload := &core.ParsePayload{Value: input, Issues: make([]core.ZodRawIssue, 0)}
+					payload := core.NewParsePayload(input)
 					engine.RunChecksOnValue(input, z.internals.Checks, payload, parseCtx)
-					if len(payload.Issues) > 0 {
-						return nil, &core.ZodError{Issues: payload.Issues}
+					if len(payload.GetIssues()) > 0 {
+						return nil, &core.ZodError{Issues: payload.GetIssues()}
 					}
 				}
 				return input, nil

@@ -140,15 +140,18 @@ type ParseContext struct {
 // ParsePayload contains value and validation issues during parsing
 // This structure is passed through the validation pipeline to collect results
 type ParsePayload struct {
-	// Value being validated - the current value in the validation pipeline
-	Value any
+	// value being validated - the current value in the validation pipeline
+	// Private field - use GetValue()/SetValue() methods for access
+	value any
 
-	// Issues collected during validation - accumulates all validation failures
-	Issues []ZodRawIssue
+	// issues collected during validation - accumulates all validation failures
+	// Private field - use GetIssues()/SetIssues() methods for access
+	issues []ZodRawIssue
 
-	// Path is the current validation path - tracks location in nested structures
+	// path is the current validation path - tracks location in nested structures
 	// Each element represents a step in the path (object key, array index, etc.)
-	Path []any
+	// Private field - use GetPath()/ClonePath() methods for access
+	path []any
 }
 
 // =============================================================================

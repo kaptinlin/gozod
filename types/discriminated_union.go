@@ -96,13 +96,11 @@ func (z *ZodDiscriminatedUnion) Parse(input any, ctx ...*core.ParseContext) (any
 	if err == nil {
 		// Validate success, perform Refine check
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{
-				Value:  result,
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			payload := core.NewParsePayload(result)
 			engine.RunChecksOnValue(result, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				return nil, &core.ZodError{Issues: payload.Issues}
+			if len(payload.GetIssues()) > 0 {
+				return nil, &core.ZodError{Issues: payload.GetIssues()}
 			}
 		}
 		return result, nil
@@ -120,13 +118,11 @@ func (z *ZodDiscriminatedUnion) parseAsRegularUnion(input any, ctx *core.ParseCo
 		if err == nil {
 			// Found matching option
 			if len(z.internals.Checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  result,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				payload := core.NewParsePayload(result)
 				engine.RunChecksOnValue(result, z.internals.Checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					return nil, &core.ZodError{Issues: payload.Issues}
+				if len(payload.GetIssues()) > 0 {
+					return nil, &core.ZodError{Issues: payload.GetIssues()}
 				}
 			}
 			return result, nil

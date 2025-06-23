@@ -20,13 +20,16 @@ func RunChecksOnValue(value any, checkList []core.ZodCheck, payload *core.ParseP
 
 	// Pre-allocate Issues slice capacity based on number of checks
 	// This reduces memory allocations during validation
-	if cap(payload.Issues) < len(checkList) {
+	currentIssues := payload.GetIssues()
+	if cap(currentIssues) < len(checkList) {
 		// Allocate with some extra capacity (2x) to handle multiple issues per check
 		newCapacity := len(checkList) * 2
 		if newCapacity < 4 {
 			newCapacity = 4 // Minimum reasonable capacity
 		}
-		payload.Issues = make([]core.ZodRawIssue, len(payload.Issues), newCapacity)
+		newIssues := make([]core.ZodRawIssue, len(currentIssues), newCapacity)
+		copy(newIssues, currentIssues)
+		payload.SetIssues(newIssues)
 	}
 
 	// Use slicex.Filter to preprocess valid checks
@@ -43,35 +46,34 @@ func RunChecksOnValue(value any, checkList []core.ZodCheck, payload *core.ParseP
 			// Get check internals and validate they exist
 			if checkInternals := check.GetZod(); checkInternals != nil && checkInternals.Check != nil {
 				// Create independent payload for each check to avoid interference
-				checkPayload := &core.ParsePayload{
-					Value:  value,
-					Path:   payload.Path, // Preserve path context
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				checkPayload := core.NewParsePayloadWithPath(value, payload.GetPath())
 
 				// Execute the check function
 				checkInternals.Check(checkPayload)
 
 				// If the check has custom error mapping, apply it to all produced issues
 				if checkInternals.Def != nil && checkInternals.Def.Error != nil {
-					for i := range checkPayload.Issues {
-						checkPayload.Issues[i].Message = (*checkInternals.Def.Error)(checkPayload.Issues[i])
-						checkPayload.Issues[i].Inst = checkInternals // attach for downstream resolution
+					checkIssues := checkPayload.GetIssues()
+					for i := range checkIssues {
+						checkIssues[i].Message = (*checkInternals.Def.Error)(checkIssues[i])
+						checkIssues[i].Inst = checkInternals // attach for downstream resolution
 					}
+					checkPayload.SetIssues(checkIssues)
 				}
 
 				// Merge any issues found into the main payload
-				if !slicex.IsEmpty(checkPayload.Issues) {
+				checkIssues := checkPayload.GetIssues()
+				if !slicex.IsEmpty(checkIssues) {
 					// Use slicex.Merge to safely combine issue slices
-					if mergedIssues, err := slicex.Merge(payload.Issues, checkPayload.Issues); err == nil {
+					if mergedIssues, err := slicex.Merge(payload.GetIssues(), checkIssues); err == nil {
 						if typedIssues, err := slicex.ToTyped[core.ZodRawIssue](mergedIssues); err == nil {
-							payload.Issues = typedIssues
+							payload.SetIssues(typedIssues)
 						}
 					}
 				}
 
 				// Support for early exit on Abort flag
-				if !slicex.IsEmpty(checkPayload.Issues) && checkInternals.Def.Abort {
+				if !slicex.IsEmpty(checkIssues) && checkInternals.Def.Abort {
 					break
 				}
 			}
@@ -82,7 +84,7 @@ func RunChecksOnValue(value any, checkList []core.ZodCheck, payload *core.ParseP
 // RunChecks executes all checks on a payload synchronously
 // This is the core validation engine that processes all validation checks
 func RunChecks(payload *core.ParsePayload, checks []core.ZodCheck, ctx *core.ParseContext) *core.ParsePayload {
-	RunChecksOnValue(payload.Value, checks, payload, ctx)
+	RunChecksOnValue(payload.GetValue(), checks, payload, ctx)
 	return payload
 }
 
@@ -90,13 +92,14 @@ func RunChecks(payload *core.ParsePayload, checks []core.ZodCheck, ctx *core.Par
 // Examines issues starting from a specific index to determine if validation should stop
 func CheckAborted(x core.ParsePayload, startIndex int) bool {
 	// Use slicex to safely handle slice bounds
-	if slicex.IsEmpty(x.Issues) || startIndex >= len(x.Issues) {
+	issues := x.GetIssues()
+	if slicex.IsEmpty(issues) || startIndex >= len(issues) {
 		return false
 	}
 
 	// Check issues from startIndex onwards
-	for i := startIndex; i < len(x.Issues); i++ {
-		if !x.Issues[i].Continue {
+	for i := startIndex; i < len(issues); i++ {
+		if !issues[i].Continue {
 			return true
 		}
 	}

@@ -24,9 +24,9 @@ func MaxLength(maximum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MaxLength(payload.Value, maximum) {
-				origin := utils.GetLengthableOrigin(payload.Value)
-				payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(maximum, true, origin, payload.Value))
+			if !validate.MaxLength(payload.GetValue(), maximum) {
+				origin := utils.GetLengthableOrigin(payload.GetValue())
+				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		OnAttach: []func(any){
@@ -48,9 +48,9 @@ func MinLength(minimum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MinLength(payload.Value, minimum) {
-				origin := utils.GetLengthableOrigin(payload.Value)
-				payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(minimum, true, origin, payload.Value))
+			if !validate.MinLength(payload.GetValue(), minimum) {
+				origin := utils.GetLengthableOrigin(payload.GetValue())
+				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			}
 		},
 		OnAttach: []func(any){
@@ -72,14 +72,14 @@ func Length(exact int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Length(payload.Value, exact) {
+			if !validate.Length(payload.GetValue(), exact) {
 				// Determine if too big or too small based on actual length
-				actualLength := getActualLength(payload.Value)
-				origin := utils.GetLengthableOrigin(payload.Value)
+				actualLength := getActualLength(payload.GetValue())
+				origin := utils.GetLengthableOrigin(payload.GetValue())
 				if actualLength > exact {
-					payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(exact, true, origin, payload.Value))
+					payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
 				} else {
-					payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(exact, true, origin, payload.Value))
+					payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.GetValue()))
 				}
 			}
 		},
@@ -107,14 +107,14 @@ func MaxSize(maximum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MaxSize(payload.Value, maximum) {
-				origin := utils.GetSizableOrigin(payload.Value)
-				payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(maximum, true, origin, payload.Value))
+			if !validate.MaxSize(payload.GetValue(), maximum) {
+				origin := utils.GetSizableOrigin(payload.GetValue())
+				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
 			// Only execute when value has size property
-			return reflectx.HasSize(payload.Value) || reflectx.HasLength(payload.Value)
+			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {
@@ -135,14 +135,14 @@ func MinSize(minimum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MinSize(payload.Value, minimum) {
-				origin := utils.GetSizableOrigin(payload.Value)
-				payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(minimum, true, origin, payload.Value))
+			if !validate.MinSize(payload.GetValue(), minimum) {
+				origin := utils.GetSizableOrigin(payload.GetValue())
+				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
 			// Only execute when value has size property
-			return reflectx.HasSize(payload.Value) || reflectx.HasLength(payload.Value)
+			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {
@@ -163,20 +163,20 @@ func Size(exact int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Size(payload.Value, exact) {
+			if !validate.Size(payload.GetValue(), exact) {
 				// Determine if too big or too small based on actual size
-				actualSize := reflectx.Size(payload.Value)
-				origin := utils.GetSizableOrigin(payload.Value)
+				actualSize := reflectx.Size(payload.GetValue())
+				origin := utils.GetSizableOrigin(payload.GetValue())
 				if actualSize > exact {
-					payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(exact, true, origin, payload.Value))
+					payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
 				} else {
-					payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(exact, true, origin, payload.Value))
+					payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.GetValue()))
 				}
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
 			// Only execute when value has size property
-			return reflectx.HasSize(payload.Value) || reflectx.HasLength(payload.Value)
+			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {
@@ -202,13 +202,13 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			actualLength := getActualLength(payload.Value)
-			origin := utils.GetLengthableOrigin(payload.Value)
+			actualLength := getActualLength(payload.GetValue())
+			origin := utils.GetLengthableOrigin(payload.GetValue())
 
 			if actualLength < minimum {
-				payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(minimum, true, origin, payload.Value))
+				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			} else if actualLength > maximum {
-				payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(maximum, true, origin, payload.Value))
+				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		OnAttach: []func(any){
@@ -231,18 +231,18 @@ func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			actualSize := reflectx.Size(payload.Value)
-			origin := utils.GetSizableOrigin(payload.Value)
+			actualSize := reflectx.Size(payload.GetValue())
+			origin := utils.GetSizableOrigin(payload.GetValue())
 
 			if actualSize < minimum {
-				payload.Issues = append(payload.Issues, issues.CreateTooSmallIssue(minimum, true, origin, payload.Value))
+				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			} else if actualSize > maximum {
-				payload.Issues = append(payload.Issues, issues.CreateTooBigIssue(maximum, true, origin, payload.Value))
+				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
 			// Only execute when value has size property
-			return reflectx.HasSize(payload.Value) || reflectx.HasLength(payload.Value)
+			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {

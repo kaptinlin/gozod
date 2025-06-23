@@ -87,9 +87,9 @@ func (z *ZodUnknown) MustParse(input any, ctx ...*core.ParseContext) any {
 // Check adds a validation check
 func (z *ZodUnknown) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+		payload := core.NewParsePayload(v)
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	})
 	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 }
@@ -407,7 +407,7 @@ func createZodUnknownFromDef(def *ZodUnknownDef) *ZodUnknown {
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		result, err := engine.ParseType[any](
-			payload.Value,
+			payload.GetValue(),
 			&internals.ZodTypeInternals,
 			"unknown",
 			func(v any) (any, bool) { return v, true },
@@ -420,19 +420,16 @@ func createZodUnknownFromDef(def *ZodUnknownDef) *ZodUnknown {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 
@@ -521,13 +518,11 @@ func Unknown(params ...any) *ZodUnknown {
 // validateUnknown validates unknown values with checks
 func validateUnknown(value any, checks []core.ZodCheck, ctx *core.ParseContext) error {
 	if len(checks) > 0 {
-		payload := &core.ParsePayload{
-			Value:  value,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayload(value)
 		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.Issues) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, ctx))
+		if len(payload.GetIssues()) > 0 {
+			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
 		}
 	}
 	return nil

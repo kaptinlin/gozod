@@ -40,9 +40,9 @@ type ZodNever struct {
 // Check adds a validation check (though never will always fail first)
 func (z *ZodNever) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+		payload := core.NewParsePayload(v)
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	}, core.SchemaParams{})
 	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 }
@@ -190,23 +190,19 @@ func createZodNeverFromDef(def *ZodNeverDef) *ZodNever {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodNever{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

@@ -67,13 +67,11 @@ func (z *ZodUnion) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		if err == nil {
 			// Found matching option, perform Refine validation
 			if len(z.internals.Checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  result,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				payload := core.NewParsePayload(result)
 				engine.RunChecksOnValue(result, z.internals.Checks, payload, parseCtx)
-				if len(payload.Issues) > 0 {
-					return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, parseCtx))
+				if len(payload.GetIssues()) > 0 {
+					return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), parseCtx))
 				}
 			}
 			return result, nil
@@ -456,41 +454,35 @@ func createZodUnionFromDef(def *ZodUnionDef) *ZodUnion {
 		results := make([]*core.ParsePayload, 0, len(def.Options))
 
 		for _, option := range def.Options {
-			optionPayload := &core.ParsePayload{
-				Value:  payload.Value,
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			optionPayload := core.NewParsePayload(payload.GetValue())
 
-			resultPayload, err := option.Parse(payload.Value, ctx)
+			resultPayload, err := option.Parse(payload.GetValue(), ctx)
 			if err != nil {
 				// Parse failed - add to results for error reporting
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
-					// Convert ZodIssue to ZodRawIssue
+					// Convert ZodIssue to ZodRawIssue using standardized converter
 					for _, issue := range zodErr.Issues {
-						rawIssue := core.ZodRawIssue{
-							Code:    issue.Code,
-							Input:   issue.Input,
-							Path:    issue.Path,
-							Message: issue.Message,
-						}
-						optionPayload.Issues = append(optionPayload.Issues, rawIssue)
+						rawIssue := issues.ConvertZodIssueToRaw(issue)
+						rawIssue.Path = issue.Path
+						optionPayload.AddIssue(rawIssue)
 					}
 				} else {
 					// Generic error - convert to ZodRawIssue
-					issue := issues.NewRawIssue(issues.InvalidType, payload.Value)
-					optionPayload.Issues = append(optionPayload.Issues, issue)
+					issue := issues.NewRawIssue(issues.InvalidType, payload.GetValue())
+					optionPayload.AddIssue(issue)
 				}
 				results = append(results, optionPayload)
 				continue
 			}
 
 			// Parse succeeded - return immediately
-			payload.Value = resultPayload
+			payload.SetValue(resultPayload)
 
 			// Run custom checks if any exist
 			if customChecks, exists := internals.Bag["customChecks"].([]core.ZodCheck); exists {
-				engine.RunChecksOnValue(payload.Value, customChecks, payload, ctx)
+				engine.RunChecksOnValue(payload.GetValue(), customChecks, payload, ctx)
 			}
 
 			return payload
@@ -563,29 +555,29 @@ func WithUnionErrors(errors [][]core.ZodRawIssue) func(*core.ZodRawIssue) {
 
 // handleUnionResults processes union validation results
 func handleUnionResults(results []*core.ParsePayload, final *core.ParsePayload, internals *ZodUnionInternals) *core.ParsePayload {
-	// Check if any result succeeded
+	// Check if any result succeeded - use getter methods instead of direct field access
 	for _, result := range results {
-		if len(result.Issues) == 0 {
-			final.Value = result.Value
+		if len(result.GetIssues()) == 0 {
+			final.SetValue(result.GetValue())
 			return final
 		}
 	}
 
 	// No result succeeded - create union error
-	issue := CreateInvalidUnionIssue(final.Value, results, func(issue *core.ZodRawIssue) {
+	issue := CreateInvalidUnionIssue(final.GetValue(), results, func(issue *core.ZodRawIssue) {
 		issue.Inst = internals
 	})
-	final.Issues = append(final.Issues, issue)
+	final.AddIssue(issue)
 	return final
 }
 
 // CreateInvalidUnionIssue creates an invalid union issue
 func CreateInvalidUnionIssue(input any, results []*core.ParsePayload, options ...func(*core.ZodRawIssue)) core.ZodRawIssue {
-	// Extract all error issues from failed results
+	// Extract all error issues from failed results - use getter methods instead of direct field access
 	allErrors := make([][]core.ZodRawIssue, 0, len(results))
 	for _, result := range results {
-		if len(result.Issues) > 0 {
-			allErrors = append(allErrors, result.Issues)
+		if len(result.GetIssues()) > 0 {
+			allErrors = append(allErrors, result.GetIssues())
 		}
 	}
 

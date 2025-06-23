@@ -78,14 +78,11 @@ func (z *ZodAny) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	// Any type accepts any value and preserves smart type inference
 	// Run validation checks if any exist
 	if len(z.internals.Checks) > 0 {
-		payload := &core.ParsePayload{
-			Value:  input,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		payload := core.NewParsePayload(input)
 		engine.RunChecksOnValue(input, z.internals.Checks, payload, parseCtx)
-		if len(payload.Issues) > 0 {
-			finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-			for i, rawIssue := range payload.Issues {
+		if len(payload.GetIssues()) > 0 {
+			finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+			for i, rawIssue := range payload.GetIssues() {
 				finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 			}
 			return nil, issues.NewZodError(finalizedIssues)
@@ -112,9 +109,9 @@ func (z *ZodAny) MustParse(input any, ctx ...*core.ParseContext) any {
 // Check adds a validation check to the any type
 func (z *ZodAny) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+		payload := core.NewParsePayload(v)
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	}, core.SchemaParams{})
 	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
 }
@@ -397,23 +394,19 @@ func createZodAnyFromDef(def *ZodAnyDef) *ZodAny {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		zodInstance := &ZodAny{internals: internals}
-		result, err := zodInstance.Parse(payload.Value, ctx)
+		result, err := zodInstance.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

@@ -76,14 +76,12 @@ func (z *ZodEnum[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		// Validator function
 		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			if len(checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  value,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				payload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-					for i, rawIssue := range payload.Issues {
+				if len(payload.GetIssues()) > 0 {
+					finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+					for i, rawIssue := range payload.GetIssues() {
 						finalizedIssues[i] = issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
 					}
 					return issues.NewZodError(finalizedIssues)

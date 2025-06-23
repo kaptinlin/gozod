@@ -60,16 +60,15 @@ func (z *ZodPrefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error
 	//    custom behaviour defined in that wrapper takes precedence – particularly important for correctly
 	//    distinguishing Default vs Prefault semantics on nil input.
 	if z.internals != nil && z.internals.Parse != nil {
-		payload := &core.ParsePayload{
-			Value:  input,
-			Issues: make([]core.ZodRawIssue, 0),
-			Path:   make([]any, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(input, make([]any, 0))
 		result := z.internals.Parse(payload, contextToUse)
-		if len(result.Issues) > 0 {
-			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.Issues, contextToUse))
+		// Use getter method instead of direct field access
+		if len(result.GetIssues()) > 0 {
+			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.GetIssues(), contextToUse))
 		}
-		return result.Value, nil
+		// Use getter method instead of direct field access
+		return result.GetValue(), nil
 	}
 
 	// 2) Handle nil input specially: attempt normal validation first (important for Optional schemas).

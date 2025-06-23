@@ -664,23 +664,20 @@ func createZodArrayFromDef(def *ZodArrayDef) *ZodArray {
 
 	// Set parse function for validation
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		value, err := array.Parse(payload.Value, ctx)
+		value, err := array.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			// Add issues to payload on validation error
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Message: issue.Message,
-						Path:    issue.Path,
-						Input:   issue.Input,
-					}
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
 					payload.AddIssue(rawIssue)
 				}
 			}
 		} else {
-			payload.Value = value
+			payload.SetValue(value)
 		}
 		return payload
 	}
@@ -812,17 +809,16 @@ func validateArray(value []any, checks []core.ZodCheck, z *ZodArray, ctx *core.P
 							var zodErr *issues.ZodError
 							if errors.As(err, &zodErr) {
 								for _, issue := range zodErr.Issues {
-									// Prepend element index to path
+									// Convert ZodError to RawIssue using standardized converter
+									rawIssue := issues.ConvertZodIssueToRaw(issue)
+
+									// Prepend element index to path for array element errors
 									newPath := make([]any, 0, len(issue.Path)+1)
 									newPath = append(newPath, i)
 									newPath = append(newPath, issue.Path...)
+									rawIssue.Path = newPath
+									rawIssue.Input = value // Use original array as input
 
-									rawIssue := core.ZodRawIssue{
-										Code:    issue.Code,
-										Message: issue.Message,
-										Path:    newPath,
-										Input:   value, // Use original array as input
-									}
 									payload.AddIssue(rawIssue)
 								}
 							} else {
@@ -853,7 +849,7 @@ func validateArray(value []any, checks []core.ZodCheck, z *ZodArray, ctx *core.P
 	}
 
 	if payload.HasIssues() {
-		convertedIssues := issues.ConvertRawIssuesToIssues(payload.Issues, ctx)
+		convertedIssues := issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx)
 		return issues.NewZodError(convertedIssues)
 	}
 

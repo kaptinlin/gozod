@@ -23,8 +23,8 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Regex(payload.Value, pattern) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("regex", payload.Value, nil))
+			if !validate.Regex(payload.GetValue(), pattern) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("regex", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -51,11 +51,11 @@ func Includes(substring string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Includes(payload.Value, substring) {
+			if !validate.Includes(payload.GetValue(), substring) {
 				additionalProps := map[string]any{
 					"includes": substring,
 				}
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("includes", payload.Value, additionalProps))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("includes", payload.GetValue(), additionalProps))
 			}
 		},
 		OnAttach: []func(any){
@@ -78,11 +78,11 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.StartsWith(payload.Value, prefix) {
+			if !validate.StartsWith(payload.GetValue(), prefix) {
 				additionalProps := map[string]any{
 					"prefix": prefix,
 				}
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("starts_with", payload.Value, additionalProps))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("starts_with", payload.GetValue(), additionalProps))
 			}
 		},
 		OnAttach: []func(any){
@@ -106,11 +106,11 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.EndsWith(payload.Value, suffix) {
+			if !validate.EndsWith(payload.GetValue(), suffix) {
 				additionalProps := map[string]any{
 					"suffix": suffix,
 				}
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("ends_with", payload.Value, additionalProps))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ends_with", payload.GetValue(), additionalProps))
 			}
 		},
 		OnAttach: []func(any){
@@ -138,8 +138,8 @@ func Lowercase(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Lowercase(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("lowercase", payload.Value, nil))
+			if !validate.Lowercase(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("lowercase", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -162,8 +162,8 @@ func Uppercase(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Uppercase(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("uppercase", payload.Value, nil))
+			if !validate.Uppercase(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("uppercase", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){

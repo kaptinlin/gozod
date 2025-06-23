@@ -315,16 +315,12 @@ func (z *ZodFloat[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType[a
 func (z *ZodFloat[T]) Check(fn core.CheckFn) core.ZodType[any, any] {
 	custom := Custom(fn, core.SchemaParams{})
 	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := z.Parse(payload.Value, ctx)
+		result, err := z.Parse(payload.GetValue(), ctx)
 		if err != nil {
-			payload.Issues = append(payload.Issues, core.ZodRawIssue{
-				Code:    core.InvalidType,
-				Message: err.Error(),
-				Input:   payload.Value,
-			})
+			payload.AddIssue(issues.CreateInvalidTypeIssueFromCode(core.ZodTypeFloat64, payload.GetValue()))
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 
 		fn(payload)
 		return payload
@@ -344,13 +340,11 @@ func (z *ZodFloat[T]) Unwrap() core.ZodType[any, any] {
 // validateFloat validates float values with checks (generic)
 func validateFloat[T ZodFloatConstraint](value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
 	if len(checks) > 0 {
-		payload := &core.ParsePayload{
-			Value:  value,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayload(value)
 		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.Issues) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, ctx))
+		if len(payload.GetIssues()) > 0 {
+			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
 		}
 	}
 	return nil
@@ -610,23 +604,20 @@ func createZodFloatFromDef[T ZodFloatConstraint](def *ZodFloatDef[T]) *ZodFloat[
 	zodSchema := &ZodFloat[T]{internals: internals}
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := zodSchema.Parse(payload.Value, ctx)
+		result, err := zodSchema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

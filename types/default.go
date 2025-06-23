@@ -271,7 +271,7 @@ func (z *ZodDefault[T]) Prefault(value any) core.ZodType[any, any] {
 			OptOut: "",         // Inherit Default's OptOut
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 				// Special logic: for nil input, directly use Default's logic, don't go through Prefault validation
-				if payload.Value == nil {
+				if payload.GetValue() == nil {
 					// Use Default's default value without validation
 					var defaultValue any
 					if z.isFunction && z.defaultFunc != nil {
@@ -279,19 +279,19 @@ func (z *ZodDefault[T]) Prefault(value any) core.ZodType[any, any] {
 					} else {
 						defaultValue = z.defaultValue
 					}
-					payload.Value = defaultValue
+					payload.SetValue(defaultValue)
 					return payload
 				}
 
 				// For non-nil input, try validation first, use Prefault value on failure
-				result, err := z.innerType.Parse(payload.Value, ctx)
+				result, err := z.innerType.Parse(payload.GetValue(), ctx)
 				if err == nil {
-					payload.Value = result
+					payload.SetValue(result)
 					return payload
 				}
 
 				// Validation failed, use Prefault value
-				payload.Value = value
+				payload.SetValue(value)
 				return payload
 			},
 		},
@@ -311,7 +311,7 @@ func (z *ZodDefault[T]) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 			OptOut: "",         // Inherit Default's OptOut
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 				// Special logic: for nil input, directly use Default's logic
-				if payload.Value == nil {
+				if payload.GetValue() == nil {
 					// Use Default's default value without validation
 					var defaultValue any
 					if z.isFunction && z.defaultFunc != nil {
@@ -319,19 +319,19 @@ func (z *ZodDefault[T]) PrefaultFunc(fn func() any) core.ZodType[any, any] {
 					} else {
 						defaultValue = z.defaultValue
 					}
-					payload.Value = defaultValue
+					payload.SetValue(defaultValue)
 					return payload
 				}
 
 				// For non-nil input, try validation first, use Prefault function on failure
-				result, err := z.innerType.Parse(payload.Value, ctx)
+				result, err := z.innerType.Parse(payload.GetValue(), ctx)
 				if err == nil {
-					payload.Value = result
+					payload.SetValue(result)
 					return payload
 				}
 
 				// Validation failed, use Prefault function value
-				payload.Value = fn()
+				payload.SetValue(fn())
 				return payload
 			},
 		},

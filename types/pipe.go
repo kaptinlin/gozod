@@ -33,22 +33,23 @@ func (zp *ZodPipe[In, Out]) GetInternals() *core.ZodTypeInternals {
 			inInternals := zp.in.GetInternals()
 			leftPayload := inInternals.Parse(payload, ctx)
 
-			// Check if left side has errors
-			if len(leftPayload.Issues) > 0 {
+			// Check if left side has errors - use getter method instead of direct field access
+			if len(leftPayload.GetIssues()) > 0 {
 				return leftPayload // Early termination
 			}
 
 			// Special handling: if left result is nil (usually from Optional), return nil directly
-			if leftPayload.Value == nil {
+			// Use getter method instead of direct field access
+			if leftPayload.GetValue() == nil {
 				return leftPayload
 			}
 
 			// 2. Execute output schema
 			outInternals := zp.out.GetInternals()
-			rightPayload := &core.ParsePayload{
-				Value:  leftPayload.Value,
-				Issues: leftPayload.Issues, // Maintain issue accumulation
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			rightPayload := core.NewParsePayloadWithPath(leftPayload.GetValue(), leftPayload.GetPath())
+			// Copy issues from leftPayload using setter method
+			rightPayload.SetIssues(leftPayload.GetIssues())
 
 			return outInternals.Parse(rightPayload, ctx)
 		},

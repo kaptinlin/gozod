@@ -69,13 +69,11 @@ func (z *ZodLiteral) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	if isValidLiteral(input, z.internals) {
 		// Run validation checks - use unified runChecksOnValue
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{
-				Value:  input,
-				Issues: make([]core.ZodRawIssue, 0),
-			}
+			// Use constructor instead of direct struct literal to respect private fields
+			payload := core.NewParsePayload(input)
 			engine.RunChecksOnValue(input, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, parseCtx))
+			if len(payload.GetIssues()) > 0 {
+				return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), parseCtx))
 			}
 		}
 		return input, nil // Preserve original type
@@ -98,13 +96,11 @@ func (z *ZodLiteral) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		if isValidLiteral(derefValue, z.internals) {
 			// Run validation checks
 			if len(z.internals.Checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  derefValue,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				payload := core.NewParsePayload(derefValue)
 				engine.RunChecksOnValue(derefValue, z.internals.Checks, payload, parseCtx)
-				if len(payload.Issues) > 0 {
-					return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, parseCtx))
+				if len(payload.GetIssues()) > 0 {
+					return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), parseCtx))
 				}
 			}
 			return input, nil // Return original pointer (preserve type)
@@ -216,13 +212,10 @@ func (z *ZodLiteral) RefineAny(fn func(any) bool, params ...any) core.ZodType[an
 // Check adds modern validation using direct payload access
 func (z *ZodLiteral) Check(fn core.CheckFn) core.ZodType[any, any] {
 	check := checks.NewCustom[any](func(v any) bool {
-		payload := &core.ParsePayload{
-			Value:  v,
-			Issues: make([]core.ZodRawIssue, 0),
-			Path:   make([]any, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayloadWithPath(v, make([]any, 0))
 		fn(payload)
-		return len(payload.Issues) == 0
+		return len(payload.GetIssues()) == 0
 	})
 	return engine.AddCheck(z, check)
 }
@@ -449,23 +442,19 @@ func createZodLiteralFromDef(def *ZodLiteralDef) *ZodLiteral {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodLiteral{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

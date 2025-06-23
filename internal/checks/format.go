@@ -21,8 +21,8 @@ func Email(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Email(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("email", payload.Value, nil))
+			if !validate.Email(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("email", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -45,8 +45,8 @@ func URL(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.URL(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("url", payload.Value, nil))
+			if !validate.URL(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("url", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -73,8 +73,8 @@ func UUID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.UUID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("uuid", payload.Value, nil))
+			if !validate.UUID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("uuid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -97,8 +97,8 @@ func GUID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.GUID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("guid", payload.Value, nil))
+			if !validate.GUID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("guid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -125,8 +125,8 @@ func IPv4(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.IPv4(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("ipv4", payload.Value, nil))
+			if !validate.IPv4(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ipv4", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -149,8 +149,8 @@ func IPv6(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.IPv6(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("ipv6", payload.Value, nil))
+			if !validate.IPv6(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ipv6", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -177,8 +177,8 @@ func CIDRv4(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.CIDRv4(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("cidrv4", payload.Value, nil))
+			if !validate.CIDRv4(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("cidrv4", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -201,8 +201,8 @@ func CIDRv6(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.CIDRv6(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("cidrv6", payload.Value, nil))
+			if !validate.CIDRv6(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("cidrv6", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -229,8 +229,8 @@ func Base64(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Base64(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("base64", payload.Value, nil))
+			if !validate.Base64(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("base64", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -253,8 +253,8 @@ func Base64URL(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Base64URL(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("base64url", payload.Value, nil))
+			if !validate.Base64URL(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("base64url", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -281,8 +281,8 @@ func JWT(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.JWT(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("jwt", payload.Value, nil))
+			if !validate.JWT(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -309,8 +309,8 @@ func E164(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.E164(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("e164", payload.Value, nil))
+			if !validate.E164(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("e164", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -338,10 +338,10 @@ func ISODateTime(params ...any) core.ZodCheck {
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODateTime(payload.Value) {
-				iss := issues.CreateInvalidFormatIssue("iso_datetime", payload.Value, nil)
+			if !validate.ISODateTime(payload.GetValue()) {
+				iss := issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil)
 				iss.Inst = check
-				payload.Issues = append(payload.Issues, iss)
+				payload.AddIssue(iss)
 			}
 		},
 		OnAttach: []func(any){
@@ -366,10 +366,10 @@ func ISODate(params ...any) core.ZodCheck {
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODate(payload.Value) {
-				iss := issues.CreateInvalidFormatIssue("iso_date", payload.Value, nil)
+			if !validate.ISODate(payload.GetValue()) {
+				iss := issues.CreateInvalidFormatIssue("iso_date", payload.GetValue(), nil)
 				iss.Inst = check
-				payload.Issues = append(payload.Issues, iss)
+				payload.AddIssue(iss)
 			}
 		},
 		OnAttach: []func(any){
@@ -394,10 +394,10 @@ func ISOTime(params ...any) core.ZodCheck {
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISOTime(payload.Value) {
-				iss := issues.CreateInvalidFormatIssue("iso_time", payload.Value, nil)
+			if !validate.ISOTime(payload.GetValue()) {
+				iss := issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil)
 				iss.Inst = check
-				payload.Issues = append(payload.Issues, iss)
+				payload.AddIssue(iss)
 			}
 		},
 		OnAttach: []func(any){
@@ -422,10 +422,10 @@ func ISODuration(params ...any) core.ZodCheck {
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODuration(payload.Value) {
-				iss := issues.CreateInvalidFormatIssue("iso_duration", payload.Value, nil)
+			if !validate.ISODuration(payload.GetValue()) {
+				iss := issues.CreateInvalidFormatIssue("iso_duration", payload.GetValue(), nil)
 				iss.Inst = check
-				payload.Issues = append(payload.Issues, iss)
+				payload.AddIssue(iss)
 			}
 		},
 		OnAttach: []func(any){
@@ -453,8 +453,8 @@ func CUID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.CUID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("cuid", payload.Value, nil))
+			if !validate.CUID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("cuid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -477,8 +477,8 @@ func CUID2(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.CUID2(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("cuid2", payload.Value, nil))
+			if !validate.CUID2(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("cuid2", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -501,8 +501,8 @@ func ULID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ULID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("ulid", payload.Value, nil))
+			if !validate.ULID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ulid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -525,8 +525,8 @@ func XID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.XID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("xid", payload.Value, nil))
+			if !validate.XID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("xid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -549,8 +549,8 @@ func KSUID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.KSUID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("ksuid", payload.Value, nil))
+			if !validate.KSUID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ksuid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -573,8 +573,8 @@ func NanoID(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.NanoID(payload.Value) {
-				payload.Issues = append(payload.Issues, issues.CreateInvalidFormatIssue("nanoid", payload.Value, nil))
+			if !validate.NanoID(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("nanoid", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){

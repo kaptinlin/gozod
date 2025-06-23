@@ -83,24 +83,21 @@ func (z *ZodCustom) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = &core.ParseContext{}
 	}
 
-	payload := &core.ParsePayload{
-		Value:  input,
-		Issues: make([]core.ZodRawIssue, 0),
-		Path:   make([]any, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(input, make([]any, 0))
 
 	// 3. Run custom check function
 	result := z.internals.Parse(payload, parseCtx)
-	if len(result.Issues) > 0 {
-		finalizedIssues := make([]core.ZodIssue, len(result.Issues))
-		for i, rawIssue := range result.Issues {
+	if len(result.GetIssues()) > 0 {
+		finalizedIssues := make([]core.ZodIssue, len(result.GetIssues()))
+		for i, rawIssue := range result.GetIssues() {
 			finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 		}
 		return nil, issues.NewZodError(finalizedIssues)
 	}
 
 	// 4. Smart type inference: custom validation preserves original input type
-	return result.Value, nil
+	return result.GetValue(), nil
 }
 
 // MustParse validates the input value and panics on failure
@@ -238,7 +235,7 @@ func createZodCustomFromDef(def *ZodCustomDef) *ZodCustom {
 
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		input := payload.Value
+		input := payload.GetValue()
 		switch def.FnType {
 		case "refine":
 			// Try both func(any) bool and core.RefineFn[any] types
@@ -253,8 +250,9 @@ func createZodCustomFromDef(def *ZodCustomDef) *ZodCustom {
 
 			if ok {
 				if !refineFn(input) {
-					path := make([]any, len(payload.Path))
-					copy(path, payload.Path)
+					// Use getter method instead of direct field access
+					path := make([]any, len(payload.GetPath()))
+					copy(path, payload.GetPath())
 					if def.Path != nil {
 						path = append(path, def.Path...)
 					}
@@ -277,12 +275,13 @@ func createZodCustomFromDef(def *ZodCustomDef) *ZodCustom {
 						}
 					}
 
-					payload.Issues = append(payload.Issues, issue)
+					payload.AddIssue(issue)
 				}
 			} else {
 				// Type assertion failed: treat as validation failure
-				path := make([]any, len(payload.Path))
-				copy(path, payload.Path)
+				// Use getter method instead of direct field access
+				path := make([]any, len(payload.GetPath()))
+				copy(path, payload.GetPath())
 				if def.Path != nil {
 					path = append(path, def.Path...)
 				}
@@ -293,15 +292,16 @@ func createZodCustomFromDef(def *ZodCustomDef) *ZodCustom {
 				issue := issues.NewRawIssue("custom", input, options...)
 				issue.Message = "Invalid function type for refinement"
 				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssue(issue)
 			}
 		case "check":
 			if checkFn, ok := def.Fn.(core.CheckFn); ok {
 				checkFn(payload)
 			} else {
 				// Invalid check function type: add validation error
-				path := make([]any, len(payload.Path))
-				copy(path, payload.Path)
+				// Use getter method instead of direct field access
+				path := make([]any, len(payload.GetPath()))
+				copy(path, payload.GetPath())
 				if def.Path != nil {
 					path = append(path, def.Path...)
 				}
@@ -311,7 +311,7 @@ func createZodCustomFromDef(def *ZodCustomDef) *ZodCustom {
 				}
 				issue := issues.NewRawIssue("custom", input, options...)
 				issue.Message = "Invalid check function type"
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssue(issue)
 			}
 		}
 		return payload
@@ -544,7 +544,8 @@ func (s ZodCustomDefault) Transform(fn func(any, *core.RefinementContext) (any, 
 // Check converts error returning check into refine and chains
 func (s ZodCustomDefault) Check(fn func(*core.ParsePayload) error) ZodCustomDefault {
 	refineFn := func(input any) bool {
-		payload := &core.ParsePayload{Value: input}
+		// Use constructor instead of struct literal to respect private fields
+		payload := core.NewParsePayload(input)
 		err := fn(payload)
 		return err == nil
 	}
@@ -649,7 +650,8 @@ func (s ZodCustomPrefault) Transform(fn func(any, *core.RefinementContext) (any,
 // Check chaining for Prefault wrapper
 func (s ZodCustomPrefault) Check(fn func(*core.ParsePayload) error) ZodCustomPrefault {
 	refineFn := func(input any) bool {
-		payload := &core.ParsePayload{Value: input}
+		// Use constructor instead of struct literal to respect private fields
+		payload := core.NewParsePayload(input)
 		err := fn(payload)
 		return err == nil
 	}

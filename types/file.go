@@ -71,16 +71,16 @@ func createZodFileFromDef(def *ZodFileDef) *ZodFile {
 
 // parseZodFile implements the core parsing logic for file type
 func parseZodFile(payload *core.ParsePayload, def *ZodFileDef, internals *core.ZodTypeInternals, ctx *core.ParseContext) *core.ParsePayload {
-	input := payload.Value
+	input := payload.GetValue()
 
 	// 1. Unified nil handling
 	if input == nil {
 		if !internals.Nilable {
 			rawIssue := issues.CreateInvalidTypeIssue("file", input)
-			payload.Issues = append(payload.Issues, rawIssue)
+			payload.AddIssue(rawIssue)
 			return payload
 		}
-		payload.Value = (*multipart.FileHeader)(nil) // Return typed nil pointer
+		payload.SetValue((*multipart.FileHeader)(nil)) // Return typed nil pointer
 		return payload
 	}
 
@@ -90,62 +90,62 @@ func parseZodFile(payload *core.ParsePayload, def *ZodFileDef, internals *core.Z
 		if v == nil {
 			if !internals.Nilable {
 				rawIssue := issues.CreateInvalidTypeIssue("file", input)
-				payload.Issues = append(payload.Issues, rawIssue)
+				payload.AddIssue(rawIssue)
 				return payload
 			}
-			payload.Value = (*multipart.FileHeader)(nil)
+			payload.SetValue((*multipart.FileHeader)(nil))
 			return payload
 		}
 		// *multipart.FileHeader → *multipart.FileHeader (preserve pointer)
 		if len(internals.Checks) > 0 {
 			engine.RunChecksOnValue(v, internals.Checks, payload, ctx)
-			if len(payload.Issues) > 0 {
+			if len(payload.GetIssues()) > 0 {
 				return payload
 			}
 		}
-		payload.Value = v // Keep original pointer
+		payload.SetValue(v) // Keep original pointer)
 		return payload
 
 	case multipart.FileHeader:
 		// multipart.FileHeader → multipart.FileHeader (value type)
 		if len(internals.Checks) > 0 {
 			engine.RunChecksOnValue(v, internals.Checks, payload, ctx)
-			if len(payload.Issues) > 0 {
+			if len(payload.GetIssues()) > 0 {
 				return payload
 			}
 		}
-		payload.Value = v
+		payload.SetValue(v)
 		return payload
 
 	case *os.File:
 		if v == nil {
 			if !internals.Nilable {
 				rawIssue := issues.CreateInvalidTypeIssue("file", input)
-				payload.Issues = append(payload.Issues, rawIssue)
+				payload.AddIssue(rawIssue)
 				return payload
 			}
-			payload.Value = (*os.File)(nil)
+			payload.SetValue((*os.File)(nil))
 			return payload
 		}
 		// *os.File → *os.File (preserve pointer)
 		if len(internals.Checks) > 0 {
 			engine.RunChecksOnValue(v, internals.Checks, payload, ctx)
-			if len(payload.Issues) > 0 {
+			if len(payload.GetIssues()) > 0 {
 				return payload
 			}
 		}
-		payload.Value = v // Keep original pointer
+		payload.SetValue(v) // Keep original pointer)
 		return payload
 
 	case os.File:
 		// os.File → os.File (value type)
 		if len(internals.Checks) > 0 {
 			engine.RunChecksOnValue(v, internals.Checks, payload, ctx)
-			if len(payload.Issues) > 0 {
+			if len(payload.GetIssues()) > 0 {
 				return payload
 			}
 		}
-		payload.Value = v
+		payload.SetValue(v)
 		return payload
 
 	default:
@@ -154,7 +154,7 @@ func parseZodFile(payload *core.ParsePayload, def *ZodFileDef, internals *core.Z
 
 		// 4. Unified error creation
 		rawIssue := issues.CreateInvalidTypeIssue("file", input)
-		payload.Issues = append(payload.Issues, rawIssue)
+		payload.AddIssue(rawIssue)
 		return payload
 	}
 }
@@ -235,11 +235,11 @@ func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		}
 		// *multipart.FileHeader → *multipart.FileHeader (preserve pointer)
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+			payload := core.NewParsePayload(v)
 			engine.RunChecksOnValue(v, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-				for i, rawIssue := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, rawIssue := range payload.GetIssues() {
 					finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 				}
 				return nil, issues.NewZodError(finalizedIssues)
@@ -250,11 +250,11 @@ func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	case multipart.FileHeader:
 		// multipart.FileHeader → multipart.FileHeader (value type)
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+			payload := core.NewParsePayload(v)
 			engine.RunChecksOnValue(v, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-				for i, rawIssue := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, rawIssue := range payload.GetIssues() {
 					finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 				}
 				return nil, issues.NewZodError(finalizedIssues)
@@ -273,11 +273,11 @@ func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		}
 		// *os.File → *os.File (preserve pointer)
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+			payload := core.NewParsePayload(v)
 			engine.RunChecksOnValue(v, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-				for i, rawIssue := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, rawIssue := range payload.GetIssues() {
 					finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 				}
 				return nil, issues.NewZodError(finalizedIssues)
@@ -288,11 +288,11 @@ func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	case os.File:
 		// os.File → os.File (value type)
 		if len(z.internals.Checks) > 0 {
-			payload := &core.ParsePayload{Value: v, Issues: make([]core.ZodRawIssue, 0)}
+			payload := core.NewParsePayload(v)
 			engine.RunChecksOnValue(v, z.internals.Checks, payload, parseCtx)
-			if len(payload.Issues) > 0 {
-				finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-				for i, rawIssue := range payload.Issues {
+			if len(payload.GetIssues()) > 0 {
+				finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+				for i, rawIssue := range payload.GetIssues() {
 					finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 				}
 				return nil, issues.NewZodError(finalizedIssues)
@@ -352,10 +352,10 @@ func (z *ZodFile) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, 
 func (z *ZodFile) Min(minimum int64, params ...any) *ZodFile {
 	// CheckFn variant allows pushing custom issue codes
 	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.Value)
+		size := getFileSize(payload.GetValue())
 		if size < minimum {
-			raw := issues.CreateTooSmallIssue(minimum, true, "file", payload.Value)
-			payload.Issues = append(payload.Issues, raw)
+			raw := issues.CreateTooSmallIssue(minimum, true, "file", payload.GetValue())
+			payload.AddIssue(raw)
 		}
 	}
 
@@ -367,10 +367,10 @@ func (z *ZodFile) Min(minimum int64, params ...any) *ZodFile {
 // Max adds maximum file size validation
 func (z *ZodFile) Max(maximum int64, params ...any) *ZodFile {
 	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.Value)
+		size := getFileSize(payload.GetValue())
 		if size > maximum {
-			raw := issues.CreateTooBigIssue(maximum, true, "file", payload.Value)
-			payload.Issues = append(payload.Issues, raw)
+			raw := issues.CreateTooBigIssue(maximum, true, "file", payload.GetValue())
+			payload.AddIssue(raw)
 		}
 	}
 
@@ -382,15 +382,15 @@ func (z *ZodFile) Max(maximum int64, params ...any) *ZodFile {
 // Size enforces exact file size validation
 func (z *ZodFile) Size(expect int64, params ...any) *ZodFile {
 	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.Value)
+		size := getFileSize(payload.GetValue())
 		if size != expect {
 			var raw core.ZodRawIssue
 			if size > expect {
-				raw = issues.CreateTooBigIssue(expect, true, "file", payload.Value)
+				raw = issues.CreateTooBigIssue(expect, true, "file", payload.GetValue())
 			} else {
-				raw = issues.CreateTooSmallIssue(expect, true, "file", payload.Value)
+				raw = issues.CreateTooSmallIssue(expect, true, "file", payload.GetValue())
 			}
-			payload.Issues = append(payload.Issues, raw)
+			payload.AddIssue(raw)
 		}
 	}
 

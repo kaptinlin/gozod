@@ -24,7 +24,8 @@ func Mime(mimeTypes []string, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			var contentType string
-			switch f := payload.Value.(type) {
+			value := payload.GetValue()
+			switch f := value.(type) {
 			case *multipart.FileHeader:
 				contentType = f.Header.Get("Content-Type")
 			case multipart.FileHeader:
@@ -53,5 +54,5 @@ func addInvalidValueIssue(mimeTypes []string, payload *core.ParsePayload) {
 	for i, v := range mimeTypes {
 		values[i] = v
 	}
-	payload.Issues = append(payload.Issues, issues.CreateInvalidValueIssue(values, payload.Value))
+	payload.AddIssue(issues.CreateInvalidValueIssue(values, payload.GetValue()))
 }

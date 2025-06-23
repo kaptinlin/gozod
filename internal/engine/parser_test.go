@@ -15,7 +15,7 @@ import (
 // MOCK SCHEMA FOR TESTING
 // =============================================================================
 
-// mockStringSchema creates a mock string schema for testing
+// mockStringSchema represents a simple string validation schema for testing
 type mockStringSchema struct {
 	internals *core.ZodTypeInternals
 }
@@ -25,22 +25,20 @@ func (m *mockStringSchema) GetInternals() *core.ZodTypeInternals {
 }
 
 func (m *mockStringSchema) Parse(input any, ctx ...*core.ParseContext) (any, error) {
+	// Use the engine Parse function
 	var context *core.ParseContext = nil
 	if len(ctx) > 0 {
 		context = ctx[0]
 	}
 
-	if context == nil {
-		context = core.NewParseContext()
-	}
-
+	// Check if schema has internals
 	if m.internals == nil {
 		rawIssue := issues.CreateCustomIssue("schema has no internals defined", nil, input)
 		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// check if parse function is nil
+	// Check if internals has a parse function
 	if m.internals.Parse == nil {
 		rawIssue := issues.CreateCustomIssue("schema has no parse function defined", nil, input)
 		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
@@ -48,11 +46,7 @@ func (m *mockStringSchema) Parse(input any, ctx ...*core.ParseContext) (any, err
 	}
 
 	// create parse payload
-	payload := &core.ParsePayload{
-		Value:  input,
-		Issues: []core.ZodRawIssue{},
-		Path:   []any{},
-	}
+	payload := core.NewParsePayload(input)
 
 	// call internal parse function
 	result := m.internals.Parse(payload, context)
@@ -65,18 +59,20 @@ func (m *mockStringSchema) Parse(input any, ctx ...*core.ParseContext) (any, err
 	}
 
 	// check if there are any issues
-	if len(result.Issues) > 0 {
+	if len(result.GetIssues()) > 0 {
 		// ensure all raw issues have correct input field
-		for i := range result.Issues {
-			if result.Issues[i].Input == nil {
-				result.Issues[i].Input = input
+		resultIssues := result.GetIssues()
+		for i := range resultIssues {
+			if resultIssues[i].Input == nil {
+				resultIssues[i].Input = input
 			}
 		}
-		finalizedIssues := issues.ConvertRawIssuesToIssues(result.Issues, context)
+		result.SetIssues(resultIssues)
+		finalizedIssues := issues.ConvertRawIssuesToIssues(result.GetIssues(), context)
 		return nil, issues.NewZodError(finalizedIssues)
 	}
 
-	return result.Value, nil
+	return result.GetValue(), nil
 }
 
 func (m *mockStringSchema) MustParse(input any, ctx ...*core.ParseContext) any {
@@ -118,20 +114,17 @@ func newMockStringSchema() *mockStringSchema {
 			Checks: []core.ZodCheck{},
 			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 				// Simple string validation
-				if str, ok := payload.Value.(string); ok {
-					return &core.ParsePayload{
-						Value:  str,
-						Issues: []core.ZodRawIssue{},
-						Path:   payload.Path,
-					}
+				if str, ok := payload.GetValue().(string); ok {
+					result := core.NewParsePayload(str)
+					result.SetPath(payload.GetPath())
+					return result
 				}
 				// Create type error
-				rawIssue := issues.CreateInvalidTypeIssue("string", payload.Value)
-				return &core.ParsePayload{
-					Value:  payload.Value,
-					Issues: []core.ZodRawIssue{rawIssue},
-					Path:   payload.Path,
-				}
+				rawIssue := issues.CreateInvalidTypeIssue("string", payload.GetValue())
+				result := core.NewParsePayload(payload.GetValue())
+				result.AddIssue(rawIssue)
+				result.SetPath(payload.GetPath())
+				return result
 			},
 		},
 	}
@@ -257,19 +250,16 @@ func TestInternalHelpers(t *testing.T) {
 				Bag:  map[string]any{},
 				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 					// Mock parse that respects coercion setting
-					if str, ok := payload.Value.(string); ok {
-						return &core.ParsePayload{
-							Value:  str,
-							Issues: []core.ZodRawIssue{},
-							Path:   payload.Path,
-						}
+					if str, ok := payload.GetValue().(string); ok {
+						result := core.NewParsePayload(str)
+						result.SetPath(payload.GetPath())
+						return result
 					}
-					rawIssue := issues.CreateInvalidTypeIssue("string", payload.Value)
-					return &core.ParsePayload{
-						Value:  payload.Value,
-						Issues: []core.ZodRawIssue{rawIssue},
-						Path:   payload.Path,
-					}
+					rawIssue := issues.CreateInvalidTypeIssue("string", payload.GetValue())
+					result := core.NewParsePayload(payload.GetValue())
+					result.AddIssue(rawIssue)
+					result.SetPath(payload.GetPath())
+					return result
 				},
 			},
 		}
@@ -285,11 +275,9 @@ func TestInternalHelpers(t *testing.T) {
 				Type: "string",
 				Bag:  map[string]any{"coerce": true},
 				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-					return &core.ParsePayload{
-						Value:  payload.Value,
-						Issues: []core.ZodRawIssue{},
-						Path:   payload.Path,
-					}
+					result := core.NewParsePayload(payload.GetValue())
+					result.SetPath(payload.GetPath())
+					return result
 				},
 			},
 		}
@@ -369,11 +357,9 @@ func TestParseErrorHandling(t *testing.T) {
 				Type: "string",
 				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 					// Return wrong type
-					return &core.ParsePayload{
-						Value:  123, // int instead of string
-						Issues: []core.ZodRawIssue{},
-						Path:   payload.Path,
-					}
+					result := core.NewParsePayload(123) // int instead of string
+					result.SetPath(payload.GetPath())
+					return result
 				},
 			},
 		}

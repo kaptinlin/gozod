@@ -89,11 +89,11 @@ func (z *ZodMap) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		validate := func(value map[any]any) error {
 			// Run schema-level checks first (Length/Min/Max etc.).
 			if len(z.internals.Checks) > 0 {
-				payload := &core.ParsePayload{Value: value, Issues: make([]core.ZodRawIssue, 0)}
+				payload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, z.internals.Checks, payload, parseCtx)
-				if len(payload.Issues) > 0 {
-					finalized := make([]core.ZodIssue, len(payload.Issues))
-					for i, raw := range payload.Issues {
+				if len(payload.GetIssues()) > 0 {
+					finalized := make([]core.ZodIssue, len(payload.GetIssues()))
+					for i, raw := range payload.GetIssues() {
 						finalized[i] = issues.FinalizeIssue(raw, parseCtx, core.GetConfig())
 					}
 					return issues.NewZodError(finalized)
@@ -188,14 +188,12 @@ func (z *ZodMap) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		},
 		func(value map[any]any, checks []core.ZodCheck, ctx *core.ParseContext) error {
 			if len(checks) > 0 {
-				payload := &core.ParsePayload{
-					Value:  value,
-					Issues: make([]core.ZodRawIssue, 0),
-				}
+				// Use constructor instead of direct struct literal to respect private fields
+				payload := core.NewParsePayload(value)
 				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.Issues) > 0 {
-					finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-					for i, rawIssue := range payload.Issues {
+				if len(payload.GetIssues()) > 0 {
+					finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+					for i, rawIssue := range payload.GetIssues() {
 						finalizedIssues[i] = issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
 					}
 					return issues.NewZodError(finalizedIssues)
@@ -576,23 +574,20 @@ func createZodMapFromDef(def *ZodMapDef, params ...any) *ZodMap {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodMap{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

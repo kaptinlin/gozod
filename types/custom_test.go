@@ -110,9 +110,9 @@ func TestCustomBasicFunctionality(t *testing.T) {
 func TestCustomValidationMethods(t *testing.T) {
 	t.Run("check function validation", func(t *testing.T) {
 		checkFn := func(payload *core.ParsePayload) {
-			if payload.Value == "forbidden" {
-				issue := issues.NewRawIssue("custom", payload.Value, issues.WithOrigin("custom"))
-				payload.Issues = append(payload.Issues, issue)
+			if payload.GetValue() == "forbidden" {
+				issue := issues.NewRawIssue("custom", payload.GetValue(), issues.WithOrigin("custom"))
+				payload.AddIssue(issue)
 			}
 		}
 		schema := Custom(core.CheckFn(checkFn))

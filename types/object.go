@@ -179,23 +179,20 @@ func createZodObjectFromDef(def *ZodObjectDef, params ...any) *ZodObject {
 	// Set up parse function
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		schema := &ZodObject{internals: internals}
-		result, err := schema.Parse(payload.Value, ctx)
+		result, err := schema.Parse(payload.GetValue(), ctx)
 		if err != nil {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 
@@ -245,22 +242,22 @@ func (z *ZodObject) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 			if obj, ok := mapx.Extract(deref); ok {
 				if stringMap, ok := obj.(map[string]any); ok {
 					// Validate the dereferenced value via parseObjectCore
-					payload := &core.ParsePayload{
-						Value:  stringMap,
-						Issues: make([]core.ZodRawIssue, 0),
-						Path:   make([]any, 0),
-					}
+					// Use constructor instead of direct struct literal to respect private fields
+					payload := core.NewParsePayloadWithPath(stringMap, make([]any, 0))
 					resPayload := parseObjectCore(payload, z.internals, parseCtx)
-					if len(resPayload.Issues) > 0 {
-						return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(resPayload.Issues, parseCtx))
+					// Use getter method instead of direct field access
+					if len(resPayload.GetIssues()) > 0 {
+						return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(resPayload.GetIssues(), parseCtx))
 					}
 
 					// Also run checks if any
 					if len(z.internals.Checks) > 0 {
-						checkPayload := &core.ParsePayload{Value: resPayload.Value, Issues: make([]core.ZodRawIssue, 0)}
-						engine.RunChecksOnValue(resPayload.Value, z.internals.Checks, checkPayload, parseCtx)
-						if len(checkPayload.Issues) > 0 {
-							return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checkPayload.Issues, parseCtx))
+						// Use getter method instead of direct field access
+						checkPayload := core.NewParsePayload(resPayload.GetValue())
+						engine.RunChecksOnValue(resPayload.GetValue(), z.internals.Checks, checkPayload, parseCtx)
+						// Use getter method instead of direct field access
+						if len(checkPayload.GetIssues()) > 0 {
+							return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checkPayload.GetIssues(), parseCtx))
 						}
 					}
 
@@ -297,31 +294,27 @@ func (z *ZodObject) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	}
 
 	// 6. use parseObjectCore for full object validation and field filtering
-	payload := &core.ParsePayload{
-		Value:  objectMap,
-		Issues: make([]core.ZodRawIssue, 0),
-		Path:   make([]any, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(objectMap, make([]any, 0))
 
 	result := parseObjectCore(payload, z.internals, parseCtx)
-	if len(result.Issues) > 0 {
-		return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.Issues, parseCtx))
+	// Use getter method instead of direct field access
+	if len(result.GetIssues()) > 0 {
+		return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.GetIssues(), parseCtx))
 	}
 
 	// 7. run additional checks
 	if len(z.internals.Checks) > 0 {
-		checksPayload := &core.ParsePayload{
-			Value:  result.Value,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
-		engine.RunChecksOnValue(result.Value, z.internals.Checks, checksPayload, parseCtx)
-		if len(checksPayload.Issues) > 0 {
-			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checksPayload.Issues, parseCtx))
+		// Use constructor and getter methods instead of direct field access
+		checksPayload := core.NewParsePayload(result.GetValue())
+		engine.RunChecksOnValue(result.GetValue(), z.internals.Checks, checksPayload, parseCtx)
+		if len(checksPayload.GetIssues()) > 0 {
+			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checksPayload.GetIssues(), parseCtx))
 		}
 	}
 
 	// 8. return validated map - smart type inference preserves original type structure
-	return result.Value, nil
+	return result.GetValue(), nil
 }
 
 // MustParse validates the input value and panics on failure
@@ -1155,11 +1148,11 @@ func (z *ZodObject) CloneFrom(source any) {
 // parseObjectCore handles object-specific parsing logic
 func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, ctx *core.ParseContext) *core.ParsePayload {
 	// 1. type check - only accept map[string]any (no coercion for object type)
-	objectData, ok := payload.Value.(map[string]any)
+	objectData, ok := payload.GetValue().(map[string]any)
 	if !ok {
-		issue := issues.CreateInvalidTypeIssue("object", payload.Value)
+		issue := issues.CreateInvalidTypeIssue("object", payload.GetValue())
 		issue.Inst = internals
-		payload.Issues = append(payload.Issues, issue)
+		payload.AddIssue(issue)
 		return payload
 	}
 
@@ -1169,8 +1162,9 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 
 	// validate defined fields
 	for fieldName, fieldSchema := range internals.Shape {
-		fieldPath := make([]any, 0, len(payload.Path)+1)
-		fieldPath = append(fieldPath, payload.Path...)
+		// Use getter method instead of direct field access
+		fieldPath := make([]any, 0, len(payload.GetPath())+1)
+		fieldPath = append(fieldPath, payload.GetPath()...)
 		fieldPath = append(fieldPath, fieldName)
 		fieldValue, exists := objectData[fieldName]
 
@@ -1191,11 +1185,10 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 				continue
 			} else {
 				// missing required field
-				issue := issues.CreateMissingKeyIssue(fieldName, func(issue *core.ZodRawIssue) {
-					issue.Path = fieldPath
-					issue.Inst = internals
+				issue := issues.CreateMissingKeyIssue(fieldName, func(iss *core.ZodRawIssue) {
+					iss.Inst = internals
 				})
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssueWithPath(issue, fieldPath)
 				continue
 			}
 		}
@@ -1207,9 +1200,8 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 		if actualFieldSchema == nil {
 			// if schema is nil, create an error
 			issue := issues.CreateInvalidTypeIssue("unknown", fieldValue)
-			issue.Path = fieldPath
 			issue.Inst = internals
-			payload.Issues = append(payload.Issues, issue)
+			payload.AddIssueWithPath(issue, fieldPath)
 			continue
 		}
 
@@ -1219,19 +1211,13 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 			// when parsing a field, convert the error to payload format
 			var zodErr *issues.ZodError
 			if errors.As(fieldErr, &zodErr) {
-				// convert ZodIssue to ZodRawIssue and update the error path
+				// Convert ZodIssue to ZodRawIssue and update the error path
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Message: issue.Message,
-						Path:    append(fieldPath, issue.Path...),
-						Input:   issue.Input,
-						Inst:    internals,
-					}
-					// copy other fields to Properties
-					if rawIssue.Properties == nil {
-						rawIssue.Properties = make(map[string]any)
-					}
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Inst = internals
+
+					// Copy additional properties from the original issue
 					if issue.Expected != "" {
 						rawIssue.Properties["expected"] = issue.Expected
 					}
@@ -1241,14 +1227,14 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 					if issue.Format != "" {
 						rawIssue.Properties["format"] = issue.Format
 					}
-					payload.Issues = append(payload.Issues, rawIssue)
+
+					payload.AddIssueWithPath(rawIssue, append(fieldPath, issue.Path...))
 				}
 			} else {
 				// if not ZodError, create a generic error
 				issue := issues.CreateInvalidTypeIssue("unknown", fieldValue)
-				issue.Path = fieldPath
 				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssueWithPath(issue, fieldPath)
 			}
 		} else {
 			result[fieldName] = fieldResultValue
@@ -1264,13 +1250,9 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 			switch internals.Def.UnknownKeys {
 			case OBJECT_STRICT_MODE:
 				// strict mode: error on unknown keys
-				issue := issues.CreateUnrecognizedKeysIssue([]string{key}, payload.Value)
-				issuePath := make([]any, 0, len(payload.Path)+1)
-				issuePath = append(issuePath, payload.Path...)
-				issuePath = append(issuePath, key)
-				issue.Path = issuePath
+				issue := issues.CreateUnrecognizedKeysIssue([]string{key}, payload.GetValue())
 				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssueWithPath(issue, append(payload.GetPath(), key))
 
 			case OBJECT_LOOSE_MODE:
 				// loose mode: allow unknown keys to pass through
@@ -1282,21 +1264,19 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 						var zodErr *issues.ZodError
 						if errors.As(err, &zodErr) {
 							for _, issue := range zodErr.Issues {
-								raw := core.ZodRawIssue{
-									Code:    issue.Code,
-									Input:   issue.Input,
-									Path:    append(payload.Path, append([]any{key}, issue.Path...)...),
-									Message: issue.Message,
-									Inst:    internals,
-								}
-								payload.Issues = append(payload.Issues, raw)
+								// Convert ZodError to RawIssue using standardized converter
+								raw := issues.ConvertZodIssueToRaw(issue)
+								raw.Inst = internals
+
+								// Prepend object key to issue path for catchall field errors
+								path := append(payload.GetPath(), append([]any{key}, issue.Path...)...)
+								payload.AddIssueWithPath(raw, path)
 							}
 						} else {
 							// Fallback generic invalid type issue
 							raw := issues.CreateInvalidTypeIssue("unknown", value)
-							raw.Path = append(payload.Path, key)
 							raw.Inst = internals
-							payload.Issues = append(payload.Issues, raw)
+							payload.AddIssueWithPath(raw, append(payload.GetPath(), key))
 						}
 					} else {
 						// Successful validation – adopt transformed value
@@ -1315,14 +1295,14 @@ func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, 
 	}
 
 	// 4. run custom checks if object validation succeeded
-	if len(payload.Issues) == 0 {
+	if len(payload.GetIssues()) == 0 {
 		if customChecks, exists := internals.Bag["customChecks"].([]core.ZodCheck); exists {
 			engine.RunChecksOnValue(result, customChecks, payload, ctx)
 		}
 	}
 
 	// update payload with validated object
-	payload.Value = result
+	payload.SetValue(result)
 	return payload
 }
 

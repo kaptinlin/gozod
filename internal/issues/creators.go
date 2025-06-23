@@ -35,6 +35,16 @@ func CreateInvalidTypeIssue(expected string, input any) core.ZodRawIssue {
 	return CreateIssue(core.InvalidType, "", properties, input)
 }
 
+// CreateInvalidTypeIssueFromCode creates an invalid type issue using ZodTypeCode
+func CreateInvalidTypeIssueFromCode(expected core.ZodTypeCode, input any) core.ZodRawIssue {
+	properties := map[string]any{
+		"expected": expected,
+		"received": reflectx.ParsedType(input),
+	}
+
+	return CreateIssue(core.InvalidType, "", properties, input)
+}
+
 // CreateInvalidValueIssue creates an invalid value issue
 func CreateInvalidValueIssue(validValues []any, input any) core.ZodRawIssue {
 	// Use slicex to get unique values
@@ -143,6 +153,19 @@ func CreateInvalidUnionIssue(unionErrors []core.ZodRawIssue, input any) core.Zod
 	return CreateIssue(core.InvalidUnion, "", properties, input)
 }
 
+// ConvertZodIssueToRaw converts a ZodIssue to ZodRawIssue efficiently
+// This is a helper for common ZodError -> RawIssue conversion patterns
+func ConvertZodIssueToRaw(issue core.ZodIssue) core.ZodRawIssue {
+	// Preserve the original code rather than creating a custom issue
+	return core.ZodRawIssue{
+		Code:       issue.Code,
+		Message:    issue.Message,
+		Input:      issue.Input,
+		Path:       []any{}, // Path will be set by caller
+		Properties: make(map[string]any),
+	}
+}
+
 // CreateInvalidElementIssue creates an invalid element issue
 func CreateInvalidElementIssue(index int, origin string, input any, elementError core.ZodRawIssue) core.ZodRawIssue {
 	properties := map[string]any{
@@ -212,4 +235,35 @@ func CreateErrorMap(errorInput any) *core.ZodErrorMap {
 	}
 
 	return nil
+}
+
+// CreateInvalidTypeWithMsg creates an invalid type issue with custom message
+// This function supports type-safe expected types using core.ZodTypeCode
+func CreateInvalidTypeWithMsg(expected core.ZodTypeCode, message string, input any) core.ZodRawIssue {
+	properties := map[string]any{
+		"expected": string(expected),
+		"received": string(reflectx.ParsedType(input)),
+	}
+
+	return CreateIssue(core.InvalidType, message, properties, input)
+}
+
+// CreateInvalidUnionIssueWithResults creates an invalid union issue with results array
+// This maintains TypeScript-compatible structure with "errors" property for union validation
+func CreateInvalidUnionIssueWithResults(unionErrors []core.ZodRawIssue, input any, continueOnError ...bool) core.ZodRawIssue {
+	properties := map[string]any{
+		"errors": unionErrors, // TypeScript-compatible property name
+	}
+
+	// Use slicex for better error analysis
+	if !slicex.IsEmpty(unionErrors) {
+		properties["error_count"] = len(unionErrors)
+	}
+
+	// Add continue flag if specified
+	if len(continueOnError) > 0 && continueOnError[0] {
+		properties["continue"] = true
+	}
+
+	return CreateIssue(core.InvalidUnion, "", properties, input)
 }

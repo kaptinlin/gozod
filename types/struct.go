@@ -169,11 +169,8 @@ func (z *ZodStruct) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	}
 
 	// Validate the object using unified parsing infrastructure
-	payload := &core.ParsePayload{
-		Value:  objectMap,
-		Issues: make([]core.ZodRawIssue, 0),
-		Path:   make([]any, 0),
-	}
+	// Use constructor instead of direct struct literal to respect private fields
+	payload := core.NewParsePayloadWithPath(objectMap, make([]any, 0))
 
 	var parseCtx *core.ParseContext
 	if len(ctx) > 0 {
@@ -181,9 +178,10 @@ func (z *ZodStruct) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	}
 
 	result := z.internals.Parse(payload, parseCtx)
-	if len(result.Issues) > 0 {
-		finalizedIssues := make([]core.ZodIssue, len(result.Issues))
-		for i, rawIssue := range result.Issues {
+	// Use getter methods instead of direct field access
+	if len(result.GetIssues()) > 0 {
+		finalizedIssues := make([]core.ZodIssue, len(result.GetIssues()))
+		for i, rawIssue := range result.GetIssues() {
 			finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 		}
 		return nil, issues.NewZodError(finalizedIssues)
@@ -191,21 +189,20 @@ func (z *ZodStruct) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 
 	// Run checks on the validated object
 	if len(z.internals.Checks) > 0 {
-		checksPayload := &core.ParsePayload{
-			Value:  result.Value,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
-		engine.RunChecksOnValue(result.Value, z.internals.Checks, checksPayload, parseCtx)
-		if len(checksPayload.Issues) > 0 {
-			finalizedIssues := make([]core.ZodIssue, len(checksPayload.Issues))
-			for i, rawIssue := range checksPayload.Issues {
+		// Use constructor and getter methods instead of direct field access
+		checksPayload := core.NewParsePayload(result.GetValue())
+		engine.RunChecksOnValue(result.GetValue(), z.internals.Checks, checksPayload, parseCtx)
+		if len(checksPayload.GetIssues()) > 0 {
+			finalizedIssues := make([]core.ZodIssue, len(checksPayload.GetIssues()))
+			for i, rawIssue := range checksPayload.GetIssues() {
 				finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 			}
 			return nil, issues.NewZodError(finalizedIssues)
 		}
 	}
 
-	validatedMap := result.Value.(map[string]any)
+	// Use getter method instead of direct field access
+	validatedMap := result.GetValue().(map[string]any)
 
 	// keep pointer return for *map[string]any
 	if fromMapPointer {
@@ -603,17 +600,17 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 	// Set up the parse function
 	internals.Parse = func(payload *core.ParsePayload, parseCtx *core.ParseContext) *core.ParsePayload {
 		// Validate input is an object
-		if payload.Value == nil {
+		if payload.GetValue() == nil {
 			if !internals.Nilable {
-				issue := issues.CreateInvalidTypeIssue("struct", payload.Value)
+				issue := issues.CreateInvalidTypeIssue("struct", payload.GetValue())
 				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssue(issue)
 			}
 			return payload
 		}
 
 		// Validate and process each field
-		objMap, _ := payload.Value.(map[string]any)
+		objMap, _ := payload.GetValue().(map[string]any)
 		processedKeys := make(map[string]struct{})
 		result := make(map[string]any)
 
@@ -622,23 +619,18 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 			processedKeys[fieldKey] = struct{}{}
 
 			if fieldValue, exists := objMap[fieldKey]; exists {
-				// Field exists, validate it
-				fieldPayload := &core.ParsePayload{
-					Value:  fieldValue,
-					Issues: make([]core.ZodRawIssue, 0),
-					Path:   append(payload.Path, fieldKey),
-				}
+				// Field exists, validate it - use constructor instead of direct struct literal
+				fieldPayload := core.NewParsePayloadWithPath(fieldValue, append(payload.GetPath(), fieldKey))
 
 				fieldResult := fieldSchema.GetInternals().Parse(fieldPayload, parseCtx)
-				if len(fieldResult.Issues) > 0 {
+				// Use getter methods instead of direct field access
+				if len(fieldResult.GetIssues()) > 0 {
 					// Add field issues with proper path
-					for _, issue := range fieldResult.Issues {
-						fieldIssue := issue
-						fieldIssue.Path = append(payload.Path, fieldKey)
-						payload.Issues = append(payload.Issues, fieldIssue)
+					for _, issue := range fieldResult.GetIssues() {
+						payload.AddIssueWithPath(issue, append(payload.GetPath(), fieldKey))
 					}
 				} else {
-					result[fieldKey] = fieldResult.Value
+					result[fieldKey] = fieldResult.GetValue()
 				}
 			} else {
 				// Field missing, check if it's optional
@@ -647,11 +639,10 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 					continue
 				} else {
 					// Required field missing
-					issue := issues.CreateMissingKeyIssue(fieldKey, func(issue *core.ZodRawIssue) {
-						issue.Path = append(payload.Path, fieldKey)
-						issue.Inst = internals
+					issue := issues.CreateMissingKeyIssue(fieldKey, func(iss *core.ZodRawIssue) {
+						iss.Inst = internals
 					})
-					payload.Issues = append(payload.Issues, issue)
+					payload.AddIssueWithPath(issue, append(payload.GetPath(), fieldKey))
 				}
 			}
 		}
@@ -668,9 +659,9 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 			switch internals.Mode {
 			case STRICT_MODE:
 				// Error on unrecognized keys
-				issue := issues.CreateUnrecognizedKeysIssue(unrecognizedKeys, payload.Value)
+				issue := issues.CreateUnrecognizedKeysIssue(unrecognizedKeys, payload.GetValue())
 				issue.Inst = internals
-				payload.Issues = append(payload.Issues, issue)
+				payload.AddIssue(issue)
 			case STRIP_MODE:
 				// Strip unrecognized keys (do nothing)
 			case LOOSE_MODE:
@@ -683,20 +674,20 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 							var zodErr *issues.ZodError
 							if errors.As(err, &zodErr) {
 								for _, issue := range zodErr.Issues {
-									raw := core.ZodRawIssue{
-										Code:    issue.Code,
-										Input:   issue.Input,
-										Path:    append(payload.Path, append([]any{key}, issue.Path...)...),
-										Message: issue.Message,
-										Inst:    internals,
-									}
-									payload.Issues = append(payload.Issues, raw)
+									// Convert ZodError to RawIssue using standardized converter
+									raw := issues.ConvertZodIssueToRaw(issue)
+
+									// Prepend struct field key to issue path for catchall field errors - use getter method
+									raw.Path = append(payload.GetPath(), append([]any{key}, issue.Path...)...)
+									raw.Inst = internals
+
+									payload.AddIssue(raw)
 								}
 							} else {
 								raw := issues.CreateInvalidTypeIssue("unknown", objMap[key])
-								raw.Path = append(payload.Path, key)
+								raw.Path = append(payload.GetPath(), key)
 								raw.Inst = internals
-								payload.Issues = append(payload.Issues, raw)
+								payload.AddIssue(raw)
 							}
 						} else {
 							result[key] = parsedVal
@@ -708,7 +699,7 @@ func createZodStructFromDef(def *ZodStructDef) *ZodStruct {
 			}
 		}
 
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 

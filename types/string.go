@@ -315,9 +315,9 @@ func (z *ZodString) JSON(params ...any) *ZodString {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			// Use pkg/jsonx JSON validation directly
-			if !jsonx.IsValid(payload.Value) {
-				rawIssue := issues.CreateInvalidFormatIssue("json", payload.Value, nil)
-				payload.Issues = append(payload.Issues, rawIssue)
+			if !jsonx.IsValid(payload.GetValue()) {
+				rawIssue := issues.CreateInvalidFormatIssue("json", payload.GetValue(), nil)
+				payload.AddIssue(rawIssue)
 			}
 		},
 		OnAttach: []func(any){
@@ -1072,7 +1072,7 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 
 	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 		result, err := engine.ParsePrimitive[string](
-			payload.Value,
+			payload.GetValue(),
 			&internals.ZodTypeInternals,
 			core.ZodTypeString,
 			validateString,
@@ -1083,19 +1083,16 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, issue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					}
-					payload.Issues = append(payload.Issues, rawIssue)
+					// Convert ZodError to RawIssue using standardized converter
+					rawIssue := issues.ConvertZodIssueToRaw(issue)
+					rawIssue.Path = issue.Path
+					payload.AddIssue(rawIssue)
 				}
 			}
 			return payload
 		}
 
-		payload.Value = result
+		payload.SetValue(result)
 		return payload
 	}
 
@@ -1262,13 +1259,11 @@ func (z *ZodString) createStringTransform(transformFn func(string) string) core.
 // validateString validates string values with checks
 func validateString(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
 	if len(checks) > 0 {
-		payload := &core.ParsePayload{
-			Value:  value,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayload(value)
 		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.Issues) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.Issues, ctx))
+		if len(payload.GetIssues()) > 0 {
+			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
 		}
 	}
 	return nil

@@ -93,15 +93,8 @@ func (z *ZodIntersection) Parse(input any, ctx ...*core.ParseContext) (any, erro
 		var zodErr *issues.ZodError
 		if errors.As(leftErr, &zodErr) {
 			for _, issue := range zodErr.Issues {
-				convertedIssue := core.ZodIssue{
-					ZodIssueBase: core.ZodIssueBase{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					},
-				}
-				allErrors = append(allErrors, convertedIssue)
+				// ZodError.Issues are already ZodIssue, no conversion needed
+				allErrors = append(allErrors, issue)
 			}
 		}
 	}
@@ -109,15 +102,8 @@ func (z *ZodIntersection) Parse(input any, ctx ...*core.ParseContext) (any, erro
 		var zodErr *issues.ZodError
 		if errors.As(rightErr, &zodErr) {
 			for _, issue := range zodErr.Issues {
-				convertedIssue := core.ZodIssue{
-					ZodIssueBase: core.ZodIssueBase{
-						Code:    issue.Code,
-						Input:   issue.Input,
-						Path:    issue.Path,
-						Message: issue.Message,
-					},
-				}
-				allErrors = append(allErrors, convertedIssue)
+				// ZodError.Issues are already ZodIssue, no conversion needed
+				allErrors = append(allErrors, issue)
 			}
 		}
 	}
@@ -138,14 +124,12 @@ func (z *ZodIntersection) Parse(input any, ctx ...*core.ParseContext) (any, erro
 
 	// Run additional checks if any
 	if len(z.internals.Checks) > 0 {
-		payload := &core.ParsePayload{
-			Value:  merged,
-			Issues: make([]core.ZodRawIssue, 0),
-		}
+		// Use constructor instead of direct struct literal to respect private fields
+		payload := core.NewParsePayload(merged)
 		engine.RunChecksOnValue(merged, z.internals.Checks, payload, parseCtx)
-		if len(payload.Issues) > 0 {
-			finalizedIssues := make([]core.ZodIssue, len(payload.Issues))
-			for i, rawIssue := range payload.Issues {
+		if len(payload.GetIssues()) > 0 {
+			finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
+			for i, rawIssue := range payload.GetIssues() {
 				finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
 			}
 			return nil, issues.NewZodError(finalizedIssues)
