@@ -258,7 +258,7 @@ func createZodNilFromDef(def *ZodNilDef) *ZodNil {
 		result, err := engine.ParseType[any](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"nil",
+			core.ZodTypeNil,
 			func(v any) (any, bool) {
 				if reflectx.IsNil(v) {
 					return nil, true

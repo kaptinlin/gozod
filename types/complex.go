@@ -109,22 +109,22 @@ func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 		parseCtx = ctx[0]
 	}
 
-	// Determine type name from generic parameter
-	var typeName string
+	// Determine type code from generic parameter
+	var typeCode core.ZodTypeCode
 	var zero T
 	switch any(zero).(type) {
 	case complex64:
-		typeName = "complex64"
+		typeCode = core.ZodTypeComplex64
 	case complex128:
-		typeName = "complex128"
+		typeCode = core.ZodTypeComplex128
 	default:
-		typeName = "complex"
+		typeCode = core.ZodTypeComplex128 // Default to complex128
 	}
 
 	return engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		typeName,
+		typeCode,
 		func(v any) (T, bool) {
 			if val, ok := v.(T); ok {
 				return val, true

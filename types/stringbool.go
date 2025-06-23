@@ -84,7 +84,7 @@ func (z *ZodStringBool) Parse(input any, ctx ...*core.ParseContext) (any, error)
 	result, err := engine.ParseType[bool](
 		input,
 		&z.internals.ZodTypeInternals,
-		"stringbool",
+		core.ZodTypeStringBool,
 		// =========================
 		// Type Checker
 		// =========================

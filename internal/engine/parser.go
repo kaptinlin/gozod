@@ -96,7 +96,7 @@ func MustParse[In, Out any](schema core.ZodType[In, Out], value any, ctx *core.P
 func ParseType[T any](
 	input any,
 	internals *core.ZodTypeInternals,
-	expectedType string,
+	expectedType core.ZodTypeCode,
 	typeChecker func(any) (T, bool),
 	pointerChecker func(any) (*T, bool),
 	validator func(T, []core.ZodCheck, *core.ParseContext) error,
@@ -105,7 +105,7 @@ func ParseType[T any](
 	// 1. Unified nil handling
 	if input == nil {
 		if !internals.Nilable {
-			rawIssue := issues.CreateInvalidTypeIssue(expectedType, input)
+			rawIssue := issues.CreateInvalidTypeIssue(string(expectedType), input)
 			finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 		}
@@ -134,6 +134,7 @@ func ParseType[T any](
 		// Try dereferencing pointer then coercion (but don't handle nil pointers)
 		if ptr, ok := pointerChecker(input); ok && ptr != nil {
 			if coerced, err := coerce.To[T](*ptr); err == nil {
+				// Always run validator when provided to allow nested validations (e.g., Map key/value)
 				if validator != nil {
 					if err := validator(coerced, internals.Checks, ctx); err != nil {
 						return nil, err
@@ -149,7 +150,7 @@ func ParseType[T any](
 	if ptr, ok := pointerChecker(input); ok {
 		if ptr == nil {
 			if !internals.Nilable {
-				rawIssue := issues.CreateInvalidTypeIssue(expectedType, input)
+				rawIssue := issues.CreateInvalidTypeIssue(string(expectedType), input)
 				finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 				return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 			}
@@ -184,7 +185,7 @@ func ParseType[T any](
 	}
 
 	// 5. Unified error creation
-	rawIssue := issues.CreateInvalidTypeIssue(expectedType, input)
+	rawIssue := issues.CreateInvalidTypeIssue(string(expectedType), input)
 	finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 	return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 }

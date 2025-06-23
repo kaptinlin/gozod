@@ -71,10 +71,10 @@ func (z *ZodFloat[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		string(typeName),
+		typeName,
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
-		ValidateFloat[T],
+		validateFloat[T],
 		parseCtx,
 	)
 }
@@ -343,8 +343,8 @@ func (z *ZodFloat[T]) Unwrap() core.ZodType[any, any] {
 // VALIDATION FUNCTIONS
 //////////////////////////
 
-// ValidateFloat validates float values with checks (generic)
-func ValidateFloat[T ZodFloatConstraint](value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
+// validateFloat validates float values with checks (generic)
+func validateFloat[T ZodFloatConstraint](value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
 	if len(checks) > 0 {
 		payload := &core.ParsePayload{
 			Value:  value,

@@ -63,7 +63,7 @@ func (z *ZodUnknown) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[any](
 		input,
 		&z.internals.ZodTypeInternals,
-		"unknown",
+		core.ZodTypeUnknown,
 		func(v any) (any, bool) { return v, true },                       // Direct acceptance extractor
 		func(v any) (*any, bool) { ptr, ok := v.(*any); return ptr, ok }, // Pointer extractor
 		validateUnknown,

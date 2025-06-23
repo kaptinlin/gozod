@@ -914,7 +914,7 @@ func TestRecordCompatibility(t *testing.T) {
 		assert.NotEmpty(t, zodErr.Issues)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 		// Error message should mention "record" or "object"
-		assert.Contains(t, zodErr.Issues[0].Message, "object")
+		assert.Contains(t, zodErr.Issues[0].Message, "record")
 	})
 
 	t.Run("union key exhaustiveness", func(t *testing.T) {

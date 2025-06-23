@@ -85,7 +85,7 @@ func (z *ZodRecord) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[map[any]any](
 		input,
 		&z.internals.ZodTypeInternals,
-		"object",
+		core.ZodTypeRecord,
 		mapx.ExtractRecord,
 		func(v any) (*map[any]any, bool) {
 			// Handle pointer types using reflectx

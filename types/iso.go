@@ -123,7 +123,7 @@ func (z *ZodISODate) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType(
 		input,
 		&z.internals.ZodTypeInternals,
-		"string",
+		core.ZodTypeString,
 		reflectx.ExtractString,
 		func(v any) (*string, bool) {
 			if reflectx.IsPointer(v) {
@@ -746,7 +746,7 @@ func createZodISODateFromDef(def *ZodISODateDef) *ZodISODate {
 		result, err := engine.ParseType[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"string",
+			core.ZodTypeString,
 			reflectx.ExtractString,
 			func(v any) (*string, bool) {
 				if reflectx.IsPointer(v) {

@@ -63,7 +63,7 @@ func (z *ZodIPv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[string](
 		input,
 		&z.internals.ZodTypeInternals,
-		"ipv4",
+		core.ZodTypeString,
 		func(v any) (string, bool) { s, ok := v.(string); return s, ok },
 		func(v any) (*string, bool) { p, ok := v.(*string); return p, ok },
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
@@ -321,7 +321,7 @@ func (z *ZodIPv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[string](
 		input,
 		&z.internals.ZodTypeInternals,
-		"ipv6",
+		core.ZodTypeString,
 		func(v any) (string, bool) { s, ok := v.(string); return s, ok },
 		func(v any) (*string, bool) { p, ok := v.(*string); return p, ok },
 		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
@@ -495,7 +495,7 @@ func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
 		result, err := engine.ParseType[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"ipv6",
+			core.ZodTypeString,
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
@@ -773,7 +773,7 @@ func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
 		result, err := engine.ParseType[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"cidrv4",
+			core.ZodTypeString,
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,
@@ -1075,7 +1075,7 @@ func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
 		result, err := engine.ParseType[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"cidrv6",
+			core.ZodTypeString,
 			typeChecker,
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validator,

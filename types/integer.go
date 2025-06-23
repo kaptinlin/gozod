@@ -95,7 +95,7 @@ func (z *ZodInteger[T]) Parse(input any, ctx ...*core.ParseContext) (any, error)
 	return engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		string(typeName),
+		typeName,
 		func(v any) (T, bool) { val, ok := v.(T); return val, ok },
 		func(v any) (*T, bool) { ptr, ok := v.(*T); return ptr, ok },
 		validateInteger[T],

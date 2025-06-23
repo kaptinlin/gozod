@@ -68,7 +68,7 @@ func (z *ZodBool) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[bool](
 		input,
 		&z.internals.ZodTypeInternals,
-		"boolean",
+		core.ZodTypeBool,
 		func(v any) (bool, bool) { b, ok := v.(bool); return b, ok },
 		func(v any) (*bool, bool) { ptr, ok := v.(*bool); return ptr, ok },
 		validateBool,
@@ -454,7 +454,7 @@ func createZodBoolFromDef(def *ZodBoolDef) *ZodBool {
 		result, err := engine.ParseType[bool](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"boolean",
+			core.ZodTypeBool,
 			func(v any) (bool, bool) { b, ok := v.(bool); return b, ok },
 			func(v any) (*bool, bool) { ptr, ok := v.(*bool); return ptr, ok },
 			validateBool,

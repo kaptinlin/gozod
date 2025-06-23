@@ -95,7 +95,7 @@ func (z *ZodSlice) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	result, err := engine.ParseType[[]any](
 		input,
 		&z.internals.ZodTypeInternals,
-		"slice",
+		core.ZodTypeSlice,
 		func(v any) ([]any, bool) {
 			if slice, ok := v.([]any); ok {
 				return slice, true

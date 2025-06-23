@@ -167,7 +167,7 @@ func (z *ZodMap) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	result, err := engine.ParseType[map[any]any](
 		input,
 		&z.internals.ZodTypeInternals,
-		"map",
+		core.ZodTypeMap,
 		func(v any) (map[any]any, bool) {
 			// Use reflectx for nil checking
 			if reflectx.IsNil(v) {

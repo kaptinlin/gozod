@@ -56,7 +56,7 @@ func (z *ZodEnum[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	result, err := engine.ParseType[T](
 		input,
 		&z.internals.ZodTypeInternals,
-		"enum",
+		core.ZodTypeEnum,
 		// Type checker function
 		func(v any) (T, bool) {
 			if value, ok := v.(T); ok {

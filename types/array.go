@@ -61,7 +61,7 @@ func (z *ZodArray) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	return engine.ParseType[[]any](
 		input,
 		&z.internals.ZodTypeInternals,
-		"array",
+		core.ZodTypeArray,
 		typeChecker,
 		func(v any) (*[]any, bool) { ptr, ok := v.(*[]any); return ptr, ok },
 		validator,

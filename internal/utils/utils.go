@@ -9,19 +9,19 @@ import (
 
 // IsPrimitiveType checks if a schema type is a primitive type that supports coercion
 // Only primitive types should support coercion according to TypeScript Zod v4 alignment
-func IsPrimitiveType(typeName string) bool {
+func IsPrimitiveType(typeName core.ZodTypeCode) bool {
 	switch typeName {
-	case "string", "bool", "boolean":
+	case core.ZodTypeString, core.ZodTypeBool:
 		return true
-	case "int", "int8", "int16", "int32", "int64":
+	case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
 		return true
-	case "uint", "uint8", "uint16", "uint32", "uint64":
+	case core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64:
 		return true
-	case "float32", "float64", "number":
+	case core.ZodTypeFloat32, core.ZodTypeFloat64:
 		return true
-	case "complex64", "complex128":
+	case core.ZodTypeComplex64, core.ZodTypeComplex128:
 		return true
-	case "bigint":
+	case core.ZodTypeBigInt:
 		return true
 	default:
 		return false

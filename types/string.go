@@ -65,18 +65,10 @@ func (z *ZodString) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 		parseCtx = ctx[0]
 	}
 
-	// Try fast path first for basic string validation
-	if len(z.internals.Checks) == 0 && !z.internals.IsCoerce() {
-		if result, err := engine.ParseStringFast(input, &z.internals.ZodTypeInternals); err == nil {
-			return result, nil
-		}
-	}
-
-	// Fall back to generic path for complex validation or coercion
 	return engine.ParseType[string](
 		input,
 		&z.internals.ZodTypeInternals,
-		string(core.ZodTypeString),
+		core.ZodTypeString,
 		func(v any) (string, bool) { str, ok := v.(string); return str, ok },
 		func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 		validateString,
@@ -1084,7 +1076,7 @@ func createZodStringFromDef(def *ZodStringDef) *ZodString {
 		result, err := engine.ParseType[string](
 			payload.Value,
 			&internals.ZodTypeInternals,
-			"string",
+			core.ZodTypeString,
 			func(v any) (string, bool) { str, ok := v.(string); return str, ok },
 			func(v any) (*string, bool) { ptr, ok := v.(*string); return ptr, ok },
 			validateString,
