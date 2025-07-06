@@ -67,6 +67,30 @@ func (p *ParsePayload) AddIssueWithPath(issue ZodRawIssue, path []any) {
 	p.issues = append(p.issues, issue)
 }
 
+// AddIssueWithMessage adds a custom issue with the provided message using IssueCode Custom.
+func (p *ParsePayload) AddIssueWithMessage(message string) {
+	p.AddIssue(ZodRawIssue{
+		Code:    Custom,
+		Message: message,
+	})
+}
+
+// AddIssueWithCode adds an issue with the specified IssueCode and message.
+func (p *ParsePayload) AddIssueWithCode(code IssueCode, message string) {
+	p.AddIssue(ZodRawIssue{
+		Code:    code,
+		Message: message,
+	})
+}
+
+// AddIssues adds multiple issues to the payload.
+func (p *ParsePayload) AddIssues(issues ...ZodRawIssue) {
+	if p.issues == nil {
+		p.issues = make([]ZodRawIssue, 0)
+	}
+	p.issues = append(p.issues, issues...)
+}
+
 // HasIssues checks if the payload has any validation issues
 // Returns true if validation has failed and issues are present
 func (p *ParsePayload) HasIssues() bool {
@@ -77,12 +101,6 @@ func (p *ParsePayload) HasIssues() bool {
 // Useful for checking severity of validation failures
 func (p *ParsePayload) GetIssueCount() int {
 	return len(p.issues)
-}
-
-// ClearIssues removes all validation issues from the payload
-// Use with caution - typically only for recovery scenarios
-func (p *ParsePayload) ClearIssues() {
-	p.issues = p.issues[:0] // Reuse underlying slice capacity
 }
 
 // Clone creates a deep copy of the payload
@@ -111,27 +129,6 @@ func (p *ParsePayload) Clone() *ParsePayload {
 // Used when entering nested validation contexts (object fields, array elements)
 func (p *ParsePayload) PushPath(element any) {
 	p.path = append(p.path, element)
-}
-
-// PopPath removes the last path element from the current validation path
-// Used when exiting nested validation contexts
-func (p *ParsePayload) PopPath() any {
-	if len(p.path) == 0 {
-		return nil
-	}
-
-	last := p.path[len(p.path)-1]
-	p.path = p.path[:len(p.path)-1]
-	return last
-}
-
-// SetPath sets the validation path to a specific value
-// Use when jumping to a different validation context
-func (p *ParsePayload) SetPath(path []any) {
-	// Create copy to avoid external mutation
-	pathCopy := make([]any, len(path))
-	copy(pathCopy, path)
-	p.path = pathCopy
 }
 
 // GetPath returns a copy of the current validation path
@@ -171,16 +168,6 @@ func (p *ParsePayload) GetPathString() string {
 // =============================================================================
 // VALIDATION HELPER METHODS
 // =============================================================================
-
-// WithValue creates a new payload with a different value but same context
-// Preserves path and issues while updating the value being validated
-func (p *ParsePayload) WithValue(value any) *ParsePayload {
-	return &ParsePayload{
-		value:  value,
-		issues: p.issues, // Share the same issues slice
-		path:   p.path,   // Share the same path slice
-	}
-}
 
 // WithCleanIssues creates a new payload with same value and path but no issues
 // Used when starting fresh validation on a value with preserved context

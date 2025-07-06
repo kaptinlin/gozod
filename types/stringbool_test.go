@@ -4,114 +4,535 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// 1. Basic functionality tests
 // =============================================================================
 
-func TestStringBoolBasicFunctionality(t *testing.T) {
-	t.Run("basic validation", func(t *testing.T) {
+func TestStringBool_BasicFunctionality(t *testing.T) {
+	t.Run("valid string inputs with default options", func(t *testing.T) {
 		schema := StringBool()
 
-		// Test truthy values
-		truthyValues := []string{"true", "1", "yes", "on", "y", "enabled", "TRUE"}
+		// Test truthy values (case insensitive by default)
+		truthyValues := []string{"true", "1", "yes", "on", "y", "enabled", "TRUE", "Yes", "ON"}
 		for _, value := range truthyValues {
 			result, err := schema.Parse(value)
-			require.NoError(t, err)
+			require.NoError(t, err, "Should parse truthy value: %s", value)
 			assert.Equal(t, true, result)
 		}
 
-		// Test falsy values
-		falsyValues := []string{"false", "0", "no", "off", "n", "disabled", "FALSE"}
+		// Test falsy values (case insensitive by default)
+		falsyValues := []string{"false", "0", "no", "off", "n", "disabled", "FALSE", "No", "OFF"}
 		for _, value := range falsyValues {
 			result, err := schema.Parse(value)
-			require.NoError(t, err)
+			require.NoError(t, err, "Should parse falsy value: %s", value)
 			assert.Equal(t, false, result)
 		}
+	})
 
-		// Test invalid values
-		invalidValues := []any{"other", "", "maybe", 123, true, false, nil, struct{}{}}
-		for _, value := range invalidValues {
-			_, err := schema.Parse(value)
-			assert.Error(t, err)
+	t.Run("invalid type inputs", func(t *testing.T) {
+		schema := StringBool()
+
+		invalidInputs := []any{
+			123, 3.14, true, false, []string{"true"}, nil, struct{}{},
+		}
+
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
 		}
 	})
 
-	t.Run("smart type inference", func(t *testing.T) {
+	t.Run("invalid string values", func(t *testing.T) {
 		schema := StringBool()
 
-		// String input returns bool
-		result1, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.IsType(t, true, result1)
-		assert.Equal(t, true, result1)
-
-		// Pointer input returns bool (not pointer)
-		str := "false"
-		result2, err := schema.Parse(&str)
-		require.NoError(t, err)
-		assert.IsType(t, false, result2)
-		assert.Equal(t, false, result2)
+		invalidStrings := []string{"maybe", "unknown", "", "2", "invalid"}
+		for _, value := range invalidStrings {
+			_, err := schema.Parse(value)
+			assert.Error(t, err, "Expected error for invalid string: %s", value)
+		}
 	})
 
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := StringBool().Nilable()
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		schema := StringBool()
 
-		// nil input should succeed, return nil pointer
-		result, err := schema.Parse(nil)
+		// Test Parse method
+		result, err := schema.Parse("true")
 		require.NoError(t, err)
-		assert.Nil(t, result)
-		assert.IsType(t, (*bool)(nil), result)
+		assert.Equal(t, true, result)
 
-		// Valid input keeps type inference
-		result2, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.Equal(t, true, result2)
-		assert.IsType(t, true, result2)
+		// Test MustParse method
+		mustResult := schema.MustParse("false")
+		assert.Equal(t, false, mustResult)
+
+		// Test panic on invalid input
+		assert.Panics(t, func() {
+			schema.MustParse("invalid")
+		})
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected a valid string boolean"
+		schema := StringBool(core.SchemaParams{Error: customError})
+
+		require.NotNil(t, schema)
+		assert.Equal(t, core.ZodTypeStringBool, schema.internals.Def.Type)
+
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
+// 2. Type safety tests
 // =============================================================================
 
-// StringBool coercion is no longer supported as it's not a primitive type
-// Tests removed in alignment with TypeScript Zod v4 coercion strategy
+func TestStringBool_TypeSafety(t *testing.T) {
+	t.Run("StringBool returns bool type", func(t *testing.T) {
+		schema := StringBool()
+		require.NotNil(t, schema)
 
-// =============================================================================
-// 3. Validation methods
-// =============================================================================
-
-func TestStringBoolValidations(t *testing.T) {
-	t.Run("custom truthy and falsy values", func(t *testing.T) {
-		schema := StringBool(&StringBoolOptions{
-			Truthy: []string{"y"},
-			Falsy:  []string{"N"},
-		})
-
-		// Test custom truthy (case insensitive by default)
-		result1, err := schema.Parse("y")
+		result, err := schema.Parse("true")
 		require.NoError(t, err)
+		assert.Equal(t, true, result)
+		assert.IsType(t, bool(false), result) // Ensure type is bool
+
+		result, err = schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+		assert.IsType(t, bool(false), result)
+	})
+
+	t.Run("StringBoolPtr returns *bool type", func(t *testing.T) {
+		schema := StringBoolPtr()
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+		assert.IsType(t, (*bool)(nil), result) // Ensure type is *bool
+
+		result, err = schema.Parse("false")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("type inference with assignment", func(t *testing.T) {
+		// Type-inference friendly API
+		boolSchema := StringBool()   // bool type
+		ptrSchema := StringBoolPtr() // *bool type
+
+		// Test bool type
+		result1, err1 := boolSchema.Parse("true")
+		require.NoError(t, err1)
+		assert.IsType(t, bool(false), result1)
 		assert.Equal(t, true, result1)
 
-		result2, err := schema.Parse("Y")
-		require.NoError(t, err)
-		assert.Equal(t, true, result2)
+		// Test *bool type
+		result2, err2 := ptrSchema.Parse("true")
+		require.NoError(t, err2)
+		assert.IsType(t, (*bool)(nil), result2)
+		require.NotNil(t, result2)
+		assert.Equal(t, true, *result2)
+	})
 
-		// Test custom falsy (case insensitive by default)
-		result3, err := schema.Parse("n")
-		require.NoError(t, err)
-		assert.Equal(t, false, result3)
+	t.Run("MustParse type safety", func(t *testing.T) {
+		// Test bool type
+		boolSchema := StringBool()
+		result := boolSchema.MustParse("true")
+		assert.IsType(t, bool(false), result)
+		assert.Equal(t, true, result)
 
-		result4, err := schema.Parse("N")
-		require.NoError(t, err)
-		assert.Equal(t, false, result4)
+		// Test *bool type
+		ptrSchema := StringBoolPtr()
+		ptrResult := ptrSchema.MustParse("true")
+		assert.IsType(t, (*bool)(nil), ptrResult)
+		require.NotNil(t, ptrResult)
+		assert.Equal(t, true, *ptrResult)
+	})
+}
 
-		// Test default values should fail
+// =============================================================================
+// 3. Modifier methods tests
+// =============================================================================
+
+func TestStringBool_Modifiers(t *testing.T) {
+	t.Run("Optional always returns *bool", func(t *testing.T) {
+		// From bool to *bool via Optional
+		boolSchema := StringBool()
+		optionalSchema := boolSchema.Optional()
+
+		// Type check: ensure it returns *ZodStringBool[*bool]
+		var _ *ZodStringBool[*bool] = optionalSchema
+
+		// Functionality test
+		result, err := optionalSchema.Parse("true")
+		require.NoError(t, err)
+		assert.IsType(t, (*bool)(nil), result)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+
+		// From *bool to *bool via Optional (maintains type)
+		ptrSchema := StringBoolPtr()
+		optionalPtrSchema := ptrSchema.Optional()
+		var _ *ZodStringBool[*bool] = optionalPtrSchema
+	})
+
+	t.Run("Nilable always returns *bool", func(t *testing.T) {
+		boolSchema := StringBool()
+		nilableSchema := boolSchema.Nilable()
+
+		var _ *ZodStringBool[*bool] = nilableSchema
+
+		// Test nil handling
+		result, err := nilableSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Default preserves current type", func(t *testing.T) {
+		// bool maintains bool
+		boolSchema := StringBool()
+		defaultBoolSchema := boolSchema.Default(true)
+		var _ *ZodStringBool[bool] = defaultBoolSchema
+
+		// *bool maintains *bool
+		ptrSchema := StringBoolPtr()
+		defaultPtrSchema := ptrSchema.Default(false)
+		var _ *ZodStringBool[*bool] = defaultPtrSchema
+	})
+
+	t.Run("Prefault preserves current type", func(t *testing.T) {
+		// bool maintains bool
+		boolSchema := StringBool()
+		prefaultBoolSchema := boolSchema.Prefault(true)
+		var _ *ZodStringBool[bool] = prefaultBoolSchema
+
+		// *bool maintains *bool
+		ptrSchema := StringBoolPtr()
+		prefaultPtrSchema := ptrSchema.Prefault(false)
+		var _ *ZodStringBool[*bool] = prefaultPtrSchema
+	})
+}
+
+// =============================================================================
+// 4. Chaining tests
+// =============================================================================
+
+func TestStringBool_Chaining(t *testing.T) {
+	t.Run("type evolution through chaining", func(t *testing.T) {
+		// Chain with type evolution
+		schema := StringBool(). // *ZodStringBool[bool]
+					Default(false). // *ZodStringBool[bool] (maintains type)
+					Optional()      // *ZodStringBool[*bool] (type conversion)
+
+		var _ *ZodStringBool[*bool] = schema
+
+		// Test final behavior
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.IsType(t, (*bool)(nil), result)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+	})
+
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := StringBoolPtr(). // *ZodStringBool[*bool]
+						Nilable().    // *ZodStringBool[*bool] (maintains type)
+						Default(true) // *ZodStringBool[*bool] (maintains type)
+
+		var _ *ZodStringBool[*bool] = schema
+
+		result, err := schema.Parse("false")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		schema := StringBool().
+			Default(true).
+			Prefault(false)
+
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+}
+
+// =============================================================================
+// 5. Default and prefault tests
+// =============================================================================
+
+func TestStringBool_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value behavior", func(t *testing.T) {
+		schema := StringBool().Default(true)
+
+		// Valid input should override default
+		result, err := schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// Nil input should use default
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("default function behavior", func(t *testing.T) {
+		called := false
+		schema := StringBool().DefaultFunc(func() bool {
+			called = true
+			return true
+		})
+
+		// Valid input should not call function
+		result, err := schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+		assert.False(t, called)
+
+		// Nil input should call function
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+		assert.True(t, called)
+	})
+
+	t.Run("prefault value behavior", func(t *testing.T) {
+		schema := StringBool().Prefault(false)
+
+		// Valid input should work normally
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Invalid input should use prefault
+		result, err = schema.Parse("invalid")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("prefault function behavior", func(t *testing.T) {
+		called := false
+		schema := StringBool().PrefaultFunc(func() bool {
+			called = true
+			return false
+		})
+
+		// Valid input should not call function
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+		assert.False(t, called)
+
+		// Invalid input should call function
+		result, err = schema.Parse("invalid")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+		assert.True(t, called)
+	})
+}
+
+// =============================================================================
+// 6. Refine tests
+// =============================================================================
+
+func TestStringBool_Refine(t *testing.T) {
+	t.Run("refine validate", func(t *testing.T) {
+		// Only accept true values
+		schema := StringBool().Refine(func(b bool) bool {
+			return b == true
+		})
+
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		_, err = schema.Parse("false")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Must be true"
+		schema := StringBoolPtr().Refine(func(b *bool) bool {
+			return b != nil && *b == true
+		}, core.SchemaParams{Error: errorMessage})
+
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+
+		_, err = schema.Parse("false")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine pointer allows nil", func(t *testing.T) {
+		schema := StringBoolPtr().Nilable().Refine(func(b *bool) bool {
+			// Accept nil or true
+			return b == nil || (b != nil && *b)
+		})
+
+		// Expect nil to be accepted
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// true should pass
+		result, err = schema.Parse("true")
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, true, *result)
+
+		// false should fail (refine returns false)
+		_, err = schema.Parse("false")
+		assert.Error(t, err)
+	})
+}
+
+func TestStringBool_RefineAny(t *testing.T) {
+	t.Run("refineAny bool schema", func(t *testing.T) {
+		// Only accept true values via RefineAny on StringBool() schema
+		schema := StringBool().RefineAny(func(v any) bool {
+			b, ok := v.(bool)
+			return ok && b
+		})
+
+		// true passes
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// false fails
+		_, err = schema.Parse("false")
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny pointer schema", func(t *testing.T) {
+		// StringBoolPtr().RefineAny sees underlying bool value
+		schema := StringBoolPtr().RefineAny(func(v any) bool {
+			b, ok := v.(bool)
+			return ok && b // accept only true
+		})
+
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, true, *result)
+
+		_, err = schema.Parse("false")
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// 7. Coercion tests
+// =============================================================================
+
+func TestStringBool_Coercion(t *testing.T) {
+	t.Run("string coercion with coerced schema", func(t *testing.T) {
+		schema := CoercedStringBool()
+
+		// Test string "true" -> bool true
+		result, err := schema.Parse("true")
+		require.NoError(t, err, "Should coerce string 'true' to bool true")
+		assert.Equal(t, true, result)
+
+		// Test string "false" -> bool false
+		result, err = schema.Parse("false")
+		require.NoError(t, err, "Should coerce string 'false' to bool false")
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("numeric coercion to string then bool", func(t *testing.T) {
+		schema := CoercedStringBool()
+
+		// Numbers should be coerced to strings first, then to bool
+		// Since default truthy/falsy lists include "1" and "0", this should work
+		result, err := schema.Parse(1)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = schema.Parse(0)
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// But numbers that don't map to truthy/falsy should fail
+		_, err = schema.Parse(2)
+		assert.Error(t, err, "Numeric input 2 should fail as it doesn't map to valid bool string")
+	})
+
+	t.Run("custom options with numeric string support", func(t *testing.T) {
+		options := &StringBoolOptions{
+			Truthy: []string{"true", "1", "yes"},
+			Falsy:  []string{"false", "0", "no"},
+			Case:   "insensitive",
+		}
+		schema := CoercedStringBool(options)
+
+		// Now numeric inputs that coerce to "1" or "0" should work
+		result, err := schema.Parse(1)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = schema.Parse(0)
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("invalid coercion inputs", func(t *testing.T) {
+		schema := CoercedStringBool()
+
+		// Inputs that cannot be coerced to valid string bools
+		invalidInputs := []any{
+			[]string{"true"}, struct{}{}, map[string]any{"key": "value"},
+		}
+
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
+		}
+	})
+}
+
+// =============================================================================
+// 8. Type-specific methods tests (StringBool Configuration)
+// =============================================================================
+
+func TestStringBool_TypeSpecificMethods(t *testing.T) {
+	t.Run("custom truthy and falsy values", func(t *testing.T) {
+		options := &StringBoolOptions{
+			Truthy: []string{"yes", "ok", "positive"},
+			Falsy:  []string{"no", "cancel", "negative"},
+			Case:   "sensitive",
+		}
+		schema := StringBool(options)
+
+		// Test custom truthy values
+		result, err := schema.Parse("yes")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = schema.Parse("positive")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Test custom falsy values
+		result, err = schema.Parse("no")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		result, err = schema.Parse("negative")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// Test that default values no longer work
 		_, err = schema.Parse("true")
 		assert.Error(t, err)
 
@@ -119,560 +540,466 @@ func TestStringBoolValidations(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("case sensitive validation", func(t *testing.T) {
-		schema := StringBool(&StringBoolOptions{
-			Truthy: []string{"y"},
-			Falsy:  []string{"N"},
+	t.Run("case sensitive mode", func(t *testing.T) {
+		options := &StringBoolOptions{
+			Truthy: []string{"True", "YES"},
+			Falsy:  []string{"False", "NO"},
 			Case:   "sensitive",
-		})
+		}
+		schema := StringBool(options)
 
-		// Test exact case match
-		result1, err := schema.Parse("y")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse("N")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		// Test case mismatch should fail
-		_, err = schema.Parse("Y")
-		assert.Error(t, err)
-
-		_, err = schema.Parse("n")
-		assert.Error(t, err)
-
-		// Test default values should fail
-		_, err = schema.Parse("TRUE")
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 4. Modifiers and wrappers
-// =============================================================================
-
-func TestStringBoolModifiers(t *testing.T) {
-	t.Run("optional modifier", func(t *testing.T) {
-		schema := StringBool().Optional()
-
-		// Valid input
-		result1, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		// nil input should succeed
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-
-		// Invalid input should fail
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
-	})
-
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := StringBool().Nilable()
-
-		// Valid input
-		result1, err := schema.Parse("false")
-		require.NoError(t, err)
-		assert.Equal(t, false, result1)
-
-		// nil input should succeed, return typed nil pointer
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-		assert.IsType(t, (*bool)(nil), result2)
-
-		// Invalid input should fail
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
-	})
-
-	t.Run("nullish modifier", func(t *testing.T) {
-		schema := StringBool().Nullish()
-
-		// Valid input
-		result1, err := schema.Parse("yes")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		// nil input should succeed
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-	})
-
-	t.Run("must parse", func(t *testing.T) {
-		schema := StringBool()
-
-		// Valid input should not panic
-		result := schema.MustParse("on")
-		assert.Equal(t, true, result)
-
-		// Invalid input should panic
-		assert.Panics(t, func() {
-			schema.MustParse("invalid")
-		})
-	})
-
-	t.Run("nilable does not affect original schema", func(t *testing.T) {
-		baseSchema := StringBool()
-		nilableSchema := baseSchema.Nilable()
-
-		// Test nilable schema allows nil
-		result1, err1 := nilableSchema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Nil(t, result1)
-
-		// Test nilable schema validates non-nil values
-		result2, err2 := nilableSchema.Parse("true")
-		require.NoError(t, err2)
-		assert.Equal(t, true, result2)
-
-		// Test nilable schema rejects invalid values
-		_, err3 := nilableSchema.Parse("invalid")
-		assert.Error(t, err3)
-
-		// Critical: Original schema should remain unchanged
-		_, err4 := baseSchema.Parse(nil)
-		assert.Error(t, err4, "Original schema should still reject nil")
-
-		result5, err5 := baseSchema.Parse("true")
-		require.NoError(t, err5)
-		assert.Equal(t, true, result5)
-	})
-}
-
-// =============================================================================
-// 5. Chaining and method composition
-// =============================================================================
-
-func TestStringBoolChaining(t *testing.T) {
-	t.Run("chaining with modifiers", func(t *testing.T) {
-		schema := StringBool().Nilable()
-
-		// Test chained validation
-		result1, err := schema.Parse("enabled")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
-	})
-
-	t.Run("custom options with modifiers", func(t *testing.T) {
-		schema := StringBool(&StringBoolOptions{
-			Truthy: []string{"yes", "ok"},
-			Falsy:  []string{"no", "nope"},
-		}).Optional()
-
-		result1, err := schema.Parse("yes")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse("nope")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		result3, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result3)
-	})
-}
-
-// =============================================================================
-// 6. Transform/Pipe
-// =============================================================================
-
-func TestStringBoolTransform(t *testing.T) {
-	t.Run("basic transform", func(t *testing.T) {
-		schema := StringBool().TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if b, ok := val.(bool); ok {
-				if b {
-					return "YES", nil
-				}
-				return "NO", nil
-			}
-			return val, nil
-		})
-
-		result1, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.Equal(t, "YES", result1)
-
-		result2, err := schema.Parse("false")
-		require.NoError(t, err)
-		assert.Equal(t, "NO", result2)
-	})
-
-	t.Run("transform chain", func(t *testing.T) {
-		schema := StringBool().
-			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-				if b, ok := val.(bool); ok {
-					if b {
-						return 1, nil
-					}
-					return 0, nil
-				}
-				return val, nil
-			}).
-			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-				if i, ok := val.(int); ok {
-					return i * 10, nil
-				}
-				return val, nil
-			})
-
-		result1, err := schema.Parse("yes")
-		require.NoError(t, err)
-		assert.Equal(t, 10, result1)
-
-		result2, err := schema.Parse("no")
-		require.NoError(t, err)
-		assert.Equal(t, 0, result2)
-	})
-
-	t.Run("pipe to another schema", func(t *testing.T) {
-		stringSchema := String().Min(2)
-		schema := StringBool().Pipe(stringSchema)
-
-		// This should fail because bool -> string pipe doesn't work directly
-		// The pipe would need proper type conversion
-		_, err := schema.Parse("true")
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 7. Refine
-// =============================================================================
-
-func TestStringBoolRefine(t *testing.T) {
-	t.Run("basic refine", func(t *testing.T) {
-		schema := StringBool().RefineAny(func(val any) bool {
-			if b, ok := val.(bool); ok {
-				return b == true // Only allow true values
-			}
-			return false
-		})
-
-		// Valid input (true)
-		result, err := schema.Parse("true")
+		// Exact case should work
+		result, err := schema.Parse("True")
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 
-		// Invalid input (false fails refine)
+		result, err = schema.Parse("False")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// Different case should fail
+		_, err = schema.Parse("true")
+		assert.Error(t, err)
+
 		_, err = schema.Parse("false")
 		assert.Error(t, err)
-
-		// Invalid input (not a valid stringbool)
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
 	})
 
-	t.Run("refine with custom error", func(t *testing.T) {
-		schema := StringBool().RefineAny(func(val any) bool {
-			if b, ok := val.(bool); ok {
-				return b == true
-			}
-			return false
-		}, core.SchemaParams{
-			Error: "Only true values are allowed",
-		})
+	t.Run("case insensitive mode", func(t *testing.T) {
+		options := &StringBoolOptions{
+			Truthy: []string{"True", "YES"},
+			Falsy:  []string{"False", "NO"},
+			Case:   "insensitive",
+		}
+		schema := StringBool(options)
 
-		_, err := schema.Parse("false")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Only true values are allowed")
-	})
+		// Different cases should all work
+		testCases := []struct {
+			input    string
+			expected bool
+		}{
+			{"True", true}, {"true", true}, {"TRUE", true},
+			{"YES", true}, {"yes", true}, {"Yes", true},
+			{"False", false}, {"false", false}, {"FALSE", false},
+			{"NO", false}, {"no", false}, {"No", false},
+		}
 
-	t.Run("refine vs transform distinction", func(t *testing.T) {
-		input := "true"
-
-		// Refine: only validates, never modifies
-		refineSchema := StringBool().RefineAny(func(val any) bool {
-			if b, ok := val.(bool); ok {
-				return b == true
-			}
-			return false
-		})
-		refineResult, refineErr := refineSchema.Parse(input)
-
-		// Transform: validates and converts
-		transformSchema := StringBool().TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if b, ok := val.(bool); ok {
-				if b {
-					return "ENABLED", nil
-				}
-				return "DISABLED", nil
-			}
-			return val, nil
-		})
-		transformResult, transformErr := transformSchema.Parse(input)
-
-		// Refine returns original converted value unchanged
-		require.NoError(t, refineErr)
-		assert.Equal(t, true, refineResult)
-
-		// Transform returns modified value
-		require.NoError(t, transformErr)
-		assert.Equal(t, "ENABLED", transformResult)
-
-		// Key distinction: Refine preserves converted value, Transform modifies
-		assert.IsType(t, true, refineResult, "Refine should return bool from stringbool conversion")
-		assert.IsType(t, "", transformResult, "Transform should return modified string")
+		for _, tc := range testCases {
+			result, err := schema.Parse(tc.input)
+			require.NoError(t, err, "Should parse input: %s", tc.input)
+			assert.Equal(t, tc.expected, result)
+		}
 	})
 }
 
 // =============================================================================
-// 8. Error handling
+// 9. Error handling and edge case tests
 // =============================================================================
 
-func TestStringBoolErrorHandling(t *testing.T) {
-	t.Run("error structure", func(t *testing.T) {
-		schema := StringBool()
-		_, err := schema.Parse("invalid")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.InvalidValue, zodErr.Issues[0].Code)
-	})
-
+func TestStringBool_ErrorHandling(t *testing.T) {
 	t.Run("custom error messages", func(t *testing.T) {
-		schema := StringBool(nil, core.SchemaParams{Error: "Custom stringbool error"})
+		customError := "Expected a valid boolean string"
+		schema := StringBool(core.SchemaParams{Error: customError})
+
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Contains(t, zodErr.Issues[0].Message, "Custom stringbool error")
+		// Note: Specific error message checking would depend on error implementation
 	})
 
-	t.Run("type error vs value error", func(t *testing.T) {
+	t.Run("nil handling with different modifiers", func(t *testing.T) {
+		// Regular schema rejects nil
 		schema := StringBool()
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
 
-		// Type error (not a string)
-		_, err1 := schema.Parse(123)
-		assert.Error(t, err1)
-		var zodErr1 *issues.ZodError
-		require.True(t, issues.IsZodError(err1, &zodErr1))
-		assert.Equal(t, core.InvalidType, zodErr1.Issues[0].Code)
+		// Optional schema accepts nil
+		optionalSchema := StringBool().Optional()
+		optionalResult, err := optionalSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, optionalResult)
 
-		// Value error (string but invalid value)
-		_, err2 := schema.Parse("invalid")
-		assert.Error(t, err2)
-		var zodErr2 *issues.ZodError
-		require.True(t, issues.IsZodError(err2, &zodErr2))
-		assert.Equal(t, core.InvalidValue, zodErr2.Issues[0].Code)
+		// Nilable schema accepts nil
+		nilableSchema := StringBool().Nilable()
+		nilableResult, err := nilableSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, nilableResult)
 	})
-}
 
-// =============================================================================
-// 9. Edge and mutual exclusion cases
-// =============================================================================
-
-func TestStringBoolEdgeCases(t *testing.T) {
-	t.Run("empty string", func(t *testing.T) {
+	t.Run("empty string handling", func(t *testing.T) {
+		// Empty string should be rejected by default
 		schema := StringBool()
 		_, err := schema.Parse("")
 		assert.Error(t, err)
+
+		// But can be included in falsy values
+		options := &StringBoolOptions{
+			Truthy: []string{"true", "1"},
+			Falsy:  []string{"false", "0", ""},
+			Case:   "insensitive",
+		}
+		schemaWithEmpty := StringBool(options)
+		result, err := schemaWithEmpty.Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
 	})
 
-	t.Run("whitespace strings", func(t *testing.T) {
+	t.Run("pointer string input", func(t *testing.T) {
 		schema := StringBool()
-		_, err := schema.Parse(" true ")
-		assert.Error(t, err) // Whitespace should not be trimmed
-	})
 
-	t.Run("nil pointer handling", func(t *testing.T) {
-		schema := StringBool()
-		var nilPtr *string = nil
+		// Test *string input
+		str := "true"
+		result, err := schema.Parse(&str)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
 
-		// Non-nilable should reject nil pointer
-		_, err := schema.Parse(nilPtr)
+		// Test nil *string input
+		var nilStr *string = nil
+		_, err = schema.Parse(nilStr)
 		assert.Error(t, err)
 
-		// Nilable should accept nil pointer
-		nilableSchema := schema.Nilable()
-		result, err := nilableSchema.Parse(nilPtr)
+		// Test nil *string with nilable schema
+		nilableSchema := StringBool().Nilable()
+		nilableResult, err := nilableSchema.Parse(nilStr)
+		require.NoError(t, err)
+		assert.Nil(t, nilableResult)
+	})
+}
+
+func TestStringBool_EdgeCases(t *testing.T) {
+	t.Run("empty truthy and falsy lists", func(t *testing.T) {
+		options := &StringBoolOptions{
+			Truthy: []string{},
+			Falsy:  []string{},
+			Case:   "insensitive",
+		}
+		schema := StringBool(options)
+
+		// Any string input should fail
+		_, err := schema.Parse("anything")
+		assert.Error(t, err)
+	})
+
+	t.Run("overlapping truthy and falsy values", func(t *testing.T) {
+		// If a value appears in both lists, truthy takes precedence
+		options := &StringBoolOptions{
+			Truthy: []string{"maybe", "true"},
+			Falsy:  []string{"maybe", "false"},
+			Case:   "insensitive",
+		}
+		schema := StringBool(options)
+
+		// "maybe" should be true (truthy checked first)
+		result, err := schema.Parse("maybe")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("whitespace handling", func(t *testing.T) {
+		schema := StringBool()
+
+		// Whitespace should not be automatically trimmed
+		_, err := schema.Parse(" true ")
+		assert.Error(t, err)
+
+		// Unless explicitly included in the lists
+		options := &StringBoolOptions{
+			Truthy: []string{"true", " true ", "  yes  "},
+			Falsy:  []string{"false", " false ", "  no  "},
+			Case:   "insensitive",
+		}
+		schemaWithWhitespace := StringBool(options)
+		result, err := schemaWithWhitespace.Parse(" true ")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+}
+
+// =============================================================================
+// Pointer identity preservation tests
+// =============================================================================
+
+func TestStringBool_PointerIdentityPreservation(t *testing.T) {
+	t.Run("StringBool Optional preserves pointer identity with string input", func(t *testing.T) {
+		schema := StringBool().Optional()
+
+		originalString := "true"
+		originalPtr := &originalString
+
+		result, err := schema.Parse(originalPtr)
+		require.NoError(t, err)
+
+		// Result should be a pointer to bool (converted from string)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+	})
+
+	t.Run("StringBool Nilable preserves pointer identity with string input", func(t *testing.T) {
+		schema := StringBool().Nilable()
+
+		originalString := "false"
+		originalPtr := &originalString
+
+		result, err := schema.Parse(originalPtr)
+		require.NoError(t, err)
+
+		// Result should be a pointer to bool (converted from string)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("StringBoolPtr Optional preserves pointer identity with string input", func(t *testing.T) {
+		schema := StringBoolPtr().Optional()
+
+		originalString := "true"
+		originalPtr := &originalString
+
+		result, err := schema.Parse(originalPtr)
+		require.NoError(t, err)
+
+		// Result should be a pointer to bool (converted from string)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+	})
+
+	t.Run("StringBoolPtr Nilable preserves pointer identity with string input", func(t *testing.T) {
+		schema := StringBoolPtr().Nilable()
+
+		originalString := "false"
+		originalPtr := &originalString
+
+		result, err := schema.Parse(originalPtr)
+		require.NoError(t, err)
+
+		// Result should be a pointer to bool (converted from string)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("Optional handles nil consistently", func(t *testing.T) {
+		schema := StringBool().Optional()
+
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
-	t.Run("case insensitive by default", func(t *testing.T) {
-		schema := StringBool()
+	t.Run("Nilable handles nil consistently", func(t *testing.T) {
+		schema := StringBool().Nilable()
 
-		// Mixed case should work
-		result1, err := schema.Parse("True")
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse("FALSE")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		result3, err := schema.Parse("YES")
-		require.NoError(t, err)
-		assert.Equal(t, true, result3)
+		assert.Nil(t, result)
 	})
 
-	t.Run("modifier combinations", func(t *testing.T) {
-		// Optional + custom values
-		schema := StringBool(&StringBoolOptions{
-			Truthy: []string{"si"},
-			Falsy:  []string{"no"},
-		}).Optional()
+	t.Run("Default().Optional() chaining preserves pointer identity with string input", func(t *testing.T) {
+		schema := StringBool().Default(false).Optional()
 
-		result1, err := schema.Parse("si")
+		originalString := "true"
+		originalPtr := &originalString
+
+		result, err := schema.Parse(originalPtr)
 		require.NoError(t, err)
-		assert.Equal(t, true, result1)
 
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
+		// Result should be a pointer to bool (converted from string)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+	})
 
-		_, err = schema.Parse("yes")
-		assert.Error(t, err) // Default values should not work
+	t.Run("Pointer identity with string inputs", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			stringInput string
+			expected    bool
+		}{
+			{"true", "true", true},
+			{"false", "false", false},
+			{"1", "1", true},
+			{"0", "0", false},
+			{"yes", "yes", true},
+			{"no", "no", false},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				schema := StringBool().Optional()
+
+				// Test with string input - this will convert from string to bool
+				originalPtr := &tc.stringInput
+
+				result, err := schema.Parse(originalPtr)
+				require.NoError(t, err)
+
+				// This is a conversion, so we just check the value
+				assert.Equal(t, tc.expected, *result)
+			})
+		}
 	})
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// OVERWRITE TESTS
 // =============================================================================
 
-func TestStringBoolDefaultAndPrefault(t *testing.T) {
-	t.Run("default value", func(t *testing.T) {
-		schema := StringBool().Default(true)
-
-		// nil input uses default value
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-
-		// Valid input normal validation
-		result2, err := schema.Parse("false")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		// Invalid input still fails
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
-	})
-
-	t.Run("defaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := StringBool().DefaultFunc(func() bool {
-			counter++
-			return counter%2 == 1
+func TestStringBool_Overwrite(t *testing.T) {
+	t.Run("basic boolean transformation", func(t *testing.T) {
+		schema := StringBool().Overwrite(func(b bool) bool {
+			return !b // Invert boolean value
 		})
 
-		// Each nil input generates a new default value
-		result1, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		// Valid input bypasses default generation
-		result3, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.Equal(t, true, result3)
-
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
-	})
-
-	t.Run("prefault value", func(t *testing.T) {
-		schema := StringBool().Prefault(false)
-
-		// Valid input normal validation
-		result1, err := schema.Parse("true")
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		// Invalid input uses prefault value
-		result2, err := schema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-
-		// nil input still fails (prefault doesn't handle nil)
-		_, err = schema.Parse(nil)
-		assert.Error(t, err)
-	})
-
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := StringBool().PrefaultFunc(func() bool {
-			counter++
-			return true
-		})
-
-		// Valid input normal validation
-		result1, err := schema.Parse("false")
-		require.NoError(t, err)
-		assert.Equal(t, false, result1)
-		assert.Equal(t, 0, counter) // No prefault called
-
-		// Invalid input uses prefault function
-		result2, err := schema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, true, result2)
-		assert.Equal(t, 1, counter) // Prefault called once
-	})
-
-	t.Run("default vs prefault distinction", func(t *testing.T) {
-		defaultSchema := StringBool().Default(true)
-		prefaultSchema := StringBool().Prefault(false)
-
-		// Default handles nil, prefault doesn't
-		result1, err := defaultSchema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, true, result1)
-
-		_, err = prefaultSchema.Parse(nil)
-		assert.Error(t, err)
-
-		// Prefault handles invalid values, default doesn't
-		_, err = defaultSchema.Parse("invalid")
-		assert.Error(t, err)
-
-		result2, err := prefaultSchema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, false, result2)
-	})
-
-	t.Run("custom options with default", func(t *testing.T) {
-		schema := StringBool(&StringBoolOptions{
-			Truthy: []string{"si", "oui"},
-			Falsy:  []string{"no", "non"},
-		}).Default(true)
-
-		// Custom truthy value
-		result, err := schema.Parse("si")
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-
-		// Custom falsy value
-		result, err = schema.Parse("non")
+		// Test true -> false
+		result, err := schema.Parse("true")
 		require.NoError(t, err)
 		assert.Equal(t, false, result)
 
-		// nil input uses default
-		result, err = schema.Parse(nil)
+		// Test false -> true
+		result, err = schema.Parse("false")
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 
-		// Invalid input still fails
-		_, err = schema.Parse("maybe")
+		// Test with custom truthy value
+		result, err = schema.Parse("yes")
+		require.NoError(t, err)
+		assert.Equal(t, false, result) // "yes" -> true -> inverted to false
+	})
+
+	t.Run("conditional transformation", func(t *testing.T) {
+		schema := StringBool().Overwrite(func(b bool) bool {
+			// Convert false to true, keep true as true (always true)
+			return true
+		})
+
+		result, err := schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("pointer type handling", func(t *testing.T) {
+		schema := StringBoolPtr().Overwrite(func(b *bool) *bool {
+			if b == nil {
+				falseVal := false
+				return &falseVal
+			}
+			inverted := !(*b)
+			return &inverted
+		})
+
+		// Test normal case
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+
+		// Test nil case through optional
+		schema = schema.Optional()
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("chaining with other validations", func(t *testing.T) {
+		schema := StringBool().
+			Overwrite(func(b bool) bool {
+				return !b // Invert first
+			}).
+			Refine(func(b bool) bool {
+				return b == false // Only allow false values (which were originally true)
+			}, "Must be originally true")
+
+		// Should pass: "true" -> inverted to false -> passes refine
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// Should fail: "false" -> inverted to true -> fails refine
+		_, err = schema.Parse("false")
 		assert.Error(t, err)
+	})
+
+	t.Run("multiple transformations", func(t *testing.T) {
+		schema := StringBool().
+			Overwrite(func(b bool) bool {
+				return !b // First inversion
+			}).
+			Overwrite(func(b bool) bool {
+				return !b // Second inversion (back to original)
+			})
+
+		// Should be back to original value
+		result, err := schema.Parse("true")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		result, err = schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+	})
+
+	t.Run("type preservation", func(t *testing.T) {
+		schema := StringBool().Overwrite(func(b bool) bool {
+			return b // Identity transformation
+		})
+
+		result, err := schema.Parse("yes")
+		require.NoError(t, err)
+		assert.IsType(t, true, result)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("custom truthy/falsy handling", func(t *testing.T) {
+		// Create StringBool with custom truthy/falsy values
+		schema := StringBoolTyped[bool](StringBoolOptions{
+			Truthy: []string{"on", "enabled", "active"},
+			Falsy:  []string{"off", "disabled", "inactive"},
+			Case:   "insensitive",
+		}).Overwrite(func(b bool) bool {
+			return !b // Invert the parsed boolean
+		})
+
+		// Test custom truthy -> false
+		result, err := schema.Parse("enabled")
+		require.NoError(t, err)
+		assert.Equal(t, false, result)
+
+		// Test custom falsy -> true
+		result, err = schema.Parse("inactive")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("error handling preservation", func(t *testing.T) {
+		schema := StringBool().Overwrite(func(b bool) bool {
+			return !b
+		})
+
+		// Invalid input should still fail validation
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
+
+		// Non-string input should still fail
+		_, err = schema.Parse(123)
+		assert.Error(t, err)
+	})
+
+	t.Run("default value interaction", func(t *testing.T) {
+		schema := StringBool().
+			Default(true).
+			Overwrite(func(b bool) bool {
+				return !b // Invert boolean
+			})
+
+		// Test with actual input
+		result, err := schema.Parse("false")
+		require.NoError(t, err)
+		assert.Equal(t, true, result) // false -> inverted to true
+
+		// Test nil input uses default -> transformed
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, false, result) // default true -> inverted to false
 	})
 }

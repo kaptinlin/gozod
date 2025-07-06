@@ -27,23 +27,28 @@ func (c *ZodConfig) GetLocaleError() ZodErrorMap {
 // globalConfig is the global configuration instance
 var globalConfig = &ZodConfig{}
 
-// Config updates and returns the global configuration
+// Config updates and returns the global configuration.
+// It merges the provided config with the existing global settings.
 func Config(config *ZodConfig) *ZodConfig {
 	if config != nil {
-		// Update global config in place
-		// Always update the fields, even if they are nil (to allow clearing)
-		globalConfig.CustomError = config.CustomError
-		globalConfig.LocaleError = config.LocaleError
+		// Merge fields instead of replacing the whole object.
+		// This allows for granular updates.
+		if config.CustomError != nil {
+			globalConfig.CustomError = config.CustomError
+		}
+		if config.LocaleError != nil {
+			globalConfig.LocaleError = config.LocaleError
+		}
 	} else {
-		// When config is nil, reset the global configuration
+		// A nil config resets the global configuration.
 		globalConfig.CustomError = nil
 		globalConfig.LocaleError = nil
 	}
-	// Return the actual global config, not a copy
+	// Return the actual global config.
 	return globalConfig
 }
 
-// GetConfig returns the current global configuration
+// GetConfig returns a read-only copy of the current global configuration.
 func GetConfig() *ZodConfig {
 	return globalConfig
 }

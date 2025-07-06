@@ -2,12 +2,15 @@ package regexes
 
 import "regexp"
 
-// Email provides practical email validation
-// TypeScript original code:
-// export const email: RegExp =
-//
-//	/^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
-var Email = regexp.MustCompile(`^[A-Za-z0-9_'+\-][A-Za-z0-9_'+\-\.]*[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$`)
+// Email provides practical email validation that rejects common invalid patterns
+// This regex rejects:
+// - IP addresses as domains (email@123.123.123.123)
+// - Leading/trailing dots (.email@domain.com, email.@domain.com)
+// - Consecutive dots (email..email@domain.com)
+// - Domains without TLD (email@domain)
+// - Invalid IP formats (email@111.222.333.44444)
+// Uses Go-compatible syntax without negative lookahead
+var Email = regexp.MustCompile(`^[A-Za-z0-9_'+\-]+([A-Za-z0-9_'+\-]*\.[A-Za-z0-9_'+\-]+)*@[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9\-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$`)
 
 // Html5Email matches HTML5 input[type=email] validation implemented by browsers
 // TypeScript original code:

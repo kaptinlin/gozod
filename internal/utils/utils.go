@@ -7,11 +7,44 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
+// ToErrorMap converts various error representations to ZodErrorMap
+// Supports: string, ZodErrorMap, *ZodErrorMap, func(ZodRawIssue) string
+func ToErrorMap(err any) (*core.ZodErrorMap, bool) {
+	switch v := err.(type) {
+	case string:
+		errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string { return v })
+		return &errorMap, true
+	case core.ZodErrorMap:
+		return &v, true
+	case *core.ZodErrorMap:
+		return v, true
+	case func(core.ZodRawIssue) string:
+		errorMap := core.ZodErrorMap(v)
+		return &errorMap, true
+	}
+	return nil, false
+}
+
+// =============================================================================
+// PARAMETER UTILITIES
+// =============================================================================
+
+// GetFirstParam extracts the first parameter from variadic arguments
+// Provides convenience for Go's variadic parameter style while maintaining
+// compatibility with Zod TypeScript v4's single parameter pattern
+// Returns nil if no parameters provided
+func GetFirstParam(params ...any) any {
+	if len(params) == 0 {
+		return nil
+	}
+	return params[0]
+}
+
 // IsPrimitiveType checks if a schema type is a primitive type that supports coercion
 // Only primitive types should support coercion according to TypeScript Zod v4 alignment
 func IsPrimitiveType(typeName core.ZodTypeCode) bool {
 	switch typeName {
-	case core.ZodTypeString, core.ZodTypeBool:
+	case core.ZodTypeString, core.ZodTypeBool, core.ZodTypeTime:
 		return true
 	case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
 		return true
@@ -221,4 +254,64 @@ func CompareValues(a, b any) int {
 
 	// Equal or incomparable
 	return 0
+}
+
+// =============================================================================
+// PARAMETER NORMALIZATION (moved from engine to avoid circular dependencies)
+// =============================================================================
+
+// NormalizeParams normalizes input parameters into a standard SchemaParams struct
+// Supports variadic arguments where the first parameter is used:
+// - nil -> empty SchemaParams
+// - string -> { Error: string }
+// - SchemaParams -> normalized copy
+// - *SchemaParams -> normalized copy
+func NormalizeParams(params ...any) *core.SchemaParams {
+	if len(params) == 0 {
+		return &core.SchemaParams{}
+	}
+
+	param := params[0]
+	if param == nil {
+		return &core.SchemaParams{}
+	}
+
+	switch v := param.(type) {
+	case string:
+		// String shorthand for error message
+		return &core.SchemaParams{Error: v}
+
+	case core.SchemaParams:
+		// Copy to avoid mutation
+		return &v
+
+	case *core.SchemaParams:
+		if v == nil {
+			return &core.SchemaParams{}
+		}
+		// Copy to avoid mutation
+		result := *v
+		return &result
+
+	default:
+		// Unsupported types return empty params
+		return &core.SchemaParams{}
+	}
+}
+
+// ApplySchemaParams applies SchemaParams to a type definition
+// Updates the definition with normalized parameters
+func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {
+	if params == nil {
+		return
+	}
+
+	// Apply error configuration
+	if params.Error != nil {
+		if err, ok := ToErrorMap(params.Error); ok {
+			def.Error = err
+		}
+	}
+
+	// Other parameters can be applied to def as needed
 }

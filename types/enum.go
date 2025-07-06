@@ -1,7 +1,6 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -9,106 +8,102 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/mapx"
+	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-//////////////////////////
-// CORE TYPE DEFINITIONS
-//////////////////////////
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
-// ZodEnumDef defines the configuration for enum validation
+// ZodEnumDef defines the schema definition for enum validation
 type ZodEnumDef[T comparable] struct {
 	core.ZodTypeDef
-	Type    core.ZodTypeCode // Type identifier using type-safe constants
-	Entries map[string]T     // Enum entries (key-value pairs)
+	Entries map[string]T // Enum key-value mapping
 }
 
-// ZodEnumInternals contains enum validator internal state
+// ZodEnumInternals contains the internal state for enum schema
 type ZodEnumInternals[T comparable] struct {
 	core.ZodTypeInternals
-	Def     *ZodEnumDef[T]              // Schema definition
-	Entries map[string]T                // Enum entries
-	Values  map[T]struct{}              // Set of valid values
-	Pattern *regexp.Regexp              // Regex pattern for validation
-	Isst    issues.ZodIssueInvalidValue // Invalid value issue template
-	Bag     map[string]any              // Additional metadata
+	Def     *ZodEnumDef[T] // Schema definition reference
+	Entries map[string]T   // Enum key-value mapping
+	Values  map[T]struct{} // Set of valid values for fast lookup
+	Pattern *regexp.Regexp // Compiled regex pattern for validation
 }
 
-// ZodEnum represents a type-safe enum validation schema
-type ZodEnum[T comparable] struct {
+// ZodEnum represents a type-safe enum validation schema with unified constraint
+// T is the base comparable type, R is the constraint type (T | *T)
+type ZodEnum[T comparable, R any] struct {
 	internals *ZodEnumInternals[T]
 }
 
-// GetInternals returns the internal state of the schema
-func (z *ZodEnum[T]) GetInternals() *core.ZodTypeInternals {
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
+// GetInternals exposes internal state for framework usage
+func (z *ZodEnum[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Parse validates and parses input using the unified engine.ParseType template
-func (z *ZodEnum[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	}
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodEnum[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
+}
 
-	// Use engine.ParseType template for unified parsing
-	result, err := engine.ParseType[T](
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodEnum[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Parse validates input using enum-specific parsing logic
+func (z *ZodEnum[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeEnum,
-		// Type checker function
-		func(v any) (T, bool) {
-			if value, ok := v.(T); ok {
-				if _, exists := z.internals.Values[value]; exists {
-					return value, true
-				}
-			}
-			var zero T
-			return zero, false
-		},
-		// Pointer checker function
-		func(v any) (*T, bool) {
-			// Match only when the input is *T itself, preserving pointer identity
-			ptr, ok := v.(*T)
-			return ptr, ok
-		},
 		// Validator function
-		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			if len(checks) > 0 {
-				// Use constructor instead of direct struct literal to respect private fields
-				payload := core.NewParsePayload(value)
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.GetIssues()) > 0 {
-					finalizedIssues := make([]core.ZodIssue, len(payload.GetIssues()))
-					for i, rawIssue := range payload.GetIssues() {
-						finalizedIssues[i] = issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-					}
-					return issues.NewZodError(finalizedIssues)
-				}
+		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+			// First check if value is in enum
+			if _, exists := z.internals.Values[value]; !exists {
+				var zero T
+				return zero, fmt.Errorf("invalid enum value: %v", value)
 			}
-			return nil
+			// Then run additional checks
+			return engine.ApplyChecks[T](value, checks, ctx)
 		},
-		parseCtx,
-	)
+		// Converter function
+		func(result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
+			var zero R
 
-	if err != nil {
-		var zErr *issues.ZodError
-		if errors.As(err, &zErr) {
-			for i, iss := range zErr.Issues {
-				if iss.Code == "invalid_type" {
-					zErr.Issues[i].Code = "invalid_value"
-					zErr.Issues[i].Message = "invalid enum value"
+			// Handle nil input
+			if result == nil {
+				// For optional/nilable schemas, return zero value
+				internals := z.GetInternals()
+				if internals.Optional || internals.Nilable {
+					return zero, nil
 				}
+				return zero, fmt.Errorf("enum value cannot be nil")
 			}
-		}
-		return nil, err
-	}
-	return result, nil
+
+			// Try to convert input to T first
+			if value, ok := result.(T); ok {
+				// Check if value is in enum
+				if _, exists := z.internals.Values[value]; !exists {
+					return zero, fmt.Errorf("invalid enum value: %v", value)
+				}
+
+				// Convert to constraint type R
+				return convertToEnumConstraintType[T, R](value), nil
+			}
+
+			return zero, fmt.Errorf("type conversion failed: expected %T but got %T", *new(T), result)
+		},
+		ctx...,
+	)
 }
 
 // MustParse validates the input value and panics on failure
-func (z *ZodEnum[T]) MustParse(input any, ctx ...*core.ParseContext) any {
+func (z *ZodEnum[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -116,21 +111,85 @@ func (z *ZodEnum[T]) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////
-// ENUM SPECIFIC METHODS
-//////////////////////////
+// ParseAny validates input and returns untyped result for runtime scenarios.
+// Zero-overhead wrapper around Parse to eliminate reflection calls.
+func (z *ZodEnum[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
 
-// Enum returns the enum mapping
-func (z *ZodEnum[T]) Enum() map[string]T {
-	result := make(map[string]T)
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+// Optional always returns *T constraint because the optional value may be nil.
+func (z *ZodEnum[T, R]) Optional() *ZodEnum[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable always returns *T constraint because the value may be nil.
+func (z *ZodEnum[T, R]) Nilable() *ZodEnum[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers for maximum flexibility
+func (z *ZodEnum[T, R]) Nullish() *ZodEnum[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default keeps the current generic constraint type R.
+func (z *ZodEnum[T, R]) Default(v T) *ZodEnum[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc keeps the current generic constraint type R.
+func (z *ZodEnum[T, R]) DefaultFunc(fn func() T) *ZodEnum[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodEnum[T, R]) Prefault(v T) *ZodEnum[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// ENUM SPECIFIC METHODS
+// =============================================================================
+
+// Enum returns the enum key-value mapping
+func (z *ZodEnum[T, R]) Enum() map[string]T {
+	result := make(map[string]T, len(z.internals.Entries))
 	for k, v := range z.internals.Entries {
 		result[k] = v
 	}
 	return result
 }
 
-// Options returns all possible values
-func (z *ZodEnum[T]) Options() []T {
+// Options returns all possible enum values
+func (z *ZodEnum[T, R]) Options() []T {
 	values := make([]T, 0, len(z.internals.Values))
 	for value := range z.internals.Values {
 		values = append(values, value)
@@ -139,26 +198,24 @@ func (z *ZodEnum[T]) Options() []T {
 }
 
 // Extract creates a sub-enum with specified keys
-func (z *ZodEnum[T]) Extract(keys []string, params ...any) *ZodEnum[T] {
+// Non-existent keys are silently ignored to maintain fluent interface design
+func (z *ZodEnum[T, R]) Extract(keys []string, params ...any) *ZodEnum[T, R] {
 	newEntries := make(map[string]T)
 	for _, key := range keys {
 		if value, exists := z.internals.Entries[key]; exists {
 			newEntries[key] = value
-		} else {
-			panic(fmt.Sprintf("Key '%s' not found in enum", key))
 		}
+		// Silently ignore non-existent keys for chainability
 	}
-
-	return EnumMap(newEntries, params...)
+	return EnumMapTyped[T, R](newEntries, params...)
 }
 
 // Exclude creates a sub-enum excluding specified keys
-func (z *ZodEnum[T]) Exclude(keys []string, params ...any) *ZodEnum[T] {
-	excludeSet := make(map[string]bool)
+// Non-existent keys are silently ignored to maintain fluent interface design
+func (z *ZodEnum[T, R]) Exclude(keys []string, params ...any) *ZodEnum[T, R] {
+	excludeSet := make(map[string]bool, len(keys))
 	for _, key := range keys {
-		if _, exists := z.internals.Entries[key]; !exists {
-			panic(fmt.Sprintf("Key '%s' not found in enum", key))
-		}
+		// Silently ignore non-existent keys for chainability
 		excludeSet[key] = true
 	}
 
@@ -168,517 +225,286 @@ func (z *ZodEnum[T]) Exclude(keys []string, params ...any) *ZodEnum[T] {
 			newEntries[key] = value
 		}
 	}
-
-	return EnumMap(newEntries, params...)
+	return EnumMapTyped[T, R](newEntries, params...)
 }
 
-//////////////////////////
-// TRANSFORM METHODS
-//////////////////////////
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
 
-// Transform provides type-safe enum transformation (value of enum -> any)
-func (z *ZodEnum[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	wrapper := func(input any, ctx *core.RefinementContext) (any, error) {
-		// Support both pointer and value inputs
-		if val, ok := input.(T); ok {
-			return fn(val, ctx)
+// Transform applies a transformation function using the WrapFn pattern.
+func (z *ZodEnum[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		enumValue := extractEnumValue[T, R](input)
+		return fn(enumValue, ctx)
+	}
+	return core.NewZodTransform[R, any](z, wrapperFn)
+}
+
+// Pipe creates a pipeline using the WrapFn pattern.
+func (z *ZodEnum[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+		enumValue := extractEnumValue[T, R](input)
+		return target.Parse(enumValue, ctx)
+	}
+	return core.NewZodPipe[R, any](z, targetFn)
+}
+
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
+
+// Refine applies type-safe validation that matches the schema's output type R.
+// The callback will be executed even when the value is nil (for *T schemas)
+// to align with Zod v4 semantics.
+func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
+	// Wrapper converts the raw value (always T or nil) into R before calling fn.
+	wrapper := func(v any) bool {
+		var zero R
+
+		switch any(zero).(type) {
+		case *T:
+			// Schema output is *T – convert incoming value (T or nil) to *T
+			if v == nil {
+				return fn(any((*T)(nil)).(R))
+			}
+			if enumVal, ok := v.(T); ok {
+				eCopy := enumVal
+				ptr := &eCopy
+				return fn(any(ptr).(R))
+			}
+			return false
+		default:
+			// Schema output is T
+			if v == nil {
+				// nil should never reach here for T schema; treat as failure.
+				return false
+			}
+			if enumVal, ok := v.(T); ok {
+				return fn(any(enumVal).(R))
+			}
+			return false
 		}
-		if ptr, ok := input.(*T); ok && ptr != nil {
-			return fn(*ptr, ctx)
+	}
+
+	// Use unified parameter handling
+	schemaParams := utils.NormalizeParams(params...)
+
+	// Convert back to the format expected by checks.NewCustom
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny provides flexible validation without type conversion
+func (z *ZodEnum[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodEnum[T, R] {
+	// Use unified parameter handling
+	schemaParams := utils.NormalizeParams(params...)
+
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates a new ZodEnum instance of constraint type *T.
+// Used by modifiers such as Optional, Nilable, and Nullish that must return a pointer constraint.
+func (z *ZodEnum[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodEnum[T, *T] {
+	return &ZodEnum[T, *T]{internals: &ZodEnumInternals[T]{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Entries:          z.internals.Entries,
+		Values:           z.internals.Values,
+		Pattern:          z.internals.Pattern,
+	}}
+}
+
+// withInternals creates a new ZodEnum instance that keeps the original constraint type R.
+// Used by modifiers that retain the original constraint, such as Default, Prefault, and Transform.
+func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] {
+	return &ZodEnum[T, R]{internals: &ZodEnumInternals[T]{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Entries:          z.internals.Entries,
+		Values:           z.internals.Values,
+		Pattern:          z.internals.Pattern,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodEnum[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodEnum[T, R]); ok {
+		// Preserve original checks to avoid overwriting them
+		originalChecks := z.internals.ZodTypeInternals.Checks
+
+		// Copy all state from source
+		*z.internals = *src.internals
+
+		// Restore the original checks that were set by the constructor
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// convertToEnumConstraintType converts enum value T to constraint type R
+func convertToEnumConstraintType[T comparable, R any](value T) R {
+	var zero R
+	switch any(zero).(type) {
+	case *T:
+		// Need to return *T
+		vCopy := value
+		return any(&vCopy).(R)
+	default:
+		// Return T directly
+		return any(value).(R)
+	}
+}
+
+// extractEnumValue extracts the base enum value T from constraint type R
+func extractEnumValue[T comparable, R any](value R) T {
+	if ptr, ok := any(value).(*T); ok {
+		if ptr != nil {
+			return *ptr
 		}
-		return nil, fmt.Errorf("invalid type for transform")
+		var zero T
+		return zero
 	}
-	return z.TransformAny(wrapper)
+	return any(value).(T)
 }
 
-// TransformAny builds the actual transform pipeline (enum -> transform)
-func (z *ZodEnum[T]) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-// Pipe operation for pipeline chaining
-func (z *ZodEnum[T]) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-//////////////////////////
-// MODIFIER METHODS
-//////////////////////////
-
-// Optional makes the enum optional
-func (z *ZodEnum[T]) Optional() core.ZodType[any, any] {
-	// Use the generic Optional wrapper to ensure nil is returned when the value is absent
-	return Optional(any(z).(core.ZodType[any, any]))
-}
-
-// Nilable makes the enum nilable
-func (z *ZodEnum[T]) Nilable() core.ZodType[any, any] {
-	return Nilable(any(z).(core.ZodType[any, any]))
-}
-
-// Nullish makes the enum both optional and nilable
-func (z *ZodEnum[T]) Nullish() core.ZodType[any, any] {
-	return Nullish(any(z).(core.ZodType[any, any]))
-}
-
-// Refine adds type-safe custom validation
-func (z *ZodEnum[T]) Refine(fn func(T) bool, params ...any) *ZodEnum[T] {
-	refined := z.RefineAny(func(val any) bool {
-		if v, ok := val.(T); ok {
-			return fn(v)
-		}
-		return false
-	}, params...)
-
-	if enumType, ok := refined.(*ZodEnum[T]); ok {
-		return enumType
+// buildEnumPattern creates regex pattern for enum validation
+func buildEnumPattern[T comparable](values map[T]struct{}) *regexp.Regexp {
+	if len(values) == 0 {
+		return regexp.MustCompile("^$a") // Never matches
 	}
 
-	// If type assertion fails, create a new enum
-	clone := z.clone()
-	check := checks.NewCustom[any](func(val any) bool {
-		if v, ok := val.(T); ok {
-			return fn(v)
-		}
-		return false
-	}, params...)
-	clone.internals.Checks = append(clone.internals.Checks, core.ZodCheck(check))
-	return clone
-}
-
-// RefineAny adds flexible custom validation
-func (z *ZodEnum[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	clone := z.clone()
-	check := checks.NewCustom[any](fn, params...)
-	clone.internals.Checks = append(clone.internals.Checks, core.ZodCheck(check))
-	return any(clone).(core.ZodType[any, any])
-}
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodEnum[T]) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-//////////////////////////
-// WRAPPER TYPES
-//////////////////////////
-
-// ZodEnumDefault is a default value wrapper for enum type
-type ZodEnumDefault[T comparable] struct {
-	inner        *ZodEnum[T]
-	defaultValue T
-	defaultFunc  func() T
-	isFunction   bool
-}
-
-// GetInternals returns the internal state
-func (s ZodEnumDefault[T]) GetInternals() *core.ZodTypeInternals {
-	return s.inner.GetInternals()
-}
-
-// Parse method with default value support
-func (s ZodEnumDefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	if input == nil {
-		if s.isFunction && s.defaultFunc != nil {
-			return s.defaultFunc(), nil
-		}
-		return s.defaultValue, nil
+	patterns := make([]string, 0, len(values))
+	for value := range values {
+		patterns = append(patterns, regexp.QuoteMeta(fmt.Sprintf("%v", value)))
 	}
-	return s.inner.Parse(input, ctx...)
+	patternStr := "^(" + strings.Join(patterns, "|") + ")$"
+	return regexp.MustCompile(patternStr)
 }
 
-// MustParse method
-func (s ZodEnumDefault[T]) MustParse(input any, ctx ...*core.ParseContext) any {
-	result, err := s.Parse(input, ctx...)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-// TransformAny method
-func (s ZodEnumDefault[T]) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return s.inner.TransformAny(fn)
-}
-
-// Pipe method
-func (s ZodEnumDefault[T]) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return s.inner.Pipe(out)
-}
-
-// Optional method
-func (s ZodEnumDefault[T]) Optional() core.ZodType[any, any] {
-	return s.inner.Optional()
-}
-
-// Nilable method
-func (s ZodEnumDefault[T]) Nilable() core.ZodType[any, any] {
-	return s.inner.Nilable()
-}
-
-// Nullish method
-func (s ZodEnumDefault[T]) Nullish() core.ZodType[any, any] {
-	return s.inner.Nullish()
-}
-
-// RefineAny method
-func (s ZodEnumDefault[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return s.inner.RefineAny(fn, params...)
-}
-
-// Unwrap method
-func (s ZodEnumDefault[T]) Unwrap() core.ZodType[any, any] {
-	return s.inner.Unwrap()
-}
-
-// Default creates an enum with default value
-func (z *ZodEnum[T]) Default(value T) ZodEnumDefault[T] {
-	return ZodEnumDefault[T]{
-		inner:        z,
-		defaultValue: value,
-		isFunction:   false,
-	}
-}
-
-// DefaultFunc creates an enum with default function
-func (z *ZodEnum[T]) DefaultFunc(fn func() T) ZodEnumDefault[T] {
-	return ZodEnumDefault[T]{
-		inner:       z,
-		defaultFunc: fn,
-		isFunction:  true,
-	}
-}
-
-// Refine adds validation to default enum
-func (s ZodEnumDefault[T]) Refine(fn func(T) bool, params ...any) ZodEnumDefault[T] {
-	refined := s.inner.Refine(fn, params...)
-	return ZodEnumDefault[T]{
-		inner:        refined,
-		defaultValue: s.defaultValue,
-		defaultFunc:  s.defaultFunc,
-		isFunction:   s.isFunction,
-	}
-}
-
-// Transform transforms default enum
-func (s ZodEnumDefault[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return s.inner.Transform(fn)
-}
-
-// Enum returns enum mapping
-func (s ZodEnumDefault[T]) Enum() map[string]T {
-	return s.inner.Enum()
-}
-
-// Options returns all possible values
-func (s ZodEnumDefault[T]) Options() []T {
-	return s.inner.Options()
-}
-
-// Extract creates sub-enum with specified keys
-func (s ZodEnumDefault[T]) Extract(keys []string, params ...any) ZodEnumDefault[T] {
-	extracted := s.inner.Extract(keys, params...)
-	return ZodEnumDefault[T]{
-		inner:        extracted,
-		defaultValue: s.defaultValue,
-		defaultFunc:  s.defaultFunc,
-		isFunction:   s.isFunction,
-	}
-}
-
-// Exclude creates sub-enum excluding specified keys
-func (s ZodEnumDefault[T]) Exclude(keys []string, params ...any) ZodEnumDefault[T] {
-	excluded := s.inner.Exclude(keys, params...)
-	return ZodEnumDefault[T]{
-		inner:        excluded,
-		defaultValue: s.defaultValue,
-		defaultFunc:  s.defaultFunc,
-		isFunction:   s.isFunction,
-	}
-}
-
-// ZodEnumPrefault is a prefault value wrapper for enum type
-type ZodEnumPrefault[T comparable] struct {
-	inner         *ZodEnum[T]
-	prefaultValue T
-	prefaultFunc  func() T
-	isFunction    bool
-}
-
-// GetInternals returns the internal state
-func (e ZodEnumPrefault[T]) GetInternals() *core.ZodTypeInternals {
-	return e.inner.GetInternals()
-}
-
-// Parse method with prefault value support
-func (e ZodEnumPrefault[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	result, err := e.inner.Parse(input, ctx...)
-	if err != nil {
-		// Use prefault value on validation failure
-		if e.isFunction && e.prefaultFunc != nil {
-			return e.prefaultFunc(), nil
-		}
-		return e.prefaultValue, nil
-	}
-	return result, nil
-}
-
-// MustParse method
-func (e ZodEnumPrefault[T]) MustParse(input any, ctx ...*core.ParseContext) any {
-	result, err := e.Parse(input, ctx...)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-// TransformAny method
-func (e ZodEnumPrefault[T]) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return e.inner.TransformAny(fn)
-}
-
-// Pipe method
-func (e ZodEnumPrefault[T]) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return e.inner.Pipe(out)
-}
-
-// Optional method
-func (e ZodEnumPrefault[T]) Optional() core.ZodType[any, any] {
-	return e.inner.Optional()
-}
-
-// Nilable method
-func (e ZodEnumPrefault[T]) Nilable() core.ZodType[any, any] {
-	return e.inner.Nilable()
-}
-
-// Nullish method
-func (e ZodEnumPrefault[T]) Nullish() core.ZodType[any, any] {
-	return e.inner.Nullish()
-}
-
-// RefineAny method
-func (e ZodEnumPrefault[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return e.inner.RefineAny(fn, params...)
-}
-
-// Unwrap method
-func (e ZodEnumPrefault[T]) Unwrap() core.ZodType[any, any] {
-	return e.inner.Unwrap()
-}
-
-// Prefault creates an enum with prefault value
-func (z *ZodEnum[T]) Prefault(value T) ZodEnumPrefault[T] {
-	return ZodEnumPrefault[T]{
-		inner:         z,
-		prefaultValue: value,
-		isFunction:    false,
-	}
-}
-
-// PrefaultFunc creates an enum with prefault function
-func (z *ZodEnum[T]) PrefaultFunc(fn func() T) ZodEnumPrefault[T] {
-	return ZodEnumPrefault[T]{
-		inner:        z,
-		prefaultFunc: fn,
-		isFunction:   true,
-	}
-}
-
-// Refine adds validation to prefault enum
-func (e ZodEnumPrefault[T]) Refine(fn func(T) bool, params ...any) ZodEnumPrefault[T] {
-	refined := e.inner.Refine(fn, params...)
-	return ZodEnumPrefault[T]{
-		inner:         refined,
-		prefaultValue: e.prefaultValue,
-		prefaultFunc:  e.prefaultFunc,
-		isFunction:    e.isFunction,
-	}
-}
-
-// Transform transforms prefault enum
-func (e ZodEnumPrefault[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return e.inner.Transform(fn)
-}
-
-// Enum returns enum mapping
-func (e ZodEnumPrefault[T]) Enum() map[string]T {
-	return e.inner.Enum()
-}
-
-// Options returns all possible values
-func (e ZodEnumPrefault[T]) Options() []T {
-	return e.inner.Options()
-}
-
-// Extract creates sub-enum with specified keys
-func (e ZodEnumPrefault[T]) Extract(keys []string, params ...any) ZodEnumPrefault[T] {
-	extracted := e.inner.Extract(keys, params...)
-	return ZodEnumPrefault[T]{
-		inner:         extracted,
-		prefaultValue: e.prefaultValue,
-		prefaultFunc:  e.prefaultFunc,
-		isFunction:    e.isFunction,
-	}
-}
-
-// Exclude creates sub-enum excluding specified keys
-func (e ZodEnumPrefault[T]) Exclude(keys []string, params ...any) ZodEnumPrefault[T] {
-	excluded := e.inner.Exclude(keys, params...)
-	return ZodEnumPrefault[T]{
-		inner:         excluded,
-		prefaultValue: e.prefaultValue,
-		prefaultFunc:  e.prefaultFunc,
-		isFunction:    e.isFunction,
-	}
-}
-
-//////////////////////////
-// CONSTRUCTOR FUNCTIONS
-//////////////////////////
-
-// createZodEnumFromDef creates enum from definition
-func createZodEnumFromDef[T comparable](def *ZodEnumDef[T]) *ZodEnum[T] {
-	values := make(map[T]struct{})
+// newZodEnumFromDef constructs new ZodEnum from definition
+func newZodEnumFromDef[T comparable, R any](def *ZodEnumDef[T]) *ZodEnum[T, R] {
+	values := make(map[T]struct{}, len(def.Entries))
 	for _, value := range def.Entries {
 		values[value] = struct{}{}
 	}
 
-	valueSlice := make([]any, 0, len(values))
+	// Convert typed values to map[any]struct{} for ZodTypeInternals.Values
+	anyValues := make(map[any]struct{}, len(values))
 	for value := range values {
-		valueSlice = append(valueSlice, value)
-	}
-
-	// Create pattern using existing utility
-	var pattern *regexp.Regexp
-	if len(valueSlice) > 0 {
-		patterns := make([]string, len(valueSlice))
-		for i, value := range valueSlice {
-			patterns[i] = regexp.QuoteMeta(fmt.Sprintf("%v", value))
-		}
-		patternStr := "^(" + strings.Join(patterns, "|") + ")$"
-		pattern = regexp.MustCompile(patternStr)
-	} else {
-		pattern = regexp.MustCompile("^$a") // Never matches
+		anyValues[value] = struct{}{}
 	}
 
 	internals := &ZodEnumInternals[T]{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Entries:          def.Entries,
-		Values:           values,
-		Pattern:          pattern,
-		Isst: issues.ZodIssueInvalidValue{
-			ZodIssueBase: issues.ZodIssueBase{
-				Code:    "invalid_value",
-				Message: "Invalid enum value",
-			},
-			Values: valueSlice,
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Values: anyValues, // Set the Values field for discriminator extraction
+			Bag:    make(map[string]any),
 		},
-		Bag: make(map[string]any),
+		Def:     def,
+		Entries: def.Entries,
+		Values:  values,
+		Pattern: buildEnumPattern(values),
 	}
 
-	zodSchema := &ZodEnum[T]{internals: internals}
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		enumDef := &ZodEnumDef[T]{
+			ZodTypeDef: *newDef,
+			Entries:    def.Entries,
+		}
+		return any(newZodEnumFromDef[T, R](enumDef)).(core.ZodType[any])
+	}
 
-	// Initialize the schema using engine
-	engine.InitZodType(any(zodSchema).(core.ZodType[any, any]), &def.ZodTypeDef)
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
 
-	return zodSchema
+	return &ZodEnum[T, R]{internals: internals}
 }
 
-// Enum creates a new enum from a list of values.
-// Example: Enum("Red", "Green", "Blue")
-func Enum[T comparable](values ...T) *ZodEnum[T] {
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// Enum creates enum schema from values with type-inference support
+func Enum[T comparable](values ...T) *ZodEnum[T, T] {
 	return EnumSlice(values)
 }
 
-// EnumMap creates type-safe enum from mapping
-func EnumMap[T comparable](entries map[string]T, params ...any) *ZodEnum[T] {
-	def := &ZodEnumDef[T]{
-		ZodTypeDef: core.ZodTypeDef{
-			Type: "enum",
-		},
-		Type:    "enum",
-		Entries: entries,
-	}
-
-	enum := createZodEnumFromDef(def)
-
-	// Apply schema parameters following unified pattern
-	if len(params) > 0 {
-		if param, ok := params[0].(core.SchemaParams); ok {
-			engine.ApplySchemaParams(&def.ZodTypeDef, param)
-
-			if param.Error != nil {
-				errorMap := issues.CreateErrorMap(param.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					enum.internals.Error = errorMap
-				}
-			}
-			if param.Description != "" {
-				enum.internals.Bag["description"] = param.Description
-			}
-		}
-	}
-
-	return enum
-}
-
-// EnumSlice creates type-safe enum from slice
-func EnumSlice[T comparable](values []T) *ZodEnum[T] {
-	entries := make(map[string]T)
+// EnumSlice creates enum schema from slice of values
+func EnumSlice[T comparable](values []T) *ZodEnum[T, T] {
+	entries := make(map[string]T, len(values))
 	for i, value := range values {
 		key := fmt.Sprintf("%d", i)
 		entries[key] = value
 	}
-	return EnumMap(entries)
+	return EnumMapTyped[T, T](entries)
 }
 
-//////////////////////////
-// UTILITY FUNCTIONS
-//////////////////////////
-
-// GetZod returns internal state (backward compatibility)
-func (z *ZodEnum[T]) GetZod() *ZodEnumInternals[T] {
-	return z.internals
+// EnumMap creates enum schema from key-value mapping
+func EnumMap[T comparable](entries map[string]T, params ...any) *ZodEnum[T, T] {
+	return EnumMapTyped[T, T](entries, params...)
 }
 
-// clone creates a copy of the enum using pkg utilities
-func (z *ZodEnum[T]) clone() *ZodEnum[T] {
-	newInternals := &ZodEnumInternals[T]{
-		ZodTypeInternals: z.internals.ZodTypeInternals,
-		Def:              z.internals.Def,
-		Entries:          make(map[string]T),
-		Values:           make(map[T]struct{}),
-		Pattern:          z.internals.Pattern,
-		Isst:             z.internals.Isst,
-		Bag:              make(map[string]any),
+// EnumMapTyped is the generic constructor for enum schemas from mapping
+func EnumMapTyped[T comparable, R any](entries map[string]T, args ...any) *ZodEnum[T, R] {
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	def := &ZodEnumDef[T]{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeEnum,
+			Checks: []core.ZodCheck{},
+		},
+		Entries: entries,
 	}
 
-	// Deep copy Entries
-	for k, v := range z.internals.Entries {
-		newInternals.Entries[k] = v
+	// Apply normalized parameters to schema definition
+	if normalizedParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
-	// Deep copy Values
-	for v := range z.internals.Values {
-		newInternals.Values[v] = struct{}{}
-	}
+	return newZodEnumFromDef[T, R](def)
+}
 
-	// Deep copy Bag using mapx
-	if z.internals.Bag != nil {
-		newInternals.Bag = mapx.Copy(z.internals.Bag)
-	}
+// EnumPtr creates pointer-capable enum schema from values
+func EnumPtr[T comparable](values ...T) *ZodEnum[T, *T] {
+	return EnumSlicePtr(values)
+}
 
-	return &ZodEnum[T]{internals: newInternals}
+// EnumSlicePtr creates pointer-capable enum schema from slice of values
+func EnumSlicePtr[T comparable](values []T) *ZodEnum[T, *T] {
+	entries := make(map[string]T, len(values))
+	for i, value := range values {
+		key := fmt.Sprintf("%d", i)
+		entries[key] = value
+	}
+	return EnumMapTyped[T, *T](entries)
+}
+
+// EnumMapPtr creates pointer-capable enum schema from key-value mapping
+func EnumMapPtr[T comparable](entries map[string]T, params ...any) *ZodEnum[T, *T] {
+	return EnumMapTyped[T, *T](entries, params...)
 }

@@ -5,28 +5,18 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// =============================================================================
-// SLICE TYPE CHECKING
-// =============================================================================
+// Sentinel errors for slicex package.
+var (
+	ErrInvalidReflectValue   = errors.New("invalid reflect value")
+	ErrNotSliceArrayOrString = errors.New("input is not a slice, array, or string")
 
-// Is checks if the value is a slice type
-func Is(v any) bool {
-	return reflectx.IsSlice(v)
-}
-
-// IsArray checks if the value is a fixed-size array type
-func IsArray(v any) bool {
-	return reflectx.IsArray(v)
-}
-
-// IsSliceOrArray checks if the value is either a slice or array type
-func IsSliceOrArray(v any) bool {
-	return Is(v) || IsArray(v)
-}
+	ErrCannotConvertSliceElement = errors.New("cannot convert slice element")
+	ErrCannotConvertFirstSlice   = errors.New("cannot convert first slice")
+	ErrCannotConvertSecondSlice  = errors.New("cannot convert second slice")
+	ErrCannotConvertSlice        = errors.New("cannot convert slice")
+)
 
 // =============================================================================
 // SLICE CONVERSION FUNCTIONS
@@ -117,7 +107,7 @@ func ToTyped[T any](input any) ([]T, error) {
 				converted := itemValue.Convert(targetType)
 				result[i] = converted.Interface().(T)
 			} else {
-				return nil, fmt.Errorf("cannot convert slice element %v to type %v", item, targetType)
+				return nil, fmt.Errorf("%w: cannot convert %v to type %v", ErrCannotConvertSliceElement, item, targetType)
 			}
 		}
 	}
@@ -142,7 +132,7 @@ func ToStrings(input any) ([]string, error) {
 // FromReflect converts reflect.Value to []any
 func FromReflect(rv reflect.Value) ([]any, error) {
 	if !rv.IsValid() {
-		return nil, errors.New("invalid reflect value")
+		return nil, ErrInvalidReflectValue
 	}
 
 	switch rv.Kind() {
@@ -158,7 +148,7 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 		str := rv.String()
 		return StringToChars(str), nil
 	default:
-		return nil, fmt.Errorf("input is not a slice, array, or string, got %v", rv.Kind())
+		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
 	}
 }
 
@@ -184,7 +174,11 @@ func Extract(input any) ([]any, bool) {
 
 // ExtractArray extracts array from input, returns the slice and whether extraction was successful
 func ExtractArray(input any) ([]any, bool) {
-	if !IsArray(input) {
+	if input == nil {
+		return nil, false
+	}
+	rv := reflect.ValueOf(input)
+	if rv.Kind() != reflect.Array {
 		return nil, false
 	}
 	result, err := ToAny(input)
@@ -193,7 +187,11 @@ func ExtractArray(input any) ([]any, bool) {
 
 // ExtractSlice extracts slice from input, returns the slice and whether extraction was successful
 func ExtractSlice(input any) ([]any, bool) {
-	if !Is(input) {
+	if input == nil {
+		return nil, false
+	}
+	rv := reflect.ValueOf(input)
+	if rv.Kind() != reflect.Slice {
 		return nil, false
 	}
 	result, err := ToAny(input)
@@ -219,21 +217,16 @@ func Merge(a, b any) (any, error) {
 	// Convert both to []any first
 	sliceA, errA := ToAny(a)
 	if errA != nil {
-		return nil, fmt.Errorf("cannot convert first slice: %w", errA)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertFirstSlice, errA)
 	}
 
 	sliceB, errB := ToAny(b)
 	if errB != nil {
-		return nil, fmt.Errorf("cannot convert second slice: %w", errB)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSecondSlice, errB)
 	}
 
-	// Merge the slices
-	result := make([]any, len(sliceA)+len(sliceB))
-	copy(result, sliceA)
-	copy(result[len(sliceA):], sliceB)
-
-	// Try to convert back to original type if possible
-	return convertToOriginalType(result, a, b)
+	merged := append(sliceA, sliceB...)
+	return convertToOriginalType(merged, a, b)
 }
 
 // Append appends elements to a slice
@@ -244,7 +237,7 @@ func Append(slice any, elements ...any) (any, error) {
 
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 
 	result := make([]any, len(sliceAny)+len(elements))
@@ -262,7 +255,7 @@ func Prepend(slice any, elements ...any) (any, error) {
 
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 
 	result := make([]any, len(elements)+len(sliceAny))
@@ -287,7 +280,7 @@ func Length(input any) (int, error) {
 	case reflect.Slice, reflect.Array, reflect.String:
 		return rv.Len(), nil
 	default:
-		return 0, fmt.Errorf("input is not a slice, array, or string")
+		return 0, ErrNotSliceArrayOrString
 	}
 }
 
@@ -329,24 +322,27 @@ func IndexOf(slice any, value any) int {
 
 // Reverse reverses a slice
 func Reverse(slice any) (any, error) {
+	if slice == nil {
+		return nil, nil
+	}
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
-	result := make([]any, len(sliceAny))
-	for i, item := range sliceAny {
-		result[len(sliceAny)-1-i] = item
+	for i, j := 0, len(sliceAny)-1; i < j; i, j = i+1, j-1 {
+		sliceAny[i], sliceAny[j] = sliceAny[j], sliceAny[i]
 	}
-
-	return convertToOriginalType(result, slice, nil)
+	return convertToOriginalType(sliceAny, slice, nil)
 }
 
 // Unique removes duplicate elements from a slice
 func Unique(slice any) (any, error) {
+	if slice == nil {
+		return nil, nil
+	}
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 
 	// Use two-phase deduplication:
@@ -395,9 +391,12 @@ func Unique(slice any) (any, error) {
 
 // Filter filters a slice based on a predicate function
 func Filter(slice any, predicate func(any) bool) (any, error) {
+	if slice == nil {
+		return nil, nil
+	}
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 
 	result := make([]any, 0, len(sliceAny))
@@ -412,9 +411,12 @@ func Filter(slice any, predicate func(any) bool) (any, error) {
 
 // Map transforms each element of a slice using a mapper function
 func Map(slice any, mapper func(any) any) (any, error) {
+	if slice == nil {
+		return nil, nil
+	}
 	sliceAny, err := ToAny(slice)
 	if err != nil {
-		return nil, fmt.Errorf("cannot convert slice: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 
 	result := make([]any, len(sliceAny))

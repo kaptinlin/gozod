@@ -1,14 +1,6 @@
 package core
 
 // =============================================================================
-// LIBRARY VERSION
-// =============================================================================
-
-// Version is the current version of the library
-// Used for compatibility checking and feature detection
-var Version = "0.1.0"
-
-// =============================================================================
 // ISSUE CODE CONSTANTS
 // =============================================================================
 
@@ -109,25 +101,37 @@ const (
 	ZodTypeEmail  ZodTypeCode = "email"  // Email address validation
 	ZodTypeURL    ZodTypeCode = "url"    // URL validation
 
+	// Time types
+	ZodTypeTime ZodTypeCode = "time" // Go time.Time validation
+
+	// ISO 8601 format validation types
+	ZodTypeIso         ZodTypeCode = "iso"          // ISO 8601 format validation
+	ZodTypeISODateTime ZodTypeCode = "iso_datetime" // ISO 8601 datetime validation
+	ZodTypeISODate     ZodTypeCode = "iso_date"     // ISO 8601 date validation
+	ZodTypeISOTime     ZodTypeCode = "iso_time"     // ISO 8601 time validation
+	ZodTypeISODuration ZodTypeCode = "iso_duration" // ISO 8601 duration validation
+
 	// File and binary types
 	ZodTypeFile ZodTypeCode = "file" // File validation
 
 	// Numeric subtypes
-	ZodTypeFloat32    ZodTypeCode = "float32"    // 32-bit float
-	ZodTypeFloat64    ZodTypeCode = "float64"    // 64-bit float
-	ZodTypeInt        ZodTypeCode = "int"        // Platform-dependent signed integer
-	ZodTypeInt8       ZodTypeCode = "int8"       // 8-bit signed integer
-	ZodTypeInt16      ZodTypeCode = "int16"      // 16-bit signed integer
-	ZodTypeInt32      ZodTypeCode = "int32"      // 32-bit signed integer
-	ZodTypeInt64      ZodTypeCode = "int64"      // 64-bit signed integer
-	ZodTypeUint       ZodTypeCode = "uint"       // Platform-dependent unsigned integer
-	ZodTypeUint8      ZodTypeCode = "uint8"      // 8-bit unsigned integer
-	ZodTypeUint16     ZodTypeCode = "uint16"     // 16-bit unsigned integer
-	ZodTypeUint32     ZodTypeCode = "uint32"     // 32-bit unsigned integer
-	ZodTypeUint64     ZodTypeCode = "uint64"     // 64-bit unsigned integer
-	ZodTypeUintptr    ZodTypeCode = "uintptr"    // Pointer-sized unsigned integer
-	ZodTypeComplex64  ZodTypeCode = "complex64"  // 64-bit complex number
-	ZodTypeComplex128 ZodTypeCode = "complex128" // 128-bit complex number
+	ZodTypeFloat32     ZodTypeCode = "float32"     // 32-bit float
+	ZodTypeFloat64     ZodTypeCode = "float64"     // 64-bit float
+	ZodTypeFloat       ZodTypeCode = "float"       // Flexible float type (accepts float32, float64)
+	ZodTypeInt         ZodTypeCode = "int"         // Flexible integer type (accepts all integer types)
+	ZodTypeInt8        ZodTypeCode = "int8"        // 8-bit signed integer
+	ZodTypeInt16       ZodTypeCode = "int16"       // 16-bit signed integer
+	ZodTypeInt32       ZodTypeCode = "int32"       // 32-bit signed integer
+	ZodTypeInt64       ZodTypeCode = "int64"       // 64-bit signed integer
+	ZodTypeUint        ZodTypeCode = "uint"        // Platform-dependent unsigned integer
+	ZodTypeUint8       ZodTypeCode = "uint8"       // 8-bit unsigned integer
+	ZodTypeUint16      ZodTypeCode = "uint16"      // 16-bit unsigned integer
+	ZodTypeUint32      ZodTypeCode = "uint32"      // 32-bit unsigned integer
+	ZodTypeUint64      ZodTypeCode = "uint64"      // 64-bit unsigned integer
+	ZodTypeUintptr     ZodTypeCode = "uintptr"     // Pointer-sized unsigned integer
+	ZodTypeComplex64   ZodTypeCode = "complex64"   // 64-bit complex number
+	ZodTypeComplex128  ZodTypeCode = "complex128"  // 128-bit complex number
+	ZodTypeNonOptional ZodTypeCode = "nonoptional" // Special type identifier for non-optional fields
 )
 
 // =============================================================================
@@ -158,24 +162,3 @@ const (
 	ParsedTypeEnum     ParsedType = "enum"     // Enumeration data type
 	ParsedTypeUnknown  ParsedType = "unknown"  // Unknown data type
 )
-
-// =============================================================================
-// NUMERIC FORMAT RANGES
-// =============================================================================
-
-// NUMBER_FORMAT_RANGES defines numeric format validation ranges
-// Used to validate that numbers fit within specific format constraints
-var NUMBER_FORMAT_RANGES = map[string][2]float64{
-	"safeint": {-9007199254740991, 9007199254740991},             // JavaScript safe integer range
-	"int32":   {-2147483648, 2147483647},                         // 32-bit signed integer range
-	"uint32":  {0, 4294967295},                                   // 32-bit unsigned integer range
-	"float32": {-3.4028234663852886e38, 3.4028234663852886e38},   // 32-bit float range
-	"float64": {-1.7976931348623157e308, 1.7976931348623157e308}, // 64-bit float range
-}
-
-// BIGINT_FORMAT_RANGES defines big integer format validation ranges
-// Used to validate that big integers fit within specific format constraints
-var BIGINT_FORMAT_RANGES = map[string][2]int64{
-	"int64":  {-9223372036854775808, 9223372036854775807}, // 64-bit signed integer range
-	"uint64": {0, 9223372036854775807},                    // 64-bit unsigned integer range (limited to int64 max)
-}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
@@ -17,7 +18,6 @@ import (
 type ZodCheckCustomDef struct {
 	core.ZodCheckDef
 	Type   string         // Custom check type identifier
-	Path   []any          // Error path for nested validation
 	Params map[string]any // Additional parameters for custom logic
 	Fn     any            // RefineFn or CheckFn function
 	FnType string         // "refine" or "check" function type
@@ -42,19 +42,17 @@ func (z *ZodCheckCustom) GetZod() *core.ZodCheckInternals {
 	return &z.Internals.ZodCheckInternals
 }
 
-// RefineFn defines function signature for refine checks with generic type support
-type RefineFn[T any] func(T) bool
-
-// CheckFn defines function signature for check functions with direct payload access
-type CheckFn func(*core.ParsePayload)
-
 // =============================================================================
 // CONSTRUCTOR FUNCTIONS
 // =============================================================================
 
 // NewCustom creates a new custom validation check with user-defined validation logic
-// Supports both legacy core.SchemaParams and new unified parameter handling
-func NewCustom[T any](fn any, params ...any) *ZodCheckCustom {
+// Uses unified parameter handling following Zod TypeScript v4 pattern
+func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
 	def := &ZodCheckCustomDef{
 		ZodCheckDef: core.ZodCheckDef{Check: "custom"},
 		Fn:          fn,
@@ -63,49 +61,21 @@ func NewCustom[T any](fn any, params ...any) *ZodCheckCustom {
 
 	// Determine function type
 	switch fn.(type) {
-	case RefineFn[T], func(T) bool:
+	case core.ZodRefineFn[T], func(T) bool:
 		def.FnType = "refine"
-	case CheckFn, func(*core.ParsePayload):
+	case core.ZodCheckFn, func(*core.ParsePayload):
 		def.FnType = "check"
 	default:
 		def.FnType = "refine" // Default to refine for backward compatibility
 	}
 
-	// Handle parameter normalization - support both old and new styles
-	var schemaParams []core.SchemaParams
+	// Apply schema parameters using the centralized utility
+	ApplySchemaParamsToCheck(&def.ZodCheckDef, normalizedParams)
 
-	for _, param := range params {
-		switch p := param.(type) {
-		case string:
-			// String shorthand for error message
-			schemaParams = append(schemaParams, core.SchemaParams{Error: p})
-		case CheckParams:
-			// New unified parameter format
-			schemaParams = append(schemaParams, core.SchemaParams{Error: p.Error})
-		case core.SchemaParams:
-			// Legacy format - use as-is
-			schemaParams = append(schemaParams, p)
-		}
-	}
-
-	// Apply schema parameters using existing logic
-	core.ApplySchemaParams(&def.ZodCheckDef, schemaParams...)
-
-	// Handle custom parameters that ApplySchemaParams doesn't process
-	for _, param := range schemaParams {
-		// Handle Path parameter
-		if len(param.Path) > 0 {
-			def.Path = make([]any, len(param.Path))
-			for i, p := range param.Path {
-				def.Path[i] = p
-			}
-		}
-
-		// Handle Params parameter
-		if len(param.Params) > 0 {
-			for k, v := range param.Params {
-				def.Params[k] = v
-			}
+	// Handle additional parameters from SchemaParams.Params
+	if normalizedParams != nil && len(normalizedParams.Params) > 0 {
+		for k, v := range normalizedParams.Params {
+			def.Params[k] = v
 		}
 	}
 
@@ -136,15 +106,10 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 		return
 	}
 
-	// Construct error path by combining payload path with custom path - use slicex for safe operations
+	// Construct error path from payload path
 	payloadPath := payload.GetPath()
 	path := make([]any, len(payloadPath))
 	copy(path, payloadPath)
-
-	// Append custom path if provided using slicex
-	if !slicex.IsEmpty(internals.Def.Path) {
-		path = append(path, internals.Def.Path...)
-	}
 
 	// Determine the error message to use - use mapx for safe access
 	var errorMessage string
@@ -227,7 +192,7 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 			value := payload.GetValue()
 			result := fn(value)
 			handleRefineResult(result, payload, value, internals)
-		case RefineFn[string]:
+		case core.ZodRefineFn[string]:
 			value := payload.GetValue()
 			if str, ok := value.(string); ok {
 				result := fn(str)
@@ -236,7 +201,7 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 				// Type mismatch: create validation error instead of panic
 				handleRefineResult(false, payload, value, internals)
 			}
-		case RefineFn[map[string]any]:
+		case core.ZodRefineFn[map[string]any]:
 			// Use mapx to safely handle map type checking
 			value := payload.GetValue()
 			if mapData, ok := value.(map[string]any); ok {
@@ -246,7 +211,7 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 				// Type mismatch: create validation error instead of panic
 				handleRefineResult(false, payload, value, internals)
 			}
-		case RefineFn[any]:
+		case core.ZodRefineFn[any]:
 			// Handle any type - accepts any value
 			value := payload.GetValue()
 			result := fn(value)
@@ -277,7 +242,7 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 	case "check":
 		// Execute check function with direct payload access
 		// The CheckFn has access to payload.AddIssue() method for ctx.issues.push() functionality
-		if checkFn, ok := internals.Def.Fn.(CheckFn); ok {
+		if checkFn, ok := internals.Def.Fn.(core.ZodCheckFn); ok {
 			checkFn(payload)
 		} else if checkFn, ok := internals.Def.Fn.(func(*core.ParsePayload)); ok {
 			checkFn(payload)
@@ -321,19 +286,21 @@ func (c *ZodCheckOverwrite) GetZod() *core.ZodCheckInternals {
 	return &c.Internals.ZodCheckInternals
 }
 
-// NewZodCheckOverwrite creates a new overwrite transformation check
-// Parameters:
-//   - transform: Function to transform the input value
-//   - params: Optional schema parameters for error customization
-func NewZodCheckOverwrite(transform func(any) any, params ...core.SchemaParams) *ZodCheckOverwrite {
+// NewZodCheckOverwrite creates a new check that overwrites input with transformed value
+func NewZodCheckOverwrite(transform func(any) any, args ...any) *ZodCheckOverwrite {
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
 	def := &ZodCheckOverwriteDef{
 		ZodCheckDef: core.ZodCheckDef{Check: "overwrite"},
 		Transform:   transform,
 	}
 
-	// Apply schema parameters for error customization
-	core.ApplySchemaParams(&def.ZodCheckDef, params...)
+	// Apply schema parameters using the centralized utility
+	ApplySchemaParamsToCheck(&def.ZodCheckDef, normalizedParams)
 
+	// Create internals with validation function
 	internals := &ZodCheckOverwriteInternals{
 		ZodCheckInternals: core.ZodCheckInternals{
 			Def: &def.ZodCheckDef,
@@ -343,9 +310,9 @@ func NewZodCheckOverwrite(transform func(any) any, params ...core.SchemaParams) 
 
 	// Set up the transformation function
 	internals.Check = func(payload *core.ParsePayload) {
-		// Apply transformation to payload value
-		value := payload.GetValue()
-		transformedValue := def.Transform(value)
+		// Transform the input value
+		transformedValue := transform(payload.GetValue())
+		// Overwrite the payload value
 		payload.SetValue(transformedValue)
 	}
 
@@ -376,4 +343,121 @@ func PrefixIssues(path any, issues []core.ZodRawIssue) []core.ZodRawIssue {
 		issues[i].Path = newPath
 	}
 	return issues
+}
+
+// =============================================================================
+// PROPERTY VALIDATION CHECKS
+// =============================================================================
+
+// ZodCheckPropertyDef defines property validation constraint for specific object fields
+type ZodCheckPropertyDef struct {
+	core.ZodCheckDef
+	Property string         // Property name to validate
+	Schema   core.ZodSchema // Schema to validate property against
+}
+
+// ZodCheckPropertyInternals contains property check internal state
+type ZodCheckPropertyInternals struct {
+	core.ZodCheckInternals
+	Def  *ZodCheckPropertyDef // Property check definition
+	Issc *core.ZodIssueBase   // Issue base for error handling
+}
+
+// ZodCheckProperty represents property validation check for specific object fields
+// This check validates that a specific property of an object matches the given schema
+type ZodCheckProperty struct {
+	Internals *ZodCheckPropertyInternals
+}
+
+// GetZod returns the internal check structure for execution
+func (z *ZodCheckProperty) GetZod() *core.ZodCheckInternals {
+	return &z.Internals.ZodCheckInternals
+}
+
+// NewProperty creates a new property validation check
+// Validates that input[property] matches the provided schema
+func NewProperty(property string, schema core.ZodSchema, args ...any) *ZodCheckProperty {
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	def := &ZodCheckPropertyDef{
+		ZodCheckDef: core.ZodCheckDef{Check: "property"},
+		Property:    property,
+		Schema:      schema,
+	}
+
+	// Apply schema parameters using the centralized utility
+	ApplySchemaParamsToCheck(&def.ZodCheckDef, normalizedParams)
+
+	// Create internals
+	internals := &ZodCheckPropertyInternals{
+		ZodCheckInternals: core.ZodCheckInternals{
+			Def: &def.ZodCheckDef,
+		},
+		Def:  def,
+		Issc: &core.ZodIssueBase{},
+	}
+
+	// Set up the validation function
+	internals.Check = func(payload *core.ParsePayload) {
+		executePropertyCheck(payload, internals)
+	}
+
+	return &ZodCheckProperty{Internals: internals}
+}
+
+// executePropertyCheck executes property validation check
+func executePropertyCheck(payload *core.ParsePayload, internals *ZodCheckPropertyInternals) {
+	input := payload.GetValue()
+
+	// Ensure input is an object
+	objMap, ok := input.(map[string]any)
+	if !ok {
+		// If input is not an object, skip property validation
+		return
+	}
+
+	// Get the property value
+	propertyValue, exists := objMap[internals.Def.Property]
+	if !exists {
+		// Property doesn't exist, skip validation (let object schema handle required fields)
+		return
+	}
+
+	// Validate property value using ParseAny - no reflection needed!
+	_, parseErr := internals.Def.Schema.ParseAny(propertyValue)
+
+	if parseErr != nil {
+		// Validation failed, create an issue with the property path
+		path := append(payload.GetPath(), internals.Def.Property)
+
+		// Determine the error message
+		var errorMessage string
+		if internals.Def.Error != nil {
+			errorMap := *internals.Def.Error
+			tempIssue := core.ZodRawIssue{
+				Code:  core.Custom,
+				Input: propertyValue,
+				Path:  path,
+			}
+			errorMessage = errorMap(tempIssue)
+		} else {
+			errorMessage = parseErr.Error()
+		}
+
+		// Create properties map
+		properties := make(map[string]any)
+		mapx.Set(properties, "origin", "property")
+		mapx.Set(properties, "property", internals.Def.Property)
+		mapx.Set(properties, "continue", !internals.Def.Abort)
+
+		// Create custom issue
+		issue := issues.CreateCustomIssue(errorMessage, properties, propertyValue)
+		issue.Input = propertyValue
+		issue.Inst = internals
+
+		// Add issue with property path
+		payload.AddIssueWithPath(issue, path)
+	}
 }

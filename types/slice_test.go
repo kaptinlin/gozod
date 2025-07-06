@@ -1,7 +1,7 @@
 package types
 
 import (
-	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
@@ -10,978 +10,607 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// 1. Basic functionality and type inference
-// =============================================================================
+func TestSlice_BasicGeneric(t *testing.T) {
+	t.Run("string slice basic functionality", func(t *testing.T) {
+		schema := Slice[string](String())
 
-// TestSliceConstructor tests basic slice schema construction
-func TestSliceConstructor(t *testing.T) {
-	t.Run("basic constructor", func(t *testing.T) {
-		elementSchema := String()
-		schema := Slice(elementSchema)
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals)
-		assert.Equal(t, core.ZodTypeSlice, internals.Type)
-	})
-
-	t.Run("constructor with params", func(t *testing.T) {
-		schema := Slice(String(), core.SchemaParams{Error: "core.Custom error"})
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals.Error)
-	})
-}
-
-// TestSliceBasicValidation tests fundamental slice validation behavior
-func TestSliceBasicValidation(t *testing.T) {
-	t.Run("successful validation with type conversion", func(t *testing.T) {
-		// Test basic type inference and conversion behavior
-		schema := Slice(String())
-
-		// Valid input should be converted to []any
-		result, err := schema.Parse([]string{"hello", "world"})
+		result, err := schema.Parse([]string{"a", "b", "c"})
 		require.NoError(t, err)
-		assert.IsType(t, []any{}, result)
-		assert.Equal(t, []any{"hello", "world"}, result)
+		assert.Equal(t, []string{"a", "b", "c"}, result)
 	})
 
-	t.Run("input type validation", func(t *testing.T) {
-		schema := Slice(String())
+	t.Run("int slice basic functionality", func(t *testing.T) {
+		schema := Slice[int](Int())
 
-		// Valid slice types
-		validInputs := []any{
-			[]string{"a", "b", "c"},
-			[]any{"hello", "world"},
-			[]string{},
-		}
-		for _, input := range validInputs {
-			result, err := schema.Parse(input)
-			require.NoError(t, err)
-			assert.NotNil(t, result)
-		}
-
-		// Invalid input types
-		invalidInputs := []any{
-			"not_a_slice",
-			42,
-			true,
-			map[string]string{"k": "v"},
-		}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-		}
-	})
-
-	t.Run("slice length validation", func(t *testing.T) {
-		// Test length constraint validation
-		schema := Slice(String()).Length(2)
-
-		// Valid case - exact length
-		result, err := schema.Parse([]string{"asdf", "asdf"})
+		result, err := schema.Parse([]int{1, 2, 3})
 		require.NoError(t, err)
-		assert.Len(t, result, 2)
-
-		// Invalid case - too short
-		_, err1 := schema.Parse([]string{"asdf"})
-		assert.Error(t, err1)
-
-		var zodErr1 *issues.ZodError
-		require.True(t, issues.IsZodError(err1, &zodErr1))
-		assert.Len(t, zodErr1.Issues, 1)
-		issue1 := zodErr1.Issues[0]
-		assert.Equal(t, issues.TooSmall, issue1.Code)
-
-		// Invalid case - too long
-		_, err2 := schema.Parse([]string{"asdf", "asdf", "asdf"})
-		assert.Error(t, err2)
-
-		var zodErr2 *issues.ZodError
-		require.True(t, issues.IsZodError(err2, &zodErr2))
-		assert.Len(t, zodErr2.Issues, 1)
-		issue2 := zodErr2.Issues[0]
-		assert.Equal(t, core.TooBig, issue2.Code)
+		assert.Equal(t, []int{1, 2, 3}, result)
 	})
 
-	t.Run("min/max length validation", func(t *testing.T) {
-		// Test min/max constraint validation with detailed error checking
-		schema := Slice(String()).Min(2).Max(2)
+	t.Run("optional modifier returns pointer constraint", func(t *testing.T) {
+		schema := Slice[string](String()).Optional()
 
-		// Test too small
-		_, err1 := schema.Parse([]string{"asdf"})
-		assert.Error(t, err1)
-
-		var zodErr1 *issues.ZodError
-		require.True(t, issues.IsZodError(err1, &zodErr1))
-		assert.Len(t, zodErr1.Issues, 1)
-		issue1 := zodErr1.Issues[0]
-		assert.Equal(t, issues.TooSmall, issue1.Code)
-		assert.Contains(t, issue1.Message, "Too small: expected slice to have >=2 items")
-
-		// Test too big
-		_, err2 := schema.Parse([]string{"asdf", "asdf", "asdf"})
-		assert.Error(t, err2)
-
-		var zodErr2 *issues.ZodError
-		require.True(t, issues.IsZodError(err2, &zodErr2))
-		assert.Len(t, zodErr2.Issues, 1)
-		issue2 := zodErr2.Issues[0]
-		assert.Equal(t, core.TooBig, issue2.Code)
-		assert.Contains(t, issue2.Message, "Too big: expected slice to have <=2 items")
-	})
-
-	t.Run("non-empty slice validation", func(t *testing.T) {
-		// Test non-empty constraint
-		schema := Slice(String()).NonEmpty()
-
-		// Valid case - has elements
-		result, err := schema.Parse([]string{"a"})
+		// Test with value
+		testSlice := []string{"test"}
+		result, err := schema.Parse(testSlice)
 		require.NoError(t, err)
-		assert.Equal(t, []any{"a"}, result)
+		assert.Equal(t, &testSlice, result)
 
-		// Invalid case - empty slice
-		_, err = schema.Parse([]string{})
+		// Test with nil
+		nilResult, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, nilResult)
+	})
+
+	t.Run("validation methods work", func(t *testing.T) {
+		schema := Slice[string](String()).Min(2).Max(5)
+
+		// Valid length
+		result, err := schema.Parse([]string{"a", "b", "c"})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b", "c"}, result)
+
+		// Too short
+		_, err = schema.Parse([]string{"a"})
 		assert.Error(t, err)
 
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-
-		// Should have a "too small" error for empty slice
-		hasTooSmall := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.TooSmall {
-				hasTooSmall = true
-				break
-			}
-		}
-		assert.True(t, hasTooSmall, "Should have 'too small' error for empty slice")
-	})
-
-	t.Run("combined non-empty with max validation", func(t *testing.T) {
-		// Test combination of non-empty and max constraints
-		schema := Slice(String()).NonEmpty().Max(2)
-
-		// Valid case
-		result, err := schema.Parse([]string{"a"})
-		require.NoError(t, err)
-		assert.Equal(t, []any{"a"}, result)
-
-		// Invalid case - empty slice
-		_, err = schema.Parse([]string{})
-		assert.Error(t, err)
-
-		// Invalid case - too many elements
-		_, err = schema.Parse([]string{"a", "a", "a"})
+		// Too long
+		_, err = schema.Parse([]string{"a", "b", "c", "d", "e", "f"})
 		assert.Error(t, err)
 	})
-}
 
-// TestSliceTypeInference tests intelligent type handling and inference
-func TestSliceTypeInference(t *testing.T) {
-	t.Run("type conversion and preservation", func(t *testing.T) {
-		schema := Slice(String())
+	t.Run("refine with type-safe functions", func(t *testing.T) {
+		schema := Slice[string](String()).Refine(func(s []string) bool {
+			return len(s) > 1
+		})
 
-		// []string input returns []any
-		input1 := []string{"hello", "world"}
-		result1, err := schema.Parse(input1)
+		// Valid
+		result, err := schema.Parse([]string{"a", "b"})
 		require.NoError(t, err)
-		assert.IsType(t, []any{}, result1)
+		assert.Equal(t, []string{"a", "b"}, result)
 
-		// []any input returns []any
-		input2 := []any{"hello", "world"}
-		result2, err := schema.Parse(input2)
-		require.NoError(t, err)
-		assert.IsType(t, []any{}, result2)
-
-		// Verify pointer identity preservation with []any
-		inputSlice := []any{"test"}
-		inputPtr := &inputSlice
-		result3, err := schema.Parse(inputPtr)
-		require.NoError(t, err)
-		resultPtr, ok := result3.(*[]any)
-		require.True(t, ok)
-		assert.True(t, resultPtr == inputPtr, "Should return the exact same pointer")
+		// Invalid
+		_, err = schema.Parse([]string{"a"})
+		assert.Error(t, err)
 	})
-}
 
-// =============================================================================
-// 2. Validation methods
-// =============================================================================
+	t.Run("default preserves type", func(t *testing.T) {
+		defaultSlice := []string{"default"}
+		schema := Slice[string](String()).Default(defaultSlice)
 
-func TestSliceValidations(t *testing.T) {
-	t.Run("length validations", func(t *testing.T) {
-		tests := []struct {
-			name    string
-			schema  *ZodSlice
-			input   []string
-			wantErr bool
-		}{
-			{"min length valid", Slice(String()).Min(2), []string{"a", "b"}, false},
-			{"min length invalid", Slice(String()).Min(2), []string{"a"}, true},
-			{"max length valid", Slice(String()).Max(2), []string{"a", "b"}, false},
-			{"max length invalid", Slice(String()).Max(2), []string{"a", "b", "c"}, true},
-			{"exact length valid", Slice(String()).Length(2), []string{"a", "b"}, false},
-			{"exact length invalid", Slice(String()).Length(2), []string{"a"}, true},
-			{"nonempty valid", Slice(String()).NonEmpty(), []string{"a"}, false},
-			{"nonempty invalid", Slice(String()).NonEmpty(), []string{}, true},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				_, err := tt.schema.Parse(tt.input)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-				}
-			})
-		}
+		// Valid input overrides default
+		result, err := schema.Parse([]string{"test"})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"test"}, result)
 	})
 
 	t.Run("element validation", func(t *testing.T) {
-		schema := Slice(String().Min(3))
+		schema := Slice[string](String())
 
 		// Valid elements
-		result, err := schema.Parse([]string{"hello", "world"})
+		result, err := schema.Parse([]string{"valid", "elements"})
 		require.NoError(t, err)
-		assert.Len(t, result, 2)
+		assert.Equal(t, []string{"valid", "elements"}, result)
 
-		// Invalid elements
-		_, err = schema.Parse([]string{"hello", "hi"})
+		// Invalid element type - test with []any containing non-string
+		_, err = schema.Parse([]any{"valid", 123})
 		assert.Error(t, err)
 	})
 
-	t.Run("get element schema", func(t *testing.T) {
-		// Test accessing element schema for individual validation
-		schema := Slice(String())
-
-		// Access element schema and validate directly
-		elementSchema := schema.Element()
-
-		// Valid element
-		result, err := elementSchema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		// Invalid element
-		_, err = elementSchema.Parse(123)
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-	})
-
-	t.Run("continue parsing despite array size error", func(t *testing.T) {
-		// Test validation behavior when slice has both element type and size errors
-		schema := Slice(String()).Min(2)
-
-		_, err := schema.Parse([]any{123})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-
-		// Should have errors - could be element type error or size error or both
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-
-		// Check if we have any relevant errors (type or size)
-		hasRelevantError := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.TooSmall || issue.Code == core.InvalidType {
-				hasRelevantError = true
-				break
-			}
-		}
-		assert.True(t, hasRelevantError, "Should have type or size validation error")
-	})
-
-	t.Run("sparse array validation", func(t *testing.T) {
-		// Test validation behavior with slices containing nil/undefined elements
-		schema := Slice(String()).NonEmpty().Min(1).Max(3)
-
-		// Create sparse array (array with nil elements)
-		sparseArray := make([]any, 3)
-		// sparseArray contains [nil, nil, nil] representing undefined values
-
-		_, err := schema.Parse(sparseArray)
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-
-		// Should have multiple invalid_type errors for each undefined element
-		invalidTypeCount := 0
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.InvalidType {
-				invalidTypeCount++
-			}
-		}
-		assert.Equal(t, 3, invalidTypeCount, "Should have 3 invalid type errors for undefined elements")
-
-		// Verify error paths are correct
-		expectedPaths := [][]any{{0}, {1}, {2}}
-		actualPaths := make([][]any, 0)
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.InvalidType {
-				actualPaths = append(actualPaths, issue.Path)
-			}
-		}
-		assert.ElementsMatch(t, expectedPaths, actualPaths, "Error paths should match slice indices")
-	})
-
-	t.Run("nested validation error handling", func(t *testing.T) {
-		// Test validation behavior with nested object schemas containing slice validation
-		schema := Object(core.ObjectSchema{
-			"people": Slice(String()).Min(2),
-		})
-
-		_, err := schema.Parse(map[string]any{
-			"people": []any{123}, // Wrong element type AND wrong length
-		})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-
-		// Should have both type error and size error
-		hasInvalidType := false
-		hasTooSmall := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.InvalidType {
-				hasInvalidType = true
-			}
-			if issue.Code == core.TooSmall {
-				hasTooSmall = true
-			}
-		}
-
-		// At least one of these errors should be present
-		assert.True(t, hasInvalidType || hasTooSmall, "Should have either type error or size error")
-	})
-}
-
-// =============================================================================
-// 3. Modifiers and wrappers
-// =============================================================================
-
-func TestSliceModifiers(t *testing.T) {
-	t.Run("optional", func(t *testing.T) {
-		schema := Slice(Int()).Optional()
-
-		// Valid slice
-		result, err := schema.Parse([]int{1, 2})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// nil input
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-	})
-
-	t.Run("nilable", func(t *testing.T) {
-		schema := Slice(Int()).Nilable()
-
-		// Valid slice
-		result, err := schema.Parse([]int{1, 2})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// nil input returns typed nil
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result2)
-		assert.IsType(t, (*[]any)(nil), result2)
-
-		// Valid input keeps type inference
-		result3, err := schema.Parse([]int{123})
-		require.NoError(t, err)
-		assert.IsType(t, []any{}, result3)
-	})
-
-	t.Run("nilable modifier immutability", func(t *testing.T) {
-		baseSchema := Slice(String())
-		nilableSchema := baseSchema.Nilable()
-
-		// Test nilable schema allows nil
-		result1, err1 := nilableSchema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Nil(t, result1)
-
-		// Critical: Original schema should remain unchanged and reject nil
-		_, err4 := baseSchema.Parse(nil)
-		assert.Error(t, err4, "Original schema should still reject nil")
-
-		// Both schemas should validate valid input the same way
-		result5, err5 := baseSchema.Parse([]string{"hello"})
-		require.NoError(t, err5)
-		assert.NotNil(t, result5)
-
-		result6, err6 := nilableSchema.Parse([]string{"hello"})
-		require.NoError(t, err6)
-		assert.NotNil(t, result6)
-	})
-
-	t.Run("nullish", func(t *testing.T) {
-		schema := Slice(Int()).Nullish()
-
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("must parse", func(t *testing.T) {
-		schema := Slice(String())
-
-		// Valid input should not panic
-		result := schema.MustParse([]string{"hello"})
-		assert.NotNil(t, result)
-
-		// Invalid input should panic
-		assert.Panics(t, func() {
-			schema.MustParse("not a slice")
-		})
-	})
-}
-
-// =============================================================================
-// 4. Chaining and method composition
-// =============================================================================
-
-func TestSliceChaining(t *testing.T) {
-	t.Run("multiple validation chaining", func(t *testing.T) {
-		schema := Slice(String().Min(3)).Min(2).Max(5)
-
-		// Valid case
-		result, err := schema.Parse([]string{"hello", "world"})
-		require.NoError(t, err)
-		assert.Len(t, result, 2)
-
-		// Invalid array length
-		_, err = schema.Parse([]string{"hello"})
-		assert.Error(t, err)
-
-		// Invalid element length
-		_, err = schema.Parse([]string{"hello", "hi"})
-		assert.Error(t, err)
-
-		// Array too long
-		_, err = schema.Parse([]string{"hello", "world", "test", "data", "extra", "more"})
-		assert.Error(t, err)
-	})
-
-	t.Run("validation with element validation", func(t *testing.T) {
-		schema := Slice(String().Email()).NonEmpty().Max(3)
-
-		// Valid emails
-		result, err := schema.Parse([]string{"test@example.com", "user@domain.org"})
-		require.NoError(t, err)
-		assert.Len(t, result, 2)
-
-		// Invalid email
-		_, err = schema.Parse([]string{"test@example.com", "invalid-email"})
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 5. Transform/Pipe
-// =============================================================================
-
-func TestSliceTransform(t *testing.T) {
-	t.Run("basic transform", func(t *testing.T) {
-		schema := Slice(Int()).TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if arr, ok := val.([]any); ok {
-				sum := 0
-				for _, v := range arr {
-					if i, ok := v.(int); ok {
-						sum += i
-					}
-				}
-				return sum, nil
-			}
-			return 0, nil
-		})
-
-		result, err := schema.Parse([]int{1, 2, 3})
-		require.NoError(t, err)
-		assert.Equal(t, 6, result)
-	})
-
-	t.Run("transform chain", func(t *testing.T) {
-		// First transform: sum the array
-		// Second transform: double the result
-		schema := Slice(Int()).
-			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-				if arr, ok := val.([]any); ok {
-					sum := 0
-					for _, v := range arr {
-						if i, ok := v.(int); ok {
-							sum += i
-						}
-					}
-					return sum, nil
-				}
-				return 0, nil
-			}).
-			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-				if i, ok := val.(int); ok {
-					return i * 2, nil
-				}
-				return val, nil
-			})
-
-		result, err := schema.Parse([]int{1, 2, 3})
-		require.NoError(t, err)
-		assert.Equal(t, 12, result) // (1+2+3) * 2 = 12
-	})
-
-	t.Run("pipe to another schema", func(t *testing.T) {
-		// Transform slice to its length, then validate as positive integer
-		lengthTransform := Slice(String()).TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if arr, ok := val.([]any); ok {
-				return len(arr), nil
-			}
-			return 0, nil
-		})
-
-		schema := lengthTransform.Pipe(Int().Min(1))
-
-		// Valid case
-		result, err := schema.Parse([]string{"hello", "world"})
-		require.NoError(t, err)
-		assert.Equal(t, 2, result)
-
-		// Invalid case (empty array -> length 0 -> fails Min(1))
-		_, err = schema.Parse([]string{})
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 6. Refine
-// =============================================================================
-
-func TestSliceRefine(t *testing.T) {
-	t.Run("basic refine", func(t *testing.T) {
-		schema := Slice(Int()).Refine(func(val []any) bool {
-			return len(val)%2 == 0
-		}, core.SchemaParams{Error: "Array length must be even"})
-
-		// Valid case (even length)
-		result, err := schema.Parse([]int{1, 2})
-		require.NoError(t, err)
-		assert.Equal(t, []any{1, 2}, result)
-
-		// Invalid case (odd length)
-		_, err = schema.Parse([]int{1})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Array length must be even")
-	})
-
-	t.Run("refine vs transform distinction", func(t *testing.T) {
-		input := []string{"hello", "world"}
-
-		// Refine: only validates, never modifies
-		refineSchema := Slice(String()).Refine(func(val []any) bool {
-			return len(val) > 0
-		})
-		refineResult, refineErr := refineSchema.Parse(input)
-
-		// Transform: validates and converts
-		transformSchema := Slice(String()).TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if arr, ok := val.([]any); ok {
-				return len(arr), nil
-			}
-			return 0, nil
-		})
-		transformResult, transformErr := transformSchema.Parse(input)
-
-		// Refine returns original value unchanged
-		require.NoError(t, refineErr)
-		assert.IsType(t, []any{}, refineResult)
-
-		// Transform returns modified value
-		require.NoError(t, transformErr)
-		assert.Equal(t, 2, transformResult)
-
-		// Key distinction: Refine preserves, Transform modifies
-		assert.NotEqual(t, transformResult, refineResult, "Transform should return modified value")
-	})
-
-	t.Run("complex refine validation", func(t *testing.T) {
-		// All elements must be unique
-		schema := Slice(String()).Refine(func(val []any) bool {
-			seen := make(map[any]bool)
-			for _, item := range val {
-				if seen[item] {
-					return false
-				}
-				seen[item] = true
-			}
-			return true
-		}, core.SchemaParams{Error: "All elements must be unique"})
-
-		// Valid case (unique elements)
-		result, err := schema.Parse([]string{"a", "b", "c"})
-		require.NoError(t, err)
-		assert.Len(t, result, 3)
-
-		// Invalid case (duplicate elements)
-		_, err = schema.Parse([]string{"a", "b", "a"})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "All elements must be unique")
-	})
-}
-
-// =============================================================================
-// 7. Error handling
-// =============================================================================
-
-func TestSliceErrorHandling(t *testing.T) {
-	t.Run("error structure", func(t *testing.T) {
-		schema := Slice(String()).Min(3)
-		_, err := schema.Parse([]string{"a"})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, issues.TooSmall, zodErr.Issues[0].Code)
-	})
-
-	t.Run("custom error messages", func(t *testing.T) {
-		schema := Slice(String()).Min(2, core.SchemaParams{
-			Error: "Array must have at least 2 elements",
-		})
-		_, err := schema.Parse([]string{"a"})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Contains(t, zodErr.Issues[0].Message, "Array must have at least 2 elements")
-	})
-
-	t.Run("error message format validation", func(t *testing.T) {
-		// Test specific error message format for size constraints
-		schema := Slice(String()).Min(2).Max(2)
-
-		// Test too small - should show proper format
-		_, err1 := schema.Parse([]string{"hello"})
-		require.Error(t, err1)
-		fmt.Printf("Too small error: %s\n", err1.Error())
-
-		// Test too big - should show proper format
-		_, err2 := schema.Parse([]string{"hello", "world", "test"})
-		require.Error(t, err2)
-		fmt.Printf("Too big error: %s\n", err2.Error())
-
-		// Verify the format matches expectations
-		assert.Contains(t, err1.Error(), "Too small: expected slice to have >=2 items")
-		assert.Contains(t, err2.Error(), "Too big: expected slice to have <=2 items")
-	})
-
-	t.Run("multilingual error message support", func(t *testing.T) {
-		// Test error message structure for internationalization support
-		schema := Slice(String()).Min(3)
-
-		// Test with default locale
-		_, err := schema.Parse([]string{"a", "b"})
-		require.Error(t, err)
-
-		// The default error should be in expected format
-		assert.Contains(t, err.Error(), "Too small: expected slice to have >=3 items")
-
-		// Test that the error contains the expected metadata for localization
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		issue := zodErr.Issues[0]
-		assert.Equal(t, issues.TooSmall, issue.Code)
-		// Note: core.ZodRawIssue doesn't have Origin, Minimum, Inclusive fields
-		// These are expected to be in Properties map or derived from message
-		assert.Contains(t, issue.Message, "Too small")
-
-		fmt.Printf("Default error message: %s\n", err.Error())
-	})
-
-	t.Run("multiple errors", func(t *testing.T) {
-		schema := Slice(String().Min(5)).Min(2)
-		_, err := schema.Parse([]string{"hi"})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-	})
-
-	t.Run("nested validation errors", func(t *testing.T) {
-		schema := Slice(Object(core.ObjectSchema{
-			"name": String().Min(3),
-			"age":  Int().Min(0),
-		}))
-
-		invalidData := []map[string]any{
-			{"name": "Jo", "age": -1}, // Both name too short and age negative
-		}
-
-		_, err := schema.Parse(invalidData)
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-	})
-}
-
-// =============================================================================
-// 8. Edge and mutual exclusion cases
-// =============================================================================
-
-func TestSliceEdgeCases(t *testing.T) {
 	t.Run("empty slice", func(t *testing.T) {
-		schema := Slice(String())
+		schema := Slice[string](String())
+
 		result, err := schema.Parse([]string{})
 		require.NoError(t, err)
-		assert.Empty(t, result)
+		assert.Equal(t, []string{}, result)
 	})
 
-	t.Run("nil slice handling", func(t *testing.T) {
-		schema := Slice(String())
+	t.Run("invalid type inputs", func(t *testing.T) {
+		schema := Slice[string](String())
 
-		// nil slice should fail unless Nilable
-		_, err := schema.Parse((*[]string)(nil))
-		assert.Error(t, err)
-
-		// Nilable schema should handle nil
-		nilableSchema := schema.Nilable()
-		result, err := nilableSchema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("complex type rejection", func(t *testing.T) {
-		schema := Slice(String())
-		complexTypes := []any{
-			make(chan int),
-			func() int { return 1 },
-			struct{ I int }{I: 1},
-			map[string]int{"a": 1},
+		invalidInputs := []any{
+			"not a slice", 123, true, map[string]any{"key": "value"}, nil,
 		}
 
-		for _, input := range complexTypes {
+		for _, input := range invalidInputs {
 			_, err := schema.Parse(input)
-			assert.Error(t, err)
+			assert.Error(t, err, "Expected error for input: %v", input)
 		}
 	})
+}
 
-	t.Run("heterogeneous slice handling", func(t *testing.T) {
-		schema := Slice(String())
+func TestSlice_TypeConstraints(t *testing.T) {
+	t.Run("slice with value constraint", func(t *testing.T) {
+		schema := Slice[string](String())
 
-		// Mixed types should fail element validation
-		_, err := schema.Parse([]any{"hello", 123, true})
-		assert.Error(t, err)
+		result, err := schema.Parse([]string{"test"})
+		require.NoError(t, err)
+		assert.IsType(t, []string{}, result)
+		assert.Equal(t, []string{"test"}, result)
 	})
 
-	t.Run("deeply nested slices", func(t *testing.T) {
-		schema := Slice(Slice(String().Min(2)))
+	t.Run("slice with pointer constraint from Optional", func(t *testing.T) {
+		schema := Slice[string](String()).Optional()
 
-		// Valid nested structure
-		result, err := schema.Parse([][]string{
-			{"hello", "world"},
-			{"test", "data"},
-		})
+		testSlice := []string{"test"}
+		result, err := schema.Parse(testSlice)
 		require.NoError(t, err)
-		assert.Len(t, result, 2)
+		assert.IsType(t, &[]string{}, result)
+		assert.Equal(t, &testSlice, result)
+	})
 
-		// Invalid inner element
-		_, err = schema.Parse([][]string{
-			{"hello", "world"},
-			{"test", "x"}, // "x" is too short
-		})
+	t.Run("slice with pointer constraint from Nilable", func(t *testing.T) {
+		schema := Slice[string](String()).Nilable()
+
+		testSlice := []string{"test"}
+		result, err := schema.Parse(testSlice)
+		require.NoError(t, err)
+		assert.IsType(t, &[]string{}, result)
+		assert.Equal(t, &testSlice, result)
+
+		// Test nil
+		nilResult, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, nilResult)
+	})
+}
+
+func TestSlice_ErrorHandling(t *testing.T) {
+	t.Run("custom error message", func(t *testing.T) {
+		schema := Slice[string](String(), core.SchemaParams{Error: "Expected a valid slice"})
+
+		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 9. Default and Prefault tests
+// Overwrite functionality tests
 // =============================================================================
 
-func TestSliceDefaultAndPrefault(t *testing.T) {
-	t.Run("basic default value", func(t *testing.T) {
-		defaultValue := []any{"default", "value"}
-		schema := Slice(String()).Default(defaultValue)
+func TestSlice_Overwrite(t *testing.T) {
+	t.Run("basic slice transformations", func(t *testing.T) {
+		// Test sorting slice
+		sortSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			sorted := make([]int, len(s))
+			copy(sorted, s)
+			for i := 0; i < len(sorted)-1; i++ {
+				for j := i + 1; j < len(sorted); j++ {
+					if sorted[i] > sorted[j] {
+						sorted[i], sorted[j] = sorted[j], sorted[i]
+					}
+				}
+			}
+			return sorted
+		})
 
-		// nil input uses default
-		result, err := schema.Parse(nil)
+		input := []int{3, 1, 4, 1, 5, 9, 2, 6}
+		result, err := sortSchema.Parse(input)
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
+		assert.Equal(t, []int{1, 1, 2, 3, 4, 5, 6, 9}, result)
+	})
 
-		// Valid input bypasses default
-		validInput := []string{"hello", "world"}
-		result2, err := schema.Parse(validInput)
+	t.Run("string slice transformations", func(t *testing.T) {
+		// Test trimming all strings
+		trimSchema := Slice[string](String()).Overwrite(func(s []string) []string {
+			trimmed := make([]string, len(s))
+			for i, str := range s {
+				trimmed[i] = strings.TrimSpace(str)
+			}
+			return trimmed
+		})
+
+		input := []string{"  hello  ", "\tworld\n", " go ", ""}
+		result, err := trimSchema.Parse(input)
 		require.NoError(t, err)
-		assert.Equal(t, []any{"hello", "world"}, result2)
+		assert.Equal(t, []string{"hello", "world", "go", ""}, result)
+
+		// Test converting to lowercase
+		lowerSchema := Slice[string](String()).Overwrite(func(s []string) []string {
+			lower := make([]string, len(s))
+			for i, str := range s {
+				lower[i] = strings.ToLower(str)
+			}
+			return lower
+		})
+
+		input = []string{"HELLO", "World", "GO"}
+		result, err = lowerSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"hello", "world", "go"}, result)
 	})
 
-	t.Run("function-based default value", func(t *testing.T) {
-		counter := 0
-		schema := Slice(String()).DefaultFunc(func() []any {
-			counter++
-			return []any{fmt.Sprintf("generated-%d", counter)}
-		}).Min(1)
+	t.Run("filtering and deduplication", func(t *testing.T) {
+		// Test removing duplicates
+		dedupeSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			seen := make(map[int]bool)
+			result := []int{}
+			for _, v := range s {
+				if !seen[v] {
+					seen[v] = true
+					result = append(result, v)
+				}
+			}
+			return result
+		})
 
-		// Each nil input generates a new default value
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, []any{"generated-1"}, result1)
+		input := []int{1, 2, 2, 3, 1, 4, 3, 5}
+		result, err := dedupeSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, result)
 
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, []any{"generated-2"}, result2)
+		// Test filtering even numbers
+		evenSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			evens := []int{}
+			for _, v := range s {
+				if v%2 == 0 {
+					evens = append(evens, v)
+				}
+			}
+			return evens
+		})
 
-		// Valid input bypasses default generation
-		result3, err3 := schema.Parse([]string{"valid"})
-		require.NoError(t, err3)
-		assert.Equal(t, []any{"valid"}, result3)
-
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
+		input = []int{1, 2, 3, 4, 5, 6, 7, 8}
+		result, err = evenSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{2, 4, 6, 8}, result)
 	})
 
-	t.Run("default with validation chaining", func(t *testing.T) {
-		schema := Slice(String()).
-			Default([]any{"hello", "world"}).
-			Min(2).
-			Max(5)
+	t.Run("mathematical transformations", func(t *testing.T) {
+		// Test doubling all values
+		doubleSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			doubled := make([]int, len(s))
+			for i, v := range s {
+				doubled[i] = v * 2
+			}
+			return doubled
+		})
 
-		// nil input: use default, validate
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, []any{"hello", "world"}, result1)
+		input := []int{1, 2, 3, 4, 5}
+		result, err := doubleSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{2, 4, 6, 8, 10}, result)
 
-		// Valid input: validate
-		result2, err2 := schema.Parse([]string{"test", "data", "example"})
-		require.NoError(t, err2)
-		assert.Len(t, result2, 3)
+		// Test calculating cumulative sum
+		cumulativeSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			cumulative := make([]int, len(s))
+			sum := 0
+			for i, v := range s {
+				sum += v
+				cumulative[i] = sum
+			}
+			return cumulative
+		})
 
-		// Invalid input still fails validation
-		_, err3 := schema.Parse([]string{"only_one"})
-		assert.Error(t, err3, "Short slice should fail Min(2) validation")
+		input = []int{1, 2, 3, 4, 5}
+		result, err = cumulativeSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 3, 6, 10, 15}, result)
 	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		fallbackValue := []any{"fallback", "data"}
-		schema := Slice(String()).Min(2).Prefault(fallbackValue) // Min(2) for slice length, not string length
+	t.Run("structural transformations", func(t *testing.T) {
+		// Test reversing slice
+		reverseSchema := Slice[string](String()).Overwrite(func(s []string) []string {
+			reversed := make([]string, len(s))
+			for i, v := range s {
+				reversed[len(s)-1-i] = v
+			}
+			return reversed
+		})
 
-		// Valid input succeeds
-		result1, err1 := schema.Parse([]string{"hello", "world"})
-		require.NoError(t, err1)
-		assert.Equal(t, []any{"hello", "world"}, result1)
+		input := []string{"a", "b", "c", "d", "e"}
+		result, err := reverseSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"e", "d", "c", "b", "a"}, result)
 
-		// Invalid input uses prefault - single element slice should fail Min(2) validation
-		result2, err2 := schema.Parse([]string{"hello"}) // only one element, should fail Min(2)
-		require.NoError(t, err2)
-		assert.Equal(t, fallbackValue, result2)
+		// Test padding slice to minimum length
+		padSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			minLen := 5
+			if len(s) >= minLen {
+				return s
+			}
+			padded := make([]int, minLen)
+			copy(padded, s)
+			// Fill remaining with zeros (default)
+			return padded
+		})
+
+		intInput := []int{1, 2, 3}
+		intResult, err := padSchema.Parse(intInput)
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3, 0, 0}, intResult)
 	})
 
-	t.Run("default with transform compatibility", func(t *testing.T) {
-		schema := Slice(String()).
-			Default([]any{"hello", "world"}).
-			Min(1).
-			Transform(func(val []any, ctx *core.RefinementContext) (any, error) {
-				return map[string]any{
-					"original": val,
-					"length":   len(val),
-					"first":    val[0],
-				}, nil
+	t.Run("chaining with validations", func(t *testing.T) {
+		// Test chaining Overwrite with Min validation
+		sortedMinSchema := Slice[int](Int()).
+			Overwrite(func(s []int) []int {
+				// Sort first
+				sorted := make([]int, len(s))
+				copy(sorted, s)
+				for i := 0; i < len(sorted)-1; i++ {
+					for j := i + 1; j < len(sorted); j++ {
+						if sorted[i] > sorted[j] {
+							sorted[i], sorted[j] = sorted[j], sorted[i]
+						}
+					}
+				}
+				return sorted
+			}).
+			Min(3) // Then require at least 3 elements
+
+		// Test with valid input
+		result, err := sortedMinSchema.Parse([]int{3, 1, 4, 1, 5})
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 1, 3, 4, 5}, result)
+
+		// Test with invalid input (too short)
+		_, err = sortedMinSchema.Parse([]int{3, 1})
+		assert.Error(t, err)
+	})
+
+	t.Run("multiple overwrite calls", func(t *testing.T) {
+		// Test chaining multiple Overwrite calls
+		multiTransformSchema := Slice[int](Int()).
+			Overwrite(func(s []int) []int {
+				// First: remove zeros
+				filtered := []int{}
+				for _, v := range s {
+					if v != 0 {
+						filtered = append(filtered, v)
+					}
+				}
+				return filtered
+			}).
+			Overwrite(func(s []int) []int {
+				// Second: double all values
+				doubled := make([]int, len(s))
+				for i, v := range s {
+					doubled[i] = v * 2
+				}
+				return doubled
+			}).
+			Overwrite(func(s []int) []int {
+				// Third: sort
+				sorted := make([]int, len(s))
+				copy(sorted, s)
+				for i := 0; i < len(sorted)-1; i++ {
+					for j := i + 1; j < len(sorted); j++ {
+						if sorted[i] > sorted[j] {
+							sorted[i], sorted[j] = sorted[j], sorted[i]
+						}
+					}
+				}
+				return sorted
 			})
 
-		// Non-nil input: validate then transform
-		result1, err1 := schema.Parse([]string{"test", "data"})
-		require.NoError(t, err1)
-		result1Map, ok1 := result1.(map[string]any)
-		require.True(t, ok1)
-		assert.Equal(t, []any{"test", "data"}, result1Map["original"])
-		assert.Equal(t, 2, result1Map["length"])
-		assert.Equal(t, "test", result1Map["first"])
-
-		// nil input: use default then transform
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		result2Map, ok2 := result2.(map[string]any)
-		require.True(t, ok2)
-		assert.Equal(t, []any{"hello", "world"}, result2Map["original"])
-		assert.Equal(t, 2, result2Map["length"])
-		assert.Equal(t, "hello", result2Map["first"])
+		// Test: [3, 0, 1, 0, 2] -> [3, 1, 2] -> [6, 2, 4] -> [2, 4, 6]
+		result, err := multiTransformSchema.Parse([]int{3, 0, 1, 0, 2})
+		require.NoError(t, err)
+		assert.Equal(t, []int{2, 4, 6}, result)
 	})
-}
 
-// =============================================================================
-// 10. Additional slice behavior tests
-// =============================================================================
-
-// TestSliceContinueParsingDespiteSizeError ensures element errors are still reported when slice size constraints fail
-func TestSliceContinueParsingDespiteSizeError(t *testing.T) {
-	t.Run("continue parsing despite slice size error", func(t *testing.T) {
-		// Define object schema with people slice requiring at least 2 items
-		schema := Object(core.ObjectSchema{
-			"people": Slice(String()).Min(2),
+	t.Run("empty slice handling", func(t *testing.T) {
+		// Test transformation that handles empty slices
+		safeSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			if len(s) == 0 {
+				return []int{0} // Provide default
+			}
+			return s
 		})
 
-		// Input has only one element and of wrong type
-		input := map[string]any{
-			"people": []any{123},
-		}
+		// Test empty slice
+		result, err := safeSchema.Parse([]int{})
+		require.NoError(t, err)
+		assert.Equal(t, []int{0}, result)
 
-		result, err := schema.Parse(input)
-		assert.Error(t, err)
+		// Test non-empty slice
+		result, err = safeSchema.Parse([]int{1, 2, 3})
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3}, result)
+	})
+
+	t.Run("type preservation", func(t *testing.T) {
+		// Test that Overwrite preserves the original type
+		sliceSchema := Slice[int](Int())
+		overwriteSchema := sliceSchema.Overwrite(func(s []int) []int {
+			// Sort the slice
+			sorted := make([]int, len(s))
+			copy(sorted, s)
+			for i := 0; i < len(sorted)-1; i++ {
+				for j := i + 1; j < len(sorted); j++ {
+					if sorted[i] > sorted[j] {
+						sorted[i], sorted[j] = sorted[j], sorted[i]
+					}
+				}
+			}
+			return sorted
+		})
+
+		// Both should have the same type
+		testValue := []int{3, 1, 4}
+
+		result1, err1 := sliceSchema.Parse(testValue)
+		require.NoError(t, err1)
+
+		result2, err2 := overwriteSchema.Parse(testValue)
+		require.NoError(t, err2)
+
+		// Both results should be of type []int
+		assert.IsType(t, []int{}, result1)
+		assert.IsType(t, []int{}, result2)
+	})
+
+	t.Run("pointer type handling", func(t *testing.T) {
+		// Pointer Overwrite should now work and preserve pointer identity
+		ptrSchema := SlicePtr[int](Int()).Nilable().Overwrite(func(s *[]int) *[]int {
+			if s == nil {
+				return nil
+			}
+			// Sort the slice
+			sorted := make([]int, len(*s))
+			copy(sorted, *s)
+			for i := 0; i < len(sorted)-1; i++ {
+				for j := i + 1; j < len(sorted); j++ {
+					if sorted[i] > sorted[j] {
+						sorted[i], sorted[j] = sorted[j], sorted[i]
+					}
+				}
+			}
+			return &sorted
+		})
+
+		// Test with non-nil value
+		testValue := []int{3, 1, 4}
+		result, err := ptrSchema.Parse(&testValue)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, []int{1, 3, 4}, *result)
+
+		// Test with nil value
+		result, err = ptrSchema.Parse(nil)
+		require.NoError(t, err)
 		assert.Nil(t, result)
+	})
 
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		// Expect at least two issues: invalid type for element 0 and too small for slice
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 2)
+	t.Run("error handling", func(t *testing.T) {
+		// Test that invalid inputs still produce errors
+		schema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			return s // Identity transformation
+		})
 
-		// Verify presence of specific codes
-		hasInvalidType := false
-		hasTooSmall := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == issues.InvalidType {
-				hasInvalidType = true
+		// Invalid input should still cause an error
+		_, err := schema.Parse("not a slice")
+		assert.Error(t, err)
+
+		_, err = schema.Parse(12345)
+		assert.Error(t, err)
+
+		_, err = schema.Parse(map[string]int{"a": 1})
+		assert.Error(t, err)
+	})
+
+	t.Run("immutability", func(t *testing.T) {
+		// Test that original values are not modified
+		originalSlice := []int{3, 1, 4, 1, 5}
+		originalCopy := make([]int, len(originalSlice))
+		copy(originalCopy, originalSlice)
+
+		sortSchema := Slice[int](Int()).Overwrite(func(s []int) []int {
+			sorted := make([]int, len(s))
+			copy(sorted, s)
+			for i := 0; i < len(sorted)-1; i++ {
+				for j := i + 1; j < len(sorted); j++ {
+					if sorted[i] > sorted[j] {
+						sorted[i], sorted[j] = sorted[j], sorted[i]
+					}
+				}
 			}
-			if issue.Code == issues.TooSmall {
-				hasTooSmall = true
-			}
+			return sorted
+		})
+
+		result, err := sortSchema.Parse(originalSlice)
+		require.NoError(t, err)
+
+		// Result should be sorted
+		assert.Equal(t, []int{1, 1, 3, 4, 5}, result)
+
+		// Original slice should remain unchanged
+		assert.Equal(t, originalCopy, originalSlice)
+	})
+
+	t.Run("complex element transformations", func(t *testing.T) {
+		// Test slice of custom struct types (using map as example)
+		type Person struct {
+			Name string
+			Age  int
 		}
-		assert.True(t, hasInvalidType, "Should report invalid element type")
-		assert.True(t, hasTooSmall, "Should report slice too small")
+
+		// Create a slice transformation that normalizes names
+		normalizeSchema := Slice[Person](Any()).Overwrite(func(people []Person) []Person {
+			normalized := make([]Person, len(people))
+			for i, person := range people {
+				normalized[i] = Person{
+					Name: strings.TrimSpace(strings.ToLower(person.Name)),
+					Age:  person.Age,
+				}
+			}
+			return normalized
+		})
+
+		input := []Person{
+			{Name: "  ALICE  ", Age: 30},
+			{Name: "Bob\n", Age: 25},
+			{Name: "\tCharlie ", Age: 35},
+		}
+
+		result, err := normalizeSchema.Parse(input)
+		require.NoError(t, err)
+
+		expected := []Person{
+			{Name: "alice", Age: 30},
+			{Name: "bob", Age: 25},
+			{Name: "charlie", Age: 35},
+		}
+		assert.Equal(t, expected, result)
 	})
 }
 
-// TestSliceSparseArrayValidation ensures slices with nil elements fail element validation even if length constraints pass
-func TestSliceSparseArrayValidation(t *testing.T) {
-	t.Run("parse should fail given sparse slice", func(t *testing.T) {
-		schema := Slice(String()).NonEmpty().Min(1).Max(3)
+// =============================================================================
+// Check Method Tests
+// =============================================================================
 
-		// Create sparse slice of length 3 (all nil)
-		sparse := make([]any, 3)
-
-		_, err := schema.Parse(sparse)
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		// Expect invalid type error for each element
-		invalidCount := 0
-		for _, issue := range zodErr.Issues {
-			if issue.Code == issues.InvalidType {
-				invalidCount++
+func TestSlice_Check(t *testing.T) {
+	t.Run("adds multiple issues for invalid input", func(t *testing.T) {
+		schema := Slice[int](nil).Check(func(value []int, p *core.ParsePayload) {
+			if len(value) == 0 {
+				p.AddIssueWithMessage("slice cannot be empty")
 			}
-		}
-		assert.Equal(t, 3, invalidCount, "Each nil element should yield an invalid_type issue")
+			if len(value) > 3 {
+				p.AddIssueWithCode(core.TooBig, "too many elements")
+			}
+		})
+
+		_, err := schema.Parse([]int{})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+
+		_, err = schema.Parse([]int{1, 2, 3, 4, 5})
+		require.Error(t, err)
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Equal(t, core.TooBig, zErr.Issues[0].Code)
+	})
+
+	t.Run("succeeds for valid input", func(t *testing.T) {
+		schema := Slice[int](nil).Check(func(value []int, p *core.ParsePayload) {
+			if len(value)%2 != 0 {
+				p.AddIssueWithMessage("length must be even")
+			}
+		})
+		res, err := schema.Parse([]int{1, 2})
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2}, res)
+	})
+
+	t.Run("works with pointer types", func(t *testing.T) {
+		schema := SlicePtr[int](nil).Check(func(value *[]int, p *core.ParsePayload) {
+			if value != nil && len(*value) < 2 {
+				p.AddIssueWithMessage("need at least two elements")
+			}
+		})
+		small := []int{1}
+		_, err := schema.Parse(&small)
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+
+		good := []int{1, 2, 3}
+		res, err := schema.Parse(&good)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.Equal(t, 3, len(*res))
 	})
 }

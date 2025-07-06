@@ -6,6 +6,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -16,9 +17,9 @@ import (
 // Regex creates a regex pattern check with JSON Schema support
 // Supports: Regex(pattern, "invalid format") or Regex(pattern, CheckParams{Error: "does not match pattern"})
 func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "regex"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -30,8 +31,8 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set pattern for JSON Schema
-				setBagProperty(schema, "pattern", pattern.String())
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "pattern", pattern.String())
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -44,9 +45,9 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 // Includes creates a substring inclusion check with JSON Schema support
 // Supports: Includes("test", "must contain test") or Includes("test", CheckParams{Error: "missing required substring"})
 func Includes(substring string, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "includes"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -61,8 +62,8 @@ func Includes(substring string, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Add custom property for includes validation
-				setBagProperty(schema, "contains", substring)
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "contains", substring)
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -71,9 +72,9 @@ func Includes(substring string, params ...any) core.ZodCheck {
 // StartsWith creates a prefix check with JSON Schema support
 // Supports: StartsWith("prefix", "wrong start") or StartsWith("prefix", CheckParams{Error: "must start with prefix"})
 func StartsWith(prefix string, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "starts_with"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -90,7 +91,7 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 				// Use pattern for starts with validation
 				pattern := "^" + regexp.QuoteMeta(prefix)
 				addPatternToSchema(schema, pattern)
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -99,9 +100,9 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 // EndsWith creates a suffix check with JSON Schema support
 // Supports: EndsWith("suffix", "wrong end") or EndsWith("suffix", CheckParams{Error: "must end with suffix"})
 func EndsWith(suffix string, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "ends_with"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -118,7 +119,7 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 				// Use pattern for ends with validation
 				pattern := regexp.QuoteMeta(suffix) + "$"
 				addPatternToSchema(schema, pattern)
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -131,9 +132,9 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 // Lowercase creates a lowercase format check with JSON Schema support
 // Supports: Lowercase("must be lowercase") or Lowercase(CheckParams{Error: "only lowercase letters allowed"})
 func Lowercase(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "lowercase"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -146,7 +147,7 @@ func Lowercase(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Use pattern for lowercase validation
 				addPatternToSchema(schema, "^[^A-Z]*$")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -155,9 +156,9 @@ func Lowercase(params ...any) core.ZodCheck {
 // Uppercase creates an uppercase format check with JSON Schema support
 // Supports: Uppercase("must be uppercase") or Uppercase(CheckParams{Error: "only uppercase letters allowed"})
 func Uppercase(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "uppercase"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -170,10 +171,64 @@ func Uppercase(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Use pattern for uppercase validation
 				addPatternToSchema(schema, "^[^a-z]*$")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
+}
+
+// =============================================================================
+// STRING VALUE COMPARISON FUNCTIONS
+// =============================================================================
+
+// StringGte creates a string greater than or equal validation check
+// Uses lexicographic comparison, perfect for ISO 8601 date/time strings
+func StringGte(minValue string, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "string_gte"}
+	ApplyCheckParams(def, checkParams)
+
+	internals := &core.ZodCheckInternals{Def: def}
+	internals.Check = func(payload *core.ParsePayload) {
+		if str, ok := reflectx.ExtractString(payload.GetValue()); ok {
+			if str < minValue {
+				raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.GetValue())
+				raw.Inst = internals
+				payload.AddIssue(raw)
+			}
+		} else {
+			// If not a string, create a type mismatch issue
+			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue())
+			raw.Inst = internals
+			payload.AddIssue(raw)
+		}
+	}
+	return internals
+}
+
+// StringLte creates a string less than or equal validation check
+// Uses lexicographic comparison, perfect for ISO 8601 date/time strings
+func StringLte(maxValue string, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "string_lte"}
+	ApplyCheckParams(def, checkParams)
+
+	internals := &core.ZodCheckInternals{Def: def}
+	internals.Check = func(payload *core.ParsePayload) {
+		if str, ok := reflectx.ExtractString(payload.GetValue()); ok {
+			if str > maxValue {
+				raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.GetValue())
+				raw.Inst = internals
+				payload.AddIssue(raw)
+			}
+		} else {
+			// If not a string, create a type mismatch issue
+			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue())
+			raw.Inst = internals
+			payload.AddIssue(raw)
+		}
+	}
+	return internals
 }
 
 // =============================================================================

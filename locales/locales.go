@@ -1,3 +1,10 @@
+// Package locales provides pre-configured error message formatters for different languages.
+// To use a locale, pass its factory function to gozod.Config().
+//
+// Example:
+//
+//	gozod.Config(locales.ZhCN()) // Switch to Chinese messages globally.
+//	gozod.Config(locales.EN())   // Switch back to English.
 package locales
 
 import (
@@ -101,24 +108,6 @@ func GetAvailableLocales() []string {
 	}
 
 	return locales
-}
-
-// =============================================================================
-// BACKWARD COMPATIBILITY FUNCTIONS
-// =============================================================================
-
-// En returns the English locale formatter function for backward compatibility
-// This function matches the old interface: func(ZodRawIssue) string
-// Preserves existing API while integrating with the new formatter system
-func En() func(core.ZodRawIssue) string {
-	return formatEn
-}
-
-// ZhCN returns the Chinese locale formatter function for backward compatibility
-// This function matches the old interface: func(ZodRawIssue) string
-// Preserves existing API while integrating with the new formatter system
-func ZhCN() func(core.ZodRawIssue) string {
-	return formatZhCN
 }
 
 // =============================================================================

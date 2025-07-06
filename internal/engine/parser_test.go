@@ -4,148 +4,355 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// MOCK SCHEMA FOR TESTING
+// TEST HELPERS
 // =============================================================================
 
-// mockStringSchema represents a simple string validation schema for testing
-type mockStringSchema struct {
-	internals *core.ZodTypeInternals
-}
-
-func (m *mockStringSchema) GetInternals() *core.ZodTypeInternals {
-	return m.internals
-}
-
-func (m *mockStringSchema) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	// Use the engine Parse function
-	var context *core.ParseContext = nil
-	if len(ctx) > 0 {
-		context = ctx[0]
-	}
-
-	// Check if schema has internals
-	if m.internals == nil {
-		rawIssue := issues.CreateCustomIssue("schema has no internals defined", nil, input)
-		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
-	// Check if internals has a parse function
-	if m.internals.Parse == nil {
-		rawIssue := issues.CreateCustomIssue("schema has no parse function defined", nil, input)
-		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
-	// create parse payload
-	payload := core.NewParsePayload(input)
-
-	// call internal parse function
-	result := m.internals.Parse(payload, context)
-
-	// check if parse result is nil
-	if result == nil {
-		rawIssue := issues.CreateCustomIssue("parse function returned nil", nil, input)
-		finalIssue := issues.FinalizeIssue(rawIssue, context, nil)
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
-	// check if there are any issues
-	if len(result.GetIssues()) > 0 {
-		// ensure all raw issues have correct input field
-		resultIssues := result.GetIssues()
-		for i := range resultIssues {
-			if resultIssues[i].Input == nil {
-				resultIssues[i].Input = input
-			}
+// mockValidator creates a simple validator function for testing
+func mockValidator[T any](shouldFail bool) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
+	return func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+		if shouldFail {
+			return value, errors.New("mock validation failed")
 		}
-		result.SetIssues(resultIssues)
-		finalizedIssues := issues.ConvertRawIssuesToIssues(result.GetIssues(), context)
-		return nil, issues.NewZodError(finalizedIssues)
+		return value, nil
 	}
-
-	return result.GetValue(), nil
 }
 
-func (m *mockStringSchema) MustParse(input any, ctx ...*core.ParseContext) any {
-	// Use the engine MustParse function
-	var context *core.ParseContext = nil
-	if len(ctx) > 0 {
-		context = ctx[0]
+// mockConverter creates a simple converter function for testing
+func mockConverter[T any](result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (T, error) {
+	if result == nil {
+		var zero T
+		return zero, nil
 	}
-	return MustParse[any, any](m, input, context)
+	if val, ok := result.(T); ok {
+		return val, nil
+	}
+	var zero T
+	return zero, CreateInvalidTypeError(expectedType, result, ctx)
 }
 
-func (m *mockStringSchema) Nilable() core.ZodType[any, any] {
-	// Create a copy with nilable flag
-	newInternals := *m.internals
-	newInternals.Nilable = true
-	return &mockStringSchema{internals: &newInternals}
+// mockTypeExtractor creates a type extractor for testing
+func mockTypeExtractor[T any](shouldExtract bool) func(any) (T, bool) {
+	return func(input any) (T, bool) {
+		if !shouldExtract {
+			var zero T
+			return zero, false
+		}
+		if val, ok := input.(T); ok {
+			return val, true
+		}
+		var zero T
+		return zero, false
+	}
 }
 
-func (m *mockStringSchema) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return m // Simple mock implementation
+// mockPtrExtractor creates a pointer extractor for testing
+func mockPtrExtractor[T any](shouldExtract bool) func(any) (*T, bool) {
+	return func(input any) (*T, bool) {
+		if !shouldExtract {
+			return nil, false
+		}
+		if ptr, ok := input.(*T); ok {
+			return ptr, true
+		}
+		return nil, false
+	}
 }
 
-func (m *mockStringSchema) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return m // Simple mock implementation
-}
+// mockCheck creates a simple check for testing
+type mockCheck struct{}
 
-func (m *mockStringSchema) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return out // Simple mock implementation
-}
-
-func (m *mockStringSchema) Unwrap() core.ZodType[any, any] {
-	return m
-}
-
-func newMockStringSchema() *mockStringSchema {
-	return &mockStringSchema{
-		internals: &core.ZodTypeInternals{
-			Type:   "string",
-			Checks: []core.ZodCheck{},
-			Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-				// Simple string validation
-				if str, ok := payload.GetValue().(string); ok {
-					result := core.NewParsePayload(str)
-					result.SetPath(payload.GetPath())
-					return result
-				}
-				// Create type error
-				rawIssue := issues.CreateInvalidTypeIssue("string", payload.GetValue())
-				result := core.NewParsePayload(payload.GetValue())
-				result.AddIssue(rawIssue)
-				result.SetPath(payload.GetPath())
-				return result
-			},
+func (m *mockCheck) GetZod() *core.ZodCheckInternals {
+	return &core.ZodCheckInternals{
+		Def: &core.ZodCheckDef{
+			Check: "mock",
 		},
+		OnAttach: []func(schema any){},
+	}
+}
+
+// createMockInternals creates mock internals for testing
+func createMockInternals() *core.ZodTypeInternals {
+	return &core.ZodTypeInternals{
+		Type:   "mock",
+		Checks: []core.ZodCheck{},
+		Values: make(map[any]struct{}),
+		Bag:    make(map[string]any),
 	}
 }
 
 // =============================================================================
-// BASIC PARSING FUNCTIONALITY TESTS
+// PARSEPRIMITIVE TESTS
 // =============================================================================
 
-func TestParseBasicFunctionality(t *testing.T) {
-	t.Run("Parse function with valid input", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result, err := Parse[any, any](schema, "test", nil)
+func TestParsePrimitive(t *testing.T) {
+	t.Run("successful parsing with valid input", func(t *testing.T) {
+		internals := createMockInternals()
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
 
 		require.NoError(t, err)
 		assert.Equal(t, "test", result)
 	})
 
-	t.Run("Parse function with invalid input", func(t *testing.T) {
-		schema := newMockStringSchema()
-		_, err := Parse[any, any](schema, 123, nil)
+	t.Run("validation failure", func(t *testing.T) {
+		internals := createMockInternals()
+		// Add a dummy check to trigger validation
+		internals.AddCheck(&mockCheck{})
+		validator := mockValidator[string](true)
+
+		_, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.Error(t, err)
+		// The error should contain the validation failure message
+		assert.Contains(t, err.Error(), "mock validation failed")
+	})
+
+	t.Run("nil input with optional flag", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			nil,
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "", result) // zero value for string
+	})
+
+	t.Run("nil input with nilable flag", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetNilable(true)
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, *string](
+			nil,
+			internals,
+			"string",
+			validator,
+			func(result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (*string, error) {
+				if result == nil {
+					return nil, nil
+				}
+				if val, ok := result.(string); ok {
+					return &val, nil
+				}
+				return nil, CreateInvalidTypeError(expectedType, result, ctx)
+			},
+		)
+
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("nil input with default value", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetDefaultValue("default")
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			nil,
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "default", result)
+	})
+
+	t.Run("nil input with default function", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetDefaultFunc(func() any { return "from_func" })
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			nil,
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "from_func", result)
+	})
+
+	t.Run("prefault value after parsing failure", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetPrefaultValue("prefault")
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			123, // Wrong type, will cause parsing failure
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "prefault", result)
+	})
+
+	t.Run("prefault function after parsing failure", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetPrefaultFunc(func() any { return "prefault_func" })
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			123, // Wrong type, will cause parsing failure
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "prefault_func", result)
+	})
+
+	t.Run("transform function applied", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			return "transformed_" + value.(string), nil
+		})
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "transformed_test", result)
+	})
+
+	t.Run("transform function error", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			return nil, errors.New("transform failed")
+		})
+		validator := mockValidator[string](false)
+
+		_, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transform failed")
+	})
+
+	t.Run("with parse context", func(t *testing.T) {
+		internals := createMockInternals()
+		validator := mockValidator[string](false)
+		ctx := &core.ParseContext{ReportInput: true}
+
+		result, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+			ctx,
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+}
+
+// =============================================================================
+// PARSETYPE TESTS
+// =============================================================================
+
+func TestParseComplex(t *testing.T) {
+	t.Run("successful parsing with type extractor", func(t *testing.T) {
+		internals := createMockInternals()
+		typeExtractor := mockTypeExtractor[string](true)
+		ptrExtractor := mockPtrExtractor[string](false)
+		validator := mockValidator[string](false)
+
+		result, err := ParseComplex[string](
+			"test",
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+
+	t.Run("successful parsing with pointer extractor", func(t *testing.T) {
+		internals := createMockInternals()
+		typeExtractor := mockTypeExtractor[string](false)
+		ptrExtractor := mockPtrExtractor[string](true)
+		validator := mockValidator[string](false)
+
+		testStr := "test"
+		result, err := ParseComplex[string](
+			&testStr,
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		// ParseComplex returns the pointer when using pointer extractor
+		assert.Equal(t, &testStr, result)
+	})
+
+	t.Run("extraction failure", func(t *testing.T) {
+		internals := createMockInternals()
+		typeExtractor := mockTypeExtractor[string](false)
+		ptrExtractor := mockPtrExtractor[string](false)
+		validator := mockValidator[string](false)
+
+		_, err := ParseComplex[string](
+			123, // Wrong type
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
 
 		require.Error(t, err)
 		var zodErr *issues.ZodError
@@ -153,56 +360,68 @@ func TestParseBasicFunctionality(t *testing.T) {
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
 
-	t.Run("MustParse with valid input", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result := MustParse[any, any](schema, "test", nil)
+	t.Run("validation failure", func(t *testing.T) {
+		internals := createMockInternals()
+		// Add a dummy check to trigger validation
+		internals.AddCheck(&mockCheck{})
+		typeExtractor := mockTypeExtractor[string](true)
+		ptrExtractor := mockPtrExtractor[string](false)
+		validator := mockValidator[string](true)
 
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("MustParse panics with invalid input", func(t *testing.T) {
-		schema := newMockStringSchema()
-
-		assert.Panics(t, func() {
-			MustParse[any, any](schema, 123, nil)
-		})
-	})
-}
-
-// =============================================================================
-// PARSE CONTEXT TESTS
-// =============================================================================
-
-func TestParseContextFunctionality(t *testing.T) {
-	t.Run("Parse with default context", func(t *testing.T) {
-		ctx := core.NewParseContext()
-		schema := newMockStringSchema()
-
-		result, err := Parse[any, any](schema, "test", ctx)
-
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("Parse with custom context", func(t *testing.T) {
-		customErrorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-			return "custom error"
-		})
-
-		ctx := &core.ParseContext{
-			Error:       customErrorMap,
-			ReportInput: true,
-		}
-
-		schema := newMockStringSchema()
-		_, err := Parse[any, any](schema, 123, ctx)
+		_, err := ParseComplex[string](
+			"test",
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
 
 		require.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, errors.As(err, &zodErr))
+		// The error should contain the validation failure message
+		assert.Contains(t, err.Error(), "mock validation failed")
+	})
 
-		// Note: Custom error map would be applied during finalization
-		assert.Equal(t, 123, zodErr.Issues[0].Input)
+	t.Run("nil input with optional flag", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		typeExtractor := mockTypeExtractor[string](false)
+		ptrExtractor := mockPtrExtractor[string](false)
+		validator := mockValidator[string](false)
+
+		result, err := ParseComplex[string](
+			nil,
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("with transform function", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			return "transformed_" + value.(string), nil
+		})
+		typeExtractor := mockTypeExtractor[string](true)
+		ptrExtractor := mockPtrExtractor[string](false)
+		validator := mockValidator[string](false)
+
+		result, err := ParseComplex[string](
+			"test",
+			internals,
+			"string",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, "transformed_test", result)
 	})
 }
 
@@ -210,203 +429,205 @@ func TestParseContextFunctionality(t *testing.T) {
 // INTERNAL HELPER TESTS
 // =============================================================================
 
-func TestInternalHelpers(t *testing.T) {
-	t.Run("coercion configuration through bag", func(t *testing.T) {
-		// Test coercion behavior indirectly through schema configuration
+func TestProcessModifiers(t *testing.T) {
+	t.Run("non-nil input bypasses modifiers", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		parseCore := func(any) (any, error) { return "parsed", nil }
 
-		// Schema without coercion
-		schema1 := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Bag:  map[string]any{},
-				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-					// Mock parse that respects coercion setting
-					if str, ok := payload.GetValue().(string); ok {
-						result := core.NewParsePayload(str)
-						result.SetPath(payload.GetPath())
-						return result
-					}
-					rawIssue := issues.CreateInvalidTypeIssue("string", payload.GetValue())
-					result := core.NewParsePayload(payload.GetValue())
-					result.AddIssue(rawIssue)
-					result.SetPath(payload.GetPath())
-					return result
-				},
-			},
+		result, handled, err := processModifiers[string](
+			"input",
+			internals,
+			"string",
+			parseCore,
+			&core.ParseContext{},
+		)
+
+		assert.False(t, handled)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("nil input with optional returns nil", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		parseCore := func(any) (any, error) { return "parsed", nil }
+
+		result, handled, err := processModifiers[string](
+			nil,
+			internals,
+			"string",
+			parseCore,
+			&core.ParseContext{},
+		)
+
+		assert.True(t, handled)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("nil input with nilable returns nil", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetNilable(true)
+		parseCore := func(any) (any, error) { return "parsed", nil }
+
+		result, handled, err := processModifiers[string](
+			nil,
+			internals,
+			"string",
+			parseCore,
+			&core.ParseContext{},
+		)
+
+		assert.True(t, handled)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("nil input with default value", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetDefaultValue("default")
+		parseCore := func(input any) (any, error) {
+			return input, nil
 		}
 
-		// Test that coercion flag can be set in bag
-		assert.NotNil(t, schema1.GetInternals().Bag)
-		_, exists := schema1.GetInternals().Bag["coerce"]
-		assert.False(t, exists)
+		result, handled, err := processModifiers[string](
+			nil,
+			internals,
+			"string",
+			parseCore,
+			&core.ParseContext{},
+		)
 
-		// Schema with coercion enabled
-		schema2 := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Bag:  map[string]any{"coerce": true},
-				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-					result := core.NewParsePayload(payload.GetValue())
-					result.SetPath(payload.GetPath())
-					return result
-				},
-			},
-		}
-
-		// Test that coercion flag is properly set
-		coerceFlag, exists := schema2.GetInternals().Bag["coerce"]
-		assert.True(t, exists)
-		assert.True(t, coerceFlag.(bool))
+		assert.True(t, handled)
+		assert.NoError(t, err)
+		assert.Equal(t, "default", result)
 	})
 
-	t.Run("bag configuration edge cases", func(t *testing.T) {
-		// Test nil bag
-		schema := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Bag:  nil,
-			},
-		}
-		assert.Nil(t, schema.GetInternals().Bag)
+	t.Run("nil input without modifiers returns error", func(t *testing.T) {
+		internals := createMockInternals()
+		parseCore := func(any) (any, error) { return "parsed", nil }
 
-		// Test empty bag
-		schema2 := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Bag:  map[string]any{},
-			},
-		}
-		assert.NotNil(t, schema2.GetInternals().Bag)
-		assert.Empty(t, schema2.GetInternals().Bag)
-	})
-}
+		result, handled, err := processModifiers[string](
+			nil,
+			internals,
+			"string",
+			parseCore,
+			&core.ParseContext{},
+		)
 
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
-
-func TestParseErrorHandling(t *testing.T) {
-	t.Run("Parse returns error for nil internals", func(t *testing.T) {
-		schema := &mockStringSchema{internals: nil}
-		_, err := Parse[any, any](schema, "test", nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "schema has no internals defined")
-	})
-
-	t.Run("Parse returns error for nil parse function", func(t *testing.T) {
-		schema := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type:  "string",
-				Parse: nil,
-			},
-		}
-		_, err := Parse[any, any](schema, "test", nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "schema has no parse function defined")
-	})
-
-	t.Run("Parse returns error when parse function returns nil", func(t *testing.T) {
-		schema := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-					return nil
-				},
-			},
-		}
-		_, err := Parse[any, any](schema, "test", nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "parse function returned nil")
-	})
-
-	t.Run("Parse handles type assertion failure", func(t *testing.T) {
-		schema := &mockStringSchema{
-			internals: &core.ZodTypeInternals{
-				Type: "string",
-				Parse: func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-					// Return wrong type
-					result := core.NewParsePayload(123) // int instead of string
-					result.SetPath(payload.GetPath())
-					return result
-				},
-			},
-		}
-		_, err := Parse[any, string](schema, "test", nil)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "type assertion failed")
-	})
-}
-
-// =============================================================================
-// EDGE CASES AND SPECIAL VALUES
-// =============================================================================
-
-func TestParseEdgeCases(t *testing.T) {
-	t.Run("Parse handles nil input correctly", func(t *testing.T) {
-		schema := newMockStringSchema()
-		_, err := Parse[any, any](schema, nil, nil)
-
-		// Should return validation error for nil input on non-nilable schema
-		require.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, errors.As(err, &zodErr))
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-	})
-
-	t.Run("Parse with nil context works", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result, err := Parse[any, any](schema, "test", nil)
-
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-	})
-
-	t.Run("Parse handles empty string", func(t *testing.T) {
-		schema := newMockStringSchema()
-		result, err := Parse[any, any](schema, "", nil)
-
-		require.NoError(t, err)
-		assert.Equal(t, "", result)
-	})
-}
-
-// =============================================================================
-// INTEGRATION TESTS
-// =============================================================================
-
-func TestParseIntegration(t *testing.T) {
-	t.Run("complete parsing workflow", func(t *testing.T) {
-		schema := newMockStringSchema()
-		ctx := core.NewParseContext()
-
-		// Valid case
-		result, err := Parse[any, any](schema, "test", ctx)
-		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-
-		// Invalid case
-		_, err = Parse[any, any](schema, 123, ctx)
-		require.Error(t, err)
+		assert.True(t, handled)
+		assert.Error(t, err)
+		assert.Nil(t, result)
 
 		var zodErr *issues.ZodError
 		require.True(t, errors.As(err, &zodErr))
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
+}
 
-	t.Run("MustParse in initialization context", func(t *testing.T) {
-		schema := newMockStringSchema()
+func TestApplyTransformIfPresent(t *testing.T) {
+	t.Run("no transform function", func(t *testing.T) {
+		internals := createMockInternals()
+		ctx := &core.ParseContext{}
 
-		// Should succeed
-		result := MustParse[any, any](schema, "test", nil)
-		assert.Equal(t, "test", result)
+		result, err := applyTransformIfPresent("input", internals, ctx)
 
-		// Should panic
-		assert.Panics(t, func() {
-			MustParse[any, any](schema, 123, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "input", result)
+	})
+
+	t.Run("with transform function", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			return "transformed", nil
 		})
+		ctx := &core.ParseContext{}
+
+		result, err := applyTransformIfPresent("input", internals, ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "transformed", result)
+	})
+
+	t.Run("transform function error", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			return nil, errors.New("transform error")
+		})
+		ctx := &core.ParseContext{}
+
+		_, err := applyTransformIfPresent("input", internals, ctx)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "transform error")
+	})
+}
+
+func TestTryPrefaultFallback(t *testing.T) {
+	t.Run("no prefault available", func(t *testing.T) {
+		internals := createMockInternals()
+		parseCore := func(any) (any, error) { return "parsed", nil }
+		originalErr := errors.New("original error")
+
+		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
+
+		assert.Error(t, err)
+		assert.Equal(t, originalErr, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("prefault value success", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetPrefaultValue("prefault")
+		parseCore := func(input any) (any, error) {
+			return input, nil
+		}
+		originalErr := errors.New("original error")
+
+		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "prefault", result)
+	})
+
+	t.Run("prefault function success", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetPrefaultFunc(func() any { return "prefault_func" })
+		parseCore := func(input any) (any, error) {
+			return input, nil
+		}
+		originalErr := errors.New("original error")
+
+		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "prefault_func", result)
+	})
+}
+
+func TestGetOrCreateContext(t *testing.T) {
+	t.Run("no context provided", func(t *testing.T) {
+		ctx := getOrCreateContext()
+
+		assert.NotNil(t, ctx)
+		assert.False(t, ctx.ReportInput)
+	})
+
+	t.Run("context provided", func(t *testing.T) {
+		providedCtx := &core.ParseContext{ReportInput: true}
+		ctx := getOrCreateContext(providedCtx)
+
+		assert.Equal(t, providedCtx, ctx)
+		assert.True(t, ctx.ReportInput)
+	})
+
+	t.Run("multiple contexts provided", func(t *testing.T) {
+		ctx1 := &core.ParseContext{ReportInput: true}
+		ctx2 := &core.ParseContext{ReportInput: false}
+		ctx := getOrCreateContext(ctx1, ctx2)
+
+		assert.Equal(t, ctx1, ctx) // Should use first one
+		assert.True(t, ctx.ReportInput)
 	})
 }

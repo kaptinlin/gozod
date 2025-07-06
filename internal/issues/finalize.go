@@ -3,7 +3,6 @@ package issues
 import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/mapx"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 // =============================================================================
@@ -255,29 +254,15 @@ func MergeRawIssueProperties(rawIssue *core.ZodRawIssue, newProperties map[strin
 // CONVERSION FUNCTIONS
 // =============================================================================
 
-// ConvertRawIssuesToIssues converts raw issues to finalized issues using slicex
+// ConvertRawIssuesToIssues converts a slice of raw issues to a slice of finalized issues
 func ConvertRawIssuesToIssues(rawIssues []core.ZodRawIssue, ctx *core.ParseContext) []core.ZodIssue {
-	if slicex.IsEmpty(rawIssues) {
-		return []core.ZodIssue{}
-	}
+	// Get the global config to be passed down
+	config := core.GetConfig()
 
-	// Use slicex.Map for efficient conversion
-	if issuesAny, err := slicex.Map(rawIssues, func(rawIssue any) any {
-		if raw, ok := rawIssue.(core.ZodRawIssue); ok {
-			return FinalizeIssue(raw, ctx, nil)
-		}
-		return core.ZodIssue{}
-	}); err == nil {
-		// Convert back to typed slice
-		if issues, err := slicex.ToTyped[core.ZodIssue](issuesAny); err == nil {
-			return issues
-		}
-	}
-
-	// Fallback implementation
+	// Manually iterate to ensure type correctness
 	issues := make([]core.ZodIssue, len(rawIssues))
 	for i, rawIssue := range rawIssues {
-		issues[i] = FinalizeIssue(rawIssue, ctx, nil)
+		issues[i] = FinalizeIssue(rawIssue, ctx, config)
 	}
 	return issues
 }

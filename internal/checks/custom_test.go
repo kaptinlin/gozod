@@ -156,7 +156,7 @@ func TestCustomValidation_CheckFunctions(t *testing.T) {
 				payload.AddIssue(issue)
 			}
 		}
-		check := NewCustom[any](CheckFn(checkFn))
+		check := NewCustom[any](core.ZodCheckFn(checkFn))
 
 		tests := []struct {
 			name  string
@@ -189,9 +189,10 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 		refineFn := func(s string) bool {
 			return len(s) > 0
 		}
-		customPath := []string{"user", "name"}
 		params := core.SchemaParams{
-			Path: customPath,
+			Params: map[string]any{
+				"customPath": []string{"user", "name"},
+			},
 		}
 		check := NewCustom[string](refineFn, params)
 
@@ -201,9 +202,7 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 
 		require.Len(t, payload.GetIssues(), 1)
 		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
-		// Path is []any but contains string values
-		expectedPath := []any{"user", "name"}
-		assert.Equal(t, expectedPath, payload.GetIssues()[0].Path)
+		assert.Empty(t, payload.GetIssues()[0].Path)
 	})
 
 	t.Run("validates with custom parameters", func(t *testing.T) {
@@ -351,7 +350,7 @@ func TestCustomCheckConstructors(t *testing.T) {
 				return NewCustom[any](func(v any) bool { return v != nil })
 			}},
 			{"Check function", func() core.ZodCheck {
-				return NewCustom[any](CheckFn(func(p *core.ParsePayload) {}))
+				return NewCustom[any](core.ZodCheckFn(func(p *core.ParsePayload) {}))
 			}},
 			{"Overwrite", func() core.ZodCheck {
 				return NewZodCheckOverwrite(func(v any) any { return v })
@@ -422,17 +421,19 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 			return false
 		}
 		params := core.SchemaParams{
-			Path: []string{"nested", "field"},
+			Params: map[string]any{
+				"nestedField": []string{"nested", "field"},
+			},
 		}
 		check := NewCustom[string](refineFn, params)
 
 		payload := core.NewParsePayload("test")
-		payload.SetPath([]any{"parent"})
+		payload.PushPath("parent")
 		internals := check.GetZod()
 		internals.Check(payload)
 
 		require.Len(t, payload.GetIssues(), 1)
-		expectedPath := []any{"parent", "nested", "field"}
+		expectedPath := []any{"parent"}
 		assert.Equal(t, expectedPath, payload.GetIssues()[0].Path)
 	})
 
@@ -487,13 +488,12 @@ func TestCustomUtilities(t *testing.T) {
 		internals := &ZodCheckCustomInternals{
 			Def: &ZodCheckCustomDef{
 				ZodCheckDef: core.ZodCheckDef{Abort: false},
-				Path:        []any{core.Custom},
 				Params:      map[string]any{"test": "value"},
 			},
 		}
 
 		payload := core.NewParsePayload("test")
-		payload.SetPath([]any{"base"})
+		payload.PushPath("base")
 
 		// Test successful case
 		handleRefineResult(true, payload, "test", internals)
@@ -503,7 +503,8 @@ func TestCustomUtilities(t *testing.T) {
 		handleRefineResult(false, payload, "test", internals)
 		require.Len(t, payload.GetIssues(), 1)
 		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
-		assert.Equal(t, []any{"base", core.Custom}, payload.GetIssues()[0].Path)
+		// Path will only contain the payload path since custom path is no longer appended
+		assert.Equal(t, []any{"base"}, payload.GetIssues()[0].Path)
 	})
 }
 

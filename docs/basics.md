@@ -170,11 +170,11 @@ Understanding the semantic difference:
 ```go
 // Optional: Handles "missing field" semantics
 optionalSchema := gozod.String().Optional()
-result, _ := optionalSchema.Parse(nil)         // result: nil (generic nil)
+result, _ := optionalSchema.Parse(nil)         // result: nil
 
-// Nilable: Handles "null value" semantics  
+// Nilable: Handles "null value" semantics by returning a typed nil pointer
 nilableSchema := gozod.String().Nilable()
-result, _ := nilableSchema.Parse(nil)          // result: (*string)(nil) (typed nil pointer)
+result, _ = nilableSchema.Parse(nil)          // result: (*string)(nil)
 ```
 
 ## Common Patterns
@@ -255,12 +255,25 @@ result, _ := coerceSchema.Parse(123)  // "123"
 ### Custom Validation
 
 ```go
-// Custom validation logic
+// Custom validation logic using Refine
 passwordSchema := gozod.String().Min(8).Refine(func(s string) bool {
     return strings.ContainsAny(s, "!@#$%^&*()")
 }, gozod.SchemaParams{
     Error: "Password must contain at least one special character",
 })
+
+// Same idea with the lightweight Check helper
+passwordSchema := gozod.String().Check(func(v string, p *core.ParsePayload) {
+    if len(v) < 8 {
+        p.AddIssueWithCode(core.TooSmall, "password too short")
+    }
+    if !strings.ContainsAny(v, "!@#$%^&*()") {
+        p.AddIssueWithMessage("missing special character")
+    }
+})
+
+// .Check gives you full access to the accumulating ParsePayload so you can
+// push multiple issues in one pass without defining separate refinements.
 ```
 
 ### Union Types

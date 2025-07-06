@@ -7,18 +7,12 @@ import (
 )
 
 // =============================================================================
-// PARAMETER TYPES AND NORMALIZATION
+// PARAMETER NORMALIZATION
 // =============================================================================
 
-// CheckParams represents unified check parameters structure
-// Supports both string shorthand and detailed configuration
-type CheckParams struct {
-	Error string // Custom error message
-}
-
-// normalizeCheckParams standardizes check parameters from various input formats
-// Supports: string (shorthand) | CheckParams (detailed) | core.SchemaParams (legacy)
-func normalizeCheckParams(params ...any) *CheckParams {
+// NormalizeCheckParams standardizes check parameters from various input formats
+// Supports: string (shorthand) | core.SchemaParams (detailed)
+func NormalizeCheckParams(params ...any) *core.CheckParams {
 	if len(params) == 0 {
 		return nil
 	}
@@ -27,26 +21,21 @@ func normalizeCheckParams(params ...any) *CheckParams {
 
 	// Support string parameter shorthand syntax
 	if str, ok := param.(string); ok {
-		return &CheckParams{Error: str}
+		return &core.CheckParams{Error: str}
 	}
 
-	// Support structured CheckParams
-	if p, ok := param.(CheckParams); ok {
-		return &p
-	}
-
-	// Support legacy core.SchemaParams for backward compatibility
+	// Support structured SchemaParams
 	if p, ok := param.(core.SchemaParams); ok {
 		if errStr, ok := p.Error.(string); ok {
-			return &CheckParams{Error: errStr}
+			return &core.CheckParams{Error: errStr}
 		}
 	}
 
 	return nil
 }
 
-// applyCheckParams applies normalized parameters to check definition
-func applyCheckParams(def *core.ZodCheckDef, params *CheckParams) {
+// ApplyCheckParams applies normalized parameters to check definition
+func ApplyCheckParams(def *core.ZodCheckDef, params *core.CheckParams) {
 	if params != nil && params.Error != "" {
 		errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
 			return params.Error
@@ -55,16 +44,23 @@ func applyCheckParams(def *core.ZodCheckDef, params *CheckParams) {
 	}
 }
 
-// normalizeParams legacy parameter normalization for backward compatibility
-// Deprecated: Use normalizeCheckParams and applyCheckParams instead
-func normalizeParams(def *core.ZodCheckDef, params []string) {
-	if len(params) > 0 && params[0] != "" {
-		// Convert string parameters to error map
-		message := params[0]
-		errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-			return message
-		})
-		def.Error = &errorMap
+// ApplySchemaParamsToCheck applies SchemaParams to a check definition
+// Used for validation checks that support error and abort configuration
+func ApplySchemaParamsToCheck(def *core.ZodCheckDef, params *core.SchemaParams) {
+	if params == nil {
+		return
+	}
+
+	// Apply error configuration
+	if params.Error != nil {
+		if err, ok := utils.ToErrorMap(params.Error); ok {
+			def.Error = err
+		}
+	}
+
+	// Apply abort configuration
+	if params.Abort {
+		def.Abort = true
 	}
 }
 
@@ -72,9 +68,9 @@ func normalizeParams(def *core.ZodCheckDef, params []string) {
 // JSON SCHEMA BAG OPERATIONS
 // =============================================================================
 
-// setBagProperty sets a property in the schema's bag for JSON Schema generation
+// SetBagProperty sets a property in the schema's bag for JSON Schema generation
 // Used to store metadata that will be included in generated JSON Schema
-func setBagProperty(schema any, key string, value any) {
+func SetBagProperty(schema any, key string, value any) {
 	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
 		internals := s.GetInternals()
 		if internals.Bag == nil {

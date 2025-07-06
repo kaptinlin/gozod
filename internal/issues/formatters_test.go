@@ -631,7 +631,7 @@ func TestReferenceCompatibility(t *testing.T) {
 			WithValues([]any{"valid"}),
 		)
 		message := GenerateDefaultMessage(rawIssue)
-		assert.Equal(t, `Invalid input: expected "valid"`, message)
+		assert.Equal(t, `Invalid option: expected one of "valid"`, message)
 
 		// Multiple values case
 		rawIssue = NewRawIssue("invalid_value", "invalid",

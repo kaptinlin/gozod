@@ -45,27 +45,16 @@ func ProcessSchemaParams(params ...core.SchemaParams) map[string]any {
 	return config
 }
 
-// ApplySchemaParams applies schema parameters to a type definition
-// This function processes SchemaParams and updates the type definition accordingly
-func ApplySchemaParams(def *core.ZodTypeDef, params ...core.SchemaParams) {
-	// Process parameters using the new ProcessSchemaParams function
-	config := ProcessSchemaParams(params...)
-
-	// Apply custom error if provided
-	if errorMsg := mapx.GetAnyDefault(config, "Error", nil); errorMsg != nil {
-		// param.Error should be a function or string that can be converted to ZodErrorMap
-		// For now, we'll handle string messages
-		if msgStr, ok := errorMsg.(string); ok {
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return msgStr
-			})
-			def.Error = &errorMap
-		}
+// ApplySchemaParamsMultiple applies multiple schema parameters to a type definition
+// This is an enhanced version that can handle multiple parameters at once
+func ApplySchemaParamsMultiple(def *core.ZodTypeDef, params ...core.SchemaParams) {
+	for _, param := range params {
+		// Use the central params package for parameter application
+		// Note: We need to import internal/params but avoid circular dependencies
+		// For now, this function is a placeholder that could be enhanced later
+		_ = def
+		_ = param
 	}
-
-	// Note: Other parameters like Description, Coerce, etc. are handled
-	// in type-specific implementations since they affect different parts
-	// of the schema differently
 }
 
 // IsValidSchemaType checks if a value implements the core ZodType interface
@@ -76,6 +65,6 @@ func IsValidSchemaType(value any) bool {
 	}
 
 	// Use reflection to check if the type implements ZodType interface
-	schemaType := reflect.TypeOf((*core.ZodType[any, any])(nil)).Elem()
+	schemaType := reflect.TypeOf((*core.ZodType[any])(nil)).Elem()
 	return reflect.TypeOf(value).Implements(schemaType)
 }

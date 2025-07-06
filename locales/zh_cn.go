@@ -326,3 +326,10 @@ func formatStringValidationZh(raw core.ZodRawIssue, format string) string {
 		return fmt.Sprintf("无效%s", noun)
 	}
 }
+
+// ZhCN returns a ZodConfig configured for the Chinese locale.
+func ZhCN() *core.ZodConfig {
+	return &core.ZodConfig{
+		LocaleError: formatZhCN,
+	}
+}

@@ -67,31 +67,32 @@ type TimeOptions struct {
 //	  return regex;
 //	}
 func timeSource(precision *int) string {
-	// Base pattern supports both HH:MM and HH:MM:SS formats
-	// TypeScript Zod 4 supports: "03:15", "03:15:00", "03:15:00.9999999"
-	regex := `([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?`
-
 	if precision == nil {
-		// Allow optional seconds and optional fractional seconds
-		return fmt.Sprintf(`%s(\.\d+)?`, regex)
+		// Default: supports both HH:MM and HH:MM:SS with optional fractional seconds
+		// This matches TypeScript Zod's default behavior
+		return `([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?`
 	}
 
 	if *precision == -1 {
 		// Minute precision only (HH:MM) - no seconds allowed
+		// This matches the test case: z.string().datetime({ precision: -1 })
 		return `([01]\d|2[0-3]):[0-5]\d`
 	}
 
 	if *precision == 0 {
 		// Second precision required (HH:MM:SS) - no fractional seconds
+		// This matches the test case: z.string().datetime({ precision: 0 })
 		return `([01]\d|2[0-3]):[0-5]\d:[0-5]\d`
 	}
 
 	if *precision > 0 {
 		// Specific fractional precision required (HH:MM:SS.sss)
+		// This matches the test case: z.string().datetime({ precision: 3 })
 		return fmt.Sprintf(`([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{%d}`, *precision)
 	}
 
-	return regex
+	// Fallback for negative values other than -1: treat as no precision
+	return `([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?`
 }
 
 // Time returns a regex for matching ISO 8601 time format
@@ -115,7 +116,7 @@ func Time(opts TimeOptions) *regexp.Regexp {
 
 // DefaultTime is the time regex with any decimal precision
 // Updated to support both HH:MM and HH:MM:SS formats like TypeScript Zod 4
-var DefaultTime = regexp.MustCompile(`^` + timeSource(nil) + `$`)
+var DefaultTime = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?$`)
 
 // DatetimeOptions defines parameters for datetime regex pattern
 // TypeScript original code:
@@ -185,4 +186,4 @@ func Datetime(options DatetimeOptions) *regexp.Regexp {
 
 // DefaultDatetime is the datetime regex with Z timezone only (no offsets by default)
 // Updated to match TypeScript Zod 4 default behavior: only Z allowed, no offsets
-var DefaultDatetime = regexp.MustCompile(`^` + dateSource + `T` + timeSource(nil) + `Z$`)
+var DefaultDatetime = regexp.MustCompile(`^` + dateSource + `T` + timeSource(nil) + `(Z|[+-]\d{2}:\d{2})$`)

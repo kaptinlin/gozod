@@ -52,7 +52,7 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 		}{
 			{
 				name:   "invalid type helper",
-				create: func() core.ZodRawIssue { return CreateInvalidTypeIssue("string", "test") },
+				create: func() core.ZodRawIssue { return CreateInvalidTypeIssue(core.ZodTypeString, "test") },
 			},
 			{
 				name:   "too big helper",
@@ -320,7 +320,7 @@ func TestPerformanceIntegration(t *testing.T) {
 
 	t.Run("API validation error response simulation", func(t *testing.T) {
 		// Simulate typical API validation error response
-		rawIssue1 := CreateInvalidTypeIssue("string", "john123")
+		rawIssue1 := CreateInvalidTypeIssue(core.ZodTypeString, "john123")
 		rawIssue1.Path = []any{"username"}
 
 		rawIssue2 := CreateTooSmallIssue(3, true, "string", "ab")
@@ -372,7 +372,7 @@ func TestPerformanceIntegration(t *testing.T) {
 	})
 
 	t.Run("development vs production error handling", func(t *testing.T) {
-		rawIssue := CreateInvalidTypeIssue("string", "test")
+		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
 		rawIssue.Path = []any{"data", "field"}
 
 		// Development mode - include input
@@ -628,7 +628,7 @@ func TestRealWorldScenarios(t *testing.T) {
 
 	t.Run("API validation error response simulation", func(t *testing.T) {
 		// Simulate typical API validation error response
-		rawIssue1 := CreateInvalidTypeIssue("string", "john123")
+		rawIssue1 := CreateInvalidTypeIssue(core.ZodTypeString, "john123")
 		rawIssue1.Path = []any{"username"}
 
 		rawIssue2 := CreateTooSmallIssue(3, true, "string", "ab")
@@ -680,7 +680,7 @@ func TestRealWorldScenarios(t *testing.T) {
 	})
 
 	t.Run("development vs production error handling", func(t *testing.T) {
-		rawIssue := CreateInvalidTypeIssue("string", "test")
+		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
 		rawIssue.Path = []any{"data", "field"}
 
 		// Development mode - include input

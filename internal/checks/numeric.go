@@ -15,9 +15,9 @@ import (
 // Lt creates a less than validation check with JSON Schema support
 // Supports: Lt(10, "too big") or Lt(10, CheckParams{Error: "value must be less than 10"})
 func Lt(value any, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "less_than"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	internals := &core.ZodCheckInternals{Def: def}
 
@@ -42,9 +42,9 @@ func Lt(value any, params ...any) core.ZodCheck {
 // Lte creates a less than or equal validation check with JSON Schema support
 // Supports: Lte(10, "too big") or Lte(10, CheckParams{Error: "value must be at most 10"})
 func Lte(value any, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "less_than_or_equal"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -67,9 +67,9 @@ func Lte(value any, params ...any) core.ZodCheck {
 // Gt creates a greater than validation check with JSON Schema support
 // Supports: Gt(0, "too small") or Gt(0, CheckParams{Error: "value must be greater than 0"})
 func Gt(value any, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "greater_than"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -92,9 +92,9 @@ func Gt(value any, params ...any) core.ZodCheck {
 // Gte creates a greater than or equal validation check with JSON Schema support
 // Supports: Gte(0, "too small") or Gte(0, CheckParams{Error: "value must be at least 0"})
 func Gte(value any, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "greater_than_or_equal"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -117,9 +117,9 @@ func Gte(value any, params ...any) core.ZodCheck {
 // MultipleOf creates a multiple of validation check with JSON Schema support
 // Supports: MultipleOf(5, "not divisible") or MultipleOf(5, CheckParams{Error: "must be multiple of 5"})
 func MultipleOf(divisor any, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "multiple_of"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -133,7 +133,7 @@ func MultipleOf(divisor any, params ...any) core.ZodCheck {
 	internals.OnAttach = []func(any){
 		func(schema any) {
 			// Set multipleOf for JSON Schema
-			setBagProperty(schema, "multipleOf", divisor)
+			SetBagProperty(schema, "multipleOf", divisor)
 		},
 	}
 

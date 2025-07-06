@@ -54,7 +54,7 @@ myRegistry.Add(mySchema, "just a string")
 
 ### `.Register()` Method
 
-> **Note** — This method is special in that it does not return a new schema; instead, it returns the original schema. No other GoZod method does this! That includes `.Meta()` and `.Describe()` (documented below) which return a new instance.
+> **Note** — This method is special in that it does not return a new schema; instead, it returns the original schema. No other GoZod method does this! That includes `.Meta()` (documented below) which returns a new instance.
 
 Schemas provide a `.Register()` method to more conveniently add them to a registry:
 
@@ -164,22 +164,6 @@ schemaB := schemaA.Refine(func(val any) bool { return true })
 
 _, found = schemaB.Meta()
 fmt.Println(found) // => false
-```
-
-### `.Describe()` Method
-
-> **Compatibility Note** — The `.Describe()` method exists for convenience and compatibility, but `.Meta()` is now the recommended approach for full metadata support.
-
-The `.Describe()` method is a shorthand for registering a schema in `gozod.GlobalRegistry` with just a `Description` field:
-
-```go
-emailSchema := gozod.Email()
-describedSchema := emailSchema.Describe("An email address")
-
-// Equivalent to:
-metaSchema := emailSchema.Meta(gozod.GlobalMetadata{
-    Description: "An email address",
-})
 ```
 
 ## Custom Registries

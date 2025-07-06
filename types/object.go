@@ -1,324 +1,110 @@
 package types
 
 import (
-	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/mapx"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
-)
-
-// Error definitions for object transformations
-var (
-	ErrTransformNilObject  = errors.New("cannot transform nil object")
-	ErrCannotConvertObject = errors.New("cannot convert to object")
+	"github.com/kaptinlin/gozod/internal/utils"
 )
 
 // =============================================================================
-// OBJECT MODE CONSTANTS
+// TYPE DEFINITIONS
 // =============================================================================
 
 // ObjectMode defines how to handle unknown keys in object validation
 type ObjectMode string
 
 const (
-	OBJECT_STRICT_MODE ObjectMode = "strict" // Error on unknown keys
-	OBJECT_STRIP_MODE  ObjectMode = "strip"  // Strip unknown keys (default)
-	OBJECT_LOOSE_MODE  ObjectMode = "loose"  // Allow unknown keys
+	ObjectModeStrict      ObjectMode = "strict"      // Reject unknown keys
+	ObjectModeStrip       ObjectMode = "strip"       // Remove unknown keys
+	ObjectModePassthrough ObjectMode = "passthrough" // Allow unknown keys
 )
 
-// =============================================================================
-// OBJECT TYPE DEFINITIONS (Three-Layer Architecture)
-// =============================================================================
-
-// ZodObjectDef defines object validation configuration
+// ZodObjectDef defines the schema definition for object validation
 type ZodObjectDef struct {
 	core.ZodTypeDef
-	Type        core.ZodTypeCode       // "object"
-	Shape       core.ObjectSchema      // Field definitions
-	Catchall    core.ZodType[any, any] // Catchall schema for unknown keys
-	UnknownKeys ObjectMode             // How to handle unknown keys
+	Shape       core.ObjectSchema // Field schemas
+	Catchall    core.ZodSchema    // Schema for unrecognized keys
+	UnknownKeys ObjectMode        // How to handle unknown keys
 }
 
-// ZodObjectInternals contains object validator internal state
+// ZodObjectInternals contains the internal state for object schema
 type ZodObjectInternals struct {
 	core.ZodTypeInternals
-	Def   *ZodObjectDef     // Schema definition
-	Shape core.ObjectSchema // Field definitions map
-	Bag   map[string]any    // Runtime configuration
+	Def               *ZodObjectDef     // Schema definition reference
+	Shape             core.ObjectSchema // Field schemas for runtime validation
+	Catchall          core.ZodSchema    // Catchall schema for unknown fields
+	UnknownKeys       ObjectMode        // Validation mode
+	IsPartial         bool              // Whether this is a partial object (all fields optional)
+	PartialExceptions map[string]bool   // Fields that should remain required in partial mode
 }
 
-// ZodObject represents fixed-field object validation
-type ZodObject struct {
+// ZodObject represents a type-safe object validation schema
+type ZodObject[T any, R any] struct {
 	internals *ZodObjectInternals
 }
 
-// Shape provides access to the internal field schemas
-func (z *ZodObject) Shape() core.ObjectSchema {
-	return z.internals.Shape
-}
-
 // =============================================================================
-// CONSTRUCTOR FUNCTIONS
+// CORE METHODS
 // =============================================================================
 
-// Object creates object schema for fixed-field validation
-func Object(shape core.ObjectSchema, params ...any) *ZodObject {
-	def := &ZodObjectDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   "object",
-			Checks: make([]core.ZodCheck, 0),
-		},
-		Type:        "object",
-		Shape:       shape,
-		UnknownKeys: OBJECT_STRIP_MODE, // Default mode
-	}
-
-	schema := createZodObjectFromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		if param, ok := params[0].(core.SchemaParams); ok {
-			// Store coerce flag in bag
-
-			// Handle schema-level error configuration
-			if param.Error != nil {
-				errorMap := issues.CreateErrorMap(param.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
-			}
-
-			// Store additional parameters
-			if param.Params != nil {
-				for key, value := range param.Params {
-					schema.internals.Bag[key] = value
-				}
-			}
-		}
-	}
-
-	return schema
-}
-
-// StrictObject creates strict object (disallows unknown keys)
-func StrictObject(shape core.ObjectSchema, params ...any) *ZodObject {
-	schema := Object(shape, params...)
-	schema.internals.Def.UnknownKeys = OBJECT_STRICT_MODE
-	return schema
-}
-
-// LooseObject creates loose object (allows unknown keys)
-func LooseObject(shape core.ObjectSchema, params ...any) *ZodObject {
-	schema := Object(shape, params...)
-	schema.internals.Def.UnknownKeys = OBJECT_LOOSE_MODE
-	return schema
-}
-
-// =============================================================================
-// OBJECT UTILITY FUNCTIONS
-// =============================================================================
-
-// No private utility functions - use pkg packages directly
-
-// =============================================================================
-// OBJECT CREATION HELPER
-// =============================================================================
-
-// createZodObjectFromDef creates a ZodObject from definition following the unified pattern
-func createZodObjectFromDef(def *ZodObjectDef, params ...any) *ZodObject {
-	// Create internals with modern pattern
-	internals := &ZodObjectInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Shape:            def.Shape,
-		Bag:              make(map[string]any),
-	}
-
-	// Apply schema parameters following unified pattern
-	for _, p := range params {
-		if param, ok := p.(core.SchemaParams); ok {
-			if param.Error != nil {
-				errorMap := issues.CreateErrorMap(param.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					internals.Error = errorMap
-				}
-			}
-			if param.Description != "" {
-				internals.Bag["description"] = param.Description
-			}
-			if param.Abort {
-				internals.Bag["abort"] = true
-			}
-			if len(param.Path) > 0 {
-				internals.Bag["path"] = param.Path
-			}
-			if len(param.Params) > 0 {
-				internals.Bag["params"] = param.Params
-			}
-		}
-	}
-
-	// Set up simplified constructor for cloning
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
-		objectDef := &ZodObjectDef{
-			ZodTypeDef:  *newDef,
-			Type:        "object",
-			Shape:       def.Shape,
-			UnknownKeys: def.UnknownKeys,
-		}
-		newSchema := createZodObjectFromDef(objectDef)
-		return any(newSchema).(core.ZodType[any, any])
-	}
-
-	// Set up parse function
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		schema := &ZodObject{internals: internals}
-		result, err := schema.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
-		payload.SetValue(result)
-		return payload
-	}
-
-	zodSchema := &ZodObject{internals: internals}
-
-	// Use unified infrastructure for initialization
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-
-	return zodSchema
-}
-
-// =============================================================================
-// CORE INTERFACE METHODS
-// =============================================================================
-
-// GetInternals returns the internal state of the schema
-func (z *ZodObject) GetInternals() *core.ZodTypeInternals {
+// GetInternals exposes internal state for framework usage
+func (z *ZodObject[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Parse validates the input value using smart type inference
-func (z *ZodObject) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodObject[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
+}
+
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodObject[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Parse validates input using object-specific parsing logic
+func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
 	}
 
-	// 1. nil handling
+	// Handle nil input for optional/nilable schemas
 	if input == nil {
-		if !z.internals.Nilable {
-			rawIssue := issues.CreateInvalidTypeIssue("object", input)
-			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+		var zero R
+		if z.internals.Optional || z.internals.Nilable {
+			return zero, nil
 		}
-		return (*map[string]any)(nil), nil
+		return zero, fmt.Errorf("object value cannot be nil")
 	}
 
-	// 3. smart type inference: check if input is nil pointer using reflectx
-	// --- Pointer smart inference -------------------------------------------------
-	// If caller provides *map[string]any (or any pointer whose underlying value is
-	// a map that can be converted to map[string]any), we validate the pointed
-	// value but return the original pointer so that tests can assert pointer
-	// identity preservation. This mirrors zod v4 behaviour.
-	if reflectx.IsPointer(input) && !reflectx.IsNilPointer(input) {
-		if deref, ok := reflectx.Deref(input); ok {
-			// Try to convert to map[string]any
-			if obj, ok := mapx.Extract(deref); ok {
-				if stringMap, ok := obj.(map[string]any); ok {
-					// Validate the dereferenced value via parseObjectCore
-					// Use constructor instead of direct struct literal to respect private fields
-					payload := core.NewParsePayloadWithPath(stringMap, make([]any, 0))
-					resPayload := parseObjectCore(payload, z.internals, parseCtx)
-					// Use getter method instead of direct field access
-					if len(resPayload.GetIssues()) > 0 {
-						return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(resPayload.GetIssues(), parseCtx))
-					}
-
-					// Also run checks if any
-					if len(z.internals.Checks) > 0 {
-						// Use getter method instead of direct field access
-						checkPayload := core.NewParsePayload(resPayload.GetValue())
-						engine.RunChecksOnValue(resPayload.GetValue(), z.internals.Checks, checkPayload, parseCtx)
-						// Use getter method instead of direct field access
-						if len(checkPayload.GetIssues()) > 0 {
-							return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checkPayload.GetIssues(), parseCtx))
-						}
-					}
-
-					// Validation succeeded: return original pointer to preserve identity
-					return input, nil
-				}
-			}
-		}
+	// Extract object from input
+	objectValue, err := z.extractObject(input)
+	if err != nil {
+		var zero R
+		return zero, err
 	}
 
-	// 3. smart type inference: check if input is nil pointer using reflectx
-	if reflectx.IsNil(input) {
-		if !z.internals.Nilable {
-			rawIssue := issues.CreateInvalidTypeIssue("object", input)
-			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-		}
-		return (*map[string]any)(nil), nil
+	// Validate the object
+	transformedObject, err := z.validateObject(objectValue, z.internals.Checks, parseCtx)
+	if err != nil {
+		var zero R
+		return zero, err
 	}
 
-	// 4. strict type requirement: only map[string]any or *map[string]any accepted
-	var objectMap map[string]any
-	switch v := input.(type) {
-	case map[string]any:
-		objectMap = v
-	case *map[string]any:
-		if v != nil {
-			objectMap = *v
-		}
-	default:
-		rawIssue := issues.CreateInvalidTypeIssue("object", input)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
-	// 6. use parseObjectCore for full object validation and field filtering
-	// Use constructor instead of direct struct literal to respect private fields
-	payload := core.NewParsePayloadWithPath(objectMap, make([]any, 0))
-
-	result := parseObjectCore(payload, z.internals, parseCtx)
-	// Use getter method instead of direct field access
-	if len(result.GetIssues()) > 0 {
-		return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.GetIssues(), parseCtx))
-	}
-
-	// 7. run additional checks
-	if len(z.internals.Checks) > 0 {
-		// Use constructor and getter methods instead of direct field access
-		checksPayload := core.NewParsePayload(result.GetValue())
-		engine.RunChecksOnValue(result.GetValue(), z.internals.Checks, checksPayload, parseCtx)
-		if len(checksPayload.GetIssues()) > 0 {
-			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(checksPayload.GetIssues(), parseCtx))
-		}
-	}
-
-	// 8. return validated map - smart type inference preserves original type structure
-	return result.GetValue(), nil
+	// Convert to constraint type R
+	return convertToObjectConstraintType[T, R](any(transformedObject).(T)), nil
 }
 
 // MustParse validates the input value and panics on failure
-func (z *ZodObject) MustParse(input any, ctx ...*core.ParseContext) any {
+func (z *ZodObject[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -326,987 +112,865 @@ func (z *ZodObject) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// Transform provides type-safe object transformation, supporting smart dereferencing
-// Automatically handles input of map[string]any, struct, *struct, and nil pointer
-func (z *ZodObject) Transform(fn func(map[string]any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		if input == nil || reflectx.IsNil(input) {
-			return nil, ErrTransformNilObject
-		}
+// ParseAny validates input and returns untyped result for runtime scenarios.
+// Zero-overhead wrapper around Parse to eliminate reflection calls.
+func (z *ZodObject[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
 
-		// Convert to map[string]any for consistent processing
-		objMap := mapx.FromAny(input)
-		if objMap == nil {
-			return nil, ErrCannotConvertObject
-		}
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
 
-		return fn(objMap, ctx)
+// Optional creates optional object schema
+func (z *ZodObject[T, R]) Optional() *ZodObject[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable allows nil values
+func (z *ZodObject[T, R]) Nilable() *ZodObject[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodObject[T, R]) Nullish() *ZodObject[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// NonOptional removes the optional flag and enforces non-nil value type.
+// It returns a schema whose constraint type is the base value (T), mirroring
+// the behaviour of .Optional().NonOptional() chain in TypeScript Zod.
+func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+
+	return &ZodObject[T, T]{
+		internals: &ZodObjectInternals{
+			ZodTypeInternals:  *in,
+			Def:               z.internals.Def,
+			Shape:             z.internals.Shape,
+			Catchall:          z.internals.Catchall,
+			UnknownKeys:       z.internals.UnknownKeys,
+			IsPartial:         z.internals.IsPartial,
+			PartialExceptions: z.internals.PartialExceptions,
+		},
+	}
+}
+
+// Default preserves current type
+func (z *ZodObject[T, R]) Default(v T) *ZodObject[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current type
+func (z *ZodObject[T, R]) DefaultFunc(fn func() T) *ZodObject[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
 	})
+	return z.withInternals(in)
 }
 
-// TransformAny flexible version of Transform - same implementation as Transform, providing backward compatibility
-// Implements ZodType[any, any] interface: TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any]
-func (z *ZodObject) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
+// Prefault provides fallback values on validation failure
+func (z *ZodObject[T, R]) Prefault(v T) *ZodObject[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
 }
 
-// Pipe creates a new schema by piping the output of this schema to another
-func (z *ZodObject) Pipe(target core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: target,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
 }
 
 // =============================================================================
-// OBJECT OPERATIONS
+// VALIDATION METHODS
 // =============================================================================
 
-// Pick creates a new object schema with only the specified fields
-func (z *ZodObject) Pick(keys []string) *ZodObject {
+// Min sets minimum number of fields
+func (z *ZodObject[T, R]) Min(minLen int, params ...any) *ZodObject[T, R] {
+	check := checks.MinSize(minLen, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Max sets maximum number of fields
+func (z *ZodObject[T, R]) Max(maxLen int, params ...any) *ZodObject[T, R] {
+	check := checks.MaxSize(maxLen, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Size sets exact number of fields
+func (z *ZodObject[T, R]) Size(exactLen int, params ...any) *ZodObject[T, R] {
+	check := checks.Size(exactLen, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Property validates a specific property using the provided schema
+func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...any) *ZodObject[T, R] {
+	check := checks.NewProperty(key, schema, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check.GetZod())
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TYPE-SPECIFIC METHODS
+// =============================================================================
+
+// Shape returns the object shape (field schemas)
+func (z *ZodObject[T, R]) Shape() core.ObjectSchema {
+	result := make(core.ObjectSchema)
+	for k, v := range z.internals.Shape {
+		result[k] = v
+	}
+	return result
+}
+
+// Pick creates a new object with only specified keys
+// Non-existent keys are silently ignored to maintain fluent interface design
+func (z *ZodObject[T, R]) Pick(keys []string, params ...any) *ZodObject[T, R] {
 	newShape := make(core.ObjectSchema)
 	for _, key := range keys {
 		if schema, exists := z.internals.Shape[key]; exists {
 			newShape[key] = schema
 		}
+		// Silently ignore non-existent keys for chainability
 	}
-
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: z.internals.Def.UnknownKeys,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+	return ObjectTyped[T, R](newShape, params...)
 }
 
-// Omit creates a new object schema without the specified fields
-func (z *ZodObject) Omit(keys []string) *ZodObject {
-	omitSet := make(map[string]struct{})
+// Omit creates a new object excluding specified keys
+// Non-existent keys are silently ignored to maintain fluent interface design
+func (z *ZodObject[T, R]) Omit(keys []string, params ...any) *ZodObject[T, R] {
+	excludeSet := make(map[string]bool)
 	for _, key := range keys {
-		omitSet[key] = struct{}{}
+		// Silently ignore non-existent keys for chainability
+		excludeSet[key] = true
 	}
 
 	newShape := make(core.ObjectSchema)
 	for key, schema := range z.internals.Shape {
-		if _, shouldOmit := omitSet[key]; !shouldOmit {
+		if !excludeSet[key] {
 			newShape[key] = schema
 		}
 	}
-
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: z.internals.Def.UnknownKeys,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+	return ObjectTyped[T, R](newShape, params...)
 }
 
-// Extend creates a new object schema with additional fields
-func (z *ZodObject) Extend(extension core.ObjectSchema) *ZodObject {
+// Extend creates a new object by extending with additional fields
+func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) *ZodObject[T, R] {
+	// Create new shape combining existing + extension fields
 	newShape := make(core.ObjectSchema)
 
-	// Copy existing fields
-	for key, schema := range z.internals.Shape {
-		newShape[key] = schema
+	// Copy existing shape
+	for k, v := range z.internals.Shape {
+		newShape[k] = v
 	}
 
-	// Add extension fields (overrides existing ones)
-	for key, schema := range extension {
-		newShape[key] = schema
+	// Add augmentation fields
+	for k, schema := range augmentation {
+		newShape[k] = schema
 	}
 
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: z.internals.Def.UnknownKeys,
-	}
+	return ObjectTyped[T, R](newShape, params...)
+}
 
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+// Merge combines two object schemas
+func (z *ZodObject[T, R]) Merge(other *ZodObject[T, R], params ...any) *ZodObject[T, R] {
+	return z.Extend(other.internals.Shape, params...)
 }
 
 // Partial makes all fields optional
-func (z *ZodObject) Partial() *ZodObject {
-	newShape := make(core.ObjectSchema)
-	for key, schema := range z.internals.Shape {
-		newShape[key] = Optional(schema)
+func (z *ZodObject[T, R]) Partial(keys ...[]string) *ZodObject[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
+
+	var partialExceptions map[string]bool
+	if len(keys) > 0 && len(keys[0]) > 0 {
+		// Specific keys provided - these are the ones to make optional
+		// All other fields remain required
+		partialExceptions = make(map[string]bool)
+		for fieldName := range z.internals.Shape {
+			partialExceptions[fieldName] = true // Mark all as exceptions initially
+		}
+		// Remove the keys that should be made optional from exceptions
+		for _, key := range keys[0] {
+			delete(partialExceptions, key)
+		}
 	}
 
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: z.internals.Def.UnknownKeys,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+	return &ZodObject[T, R]{internals: &ZodObjectInternals{
+		ZodTypeInternals:  *newInternals,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		Catchall:          z.internals.Catchall,
+		UnknownKeys:       z.internals.UnknownKeys,
+		IsPartial:         true,
+		PartialExceptions: partialExceptions,
+	}}
 }
 
-// Required makes all fields required
-func (z *ZodObject) Required(fields ...[]string) *ZodObject {
-	newShape := make(core.ObjectSchema)
+// Required makes all fields required (opposite of Partial)
+func (z *ZodObject[T, R]) Required(fields ...[]string) *ZodObject[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
 
-	// If specific fields provided, only make those required
-	var targetFields map[string]struct{}
+	var partialExceptions map[string]bool
 	if len(fields) > 0 && len(fields[0]) > 0 {
-		targetFields = make(map[string]struct{})
-		for _, field := range fields[0] {
-			targetFields[field] = struct{}{}
+		// Specific fields provided - these become required
+		partialExceptions = make(map[string]bool)
+		for _, fieldName := range fields[0] {
+			partialExceptions[fieldName] = true
 		}
 	}
 
-	for key, schema := range z.internals.Shape {
-		if targetFields != nil {
-			// Only make specified fields required
-			if _, shouldRequire := targetFields[key]; shouldRequire {
-				// Remove optional wrapper if present
-				if optionalType, ok := schema.(*ZodOptional[core.ZodType[any, any]]); ok {
-					newShape[key] = optionalType.Unwrap()
-				} else {
-					newShape[key] = schema
-				}
-			} else {
-				newShape[key] = schema
-			}
-		} else {
-			// Make all fields required
-			if optionalType, ok := schema.(*ZodOptional[core.ZodType[any, any]]); ok {
-				newShape[key] = optionalType.Unwrap()
-			} else {
-				newShape[key] = schema
-			}
-		}
-	}
-
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: z.internals.Def.UnknownKeys,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+	return &ZodObject[T, R]{internals: &ZodObjectInternals{
+		ZodTypeInternals:  *newInternals,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		Catchall:          z.internals.Catchall,
+		UnknownKeys:       z.internals.UnknownKeys,
+		IsPartial:         true,              // Keep as partial, but with specific required fields
+		PartialExceptions: partialExceptions, // Fields in this map are required
+	}}
 }
 
-// Merge combines this object schema with another
-func (z *ZodObject) Merge(other *ZodObject) *ZodObject {
-	newShape := make(core.ObjectSchema)
-
-	// Copy fields from this schema
-	for key, schema := range z.internals.Shape {
-		newShape[key] = schema
-	}
-
-	// Override with fields from other schema
-	for key, schema := range other.internals.Shape {
-		newShape[key] = schema
-	}
-
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       newShape,
-		UnknownKeys: other.internals.Def.UnknownKeys,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from both schemas (other takes precedence)
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-	for key, value := range other.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+// Strict sets strict mode (no unknown keys allowed)
+func (z *ZodObject[T, R]) Strict() *ZodObject[T, R] {
+	return z.withUnknownKeys(ObjectModeStrict)
 }
 
-// Catchall sets a schema to validate unknown keys
-func (z *ZodObject) Catchall(catchallSchema core.ZodType[any, any]) *ZodObject {
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       z.internals.Shape,
-		Catchall:    catchallSchema,
-		UnknownKeys: OBJECT_LOOSE_MODE, // Catchall implies loose mode
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+// Strip sets strip mode (unknown keys are removed)
+func (z *ZodObject[T, R]) Strip() *ZodObject[T, R] {
+	return z.withUnknownKeys(ObjectModeStrip)
 }
 
-// Passthrough allows unknown keys to pass through (alias for loose mode)
-func (z *ZodObject) Passthrough() *ZodObject {
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       z.internals.Shape,
-		Catchall:    Unknown(),
-		UnknownKeys: OBJECT_LOOSE_MODE,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+// Passthrough sets passthrough mode (unknown keys are allowed)
+func (z *ZodObject[T, R]) Passthrough() *ZodObject[T, R] {
+	return z.withUnknownKeys(ObjectModePassthrough)
 }
 
-// Strict sets strict mode (rejects unknown keys)
-func (z *ZodObject) Strict() *ZodObject {
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       z.internals.Shape,
-		UnknownKeys: OBJECT_STRICT_MODE,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
+// Catchall sets a schema for unknown keys
+func (z *ZodObject[T, R]) Catchall(catchallSchema core.ZodSchema) *ZodObject[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	return &ZodObject[T, R]{internals: &ZodObjectInternals{
+		ZodTypeInternals: *newInternals,
+		Def:              z.internals.Def,
+		Shape:            z.internals.Shape,
+		Catchall:         catchallSchema,
+		UnknownKeys:      z.internals.UnknownKeys,
+	}}
 }
 
-// Strip sets strip mode (removes unknown keys) - default behavior
-func (z *ZodObject) Strip() *ZodObject {
-	newDef := &ZodObjectDef{
-		ZodTypeDef:  z.internals.Def.ZodTypeDef,
-		Type:        z.internals.Def.Type,
-		Shape:       z.internals.Shape,
-		UnknownKeys: OBJECT_STRIP_MODE,
-	}
-
-	newSchema := createZodObjectFromDef(newDef)
-
-	// Copy runtime configuration from original schema
-	for key, value := range z.internals.Bag {
-		newSchema.internals.Bag[key] = value
-	}
-
-	return newSchema
-}
-
-// Keyof creates an enum schema from the object keys
-func (z *ZodObject) Keyof() core.ZodType[any, any] {
+// Keyof returns a string literal schema of all keys
+func (z *ZodObject[T, R]) Keyof() *ZodEnum[string, string] {
 	keys := make([]string, 0, len(z.internals.Shape))
 	for key := range z.internals.Shape {
 		keys = append(keys, key)
 	}
-
-	if len(keys) == 0 {
-		return Never() // Empty object has no keys
-	}
-
 	return EnumSlice(keys)
 }
 
 // =============================================================================
-// WRAPPER METHODS
+// TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-//////////////////////////////////////////
-//////////   Utility Methods     //////////
-//////////////////////////////////////////
+// Transform creates a type-safe transformation using WrapFn pattern
+func (z *ZodObject[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		baseValue := extractObjectValue[T, R](input)
+		return fn(baseValue, ctx)
+	}
+	return core.NewZodTransform[R, any](z, wrapperFn)
+}
 
-// Refine adds a type-safe validation function to the object
-func (z *ZodObject) Refine(fn func(map[string]any) bool, params ...any) *ZodObject {
-	result := z.RefineAny(func(v any) bool {
-		if v == nil || reflectx.IsNil(v) {
-			return true // let the upper logic decide
+// Overwrite transforms the input value while preserving the original type.
+// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
+// The transformation function is stored as a check, so it doesn't modify the inferred type.
+func (z *ZodObject[T, R]) Overwrite(transform func(R) R, params ...any) *ZodObject[T, R] {
+	// Create a transformation function that works with the constraint type R
+	transformAny := func(input any) any {
+		// Try to convert input to constraint type R
+		converted, ok := convertToObjectType[T, R](input)
+		if !ok {
+			// If conversion fails, return original value
+			return input
 		}
-		objectMap := mapx.FromAny(v)
-		if objectMap == nil {
-			return false
+
+		// Apply transformation directly on constraint type R
+		return transform(converted)
+	}
+
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodObject[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
+		baseValue := extractObjectValue[T, R](input)
+		return target.Parse(baseValue, ctx)
+	}
+	return core.NewZodPipe[R, any](z, wrapperFn)
+}
+
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
+
+// Refine applies type-safe validation using constraint type
+func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R] {
+	wrapper := func(v any) bool {
+		if v == nil {
+			return true // Skip refinement for nil values
 		}
-		return fn(objectMap)
-	}, params...)
-	return result.(*ZodObject)
+		// Convert any to constraint type R for type-safe refinement
+		if constraintVal, ok := convertToConstraintValue[T, R](v); ok {
+			return fn(constraintVal)
+		}
+		return false
+	}
+
+	checkParams := checks.NormalizeCheckParams(params...)
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// RefineAny adds flexible custom validation logic to the object schema
-func (z *ZodObject) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+// RefineAny provides flexible validation without type conversion
+func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject[T, R] {
+	checkParams := checks.NormalizeCheckParams(params...)
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Optional makes the object optional
-func (z *ZodObject) Optional() core.ZodType[any, any] {
-	return any(Optional(any(z).(core.ZodType[any, any]))).(core.ZodType[any, any])
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer constraint type
+func (z *ZodObject[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodObject[T, *T] {
+	return &ZodObject[T, *T]{internals: &ZodObjectInternals{
+		ZodTypeInternals:  *in,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		Catchall:          z.internals.Catchall,
+		UnknownKeys:       z.internals.UnknownKeys,
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: z.internals.PartialExceptions,
+	}}
 }
 
-// Nilable makes the object nilable
-func (z *ZodObject) Nilable() core.ZodType[any, any] {
-	cloned := engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
-	}).(*ZodObject)
-	cloned.internals.SetNilable()
-	return any(cloned).(core.ZodType[any, any])
+// withInternals creates new instance preserving type
+func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T, R] {
+	return &ZodObject[T, R]{internals: &ZodObjectInternals{
+		ZodTypeInternals:  *in,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		Catchall:          z.internals.Catchall,
+		UnknownKeys:       z.internals.UnknownKeys,
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: z.internals.PartialExceptions,
+	}}
 }
 
-// Check adds modern validation using direct payload access
-func (z *ZodObject) Check(fn core.CheckFn) *ZodObject {
-	check := checks.NewCustom[map[string]any](fn, core.SchemaParams{})
-	result := engine.AddCheck(z, check)
-	return result.(*ZodObject)
+// withUnknownKeys creates new instance with specified unknown keys handling
+func (z *ZodObject[T, R]) withUnknownKeys(mode ObjectMode) *ZodObject[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	return &ZodObject[T, R]{internals: &ZodObjectInternals{
+		ZodTypeInternals:  *newInternals,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		Catchall:          z.internals.Catchall,
+		UnknownKeys:       mode,
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: z.internals.PartialExceptions,
+	}}
 }
 
-////////////////////////////
-////   OBJECT DEFAULT WRAPPER ////
-////////////////////////////
-
-type ZodObjectDefault struct {
-	*ZodDefault[*ZodObject] // embed pointer to allow method promotion
-}
-
-func (s ZodObjectDefault) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	return s.ZodDefault.Parse(input, ctx...)
-}
-
-////////////////////////////
-////   DEFAULT method   ////
-////////////////////////////
-
-// Default sets the default value for the object
-func (z *ZodObject) Default(value map[string]any) ZodObjectDefault {
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
+// CloneFrom copies configuration from another schema
+func (z *ZodObject[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodObject[T, R]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
 	}
 }
 
-// DefaultFunc sets the default function for the object
-func (z *ZodObject) DefaultFunc(fn func() map[string]any) ZodObjectDefault {
-	genericFn := func() any { return fn() }
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
+// convertToObjectConstraintType converts base type T to constraint type R
+func convertToObjectConstraintType[T any, R any](value T) R {
+	// For value types, R should be T
+	// For pointer constraints, R should be *T
+	var result R
+	resultVal := reflect.ValueOf(&result).Elem()
 
-////////////////////////////
-////   OBJECTDEFAULT CHAIN METHODS ////
-////////////////////////////
-
-// Pick creates a new object schema with only the specified fields, return ZodObjectDefault
-func (s ZodObjectDefault) Pick(keys []string) ZodObjectDefault {
-	newInner := s.innerType.Pick(keys)
-
-	// filter the default value, only keep the fields of Pick
-	var newDefaultValue any
-	var newDefaultFunc func() any
-
-	if s.isFunction && s.defaultFunc != nil {
-		// if it is a function default value, create a new function to filter the result
-		newDefaultFunc = func() any {
-			originalValue := s.defaultFunc()
-			if originalMap, ok := originalValue.(map[string]any); ok {
-				filteredMap := make(map[string]any)
-				for _, key := range keys {
-					if value, exists := originalMap[key]; exists {
-						filteredMap[key] = value
-					}
-				}
-				return filteredMap
-			}
-			return originalValue
+	// Check if R is a pointer to T
+	if resultVal.Kind() == reflect.Pointer {
+		// Create a new instance of T and set it
+		if reflect.TypeOf(value).AssignableTo(resultVal.Type().Elem()) {
+			newVal := reflect.New(resultVal.Type().Elem())
+			newVal.Elem().Set(reflect.ValueOf(value))
+			resultVal.Set(newVal)
 		}
 	} else {
-		// if it is a static default value, filter directly
-		if originalMap, ok := s.defaultValue.(map[string]any); ok {
-			filteredMap := make(map[string]any)
-			for _, key := range keys {
-				if value, exists := originalMap[key]; exists {
-					filteredMap[key] = value
-				}
+		// Direct assignment for value types
+		if reflect.TypeOf(value).AssignableTo(resultVal.Type()) {
+			resultVal.Set(reflect.ValueOf(value))
+		}
+	}
+
+	return result
+}
+
+// extractObjectValue extracts the base value from constraint type R
+func extractObjectValue[T any, R any](value R) T {
+	// Handle direct assignment (when T == R)
+	if directValue, ok := any(value).(T); ok {
+		return directValue
+	}
+
+	// Handle pointer dereferencing
+	if ptrValue := reflect.ValueOf(value); ptrValue.Kind() == reflect.Ptr && !ptrValue.IsNil() {
+		if derefValue, ok := ptrValue.Elem().Interface().(T); ok {
+			return derefValue
+		}
+	}
+
+	// Fallback to zero value
+	var zero T
+	return zero
+}
+
+// convertToObjectType converts any value to the object constraint type R with strict type checking
+func convertToObjectType[T any, R any](v any) (R, bool) {
+	var zero R
+
+	if v == nil {
+		// Handle nil values for pointer types
+		zeroType := reflect.TypeOf((*R)(nil)).Elem()
+		if zeroType.Kind() == reflect.Ptr {
+			return zero, true // zero value for pointer types is nil
+		}
+		return zero, false // nil not allowed for value types
+	}
+
+	// Extract object value from input
+	var objectValue map[string]any
+	var isValid bool
+
+	switch val := v.(type) {
+	case map[string]any:
+		objectValue, isValid = val, true
+	case *map[string]any:
+		if val != nil {
+			objectValue, isValid = *val, true
+		}
+	case map[any]any:
+		// Convert map[any]any to map[string]any
+		objectValue = make(map[string]any)
+		for k, v := range val {
+			if strKey, ok := k.(string); ok {
+				objectValue[strKey] = v
+			} else {
+				return zero, false // Non-string key found
 			}
-			newDefaultValue = filteredMap
-		} else {
-			newDefaultValue = s.defaultValue
 		}
+		isValid = true
+	default:
+		return zero, false // Reject all non-map types
 	}
 
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: newDefaultValue,
-			defaultFunc:  newDefaultFunc,
-			isFunction:   s.isFunction,
-		},
+	if !isValid {
+		return zero, false
 	}
-}
 
-// Omit creates a new object schema with the specified fields omitted, return ZodObjectDefault
-func (s ZodObjectDefault) Omit(keys []string) ZodObjectDefault {
-	newInner := s.innerType.Omit(keys)
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Extend extends the object schema, return ZodObjectDefault
-func (s ZodObjectDefault) Extend(extension core.ObjectSchema) ZodObjectDefault {
-	newInner := s.innerType.Extend(extension)
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Partial makes all fields optional, return ZodObjectDefault
-func (s ZodObjectDefault) Partial() ZodObjectDefault {
-	newInner := s.innerType.Partial()
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Required makes the specified fields required, return ZodObjectDefault
-func (s ZodObjectDefault) Required(fields ...[]string) ZodObjectDefault {
-	newInner := s.innerType.Required(fields...)
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Merge merges another object schema, return ZodObjectDefault
-func (s ZodObjectDefault) Merge(other *ZodObject) ZodObjectDefault {
-	newInner := s.innerType.Merge(other)
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the object schema, return ZodObjectDefault
-func (s ZodObjectDefault) Refine(fn func(map[string]any) bool, params ...any) ZodObjectDefault {
-	newInner := s.innerType.Refine(fn, params...)
-	return ZodObjectDefault{
-		&ZodDefault[*ZodObject]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Transform adds data transformation, return a generic ZodType
-func (s ZodObjectDefault) Transform(fn func(map[string]any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// use the TransformAny method of the embedded ZodDefault
-	return s.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		// smartly handle object value
-		if input == nil || reflectx.IsNil(input) {
-			return nil, ErrTransformNilObject
-		}
-
-		// convert to map[string]any
-		objMap := mapx.FromAny(input)
-		if objMap == nil {
-			return nil, ErrCannotConvertObject
-		}
-
-		return fn(objMap, ctx)
-	})
-}
-
-// Optional modifier - correctly wrap Default wrapper
-func (s ZodObjectDefault) Optional() core.ZodType[any, any] {
-	// wrap the current ZodObjectDefault instance, keep Default logic
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable modifier - correctly wrap Default wrapper
-func (s ZodObjectDefault) Nilable() core.ZodType[any, any] {
-	// wrap the current ZodObjectDefault instance, keep Default logic
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-////////////////////////////
-////   OBJECT PREFAULT WRAPPER ////
-////////////////////////////
-
-// ZodObjectPrefault is the Prefault wrapper for object type
-// provide perfect type safety and chain call support
-type ZodObjectPrefault struct {
-	*ZodPrefault[*ZodObject] // embed pointer to allow method promotion
-}
-
-////////////////////////////
-////   PREFAULT method   ////
-////////////////////////////
-
-// Prefault adds a prefault value to the object schema, return ZodObjectPrefault
-func (z *ZodObject) Prefault(value map[string]any) ZodObjectPrefault {
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:     z,
-			prefaultValue: value,
-			isFunction:    false,
-		},
-	}
-}
-
-// PrefaultFunc adds a prefault function to the object schema, return ZodObjectPrefault
-func (z *ZodObject) PrefaultFunc(fn func() map[string]any) ZodObjectPrefault {
-	genericFn := func() any { return fn() }
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:    z,
-			prefaultFunc: genericFn,
-			isFunction:   true,
-		},
-	}
-}
-
-////////////////////////////
-////   OBJECTPREFAULT chain methods ////
-////////////////////////////
-
-// Pick selects the specified fields, return ZodObjectPrefault
-func (o ZodObjectPrefault) Pick(keys []string) ZodObjectPrefault {
-	newInner := o.innerType.Pick(keys)
-
-	// filter prefaultValue, only keep the fields of Pick
-	var newPrefaultValue any
-	var newPrefaultFunc func() any
-
-	if o.isFunction && o.prefaultFunc != nil {
-		// if it is a function default value, create a new function to filter the result
-		newPrefaultFunc = func() any {
-			originalValue := o.prefaultFunc()
-			if originalMap, ok := originalValue.(map[string]any); ok {
-				filteredMap := make(map[string]any)
-				for _, key := range keys {
-					if value, exists := originalMap[key]; exists {
-						filteredMap[key] = value
-					}
-				}
-				return filteredMap
-			}
-			return originalValue
+	// Convert to target constraint type R
+	zeroType := reflect.TypeOf((*R)(nil)).Elem()
+	if zeroType.Kind() == reflect.Ptr {
+		// R is *map[string]any
+		if converted, ok := any(&objectValue).(R); ok {
+			return converted, true
 		}
 	} else {
-		// if it is a static default value, filter directly
-		if originalMap, ok := o.prefaultValue.(map[string]any); ok {
-			filteredMap := make(map[string]any)
-			for _, key := range keys {
-				if value, exists := originalMap[key]; exists {
-					filteredMap[key] = value
-				}
-			}
-			newPrefaultValue = filteredMap
-		} else {
-			newPrefaultValue = o.prefaultValue
+		// R is map[string]any
+		if converted, ok := any(objectValue).(R); ok {
+			return converted, true
 		}
 	}
 
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:     newInner,
-			prefaultValue: newPrefaultValue,
-			prefaultFunc:  newPrefaultFunc,
-			isFunction:    o.isFunction,
-		},
-	}
+	return zero, false
 }
 
-// Omit excludes the specified fields, return ZodObjectPrefault
-func (o ZodObjectPrefault) Omit(keys []string) ZodObjectPrefault {
-	newInner := o.innerType.Omit(keys)
-
-	// create the omit set
-	omitSet := make(map[string]struct{})
-	for _, key := range keys {
-		omitSet[key] = struct{}{}
+// extractObject extracts map[string]any from value with proper conversion
+func (z *ZodObject[T, R]) extractObject(value any) (map[string]any, error) {
+	// Handle direct map[string]any
+	if objectVal, ok := value.(map[string]any); ok {
+		return objectVal, nil
 	}
 
-	// filter prefaultValue, exclude the fields of Omit
-	var newPrefaultValue any
-	var newPrefaultFunc func() any
+	// Handle pointer to map[string]any
+	if objectPtr, ok := value.(*map[string]any); ok && objectPtr != nil {
+		return *objectPtr, nil
+	}
 
-	if o.isFunction && o.prefaultFunc != nil {
-		// if it is a function default value, create a new function to filter the result
-		newPrefaultFunc = func() any {
-			originalValue := o.prefaultFunc()
-			if originalMap, ok := originalValue.(map[string]any); ok {
-				filteredMap := make(map[string]any)
-				for key, value := range originalMap {
-					if _, shouldOmit := omitSet[key]; !shouldOmit {
-						filteredMap[key] = value
+	// Handle struct conversion using reflection
+	rv := reflect.ValueOf(value)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return nil, fmt.Errorf("nil pointer cannot be converted to object")
+		}
+		rv = rv.Elem()
+	}
+
+	if rv.Kind() == reflect.Struct {
+		result := make(map[string]any)
+		rt := rv.Type()
+		for i := 0; i < rv.NumField(); i++ {
+			field := rt.Field(i)
+			if field.IsExported() {
+				// Use json tag if present, otherwise use field name
+				name := field.Name
+				if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
+					if commaIdx := strings.Index(tag, ","); commaIdx > 0 {
+						name = tag[:commaIdx]
+					} else {
+						name = tag
 					}
 				}
-				return filteredMap
-			}
-			return originalValue
-		}
-	} else {
-		// if it is a static default value, filter directly
-		if originalMap, ok := o.prefaultValue.(map[string]any); ok {
-			filteredMap := make(map[string]any)
-			for key, value := range originalMap {
-				if _, shouldOmit := omitSet[key]; !shouldOmit {
-					filteredMap[key] = value
-				}
-			}
-			newPrefaultValue = filteredMap
-		} else {
-			newPrefaultValue = o.prefaultValue
-		}
-	}
-
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:     newInner,
-			prefaultValue: newPrefaultValue,
-			prefaultFunc:  newPrefaultFunc,
-			isFunction:    o.isFunction,
-		},
-	}
-}
-
-// Partial makes all fields optional, return ZodObjectPrefault
-func (o ZodObjectPrefault) Partial() ZodObjectPrefault {
-	newInner := o.innerType.Partial()
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:     newInner,
-			prefaultValue: o.prefaultValue,
-			prefaultFunc:  o.prefaultFunc,
-			isFunction:    o.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the object schema, return ZodObjectPrefault
-func (o ZodObjectPrefault) Refine(fn func(map[string]any) bool, params ...any) ZodObjectPrefault {
-	newInner := o.innerType.Refine(fn, params...)
-	return ZodObjectPrefault{
-		&ZodPrefault[*ZodObject]{
-			innerType:     newInner,
-			prefaultValue: o.prefaultValue,
-			prefaultFunc:  o.prefaultFunc,
-			isFunction:    o.isFunction,
-		},
-	}
-}
-
-// Transform adds data transformation, return a generic ZodType
-func (o ZodObjectPrefault) Transform(fn func(map[string]any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// use the TransformAny method of the embedded ZodPrefault
-	return o.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		// smartly handle object value
-		if input == nil || reflectx.IsNil(input) {
-			return nil, ErrTransformNilObject
-		}
-
-		// convert to map[string]any
-		objMap := mapx.FromAny(input)
-		if objMap == nil {
-			return nil, ErrCannotConvertObject
-		}
-
-		return fn(objMap, ctx)
-	})
-}
-
-// Optional modifier - correctly wrap Prefault wrapper
-func (o ZodObjectPrefault) Optional() core.ZodType[any, any] {
-	// wrap the current ZodObjectPrefault instance, keep Prefault logic
-	return Optional(any(o).(core.ZodType[any, any]))
-}
-
-// Nilable modifier - correctly wrap Prefault wrapper
-func (o ZodObjectPrefault) Nilable() core.ZodType[any, any] {
-	// wrap the current ZodObjectPrefault instance, keep Prefault logic
-	return Nilable(any(o).(core.ZodType[any, any]))
-}
-
-// =============================================================================
-// INTERNAL CHECK MANAGEMENT
-// =============================================================================
-
-// CloneFrom implements Cloneable interface for type-specific state copying
-func (z *ZodObject) CloneFrom(source any) {
-	if src, ok := source.(*ZodObject); ok {
-		// Copy type-specific fields from Bag
-		if src.internals.Bag != nil {
-			if z.internals.Bag == nil {
-				z.internals.Bag = make(map[string]any)
-			}
-			for k, v := range src.internals.Bag {
-				z.internals.Bag[k] = v
+				result[name] = rv.Field(i).Interface()
 			}
 		}
-
-		// Copy shape and other object-specific fields
-		if src.internals.Shape != nil {
-			z.internals.Shape = make(core.ObjectSchema)
-			for k, v := range src.internals.Shape {
-				z.internals.Shape[k] = v
-			}
-		}
-
-		// Copy object definition fields
-		if src.internals.Def != nil {
-			z.internals.Def.UnknownKeys = src.internals.Def.UnknownKeys
-		}
+		return result, nil
 	}
+
+	return nil, fmt.Errorf("cannot convert %T to map[string]any", value)
 }
 
-// =============================================================================
-// CORE PARSING LOGIC
-// =============================================================================
-
-// parseObjectCore handles object-specific parsing logic
-func parseObjectCore(payload *core.ParsePayload, internals *ZodObjectInternals, ctx *core.ParseContext) *core.ParsePayload {
-	// 1. type check - only accept map[string]any (no coercion for object type)
-	objectData, ok := payload.GetValue().(map[string]any)
-	if !ok {
-		issue := issues.CreateInvalidTypeIssue("object", payload.GetValue())
-		issue.Inst = internals
-		payload.AddIssue(issue)
-		return payload
-	}
-
-	// 2. field validation - validate each field according to Shape definition
-	result := make(map[string]any)
-	processedKeys := make(map[string]struct{})
-
-	// validate defined fields
-	for fieldName, fieldSchema := range internals.Shape {
-		// Use getter method instead of direct field access
-		fieldPath := make([]any, 0, len(payload.GetPath())+1)
-		fieldPath = append(fieldPath, payload.GetPath()...)
-		fieldPath = append(fieldPath, fieldName)
-		fieldValue, exists := objectData[fieldName]
+// validateObject validates object fields using field schemas
+func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.ZodCheck, ctx *core.ParseContext) (map[string]any, error) {
+	// Validate known fields first
+	for fieldName, fieldSchema := range z.internals.Shape {
+		fieldValue, exists := value[fieldName]
 
 		if !exists {
-			// check if field is optional
-			if engine.IsOptionalField(fieldSchema) {
-				// for optional fields, try parsing nil to get default values
-				// this handles Default types that should provide default values
-
-				// use the schema's Parse method directly, not GetInternals().Parse
-				// this ensures wrapper types like Default work correctly
-				fieldResultValue, fieldErr := fieldSchema.Parse(nil, ctx)
-				if fieldErr == nil && fieldResultValue != nil {
-					// default value provided, include it in result
-					result[fieldName] = fieldResultValue
-				}
-				// if no default value or parsing failed, skip the field (Optional behavior)
-				continue
-			} else {
-				// missing required field
-				issue := issues.CreateMissingKeyIssue(fieldName, func(iss *core.ZodRawIssue) {
-					iss.Inst = internals
-				})
-				payload.AddIssueWithPath(issue, fieldPath)
-				continue
+			if !z.isFieldOptional(fieldSchema, fieldName) {
+				return nil, fmt.Errorf("missing required field: %s", fieldName)
 			}
-		}
-
-		// no coercion for object type (non-primitive)
-		actualFieldSchema := fieldSchema
-
-		// fix nil pointer error: for wrapper types, use engine.Parse method directly
-		if actualFieldSchema == nil {
-			// if schema is nil, create an error
-			issue := issues.CreateInvalidTypeIssue("unknown", fieldValue)
-			issue.Inst = internals
-			payload.AddIssueWithPath(issue, fieldPath)
 			continue
 		}
 
-		// use the schema's Parse method directly, this ensures wrapper types (like Prefault, Default) work correctly
-		fieldResultValue, fieldErr := actualFieldSchema.Parse(fieldValue, ctx)
-		if fieldErr != nil {
-			// when parsing a field, convert the error to payload format
-			var zodErr *issues.ZodError
-			if errors.As(fieldErr, &zodErr) {
-				// Convert ZodIssue to ZodRawIssue and update the error path
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Inst = internals
+		if err := z.validateField(fieldValue, fieldSchema, ctx, fieldName); err != nil {
+			return nil, fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+		}
+	}
 
-					// Copy additional properties from the original issue
-					if issue.Expected != "" {
-						rawIssue.Properties["expected"] = issue.Expected
-					}
-					if issue.Received != "" {
-						rawIssue.Properties["received"] = issue.Received
-					}
-					if issue.Format != "" {
-						rawIssue.Properties["format"] = issue.Format
-					}
+	// Separate Overwrite checks from other checks
+	var overwriteChecks []core.ZodCheck
+	var otherChecks []core.ZodCheck
 
-					payload.AddIssueWithPath(rawIssue, append(fieldPath, issue.Path...))
-				}
-			} else {
-				// if not ZodError, create a generic error
-				issue := issues.CreateInvalidTypeIssue("unknown", fieldValue)
-				issue.Inst = internals
-				payload.AddIssueWithPath(issue, fieldPath)
-			}
+	for _, check := range checks {
+		// Check if this is an Overwrite check by checking the check name
+		if checkInternals := check.GetZod(); checkInternals != nil && checkInternals.Def != nil && checkInternals.Def.Check == "overwrite" {
+			overwriteChecks = append(overwriteChecks, check)
 		} else {
-			result[fieldName] = fieldResultValue
+			otherChecks = append(otherChecks, check)
 		}
-
-		processedKeys[fieldName] = struct{}{}
 	}
 
-	// 3. handle unknown keys according to UnknownKeys mode
-	for key, value := range objectData {
-		if _, processed := processedKeys[key]; !processed {
-			// Unknown key found
-			switch internals.Def.UnknownKeys {
-			case OBJECT_STRICT_MODE:
-				// strict mode: error on unknown keys
-				issue := issues.CreateUnrecognizedKeysIssue([]string{key}, payload.GetValue())
-				issue.Inst = internals
-				payload.AddIssueWithPath(issue, append(payload.GetPath(), key))
+	// Apply Overwrite transformations before unknown field handling (preserves added fields)
+	if len(overwriteChecks) > 0 {
+		transformedValue, err := engine.ApplyChecks[map[string]any](value, overwriteChecks, ctx)
+		if err != nil {
+			return nil, err
+		}
+		value = transformedValue
+	}
 
-			case OBJECT_LOOSE_MODE:
-				// loose mode: allow unknown keys to pass through
-				if internals.Def.Catchall != nil {
-					// Validate unknown key value with catchall schema using full Parse to preserve wrapper behaviour
-					parsedVal, err := internals.Def.Catchall.Parse(value, ctx)
-					if err != nil {
-						// Convert ZodError to raw issues with correct path
-						var zodErr *issues.ZodError
-						if errors.As(err, &zodErr) {
-							for _, issue := range zodErr.Issues {
-								// Convert ZodError to RawIssue using standardized converter
-								raw := issues.ConvertZodIssueToRaw(issue)
-								raw.Inst = internals
-
-								// Prepend object key to issue path for catchall field errors
-								path := append(payload.GetPath(), append([]any{key}, issue.Path...)...)
-								payload.AddIssueWithPath(raw, path)
-							}
-						} else {
-							// Fallback generic invalid type issue
-							raw := issues.CreateInvalidTypeIssue("unknown", value)
-							raw.Inst = internals
-							payload.AddIssueWithPath(raw, append(payload.GetPath(), key))
-						}
-					} else {
-						// Successful validation – adopt transformed value
-						result[key] = parsedVal
+	// Handle unknown fields based on mode
+	var fieldsToRemove []string
+	for fieldName, fieldValue := range value {
+		if _, isKnown := z.internals.Shape[fieldName]; !isKnown {
+			switch z.internals.UnknownKeys {
+			case ObjectModeStrict:
+				return nil, fmt.Errorf("unknown field not allowed in strict mode: %s", fieldName)
+			case ObjectModeStrip:
+				fieldsToRemove = append(fieldsToRemove, fieldName)
+			case ObjectModePassthrough:
+				if z.internals.Catchall != nil {
+					if err := z.validateField(fieldValue, z.internals.Catchall, ctx, fieldName); err != nil {
+						return nil, fmt.Errorf("catchall validation failed for field '%s': %w", fieldName, err)
 					}
-				} else {
-					// no catchall, pass through as-is
-					result[key] = value
 				}
-
-			case OBJECT_STRIP_MODE:
-				// strip mode: ignore unknown keys (default behavior)
-				// do nothing - key is stripped
 			}
 		}
 	}
 
-	// 4. run custom checks if object validation succeeded
-	if len(payload.GetIssues()) == 0 {
-		if customChecks, exists := internals.Bag["customChecks"].([]core.ZodCheck); exists {
-			engine.RunChecksOnValue(result, customChecks, payload, ctx)
+	// Remove unknown fields for strip mode (except for Overwrite-added fields)
+	if len(overwriteChecks) == 0 {
+		for _, fieldName := range fieldsToRemove {
+			delete(value, fieldName)
 		}
 	}
 
-	// update payload with validated object
-	payload.SetValue(result)
-	return payload
+	// Apply other checks (Size, Min, Max, etc.) after field processing
+	if len(otherChecks) > 0 {
+		finalValue, err := engine.ApplyChecks[map[string]any](value, otherChecks, ctx)
+		if err != nil {
+			return nil, err
+		}
+		return finalValue, nil
+	}
+
+	return value, nil
 }
 
-// Unwrap returns the inner type (for basic types, return self)
-func (z *ZodObject) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
+// validateField validates a single field using reflection (same as struct.go)
+func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.ParseContext, fieldName string) error {
+	if schema == nil {
+		return nil
+	}
+
+	// Try using reflection to call Parse method - this handles all schema types
+	schemaValue := reflect.ValueOf(schema)
+	if !schemaValue.IsValid() || schemaValue.IsNil() {
+		return nil
+	}
+
+	parseMethod := schemaValue.MethodByName("Parse")
+	if !parseMethod.IsValid() {
+		return nil
+	}
+
+	methodType := parseMethod.Type()
+	if methodType.NumIn() < 1 {
+		return nil
+	}
+
+	// Build arguments for Parse call
+	var firstArg reflect.Value
+	if element == nil {
+		// If element is nil, use zero value of the method's first argument type
+		firstArg = reflect.Zero(methodType.In(0))
+	} else {
+		firstArg = reflect.ValueOf(element)
+	}
+	args := []reflect.Value{firstArg}
+	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
+		// Add context parameter if expected
+		if ctx == nil {
+			args = append(args, reflect.Zero(methodType.In(1)))
+		} else {
+			args = append(args, reflect.ValueOf(ctx))
+		}
+	}
+
+	// Call Parse method
+	results := parseMethod.Call(args)
+	if len(results) >= 2 {
+		// Check if there's an error (second return value)
+		if errInterface := results[1].Interface(); errInterface != nil {
+			if err, ok := errInterface.(error); ok {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// isFieldOptional checks if a field schema is optional using reflection or partial state
+func (z *ZodObject[T, R]) isFieldOptional(schema any, fieldName string) bool {
+	if schema == nil {
+		return true
+	}
+
+	// Check if this object is in partial mode and this field should be optional in partial mode
+	if z.internals.IsPartial {
+		// If there are no exceptions, all fields are optional
+		if z.internals.PartialExceptions == nil {
+			return true
+		}
+		// If this field is not in the exceptions list, it's optional
+		if !z.internals.PartialExceptions[fieldName] {
+			return true
+		}
+	}
+
+	schemaValue := reflect.ValueOf(schema)
+	if !schemaValue.IsValid() || schemaValue.IsNil() {
+		return true
+	}
+
+	// Try to get internals to check if optional
+	if internalsMethod := schemaValue.MethodByName("GetInternals"); internalsMethod.IsValid() {
+		results := internalsMethod.Call(nil)
+		if len(results) > 0 {
+			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
+				return internals.Optional
+			}
+		}
+	}
+
+	return false
+}
+
+// newZodObjectFromDef constructs new ZodObject from definition
+func newZodObjectFromDef[T any, R any](def *ZodObjectDef) *ZodObject[T, R] {
+	internals := &ZodObjectInternals{
+		ZodTypeInternals:  engine.NewBaseZodTypeInternals(def.Type),
+		Def:               def,
+		Shape:             def.Shape,
+		Catchall:          def.Catchall,
+		UnknownKeys:       def.UnknownKeys,
+		IsPartial:         false,
+		PartialExceptions: nil,
+	}
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		objectDef := &ZodObjectDef{
+			ZodTypeDef:  *newDef,
+			Shape:       def.Shape,
+			Catchall:    def.Catchall,
+			UnknownKeys: def.UnknownKeys,
+		}
+		return any(newZodObjectFromDef[T, R](objectDef)).(core.ZodType[any])
+	}
+
+	schema := &ZodObject[T, R]{internals: internals}
+
+	// Set error if provided
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	// Set checks if provided
+	if len(def.Checks) > 0 {
+		for _, check := range def.Checks {
+			internals.AddCheck(check)
+		}
+	}
+
+	return schema
+}
+
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// ObjectTyped creates a typed object schema with explicit type parameters
+func ObjectTyped[T any, R any](shape core.ObjectSchema, params ...any) *ZodObject[T, R] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodObjectDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeObject,
+			Checks: []core.ZodCheck{},
+		},
+		Shape:       make(core.ObjectSchema),
+		Catchall:    nil,
+		UnknownKeys: ObjectModeStrip, // Default mode
+	}
+
+	// Copy the shape directly since core.ObjectSchema contains ZodSchema types
+	for key, schema := range shape {
+		def.Shape[key] = schema
+	}
+
+	// Use utils.ApplySchemaParams for consistent parameter handling
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	objectSchema := newZodObjectFromDef[T, R](def)
+
+	// Add a minimal check to trigger field validation
+	alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
+	objectSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+
+	return objectSchema
+}
+
+// Object creates object schema with default types (map[string]any, map[string]any)
+func Object(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, map[string]any] {
+	return ObjectTyped[map[string]any, map[string]any](shape, params...)
+}
+
+// ObjectPtr creates object schema with pointer constraint
+func ObjectPtr(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, *map[string]any] {
+	return ObjectTyped[map[string]any, *map[string]any](shape, params...)
+}
+
+// StrictObject creates strict object schema with default types
+func StrictObject(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, map[string]any] {
+	return Object(shape, params...).Strict()
+}
+
+// LooseObject creates loose object schema with default types
+func LooseObject(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, map[string]any] {
+	return Object(shape, params...).Passthrough()
+}
+
+// StrictObjectPtr creates strict object schema with pointer constraint
+func StrictObjectPtr(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, *map[string]any] {
+	return ObjectTyped[map[string]any, *map[string]any](shape, params...).Strict()
+}
+
+// LooseObjectPtr creates loose object schema with pointer constraint
+func LooseObjectPtr(shape core.ObjectSchema, params ...any) *ZodObject[map[string]any, *map[string]any] {
+	return ObjectTyped[map[string]any, *map[string]any](shape, params...).Passthrough()
+}
+
+// Check adds a custom validation function that can report multiple issues for object schema.
+func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodObject[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		// Direct assertion attempt.
+		if val, ok := payload.GetValue().(R); ok {
+			fn(val, payload)
+			return
+		}
+
+		// Pointer/value mismatch handling.
+		var zero R
+		zeroTyp := reflect.TypeOf(zero)
+		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
+			elemTyp := zeroTyp.Elem()
+			valRV := reflect.ValueOf(payload.GetValue())
+			if valRV.IsValid() && valRV.Type() == elemTyp {
+				ptr := reflect.New(elemTyp)
+				ptr.Elem().Set(valRV)
+				if casted, ok := ptr.Interface().(R); ok {
+					fn(casted, payload)
+				}
+			}
+		}
+	}
+
+	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }

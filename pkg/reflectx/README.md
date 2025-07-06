@@ -28,19 +28,15 @@ func main() {
 
     // Property checking
     if reflectx.HasLength(value) {
-        length := reflectx.Length(value)
-        fmt.Printf("Length: %d\n", length)
+        if length, ok := reflectx.GetLength(value); ok {
+            fmt.Printf("Length: %d\n", length)
+        }
     }
 
     // Pointer operations
     ptr := &value
     if deref, ok := reflectx.Deref(ptr); ok {
         fmt.Printf("Dereferenced: %v\n", deref)
-    }
-
-    // String conversion fallback
-    if str, err := reflectx.ToString(123); err == nil {
-        fmt.Printf("Number as string: %s\n", str)
     }
 
     // Generic type conversion
@@ -73,7 +69,7 @@ reflectx.IsPointer(val)     // true if pointer
 
 // Property
 reflectx.HasLength(val)     // true if has length property
-reflectx.IsEmpty(val)       // true if empty
+length, _ := reflectx.GetLength(val)
 
 // Value extraction
 reflectx.ExtractString(val) // (string, ok)
@@ -81,17 +77,13 @@ reflectx.ExtractInt(val)    // (int, ok)
 reflectx.ExtractSlice(val)  // (slice, ok)
 reflectx.ExtractMap(val)    // (map, ok)
 
+// Size helpers
+size, _ := reflectx.GetSize(val)
+
 // Pointer operations
 reflectx.Deref(ptr)         // (value, ok)
 reflectx.DerefAll(ptr)      // (value, ok)
 reflectx.ToPointer(val)     // pointer to value
 
-// Collections
-reflectx.Length(val)        // length (int)
-reflectx.Size(val)          // size (int)
-reflectx.Capacity(val)      // capacity (int)
-
 // Conversion
-reflectx.ToString(val)      // (string, error)
 reflectx.ConvertToGeneric[T](val) // (T, error)
-```

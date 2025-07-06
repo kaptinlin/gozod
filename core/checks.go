@@ -1,71 +1,78 @@
+// Package core contains the low-level building blocks shared by every schema
+// implementation.  This file groups **validation check** primitives: the
+// interfaces, configuration objects and function signatures required to plug
+// additional constraints into any Zod schema.
+//
+// Naming convention
+//
+//	ZodCheck*   – general check abstractions (interface / internals / def)
+//	ZodCheckFn  – validation function executed at runtime
+//	ZodWhenFn   – predicate that decides whether the check should run
+//	ZodRefineFn – type-safe helper for simple boolean refinements
+//
+// A *check* is therefore a self-contained unit composed of metadata +
+// execution function.  Higher-level packages (`internal/checks`, individual
+// type packages, …) create concrete checks by embedding / configuring these
+// primitives.
 package core
 
 // =============================================================================
-// VALIDATION CHECK INTERFACES
+// VALIDATION CHECK INTERFACE & INTERNALS
 // =============================================================================
 
-// ZodCheck represents validation constraint interface
-// All validation checks must implement this interface
+// ZodCheck represents the interface for any validation constraint.
+// All checks (e.g., min length, regex) must implement this interface to be
+// attached to a schema.
 type ZodCheck interface {
 	GetZod() *ZodCheckInternals
 }
 
-// ZodCheckInternals contains check internal state and configuration
+// ZodCheckInternals contains the internal state and logic for a check.
 // This structure holds all the necessary data for executing a validation check
 type ZodCheckInternals struct {
-	Def      *ZodCheckDef                     // Check definition with metadata
-	Issc     *ZodIssueBase                    // Issues this check might throw
-	Check    ZodCheckFn                       // Validation function to execute
-	OnAttach []func(schema any)               // Schema attachment callbacks
-	When     func(payload *ParsePayload) bool // Conditional execution predicate
+	Def      *ZodCheckDef                     // The check's definition and metadata.
+	Issc     *ZodIssueBase                    // A template for issues this check might create.
+	Check    ZodCheckFn                       // The validation function to execute.
+	OnAttach []func(schema any)               // Callbacks executed when the check is attached to a schema.
+	When     func(payload *ParsePayload) bool // A predicate to conditionally run the check.
 }
 
-// GetZod implements ZodCheck interface
+// GetZod implements the ZodCheck interface.
 // Returns the internal structure itself following TypeScript pattern
 func (c *ZodCheckInternals) GetZod() *ZodCheckInternals {
 	return c
 }
 
-// ZodCheckDef defines a check definition
+// =============================================================================
+// CHECK DEFINITION & PARAMETERS
+// =============================================================================
+
+// ZodCheckDef defines the static configuration for a validation check.
 // Contains the basic configuration for any validation check
 type ZodCheckDef struct {
-	Check string       // Check type identifier (e.g., "min_length", "regex")
-	Error *ZodErrorMap // Custom error mapping function
-	Abort bool         // Whether to abort parsing on validation failure
+	Check string       // The unique identifier for the check (e.g., "min_length").
+	Error *ZodErrorMap // An optional custom error mapping function.
+	Abort bool         // If true, parsing aborts if this check fails.
 }
 
-// ZodCheckFn defines validation execution function
-// This function performs the actual validation logic
+// CheckParams defines the parameters for attaching a validation check.
+// This is a simplified version of SchemaParams for check-specific configuration.
+type CheckParams struct {
+	Error string // Custom error message.
+}
+
+// =============================================================================
+// CHECK FUNCTION SIGNATURES
+// =============================================================================
+
+// ZodCheckFn defines the signature for a validation execution function.
+// This function performs the actual validation logic on a ParsePayload.
 type ZodCheckFn func(payload *ParsePayload)
 
-// ZodWhenFn defines conditional function type
-// Used to determine when a check should be executed
+// ZodWhenFn defines the signature for a conditional predicate function.
+// It is used to determine if a check should be executed based on the payload.
 type ZodWhenFn func(payload *ParsePayload) bool
 
-// =============================================================================
-// FUNCTION TYPE DEFINITIONS
-// =============================================================================
-
-// CheckFn defines the function signature for validation checks
-// Simple boolean validation function
-type CheckFn func(payload *ParsePayload)
-
-// RefineFn defines the function signature for refinement validation
-// Type-safe refinement function with generic type parameter
-type RefineFn[T any] func(value T) bool
-
-// TransformFn defines the function signature for transformation
-// Transforms input of type T to output of type R
-type TransformFn[T any, R any] func(T, *RefinementContext) (R, error)
-
-// =============================================================================
-// CONSTRUCTOR FUNCTION TYPES
-// =============================================================================
-
-// ConstructorFn defines the signature for schema constructor functions
-// Used to create new instances of schema types
-type ConstructorFn[T ZodType[any, any]] func(def *ZodTypeDef) T
-
-// ModifierFn defines the signature for schema modifier functions
-// Used to add modifiers like Optional, Nilable, etc.
-type ModifierFn[T ZodType[any, any]] func(schema T) ZodType[any, any]
+// ZodRefineFn defines the signature for a simple, type-safe refinement.
+// It's a helper for checks that only need to return a boolean result.
+type ZodRefineFn[T any] func(value T) bool

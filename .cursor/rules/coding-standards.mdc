@@ -88,6 +88,11 @@ This document defines comprehensive coding standards and best practices for the 
 
 ## 🔧 Go Language Idiom Guidelines
 
+### 0. General Principles
+- **Simplicity first**: Write simple, clear, idiomatic Go code; favor readability over cleverness.
+- **Happy path left-aligned**: Return early to reduce nesting and keep the main flow flush left.
+- **Useful zero values**: Design types so that their zero value is meaningful and immediately usable.
+
 ### 1. Error Handling Patterns
 ```go
 // ✅ Standard Go error handling
@@ -143,6 +148,16 @@ func (z *ZodString) min(min int) *ZodString { ... }  // Public methods should be
 var emailRegex = ...  // Package-level variables should be capitalized
 ```
 
+### 5. Code Style & Formatting
+- Always run `gofmt` and `goimports` before committing.
+- Keep line length reasonable and use blank lines to separate logical sections for readability.
+
+### 6. Concurrency Guidelines
+- Let the caller decide when to launch goroutines; libraries should not spawn them arbitrarily.
+- Always define clear termination conditions for goroutines and prevent leaks with `sync.WaitGroup`, contexts, or channels.
+- Communicate between goroutines via channels; protect shared state with `sync.Mutex`/`sync.RWMutex` when necessary.
+- Close channels from the sender side and leverage `select` for non-blocking operations.
+
 ## 🚀 Performance Optimization Guidelines
 
 ### 1. Memory Allocation Optimization
@@ -168,7 +183,7 @@ var emailRegex = ...  // Package-level variables should be capitalized
 ### 1. Type System Differences
 | Concept | TypeScript | Go | Handling Strategy |
 |---------|------------|----|-----------------|
-| Optional fields | `field?: T` | `*T` or `Optional` wrapper | Use wrapper pattern |
+| Optional fields | `field?: T` | `*T` pointer | Copy-on-Write modifier (`Optional()`) |
 | Union types | `T \| U` | `any` + type assertion | Runtime type checking |
 | Literal types | `"literal"` | Constants + validation | Enum validation |
 | Generic constraints | `T extends U` | `T interface{ ... }` | Interface constraints |
@@ -219,23 +234,39 @@ func (z *ZodString) Parse(input any, ctx ...*ParseContext) (any, error) {
 }
 ```
 
-### 3. Wrapper Factory Pattern
-Consistent wrapper creation across all types:
+### 3. Copy-on-Write Modifier Pattern
+
+Each modifier clones the schema's internal state and returns a **new instance**, ensuring immutability and type-safe chaining without auxiliary wrapper structs:
 
 ```go
-// Default wrapper
-func (z *ZodString) Default(value string) *ZodStringDefault {
-    return &ZodStringDefault{
-        schema:  z,
-        default: value,
-        def:     ZodTypeDef{Type: "default"},
-    }
+// Optional() – converts to pointer type and marks as optional
+func (z *ZodBool[T]) Optional() *ZodBool[*bool] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetOptional(true)
+    return z.withPtrInternals(in)
 }
 
-// Generic wrapper functions
-func Optional[T ZodType[any, any]](schema T) *ZodOptional[T] { ... }
-func Nilable[T ZodType[any, any]](schema T) *ZodNilable[T] { ... }
+// Nilable() – converts to pointer type and allows nil values
+func (z *ZodBool[T]) Nilable() *ZodBool[*bool] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetNilable(true)
+    return z.withPtrInternals(in)
+}
+
+// Default() – retains original generic type while setting default value
+func (z *ZodBool[T]) Default(v bool) *ZodBool[T] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetDefaultValue(v)
+    return z.withInternals(in)
+}
 ```
+
+Key characteristics:
+
+- **Immutable modifier chain**: Original schema is never mutated.
+- **Pointer semantics**: Optional/Nilable always return pointer type (`*T`).
+- **No wrapper structs**: Eliminates `ZodOptional`, `ZodNilable`, `ZodStringDefault`, etc., reducing allocations.
+- **Type inference preserved**: Default/Prefault keep the current generic type `T`; Optional/Nilable switch to `*T`.
 
 ## 📝 Code Quality Standards
 
@@ -248,7 +279,6 @@ func Nilable[T ZodType[any, any]](schema T) *ZodNilable[T] { ... }
 ### 2. Testing Requirements
 - **Unit tests**: Every public method must have comprehensive unit tests
 - **Integration tests**: Complex workflows must have integration tests
-- **Compatibility tests**: Ensure behavior matches TypeScript Zod v4
 - **Performance tests**: Critical paths must have benchmark tests
 
 ### 3. Code Review Standards

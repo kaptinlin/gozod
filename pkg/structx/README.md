@@ -1,8 +1,15 @@
 # StructX
 
-Type-safe, lightweight helpers for struct manipulation and conversion in Go.
+Lightweight utilities for converting between Go structs and `map[string]any`.
 
-## Usage Example
+## Features
+
+* **Marshal** – Convert a struct (or pointer to struct) to `map[string]any`.
+* **ToMap** – Same as Marshal but returns an error when input is nil or not a struct.
+* **Unmarshal / FromMap** – Populate a struct instance from `map[string]any` using reflection.
+* Respects `json` tags and skips unexported or `json:"-"` fields.
+
+## Quick Start
 
 ```go
 package main
@@ -10,6 +17,7 @@ package main
 import (
     "fmt"
     "reflect"
+
     "github.com/kaptinlin/gozod/pkg/structx"
 )
 
@@ -20,64 +28,34 @@ type User struct {
 }
 
 func main() {
-    user := User{Name: "John Doe", Email: "john@example.com", Age: 30}
+    user := User{"John Doe", "john@example.com", 30}
 
-    // struct -> map
+    // struct → map
     userMap := structx.Marshal(user)
-    fmt.Println(userMap) // map[age:30 email:john@example.com name:John Doe]
+    fmt.Println(userMap)
 
-    // map -> struct
-    newUser, _ := structx.Unmarshal(userMap, reflect.TypeOf(User{}))
-    fmt.Println(newUser)
+    // struct → map with error handling
+    userMap2, err := structx.ToMap(user)
+    fmt.Println(userMap2, err)
 
-    // Field operations
-    if name, ok := structx.GetField(user, "name"); ok {
-        fmt.Println("Name:", name)
-    }
+    // map → struct
+    restored, _ := structx.Unmarshal(userMap, reflect.TypeOf(User{}))
+    fmt.Println(restored)
 }
-```
-
-## Quick Reference
-
-```go
-import "github.com/kaptinlin/gozod/pkg/structx"
-
-type Person struct{ Name string; Age int }
-p := Person{"Alice", 25}
-
-// Type checks
-structx.Is(p)           // struct?
-structx.IsPointer(&p)   // pointer to struct?
-
-// struct <-> map
-m := structx.Marshal(p) // map[string]any
-m2, err := structx.ToMap(p)
-obj, err := structx.Unmarshal(m, reflect.TypeOf(Person{}))
-
-// Field operations
-fields := structx.Fields(p)                  // []string
-val, ok := structx.GetField(p, "Name")      // "Alice", true
-err := structx.SetField(&p, "Age", 30)      // set by name/tag
-ok = structx.HasField(p, "Age")             // true
-count := structx.Count(p)                    // 2
-
-// Utilities
-out, ok := structx.Extract(p)                // map[string]any, true
-clone, err := structx.Clone(p)               // deep copy
 ```
 
 ## JSON Tag Support
 
-StructX respects `json` tags for field naming and omits fields with `json:"-"`:
+`structx` automatically honors `json` tags for field names and omits fields tagged with `-`:
 
 ```go
 type APIResponse struct {
     UserID   int    `json:"user_id"`
     UserName string `json:"username"`
     IsActive bool   `json:"is_active"`
-    Internal string `json:"-"` // skipped
+    Secret   string `json:"-"` // skipped
 }
 
-data := structx.Marshal(APIResponse{1, "alice", true, "secret"})
+data := structx.Marshal(APIResponse{1, "alice", true, "hidden"})
 // map[user_id:1 username:alice is_active:true]
 ```

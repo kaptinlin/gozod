@@ -1,84 +1,210 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"math"
-	"regexp"
+	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-//////////////////////////
-// CORE TYPE DEFINITIONS
-//////////////////////////
+// =============================================================================
+// TYPE CONSTRAINTS
+// =============================================================================
 
-// ZodFloatConstraint defines supported floating-point types for generic implementation
-type ZodFloatConstraint interface {
-	~float32 | ~float64
+// FloatConstraint restricts values to supported float types or their pointers.
+type FloatConstraint interface {
+	~float32 | ~float64 | ~*float32 | ~*float64
 }
 
-// ZodFloatDef defines the configuration for generic floating-point validation
-type ZodFloatDef[T ZodFloatConstraint] struct {
+// Float32Constraint restricts values to float32 or *float32.
+type Float32Constraint interface {
+	float32 | *float32
+}
+
+// Float64Constraint restricts values to float64 or *float64.
+type Float64Constraint interface {
+	float64 | *float64
+}
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+// ZodFloatDef defines the configuration for float validation
+type ZodFloatDef struct {
 	core.ZodTypeDef
-	Type     core.ZodTypeCode // Type identifier using type-safe constants
-	MinValue T                // Type minimum value
-	MaxValue T                // Type maximum value
-	Checks   []core.ZodCheck  // Float-specific validation checks
 }
 
-// ZodFloatInternals contains generic floating-point validator internal state
-type ZodFloatInternals[T ZodFloatConstraint] struct {
+// ZodFloatInternals contains float validator internal state
+type ZodFloatInternals struct {
 	core.ZodTypeInternals
-	Def     *ZodFloatDef[T]            // Schema definition
-	Checks  []core.ZodCheck            // Validation checks
-	Isst    issues.ZodIssueInvalidType // Invalid type issue template
-	Pattern *regexp.Regexp             // Float pattern (if any)
-	Bag     map[string]any             // Additional metadata (minimum, maximum, format, coerce flag, etc.)
+	Def *ZodFloatDef // Schema definition
 }
 
-// ZodFloat represents a generic floating-point validation schema
-type ZodFloat[T ZodFloatConstraint] struct {
-	internals *ZodFloatInternals[T]
+// ZodFloatTyped represents a floating-point validation schema with dual generic parameters
+// T = base type (float32, float64, etc.), R = constraint type (T or *T)
+type ZodFloatTyped[T FloatConstraint, R any] struct {
+	internals *ZodFloatInternals
 }
+
+// ZodFloat is now a generic type alias for ZodFloatTyped
+// This provides a unified interface for all float types
+type ZodFloat[T FloatConstraint, R any] = ZodFloatTyped[T, R]
+
+// =============================================================================
+// CORE METHODS
+// =============================================================================
 
 // GetInternals returns the internal state of the schema
-func (z *ZodFloat[T]) GetInternals() *core.ZodTypeInternals {
+func (z *ZodFloatTyped[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Coerce implements Coercible interface for floating-point type conversion
-func (z *ZodFloat[T]) Coerce(input any) (any, bool) {
-	result, err := coerce.ToFloat[T](input)
-	return result, err == nil
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodFloatTyped[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse validates and parses input with smart type inference
-func (z *ZodFloat[T]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodFloatTyped[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Coerce implements Coercible interface for float type conversion
+func (z *ZodFloatTyped[T, R]) Coerce(input any) (any, bool) {
+	var zero T
+	switch any(zero).(type) {
+	case float32, *float32:
+		result, err := coerce.ToFloat[float32](input)
+		return result, err == nil
+	case float64, *float64:
+		result, err := coerce.ToFloat[float64](input)
+		return result, err == nil
+	default:
+		// Fallback to float64
+		result, err := coerce.ToFloat[float64](input)
+		return result, err == nil
+	}
+}
+
+// Parse returns a value that matches the constraint type R with full type safety.
+func (z *ZodFloatTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var zero T
+
+	// Determine the type code based on T
+	var typeCode core.ZodTypeCode
+	switch any(zero).(type) {
+	case float32, *float32:
+		typeCode = core.ZodTypeFloat32
+	case float64, *float64:
+		typeCode = core.ZodTypeFloat64
+	default:
+		// Fallback to float64
+		typeCode = core.ZodTypeFloat64
 	}
 
-	var zero T
-	typeName := getFloatTypeName(zero)
+	// Determine if we have a pointer constraint type R to enable pointer identity preservation
+	var zeroR R
+	isPointerConstraint := false
+	switch any(zeroR).(type) {
+	case *float32, *float64:
+		isPointerConstraint = true
+	}
 
-	return engine.ParsePrimitive[T](
+	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParsePrimitive
+	originalInternals := z.internals
+	if isPointerConstraint && !originalInternals.ZodTypeInternals.Optional && !originalInternals.ZodTypeInternals.Nilable {
+		// Create a copy of internals with Optional flag temporarily enabled
+		tempInternals := *originalInternals
+		tempInternals.ZodTypeInternals.SetOptional(true)
+		z.internals = &tempInternals
+
+		// Restore original internals after parsing
+		defer func() {
+			z.internals = originalInternals
+		}()
+	}
+
+	// Use ParsePrimitive with custom validator and converter functions
+	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
-		typeName,
-		validateFloat[T],
-		parseCtx,
+		typeCode,
+		// Validator function - validates the base type T
+		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+			// Apply all float-specific checks
+			return engine.ApplyChecks[T](value, checks, ctx)
+		},
+		// Converter function - converts validated T to constraint type R
+		func(result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
+			var zeroR R
+
+			// Handle nil input for optional/nilable schemas
+			if result == nil {
+				internals := originalInternals // Use original internals for nil checking
+				if internals.ZodTypeInternals.Optional || internals.ZodTypeInternals.Nilable {
+					return zeroR, nil
+				}
+				return zeroR, fmt.Errorf("float value cannot be nil")
+			}
+
+			// First, try to convert result directly to constraint type R (preserves pointer identity)
+			if directValue, ok := result.(R); ok {
+				return directValue, nil
+			}
+
+			// Special handling for pointer constraint types to preserve pointer identity
+			var zeroPtr R
+			switch any(zeroPtr).(type) {
+			case *float32:
+				if ptr, ok := result.(*float32); ok {
+					if convertedPtr, ok2 := any(ptr).(R); ok2 {
+						return convertedPtr, nil
+					}
+				}
+			case *float64:
+				if ptr, ok := result.(*float64); ok {
+					if convertedPtr, ok2 := any(ptr).(R); ok2 {
+						return convertedPtr, nil
+					}
+				}
+			}
+
+			// Fallback: try to convert to base type T and then to constraint type R
+			if value, ok := result.(T); ok {
+				// Convert base type T to constraint type R (this will create new pointers for pointer types)
+				return convertToFloatConstraintType[T, R](value), nil
+			}
+
+			// Handle pointer dereferencing if needed (for cases where input pointer doesn't match expected type)
+			switch v := result.(type) {
+			case *float32:
+				if v != nil {
+					if floatVal, ok := any(*v).(T); ok {
+						return convertToFloatConstraintType[T, R](floatVal), nil
+					}
+				}
+			case *float64:
+				if v != nil {
+					if floatVal, ok := any(*v).(T); ok {
+						return convertToFloatConstraintType[T, R](floatVal), nil
+					}
+				}
+			}
+
+			return zeroR, fmt.Errorf("type conversion failed: expected %T but got %T", *new(T), result)
+		},
+		ctx...,
 	)
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodFloat[T]) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the type-safe variant that panics on error.
+func (z *ZodFloatTyped[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -86,655 +212,682 @@ func (z *ZodFloat[T]) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////
-// VALIDATION METHODS
-//////////////////////////
-
-// Min adds minimum value validation
-func (z *ZodFloat[T]) Min(minimum T, params ...any) *ZodFloat[T] {
-	check := checks.Gte(minimum, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+// ParseAny validates input and returns untyped result for runtime scenarios.
+// Zero-overhead wrapper around Parse to eliminate reflection calls.
+func (z *ZodFloatTyped[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-// Max adds maximum value validation
-func (z *ZodFloat[T]) Max(maximum T, params ...any) *ZodFloat[T] {
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+// withPtrInternals creates a new ZodFloatTyped instance with pointer constraint type *T.
+// Used by modifiers such as Optional, Nilable, and Nullish that must return a pointer constraint.
+func (z *ZodFloatTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFloatTyped[T, *T] {
+	return &ZodFloatTyped[T, *T]{internals: &ZodFloatInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// Optional returns a schema that accepts the base type T or nil, with constraint type *T.
+func (z *ZodFloatTyped[T, R]) Optional() *ZodFloatTyped[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable returns a schema that accepts the base type T or nil, with constraint type *T.
+func (z *ZodFloatTyped[T, R]) Nilable() *ZodFloatTyped[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers for maximum flexibility.
+func (z *ZodFloatTyped[T, R]) Nullish() *ZodFloatTyped[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// NonOptional removes optional flag and returns value constraint (T).
+// Mirrors Optional() -> NonOptional() pattern, enabling strict non-nil validation.
+func (z *ZodFloatTyped[T, R]) NonOptional() *ZodFloatTyped[T, T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+
+	return &ZodFloatTyped[T, T]{
+		internals: &ZodFloatInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
+}
+
+// Default keeps the current constraint type R.
+func (z *ZodFloatTyped[T, R]) Default(v float64) *ZodFloatTyped[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc keeps the current constraint type R.
+func (z *ZodFloatTyped[T, R]) DefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault keeps the current constraint type R.
+func (z *ZodFloatTyped[T, R]) Prefault(v float64) *ZodFloatTyped[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc keeps the current constraint type R.
+func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// Min adds minimum value validation (alias for Gte)
+func (z *ZodFloatTyped[T, R]) Min(minimum float64, params ...any) *ZodFloatTyped[T, R] {
+	check := checks.Gte(minimum, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Max adds maximum value validation (alias for Lte)
+func (z *ZodFloatTyped[T, R]) Max(maximum float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lte(maximum, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Gt adds greater than validation (exclusive)
-func (z *ZodFloat[T]) Gt(value T, params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Gt(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Gt(value, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Gte adds greater than or equal validation (inclusive)
-func (z *ZodFloat[T]) Gte(value T, params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Gte(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Gte(value, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Lt adds less than validation (exclusive)
-func (z *ZodFloat[T]) Lt(value T, params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Lt(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lt(value, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Lte adds less than or equal validation (inclusive)
-func (z *ZodFloat[T]) Lte(value T, params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Lte(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lte(value, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Positive adds positive number validation (> 0)
-func (z *ZodFloat[T]) Positive(params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Positive(params ...any) *ZodFloatTyped[T, R] {
 	return z.Gt(0, params...)
 }
 
 // Negative adds negative number validation (< 0)
-func (z *ZodFloat[T]) Negative(params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) Negative(params ...any) *ZodFloatTyped[T, R] {
 	return z.Lt(0, params...)
 }
 
-// NonNegative adds non-negative number validation (>= 0)
-func (z *ZodFloat[T]) NonNegative(params ...any) *ZodFloat[T] {
+// NonNegative adds non-negative number validation (>= 0, alias for nonnegative)
+func (z *ZodFloatTyped[T, R]) NonNegative(params ...any) *ZodFloatTyped[T, R] {
 	return z.Gte(0, params...)
 }
 
-// NonPositive adds non-positive number validation (<= 0)
-func (z *ZodFloat[T]) NonPositive(params ...any) *ZodFloat[T] {
+// NonPositive adds non-positive number validation (<= 0, alias for nonpositive)
+func (z *ZodFloatTyped[T, R]) NonPositive(params ...any) *ZodFloatTyped[T, R] {
 	return z.Lte(0, params...)
 }
 
 // MultipleOf adds multiple of validation
-func (z *ZodFloat[T]) MultipleOf(value T, params ...any) *ZodFloat[T] {
+func (z *ZodFloatTyped[T, R]) MultipleOf(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.MultipleOf(value, params...)
-	result := engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-	return result.(*ZodFloat[T])
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Step adds step validation (alias for MultipleOf to match Zod)
+func (z *ZodFloatTyped[T, R]) Step(step float64, params ...any) *ZodFloatTyped[T, R] {
+	return z.MultipleOf(step, params...)
 }
 
 // Int adds integer validation (no decimal part)
-func (z *ZodFloat[T]) Int(params ...any) core.ZodType[any, any] {
-	// Create a custom check for integer validation using reflectx
+func (z *ZodFloatTyped[T, R]) Int(params ...any) *ZodFloatTyped[T, R] {
 	check := checks.NewCustom[any](func(v any) bool {
-		if !reflectx.IsFloat(v) {
+		switch val := v.(type) {
+		case float32:
+			return val == float32(math.Trunc(float64(val)))
+		case float64:
+			return val == math.Trunc(val)
+		case *float32:
+			if val == nil {
+				return true
+			}
+			return *val == float32(math.Trunc(float64(*val)))
+		case *float64:
+			if val == nil {
+				return true
+			}
+			return *val == math.Trunc(*val)
+		default:
 			return false
 		}
-		if floatVal, ok := reflectx.ExtractFloat(v); ok {
-			return floatVal == math.Trunc(floatVal)
-		}
-		return false
 	}, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Finite adds finite number validation (not NaN or Infinity)
-func (z *ZodFloat[T]) Finite(params ...any) core.ZodType[any, any] {
-	// Create a custom check for finite validation using reflectx
+func (z *ZodFloatTyped[T, R]) Finite(params ...any) *ZodFloatTyped[T, R] {
 	check := checks.NewCustom[any](func(v any) bool {
-		if !reflectx.IsFloat(v) {
+		switch val := v.(type) {
+		case float32:
+			return !math.IsInf(float64(val), 0) && !math.IsNaN(float64(val))
+		case float64:
+			return !math.IsInf(val, 0) && !math.IsNaN(val)
+		case *float32:
+			if val == nil {
+				return true
+			}
+			return !math.IsInf(float64(*val), 0) && !math.IsNaN(float64(*val))
+		case *float64:
+			if val == nil {
+				return true
+			}
+			return !math.IsInf(*val, 0) && !math.IsNaN(*val)
+		default:
 			return false
 		}
-		if floatVal, ok := reflectx.ExtractFloat(v); ok {
-			return !math.IsInf(floatVal, 0) && !math.IsNaN(floatVal)
-		}
-		return false
 	}, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Safe adds safe number validation (within JavaScript safe integer range)
-func (z *ZodFloat[T]) Safe(params ...any) core.ZodType[any, any] {
+func (z *ZodFloatTyped[T, R]) Safe(params ...any) *ZodFloatTyped[T, R] {
 	const maxSafeInt = 1<<53 - 1
 	const minSafeInt = -(1<<53 - 1)
-	return z.Gte(T(minSafeInt), params...).Lte(T(maxSafeInt), params...)
+	return z.Gte(minSafeInt, params...).Lte(maxSafeInt, params...)
 }
 
-//////////////////////////
-// TRANSFORM METHODS
-//////////////////////////
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
 
-// Transform creates a type-safe transformation of floating-point values
-func (z *ZodFloat[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	wrappedFn := func(input any, ctx *core.RefinementContext) (any, error) {
-		// Use reflectx for smart value extraction
-		if reflectx.IsNil(input) {
-			return (*T)(nil), nil
-		}
-
-		// Handle pointer dereferencing
-		actualInput := input
-		if reflectx.IsPointer(input) {
-			if deref, ok := reflectx.Deref(input); ok {
-				actualInput = deref
-			} else {
-				return (*T)(nil), nil // nil pointer
-			}
-		}
-
-		// Try direct type match first
-		if floatVal, ok := actualInput.(T); ok {
-			return fn(floatVal, ctx)
-		}
-
-		// Use reflectx.ExtractFloat for unified extraction
-		if floatVal, ok := reflectx.ExtractFloat(actualInput); ok {
-			return fn(T(floatVal), ctx)
-		}
-
-		return nil, fmt.Errorf("expected float type, got %T", input)
+// Transform applies a transformation function using the WrapFn pattern.
+// Float types implement direct extraction of float64 values for transformation.
+//
+// WrapFn Implementation:
+//  1. Create a wrapper function that extracts float64 from constraint type R
+//  2. Apply the user's transformation function to the extracted float64
+//  3. Return a ZodTransform with the wrapper function
+//
+// Zero Redundancy:
+//   - No floatTypeConverter structure needed
+//   - Direct function composition for maximum performance
+//   - Type-safe extraction from constraint type R to float64
+//
+// Example:
+//
+//	schema := Float64().Min(0.0).Transform(func(f float64, ctx *RefinementContext) (string, error) {
+//	    return fmt.Sprintf("%.2f", f), nil
+//	})
+func (z *ZodFloatTyped[T, R]) Transform(fn func(float64, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	// WrapFn Pattern: Create wrapper function for type-safe extraction
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		float64Value := extractFloatToFloat64[T, R](input) // Use existing extraction logic
+		return fn(float64Value, ctx)
 	}
-	return z.TransformAny(wrappedFn)
+
+	// Use the new factory function for ZodTransform
+	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
-// TransformAny provides flexible transformation with any input/output types
-func (z *ZodFloat[T]) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
+// Overwrite transforms the input value while preserving the original type.
+// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
+// The transformation function is stored as a check, so it doesn't modify the inferred type.
+func (z *ZodFloatTyped[T, R]) Overwrite(transform func(T) T, params ...any) *ZodFloatTyped[T, R] {
+	// Create a transformation function that works with the exact type T
+	transformAny := func(input any) any {
+		// Try to convert input to type T
+		converted, ok := convertToFloatType[T](input)
+		if !ok {
+			// If conversion fails, return original value
+			return input
+		}
 
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+		// Apply transformation directly on type T
+		return transform(converted)
 	}
+
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Pipe operation for pipeline chaining
-func (z *ZodFloat[T]) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-		def: core.ZodTypeDef{Type: "pipe"},
+// Pipe creates a pipeline using the WrapFn pattern.
+// Instead of using adapter structures, this creates a target function that handles type conversion.
+func (z *ZodFloatTyped[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	// WrapFn Pattern: Create target function for type conversion and validation
+	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+		// Extract float64 value from constraint type R
+		float64Value := extractFloatToFloat64[T, R](input)
+		// Apply target schema to the extracted float64
+		return target.Parse(float64Value, ctx)
 	}
+
+	// Use the new factory function for ZodPipe
+	return core.NewZodPipe[R, any](z, targetFn)
 }
 
-//////////////////////////
-// MODIFIER METHODS
-//////////////////////////
+// =============================================================================
+// TYPE CONVERSION
+// =============================================================================
 
-// Optional adds an optional check to the floating-point, returns ZodType support chain call
-func (z *ZodFloat[T]) Optional() core.ZodType[any, any] {
-	return Optional(any(z).(core.ZodType[any, any]))
-}
+// extractFloatToFloat64 converts constraint type R to float64 for WrapFn pattern transformations
+func extractFloatToFloat64[T FloatConstraint, R any](value R) float64 {
+	// First extract the base type T from constraint type R
+	baseValue := extractFloatValue[T, R](value)
 
-// Nilable adds a nilable check to the floating-point, returns ZodType support chain call
-func (z *ZodFloat[T]) Nilable() core.ZodType[any, any] {
-	return Nilable(any(z).(core.ZodType[any, any]))
-}
-
-// Nullish combines optional and nilable
-func (z *ZodFloat[T]) Nullish() core.ZodType[any, any] {
-	return Nullish(any(z).(core.ZodType[any, any]))
-}
-
-// Refine adds a flexible validation function to the floating-point, returns ZodType support chain call
-func (z *ZodFloat[T]) Refine(fn func(T) bool, params ...any) *ZodFloat[T] {
-	result := z.RefineAny(func(v any) bool {
-		// Use reflectx for smart value extraction
-		if reflectx.IsNil(v) {
-			return true // Let Nilable flag handle nil validation
-		}
-
-		// Handle pointer dereferencing
-		actualValue := v
-		if reflectx.IsPointer(v) {
-			if deref, ok := reflectx.Deref(v); ok {
-				actualValue = deref
-			} else {
-				return true // nil pointer
-			}
-		}
-
-		// Try direct type match first
-		if floatVal, ok := actualValue.(T); ok {
-			return fn(floatVal)
-		}
-
-		// Use reflectx.ExtractFloat for unified extraction
-		if floatVal, ok := reflectx.ExtractFloat(actualValue); ok {
-			return fn(T(floatVal))
-		}
-
-		return false // Invalid type
-	}, params...)
-	return result.(*ZodFloat[T])
-}
-
-// RefineAny adds a flexible validation function to the floating-point, returns ZodType support chain call
-func (z *ZodFloat[T]) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-}
-
-// Check adds a modern validation function to the floating-point, returns ZodType support chain call
-func (z *ZodFloat[T]) Check(fn core.CheckFn) core.ZodType[any, any] {
-	custom := Custom(fn, core.SchemaParams{})
-	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := z.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			payload.AddIssue(issues.CreateInvalidTypeIssueFromCode(core.ZodTypeFloat64, payload.GetValue()))
-			return payload
-		}
-		payload.SetValue(result)
-
-		fn(payload)
-		return payload
-	}
-	return custom
-}
-
-// Unwrap returns the inner type (for basic types, returns self), returns ZodType support chain call
-func (z *ZodFloat[T]) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-//////////////////////////
-// VALIDATION FUNCTIONS
-//////////////////////////
-
-// validateFloat validates float values with checks (generic)
-func validateFloat[T ZodFloatConstraint](value T, checks []core.ZodCheck, ctx *core.ParseContext) error {
-	if len(checks) > 0 {
-		// Use constructor instead of direct struct literal to respect private fields
-		payload := core.NewParsePayload(value)
-		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-		}
-	}
-	return nil
-}
-
-//////////////////////////
-// WRAPPER TYPES
-//////////////////////////
-
-// ZodFloatDefault is a default value wrapper for floating-point type
-type ZodFloatDefault[T ZodFloatConstraint] struct {
-	*ZodDefault[*ZodFloat[T]]
-}
-
-// Default adds a default value to the floating-point, returns ZodFloatDefault support chain call
-func (z *ZodFloat[T]) Default(value T) ZodFloatDefault[T] {
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
+	// Then convert T to float64
+	switch v := any(baseValue).(type) {
+	case float32:
+		return float64(v)
+	case float64:
+		return v
+	default:
+		return 0
 	}
 }
 
-// DefaultFunc adds a default function to the floating-point, returns ZodFloatDefault support chain call
-func (z *ZodFloat[T]) DefaultFunc(fn func() T) ZodFloatDefault[T] {
-	genericFn := func() any { return fn() }
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
 
-// ZodFloatDefault chain call methods
-
-// Min adds a minimum value validation to the floating-point, returns ZodFloatDefault support chain call
-func (s ZodFloatDefault[T]) Min(minimum T, params ...any) ZodFloatDefault[T] {
-	newInner := s.innerType.Min(minimum, params...)
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Max adds a maximum value validation to the floating-point, returns ZodFloatDefault support chain call
-func (s ZodFloatDefault[T]) Max(maximum T, params ...any) ZodFloatDefault[T] {
-	newInner := s.innerType.Max(maximum, params...)
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Positive adds a positive number validation to the floating-point, returns ZodFloatDefault support chain call
-func (s ZodFloatDefault[T]) Positive(params ...any) ZodFloatDefault[T] {
-	newInner := s.innerType.Positive(params...)
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the floating-point, returns ZodFloatDefault support chain call
-func (s ZodFloatDefault[T]) Refine(fn func(T) bool, params ...any) ZodFloatDefault[T] {
-	newInner := s.innerType.Refine(fn, params...)
-	return ZodFloatDefault[T]{
-		&ZodDefault[*ZodFloat[T]]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodFloatDefault[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return s.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		// Use reflectx for smart value extraction
-		if reflectx.IsNil(input) {
-			return nil, fmt.Errorf("cannot transform nil float value")
+// Refine applies type-safe validation using the base type T instead of constraint
+// type T. The callback will be executed even when the value is nil (for pointer
+// schemas) to align with Zod v4 semantics.
+func (z *ZodFloatTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodFloatTyped[T, R] {
+	wrapper := func(v any) bool {
+		converted, ok := convertToFloatType[T](v)
+		if !ok {
+			return false
 		}
-
-		// Handle pointer dereferencing
-		actualInput := input
-		if reflectx.IsPointer(input) {
-			if deref, ok := reflectx.Deref(input); ok {
-				actualInput = deref
-			} else {
-				return nil, fmt.Errorf("cannot transform nil float value")
-			}
-		}
-
-		// Try direct type match first
-		if floatVal, ok := actualInput.(T); ok {
-			return fn(floatVal, ctx)
-		}
-
-		// Use reflectx.ExtractFloat for unified extraction
-		if floatVal, ok := reflectx.ExtractFloat(actualInput); ok {
-			return fn(T(floatVal), ctx)
-		}
-
-		return nil, fmt.Errorf("expected float type, got %T", input)
-	})
-}
-
-// Optional adds an optional check to the floating-point, returns ZodType support chain call
-func (s ZodFloatDefault[T]) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the floating-point, returns ZodType support chain call
-func (s ZodFloatDefault[T]) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-// ZodFloatPrefault is a prefault value wrapper for floating-point type, returns ZodFloatPrefault support chain call
-type ZodFloatPrefault[T ZodFloatConstraint] struct {
-	*ZodPrefault[*ZodFloat[T]]
-}
-
-// Prefault adds a prefault value to the floating-point, returns ZodFloatPrefault support chain call
-func (z *ZodFloat[T]) Prefault(value T) ZodFloatPrefault[T] {
-	return ZodFloatPrefault[T]{
-		&ZodPrefault[*ZodFloat[T]]{
-			innerType:     z,
-			prefaultValue: value,
-			isFunction:    false,
-		},
-	}
-}
-
-// PrefaultFunc adds a prefault function to the floating-point, returns ZodFloatPrefault support chain call
-func (z *ZodFloat[T]) PrefaultFunc(fn func() T) ZodFloatPrefault[T] {
-	genericFn := func() any { return fn() }
-	return ZodFloatPrefault[T]{
-		&ZodPrefault[*ZodFloat[T]]{
-			innerType:    z,
-			prefaultFunc: genericFn,
-			isFunction:   true,
-		},
-	}
-}
-
-// ZodFloatPrefault chain call methods
-
-// Positive adds a positive number validation to the floating-point, returns ZodFloatPrefault support chain call
-func (f ZodFloatPrefault[T]) Positive(params ...any) ZodFloatPrefault[T] {
-	newInner := f.innerType.Positive(params...)
-	return ZodFloatPrefault[T]{
-		&ZodPrefault[*ZodFloat[T]]{
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the floating-point, returns ZodFloatPrefault support chain call
-func (f ZodFloatPrefault[T]) Refine(fn func(T) bool, params ...any) ZodFloatPrefault[T] {
-	newInner := f.innerType.Refine(fn, params...)
-	return ZodFloatPrefault[T]{
-		&ZodPrefault[*ZodFloat[T]]{
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Transform adds a data transformation function to the floating-point, returns ZodType support transform pipeline
-func (f ZodFloatPrefault[T]) Transform(fn func(T, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return f.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		// Use reflectx for smart value extraction
-		if reflectx.IsNil(input) {
-			return nil, fmt.Errorf("cannot transform nil float value")
-		}
-
-		// Handle pointer dereferencing
-		actualInput := input
-		if reflectx.IsPointer(input) {
-			if deref, ok := reflectx.Deref(input); ok {
-				actualInput = deref
-			} else {
-				return nil, fmt.Errorf("cannot transform nil float value")
-			}
-		}
-
-		// Try direct type match first
-		if floatVal, ok := actualInput.(T); ok {
-			return fn(floatVal, ctx)
-		}
-
-		// Use reflectx.ExtractFloat for unified extraction
-		if floatVal, ok := reflectx.ExtractFloat(actualInput); ok {
-			return fn(T(floatVal), ctx)
-		}
-
-		return nil, fmt.Errorf("expected float type, got %T", input)
-	})
-}
-
-// Optional adds an optional check to the floating-point, returns ZodType support chain call
-func (f ZodFloatPrefault[T]) Optional() core.ZodType[any, any] {
-	return Optional(any(f).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the floating-point, returns ZodType support chain call
-func (f ZodFloatPrefault[T]) Nilable() core.ZodType[any, any] {
-	return Nilable(any(f).(core.ZodType[any, any]))
-}
-
-//////////////////////////
-// CONSTRUCTOR FUNCTIONS
-//////////////////////////
-
-// createZodFloatFromDef creates a ZodFloat from definition
-func createZodFloatFromDef[T ZodFloatConstraint](def *ZodFloatDef[T]) *ZodFloat[T] {
-	internals := &ZodFloatInternals[T]{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: def.Type},
-		Pattern:          nil,
-		Bag:              make(map[string]any),
+		return fn(converted)
 	}
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
-		floatDef := &ZodFloatDef[T]{
-			ZodTypeDef: *newDef,
-			Type:       def.Type,
-			MinValue:   def.MinValue,
-			MaxValue:   def.MaxValue,
-			Checks:     newDef.Checks,
-		}
-		return createZodFloatFromDef(floatDef)
+	// Use unified parameter handling
+	schemaParams := utils.NormalizeParams(params...)
+
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
 	}
 
-	zodSchema := &ZodFloat[T]{internals: internals}
-
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := zodSchema.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
-		payload.SetValue(result)
-		return payload
-	}
-
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-	return zodSchema
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Float creates a new generic floating-point schema
-func Float[T ZodFloatConstraint](params ...any) *ZodFloat[T] {
+// convertToFloatType converts only matching float values to the target float type T with strict type checking
+func convertToFloatType[T FloatConstraint](v any) (T, bool) {
 	var zero T
-	typeName := getFloatTypeName(zero)
-	minValue, maxValue := getFloatTypeBounds[T]()
 
-	def := &ZodFloatDef[T]{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   typeName,
-			Checks: make([]core.ZodCheck, 0),
-		},
-		Type:     typeName,
-		MinValue: minValue,
-		MaxValue: maxValue,
-		Checks:   make([]core.ZodCheck, 0),
-	}
-
-	schema := createZodFloatFromDef(def)
-
-	if len(params) > 0 {
-		param := params[0]
-
-		// Handle different parameter types
-		switch p := param.(type) {
-		case string:
-			// String parameter becomes Error field
-			errorMap := issues.CreateErrorMap(p)
-			if errorMap != nil {
-				def.Error = errorMap
-				schema.internals.Error = errorMap
-			}
-		case core.SchemaParams:
-			// Handle core.SchemaParams
-			if p.Error != nil {
-				errorMap := issues.CreateErrorMap(p.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
-			}
+	if v == nil {
+		// Handle nil values for pointer types
+		switch any(zero).(type) {
+		case *float32, *float64:
+			return zero, true // zero value for pointer types is nil
+		default:
+			return zero, false // nil not allowed for value types
 		}
 	}
 
-	return schema
+	// Only accept matching float types - no cross-type conversion
+	switch any(zero).(type) {
+	case float32:
+		if val, ok := v.(float32); ok {
+			return any(val).(T), true
+		}
+		if val, ok := v.(*float32); ok && val != nil {
+			return any(*val).(T), true
+		}
+	case float64:
+		if val, ok := v.(float64); ok {
+			return any(val).(T), true
+		}
+		if val, ok := v.(*float64); ok && val != nil {
+			return any(*val).(T), true
+		}
+	// Pointer types
+	case *float32:
+		if val, ok := v.(float32); ok {
+			ptr := &val
+			return any(ptr).(T), true
+		}
+		if val, ok := v.(*float32); ok {
+			return any(val).(T), true
+		}
+	case *float64:
+		if val, ok := v.(float64); ok {
+			ptr := &val
+			return any(ptr).(T), true
+		}
+		if val, ok := v.(*float64); ok {
+			return any(val).(T), true
+		}
+	}
+
+	return zero, false // Reject all non-matching float types
 }
 
-// Concrete floating-point type definitions
-type ZodFloat32 = ZodFloat[float32]
-type ZodFloat64 = ZodFloat[float64]
-type ZodNumber = ZodFloat64
-
-// Float32 creates a new float32 schema
-func Float32(params ...any) *ZodFloat32 {
-	return Float[float32](params...)
+// RefineAny adds flexible custom validation logic
+func (z *ZodFloatTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFloatTyped[T, R] {
+	check := checks.NewCustom[any](fn, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Float64 creates a new float64 schema
-func Float64(params ...any) *ZodFloat64 {
-	return Float[float64](params...)
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withInternals creates a new ZodFloat instance that keeps the original constraint type R.
+// Used by modifiers that retain the original type, such as Default, Prefault, and validation methods.
+func (z *ZodFloatTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFloatTyped[T, R] {
+	return &ZodFloatTyped[T, R]{internals: &ZodFloatInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
 }
 
-// Number creates a new number schema (alias for Float64)
-func Number(params ...any) *ZodFloat64 {
+// CloneFrom copies configuration from another schema
+func (z *ZodFloatTyped[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodFloatTyped[T, R]); ok {
+		// Preserve original checks to avoid overwriting them
+		originalChecks := z.internals.ZodTypeInternals.Checks
+
+		// Copy all state from source
+		*z.internals = *src.internals
+
+		// Restore the original checks that were set by the constructor
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// extractFloatValue extracts the base float value T from constraint type R
+func extractFloatValue[T FloatConstraint, R any](value R) T {
+	// Handle direct assignment (when T == R)
+	if directValue, ok := any(value).(T); ok {
+		return directValue
+	}
+
+	// Handle pointer dereferencing
+	switch v := any(value).(type) {
+	case *float32:
+		if v != nil {
+			return any(*v).(T)
+		}
+	case *float64:
+		if v != nil {
+			return any(*v).(T)
+		}
+	}
+
+	// Fallback to zero value
+	var zero T
+	return zero
+}
+
+// newZodFloatFromDef constructs a new ZodFloat from the given definition.
+// Internal helper used by the constructor chain.
+func newZodFloatFromDef[T FloatConstraint, R any](def *ZodFloatDef) *ZodFloatTyped[T, R] {
+	internals := &ZodFloatInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.ZodTypeDef.Type,
+			Checks: def.ZodTypeDef.Checks,
+			Coerce: def.ZodTypeDef.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		floatDef := &ZodFloatDef{
+			ZodTypeDef: *newDef,
+		}
+		return any(newZodFloatFromDef[T, R](floatDef)).(core.ZodType[any])
+	}
+
+	if def.ZodTypeDef.Error != nil {
+		internals.ZodTypeInternals.Error = def.ZodTypeDef.Error
+	}
+
+	return &ZodFloatTyped[T, R]{internals: internals}
+}
+
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// FloatTyped creates a generic float schema with automatic type inference.
+// It automatically determines the appropriate type code based on the generic type parameter.
+// Usage: FloatTyped[float32](), FloatTyped[float64](), etc.
+func FloatTyped[T FloatConstraint](params ...any) *ZodFloatTyped[T, T] {
+	// Determine type code based on T
+	var typeCode core.ZodTypeCode
+	var zero T
+	switch any(zero).(type) {
+	case float32, *float32:
+		typeCode = core.ZodTypeFloat32
+	case float64, *float64:
+		typeCode = core.ZodTypeFloat64
+	default:
+		typeCode = core.ZodTypeFloat64 // fallback
+	}
+
+	return newFloatTyped[T, T](typeCode, params...)
+}
+
+// Float32 creates a float32 schema
+func Float32(params ...any) *ZodFloatTyped[float32, float32] {
+	return newFloatTyped[float32, float32](core.ZodTypeFloat32, params...)
+}
+
+// Float32Ptr creates a schema for *float32.
+func Float32Ptr(params ...any) *ZodFloatTyped[float32, *float32] {
+	return newFloatTyped[float32, *float32](core.ZodTypeFloat32, params...)
+}
+
+// Float64 creates a float64 schema
+func Float64(params ...any) *ZodFloatTyped[float64, float64] {
+	return newFloatTyped[float64, float64](core.ZodTypeFloat64, params...)
+}
+
+// Float64Ptr creates a schema for *float64.
+func Float64Ptr(params ...any) *ZodFloatTyped[float64, *float64] {
+	return newFloatTyped[float64, *float64](core.ZodTypeFloat64, params...)
+}
+
+// Float creates a flexible float64 schema (alias for Float64).
+func Float(params ...any) *ZodFloatTyped[float64, float64] {
 	return Float64(params...)
 }
 
-//////////////////////////
-// UTILITY FUNCTIONS
-//////////////////////////
-
-// CloneFrom implements Cloneable interface for type-specific state copying
-func (z *ZodFloat[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodFloat[T]); ok {
-		if src.internals.Bag != nil {
-			if z.internals.Bag == nil {
-				z.internals.Bag = make(map[string]any)
-			}
-			for k, v := range src.internals.Bag {
-				z.internals.Bag[k] = v
-			}
-		}
-
-		if src.internals.Def != nil {
-			z.internals.Def.MinValue = src.internals.Def.MinValue
-			z.internals.Def.MaxValue = src.internals.Def.MaxValue
-		}
-	}
+// FloatPtr creates a schema for *float64 (alias for Float64Ptr).
+func FloatPtr(params ...any) *ZodFloatTyped[float64, *float64] {
+	return Float64Ptr(params...)
 }
 
-// getFloatTypeName returns the type name for floating-point type T
-func getFloatTypeName[T ZodFloatConstraint](zero T) core.ZodTypeCode {
-	switch any(zero).(type) {
-	case float32:
-		return core.ZodTypeFloat32
-	case float64:
-		return core.ZodTypeFloat64
-	default:
-		return core.ZodTypeFloat64 // Default fallback
-	}
+// Number creates a number schema (alias for Float64).
+func Number(params ...any) *ZodFloatTyped[float64, float64] {
+	return Float64(params...)
 }
 
-// getFloatTypeBounds returns min, max values for floating-point type T
-func getFloatTypeBounds[T ZodFloatConstraint]() (T, T) {
-	var zero T
-	switch any(zero).(type) {
-	case float32:
-		return any(float32(-math.MaxFloat32)).(T), any(float32(math.MaxFloat32)).(T)
-	case float64:
-		return any(float64(-math.MaxFloat64)).(T), any(float64(math.MaxFloat64)).(T)
-	default:
-		return zero, zero
+// NumberPtr creates a schema for *float64 (alias for Float64Ptr).
+func NumberPtr(params ...any) *ZodFloatTyped[float64, *float64] {
+	return Float64Ptr(params...)
+}
+
+// newFloatTyped is the underlying generic function for creating float schemas,
+// allowing for explicit type parameterization. This is an internal function.
+func newFloatTyped[T FloatConstraint, R any](typeCode core.ZodTypeCode, params ...any) *ZodFloatTyped[T, R] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodFloatDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   typeCode,
+			Checks: []core.ZodCheck{},
+		},
 	}
+
+	// Apply the normalized parameters to the schema definition.
+	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+
+	return newZodFloatFromDef[T, R](def)
+}
+
+// CoercedFloat32 creates a float32 schema with coercion enabled
+func CoercedFloat32(params ...any) *ZodFloatTyped[float32, float32] {
+	schema := Float32(params...)
+	schema.internals.ZodTypeInternals.SetCoerce(true)
+	return schema
+}
+
+// CoercedFloat32Ptr creates a *float32 schema with coercion enabled
+func CoercedFloat32Ptr(params ...any) *ZodFloatTyped[float32, *float32] {
+	schema := Float32Ptr(params...)
+	schema.internals.ZodTypeInternals.SetCoerce(true)
+	return schema
+}
+
+// CoercedFloat64 creates a float64 schema with coercion enabled
+func CoercedFloat64(params ...any) *ZodFloatTyped[float64, float64] {
+	schema := Float64(params...)
+	schema.internals.ZodTypeInternals.SetCoerce(true)
+	return schema
+}
+
+// CoercedFloat64Ptr creates a *float64 schema with coercion enabled
+func CoercedFloat64Ptr(params ...any) *ZodFloatTyped[float64, *float64] {
+	schema := Float64Ptr(params...)
+	schema.internals.ZodTypeInternals.SetCoerce(true)
+	return schema
+}
+
+// CoercedFloat creates a flexible float schema with coercion enabled
+func CoercedFloat[T FloatConstraint](params ...any) *ZodFloatTyped[T, T] {
+	schema := FloatTyped[T](params...)
+	schema.internals.ZodTypeInternals.SetCoerce(true)
+	return schema
+}
+
+// CoercedFloatPtr creates a *float64 schema with coercion enabled
+func CoercedFloatPtr(params ...any) *ZodFloatTyped[float64, *float64] {
+	return CoercedFloat64Ptr(params...)
+}
+
+// CoercedNumber creates a number schema with coercion enabled (alias for CoercedFloat64)
+func CoercedNumber(params ...any) *ZodFloatTyped[float64, float64] {
+	return CoercedFloat64(params...)
+}
+
+// CoercedNumberPtr creates a *number schema with coercion enabled (alias for CoercedFloat64Ptr)
+func CoercedNumberPtr(params ...any) *ZodFloatTyped[float64, *float64] {
+	return CoercedFloat64Ptr(params...)
+}
+
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
+
+// convertToFloatConstraintType converts a base type T to constraint type R
+func convertToFloatConstraintType[T FloatConstraint, R any](value T) R {
+	var zero R
+	switch any(zero).(type) {
+	case *float32:
+		if floatVal, ok := any(value).(float32); ok {
+			floatCopy := floatVal
+			return any(&floatCopy).(R)
+		}
+	case *float64:
+		if floatVal, ok := any(value).(float64); ok {
+			floatCopy := floatVal
+			return any(&floatCopy).(R)
+		}
+	default:
+		// For value types, return T directly as R
+		return any(value).(R)
+	}
+	return zero
+}
+
+// Check adds a custom validation function for ZodFloatTyped that can report multiple issues.
+func (z *ZodFloatTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodFloatTyped[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		// direct assertion
+		if val, ok := payload.GetValue().(R); ok {
+			fn(val, payload)
+			return
+		}
+
+		// pointer/value mismatch handling
+		var zero R
+		zeroTyp := reflect.TypeOf(zero)
+		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
+			elemTyp := zeroTyp.Elem()
+			valRV := reflect.ValueOf(payload.GetValue())
+			if valRV.IsValid() && valRV.Type() == elemTyp {
+				ptr := reflect.New(elemTyp)
+				ptr.Elem().Set(valRV)
+				if casted, ok := ptr.Interface().(R); ok {
+					fn(casted, payload)
+				}
+			}
+		}
+	}
+	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }

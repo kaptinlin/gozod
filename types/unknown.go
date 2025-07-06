@@ -1,78 +1,123 @@
 package types
 
 import (
-	"errors"
-
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Error definitions for unknown transformations
-var (
-	ErrExpectedUnknown = errors.New("expected unknown type")
-)
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
-//////////////////////////
-// CORE TYPE DEFINITIONS
-//////////////////////////
-
-// ZodUnknownDef defines the configuration for unknown validation
+// ZodUnknownDef defines the configuration for unknown value validation
 type ZodUnknownDef struct {
 	core.ZodTypeDef
-	Type   core.ZodTypeCode // "unknown"
-	Checks []core.ZodCheck  // Unknown-specific validation checks
 }
 
 // ZodUnknownInternals contains unknown validator internal state
 type ZodUnknownInternals struct {
 	core.ZodTypeInternals
-	Def  *ZodUnknownDef             // Schema definition
-	Isst issues.ZodIssueInvalidType // Invalid type issue template
-	Bag  map[string]any             // Additional metadata
+	Def *ZodUnknownDef // Schema definition
 }
 
-// ZodUnknown represents the concrete implementation of unknown validation schema
-type ZodUnknown struct {
+// ZodUnknown represents an unknown-value validation schema with dual generic parameters
+// T = base type (any), R = constraint type (any or *any)
+// Unknown accepts any value but provides validation and modifier support
+type ZodUnknown[T any, R any] struct {
 	internals *ZodUnknownInternals
 }
 
-//////////////////////////
-// VALIDATION METHODS
-//////////////////////////
+// =============================================================================
+// CORE METHODS
+// =============================================================================
 
 // GetInternals returns the internal state of the schema
-func (z *ZodUnknown) GetInternals() *core.ZodTypeInternals {
+func (z *ZodUnknown[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Coerce implements Coercible interface for unknown type (accepts any value)
-func (z *ZodUnknown) Coerce(input any) (any, bool) {
-	// Unknown type accepts any value without conversion
-	return input, true
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodUnknown[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse implements intelligent type inference and validation
-func (z *ZodUnknown) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodUnknown[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Parse returns the input value as-is with full modifier and validation support using direct validation
+// Unknown type has special behavior: it accepts nil by default (unlike other types)
+func (z *ZodUnknown[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
 	}
 
-	return engine.ParseType[any](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeUnknown,
-		func(v any) (any, bool) { return v, true },                       // Direct acceptance extractor
-		func(v any) (*any, bool) { ptr, ok := v.(*any); return ptr, ok }, // Pointer extractor
-		validateUnknown,
-		parseCtx,
-	)
+	// Handle nil input
+	if input == nil {
+		if z.internals.NonOptional {
+			return *new(R), engine.CreateNonOptionalError(parseCtx)
+		}
+		// Check if nil is allowed (optional/nilable)
+		if z.internals.Optional || z.internals.Nilable {
+			var zero R
+			return zero, nil
+		}
+
+		// Try default values
+		if z.internals.ZodTypeInternals.DefaultValue != nil {
+			return z.Parse(z.internals.ZodTypeInternals.DefaultValue, parseCtx)
+		}
+		if z.internals.ZodTypeInternals.DefaultFunc != nil {
+			defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
+			return z.Parse(defaultValue, parseCtx)
+		}
+
+		// SPECIAL: Unknown type accepts nil by default (this is what makes it different)
+		var zero R
+		return zero, nil
+	}
+
+	// For non-nil values, use direct validation
+	if len(z.internals.ZodTypeInternals.Checks) > 0 {
+		transformedValue, err := engine.ApplyChecks(input, z.internals.ZodTypeInternals.Checks, parseCtx)
+		if err != nil {
+			// Try prefault on validation failure
+			if z.internals.ZodTypeInternals.PrefaultValue != nil {
+				return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
+			}
+			if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+				prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+				return z.Parse(prefaultValue, parseCtx)
+			}
+
+			return *new(R), err
+		}
+		// Use the transformed value from ApplyChecks
+		input = transformedValue
+	}
+
+	// Apply transform if present
+	if z.internals.ZodTypeInternals.Transform != nil {
+		refCtx := &core.RefinementContext{ParseContext: parseCtx}
+		result, err := z.internals.ZodTypeInternals.Transform(input, refCtx)
+		if err != nil {
+			return *new(R), err
+		}
+		return convertToUnknownConstraintType[T, R](result), nil
+	}
+
+	// Convert result to constraint type R and return
+	return convertToUnknownConstraintType[T, R](input), nil
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodUnknown) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the variant that panics on error
+func (z *ZodUnknown[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -80,450 +125,323 @@ func (z *ZodUnknown) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////
-// VALIDATION METHODS
-//////////////////////////
-
-// Check adds a validation check
-func (z *ZodUnknown) Check(fn core.CheckFn) core.ZodType[any, any] {
-	check := checks.NewCustom[any](func(v any) bool {
-		payload := core.NewParsePayload(v)
-		fn(payload)
-		return len(payload.GetIssues()) == 0
-	})
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodUnknown[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-//////////////////////////
-// TRANSFORM METHODS
-//////////////////////////
-
-// Transform adds data transformation logic to the unknown schema
-func (z *ZodUnknown) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(fn)
-}
-
-// TransformAny adds flexible data transformation logic
-func (z *ZodUnknown) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-// Pipe creates a validation pipeline
-func (z *ZodUnknown) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-//////////////////////////
+// =============================================================================
 // MODIFIER METHODS
-//////////////////////////
+// =============================================================================
 
-// Optional makes the unknown schema optional
-func (z *ZodUnknown) Optional() core.ZodType[any, any] {
-	return Optional(any(z).(core.ZodType[any, any]))
+// Optional makes the unknown type optional and returns pointer constraint
+func (z *ZodUnknown[T, R]) Optional() *ZodUnknown[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
-// Nilable makes the unknown schema nilable
-func (z *ZodUnknown) Nilable() core.ZodType[any, any] {
-	cloned := engine.Clone(z, nil).(*ZodUnknown)
-	cloned.internals.Nilable = true
-	return any(cloned).(core.ZodType[any, any])
+// Nilable makes the unknown type nilable and returns pointer constraint
+func (z *ZodUnknown[T, R]) Nilable() *ZodUnknown[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
-// Nullish makes the unknown schema both optional and nilable
-func (z *ZodUnknown) Nullish() core.ZodType[any, any] {
-	return Nullish(any(z).(core.ZodType[any, any]))
+// Nullish combines optional and nilable modifiers
+func (z *ZodUnknown[T, R]) Nullish() *ZodUnknown[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
-// Refine adds type-safe custom validation logic
-func (z *ZodUnknown) Refine(fn func(any) bool, params ...any) *ZodUnknown {
-	result := z.RefineAny(fn, params...)
-	return result.(*ZodUnknown)
-}
+// NonOptional makes the unknown type non-optional and returns base type constraint
+func (z *ZodUnknown[T, R]) NonOptional() *ZodUnknown[T, T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
 
-// RefineAny adds flexible custom validation logic
-func (z *ZodUnknown) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-}
-
-// Unwrap returns the inner type
-func (z *ZodUnknown) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-//////////////////////////
-// WRAPPER TYPES
-//////////////////////////
-
-// ZodUnknownDefault represents an unknown schema with default value
-type ZodUnknownDefault struct {
-	*ZodDefault[*ZodUnknown]
-}
-
-// ZodUnknownPrefault represents an unknown schema with prefault value
-type ZodUnknownPrefault struct {
-	*ZodPrefault[*ZodUnknown]
-}
-
-//////////////////////////
-// DEFAULT METHODS
-//////////////////////////
-
-// Default adds a default value to the unknown schema, returns ZodUnknownDefault support chain call
-func (z *ZodUnknown) Default(value any) ZodUnknownDefault {
-	return ZodUnknownDefault{
-		&ZodDefault[*ZodUnknown]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
+	return &ZodUnknown[T, T]{
+		internals: &ZodUnknownInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
 		},
 	}
 }
 
-// DefaultFunc adds a default function to the unknown schema, returns ZodUnknownDefault support chain call
-func (z *ZodUnknown) DefaultFunc(fn func() any) ZodUnknownDefault {
-	return ZodUnknownDefault{
-		&ZodDefault[*ZodUnknown]{
-			innerType:   z,
-			defaultFunc: fn,
-			isFunction:  true,
-		},
-	}
+// Default preserves current constraint type R
+func (z *ZodUnknown[T, R]) Default(v T) *ZodUnknown[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
 }
 
-//////////////////////////
-// UNKNOWNDEFAULT CHAINING METHODS
-//////////////////////////
-
-// Refine adds a flexible validation function to the unknown schema, returns ZodUnknownDefault support chain call
-func (s ZodUnknownDefault) Refine(fn func(any) bool, params ...any) ZodUnknownDefault {
-	newInner := s.innerType.Refine(fn, params...)
-	return ZodUnknownDefault{
-		&ZodDefault[*ZodUnknown]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
+// DefaultFunc preserves current constraint type R
+func (z *ZodUnknown[T, R]) DefaultFunc(fn func() T) *ZodUnknown[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
 }
 
-// Transform adds data transformation, returns a generic ZodType support transform pipeline
-func (s ZodUnknownDefault) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// Use embedded ZodDefault's TransformAny method
-	return s.TransformAny(fn)
+// Prefault provides fallback values on validation failure
+func (z *ZodUnknown[T, R]) Prefault(v T) *ZodUnknown[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
 }
 
-// Optional adds an optional check to the unknown schema, returns ZodType support chain call
-func (s ZodUnknownDefault) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodUnknown[T, R]) PrefaultFunc(fn func() T) *ZodUnknown[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
 }
 
-// Nilable adds a nilable check to the unknown schema, returns ZodType support chain call
-func (s ZodUnknownDefault) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// Overwrite applies data transformation while preserving type structure
+// This allows for data cleaning, normalization, and preprocessing operations
+// Unknown type's Overwrite is particularly useful for sanitizing unpredictable data
+func (z *ZodUnknown[T, R]) Overwrite(transform func(T) T, params ...any) *ZodUnknown[T, R] {
+	// Create transformation function that wraps the user's transform function
+	transformFunc := checks.NewZodCheckOverwrite(func(value any) any {
+		// Convert any to T, apply transformation, and return as any
+		return convertToUnknownType[T, R](transform(extractUnknownValue[T, R](convertToUnknownConstraintType[T, R](value))))
+	}, params...)
+
+	// Clone current internals and add the overwrite check
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(transformFunc)
+
+	return z.withInternals(newInternals)
 }
 
-//////////////////////////
-// PREFAULT METHODS
-//////////////////////////
-
-// Prefault adds a prefault value to the unknown schema, returns ZodUnknownPrefault support chain call
-func (z *ZodUnknown) Prefault(value any) ZodUnknownPrefault {
-	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/coerce/optional/nilable
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodUnknownPrefault{
-		&ZodPrefault[*ZodUnknown]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: value,
-			prefaultFunc:  nil,
-			isFunction:    false,
-		},
-	}
-}
-
-// PrefaultFunc adds a prefault function to the unknown schema, returns ZodUnknownPrefault support chain call
-func (z *ZodUnknown) PrefaultFunc(fn func() any) ZodUnknownPrefault {
-	// Construct Prefault's internals, Type = "prefault", copy internal type's checks/coerce/optional/nilable
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodUnknownPrefault{
-		&ZodPrefault[*ZodUnknown]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: nil,
-			prefaultFunc:  fn,
-			isFunction:    true,
-		},
-	}
-}
-
-//////////////////////////
-// UNKNOWNPREFAULT CHAINING METHODS
-//////////////////////////
-
-// Refine adds a flexible validation function to the unknown schema, returns ZodUnknownPrefault support chain call
-func (u ZodUnknownPrefault) Refine(fn func(any) bool, params ...any) ZodUnknownPrefault {
-	newInner := u.innerType.Refine(fn, params...)
-
-	// Construct new internals
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodUnknownPrefault{
-		&ZodPrefault[*ZodUnknown]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: u.prefaultValue,
-			prefaultFunc:  u.prefaultFunc,
-			isFunction:    u.isFunction,
-		},
-	}
-}
-
-// Transform adds data conversion, returns a generic ZodType support conversion pipeline
-func (u ZodUnknownPrefault) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// Use embedded ZodPrefault's TransformAny method
-	return u.TransformAny(fn)
-}
-
-// Optional adds an optional check to the unknown schema, returns ZodType support chain call
-func (u ZodUnknownPrefault) Optional() core.ZodType[any, any] {
-	// Wrap current ZodUnknownPrefault instance, keep Prefault logic
-	return Optional(any(u).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the unknown schema, returns ZodType support chain call
-func (u ZodUnknownPrefault) Nilable() core.ZodType[any, any] {
-	// Wrap current ZodUnknownPrefault instance, keep Prefault logic
-	return Nilable(any(u).(core.ZodType[any, any]))
-}
-
-//////////////////////////
-// UTILITY FUNCTIONS
-//////////////////////////
-
-// GetZod returns the unknown-specific internals
-func (z *ZodUnknown) GetZod() *ZodUnknownInternals {
-	return z.internals
-}
-
-// CloneFrom implements the Cloneable interface
-func (z *ZodUnknown) CloneFrom(source any) {
-	if src, ok := source.(interface{ GetZod() *ZodUnknownInternals }); ok {
-		srcState := src.GetZod()
-		tgtState := z.GetZod()
-
-		if len(srcState.Bag) > 0 {
-			if tgtState.Bag == nil {
-				tgtState.Bag = make(map[string]any)
-			}
-			for key, value := range srcState.Bag {
-				tgtState.Bag[key] = value
-			}
+// Refine applies type-safe validation with constraint type R
+func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R] {
+	// Wrapper converts the raw value to R before calling fn
+	wrapper := func(v any) bool {
+		// Convert value to constraint type R and call the refinement function
+		if constraintValue, ok := convertToUnknownConstraintValue[T, R](v); ok {
+			return fn(constraintValue)
 		}
+		return false
+	}
 
-		if len(srcState.ZodTypeInternals.Bag) > 0 {
-			if tgtState.ZodTypeInternals.Bag == nil {
-				tgtState.ZodTypeInternals.Bag = make(map[string]any)
-			}
-			for key, value := range srcState.ZodTypeInternals.Bag {
-				tgtState.ZodTypeInternals.Bag[key] = value
-			}
-		}
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	var checkParams any
+	if normalizedParams.Error != nil {
+		checkParams = normalizedParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny provides flexible validation without type conversion
+func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown[T, R] {
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	var checkParams any
+	if normalizedParams.Error != nil {
+		checkParams = normalizedParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates type-safe transformation pipeline using WrapFn pattern
+func (z *ZodUnknown[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		unknownValue := extractUnknownValue[T, R](input)
+		return fn(unknownValue, ctx)
+	}
+	return core.NewZodTransform[R, any](z, wrapperFn)
+}
+
+// Pipe creates validation pipeline to another schema using WrapFn pattern
+func (z *ZodUnknown[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
+		unknownValue := extractUnknownValue[T, R](input)
+		return target.Parse(unknownValue, ctx)
+	}
+	return core.NewZodPipe[R, any](z, wrapperFn)
+}
+
+// =============================================================================
+// HELPER METHODS
+// =============================================================================
+
+func (z *ZodUnknown[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnknown[T, *T] {
+	return &ZodUnknown[T, *T]{internals: &ZodUnknownInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+func (z *ZodUnknown[T, R]) withInternals(in *core.ZodTypeInternals) *ZodUnknown[T, R] {
+	return &ZodUnknown[T, R]{internals: &ZodUnknownInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodUnknown[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodUnknown[T, R]); ok {
+		z.internals = src.internals
 	}
 }
 
-//////////////////////////
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
+
+// convertToUnknownConstraintType converts a base type T to constraint type R
+func convertToUnknownConstraintType[T any, R any](value any) R {
+	var zero R
+	switch any(zero).(type) {
+	case *any:
+		// Need to return *any from any
+		if value != nil {
+			valueCopy := value
+			return any(&valueCopy).(R)
+		}
+		return any((*any)(nil)).(R)
+	default:
+		// Return value directly as R
+		return any(value).(R)
+	}
+}
+
+// extractUnknownValue extracts base type T from constraint type R
+func extractUnknownValue[T any, R any](value R) T {
+	switch v := any(value).(type) {
+	case *any:
+		if v != nil {
+			return any(*v).(T)
+		}
+		var zero T
+		return zero
+	default:
+		return any(value).(T)
+	}
+}
+
+// convertToUnknownConstraintValue converts any value to constraint type R if possible
+func convertToUnknownConstraintValue[T any, R any](value any) (R, bool) {
+	var zero R
+
+	// Direct type match
+	if r, ok := any(value).(R); ok {
+		return r, true
+	}
+
+	// Handle pointer conversion for unknown types
+	if _, ok := any(zero).(*any); ok {
+		// Need to convert any to *any
+		if value != nil {
+			valueCopy := value
+			return any(&valueCopy).(R), true
+		}
+		return any((*any)(nil)).(R), true
+	}
+
+	return zero, false
+}
+
+// convertToUnknownType helper function for Overwrite transformations
+// Converts transformed result back to any type for further processing in Unknown validation
+func convertToUnknownType[T any, R any](value T) any {
+	return any(value)
+}
+
+// =============================================================================
 // CONSTRUCTOR FUNCTIONS
-//////////////////////////
+// =============================================================================
 
-// createZodUnknownFromDef creates a ZodUnknown from definition using unified patterns
-func createZodUnknownFromDef(def *ZodUnknownDef) *ZodUnknown {
+// newZodUnknownFromDef constructs new ZodUnknown from definition
+func newZodUnknownFromDef[T any, R any](def *ZodUnknownDef) *ZodUnknown[T, R] {
 	internals := &ZodUnknownInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeUnknown},
-		Bag:              make(map[string]any),
 	}
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		unknownDef := &ZodUnknownDef{
 			ZodTypeDef: *newDef,
-			Type:       core.ZodTypeUnknown,
-			Checks:     newDef.Checks,
 		}
-		return any(createZodUnknownFromDef(unknownDef)).(core.ZodType[any, any])
+		return any(newZodUnknownFromDef[T, R](unknownDef)).(core.ZodType[any])
 	}
 
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := engine.ParseType[any](
-			payload.GetValue(),
-			&internals.ZodTypeInternals,
-			"unknown",
-			func(v any) (any, bool) { return v, true },
-			func(v any) (*any, bool) { ptr, ok := v.(*any); return ptr, ok },
-			validateUnknown,
-			ctx,
-		)
+	schema := &ZodUnknown[T, R]{internals: internals}
 
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
-
-		payload.SetValue(result)
-		return payload
+	// Set error if provided
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
-	zodSchema := &ZodUnknown{internals: internals}
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-	return zodSchema
-}
-
-// Unknown creates an unknown validation schema
-func Unknown(params ...any) *ZodUnknown {
-	def := &ZodUnknownDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeUnknown,
-			Checks: make([]core.ZodCheck, 0),
-		},
-		Type:   core.ZodTypeUnknown,
-		Checks: make([]core.ZodCheck, 0),
-	}
-
-	schema := createZodUnknownFromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		param := params[0]
-
-		// Handle different parameter types
-		switch p := param.(type) {
-		case string:
-			// String parameter becomes Error field
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return p
-			})
-			def.Error = &errorMap
-			schema.internals.Error = &errorMap
-		case core.SchemaParams:
-			// Handle core.SchemaParams
-
-			if p.Error != nil {
-				// Handle string error messages by converting to ZodErrorMap
-				if errStr, ok := p.Error.(string); ok {
-					errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-						return errStr
-					})
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				} else if errorMap, ok := p.Error.(core.ZodErrorMap); ok {
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				}
-			}
-
-			if p.Description != "" {
-				schema.internals.Bag["description"] = p.Description
-			}
-			if p.Abort {
-				schema.internals.Bag["abort"] = true
-			}
-			if len(p.Path) > 0 {
-				schema.internals.Bag["path"] = p.Path
-			}
-			// Ensure any custom Params are preserved for introspection.
-			if len(p.Params) > 0 {
-				// Lazily initialize inner Bag if it was somehow nil.
-				if schema.internals.Bag == nil {
-					schema.internals.Bag = make(map[string]any)
-				}
-				if schema.internals.ZodTypeInternals.Bag == nil {
-					schema.internals.ZodTypeInternals.Bag = make(map[string]any)
-				}
-
-				for k, v := range p.Params {
-					schema.internals.Bag[k] = v                  // Store on outer Bag for tests
-					schema.internals.ZodTypeInternals.Bag[k] = v // Mirror on embedded internals for consistency
-				}
-			}
+	// Set checks if provided
+	if len(def.Checks) > 0 {
+		for _, check := range def.Checks {
+			internals.AddCheck(check)
 		}
 	}
 
 	return schema
 }
 
-//////////////////////////
-// VALIDATION FUNCTIONS
-//////////////////////////
+// =============================================================================
+// FACTORY FUNCTIONS
+// =============================================================================
 
-// validateUnknown validates unknown values with checks
-func validateUnknown(value any, checks []core.ZodCheck, ctx *core.ParseContext) error {
-	if len(checks) > 0 {
-		// Use constructor instead of direct struct literal to respect private fields
-		payload := core.NewParsePayload(value)
-		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-		}
+// Unknown creates unknown schema that accepts any value - returns value constraint
+func Unknown(params ...any) *ZodUnknown[any, any] {
+	return UnknownTyped[any, any](params...)
+}
+
+// UnknownPtr creates unknown schema that accepts any value - returns pointer constraint
+func UnknownPtr(params ...any) *ZodUnknown[any, *any] {
+	return UnknownTyped[any, *any](params...)
+}
+
+// UnknownTyped creates typed unknown schema with generic constraints
+func UnknownTyped[T any, R any](params ...any) *ZodUnknown[T, R] {
+	param := utils.GetFirstParam(params...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	def := &ZodUnknownDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeUnknown,
+			Checks: []core.ZodCheck{},
+		},
 	}
-	return nil
+
+	// Use utils.ApplySchemaParams for consistent parameter handling
+	if normalizedParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	}
+
+	return newZodUnknownFromDef[T, R](def)
 }

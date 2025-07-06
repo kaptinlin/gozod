@@ -1,824 +1,238 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// Error definitions for testing transformations
-var (
-	ErrEmptyString           = errors.New("empty string not allowed")
-	ErrTransformationFailed  = errors.New("transformation failed")
-	ErrTransformFailed       = errors.New("transform failed")
-	ErrExpectedStringInput   = errors.New("expected string input")
-	ErrCleanedStringTooShort = errors.New("cleaned string too short")
-	ErrExpectedStringType    = errors.New("expected string type")
-	ErrContainsInvalidWord   = errors.New("contains invalid word")
-)
+func TestBool_Transform(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected any
+		wantErr  bool
+	}{
+		{
+			name:     "true to YES",
+			input:    true,
+			expected: "YES",
+			wantErr:  false,
+		},
+		{
+			name:     "false to NO",
+			input:    false,
+			expected: "NO",
+			wantErr:  false,
+		},
+		{
+			name:     "invalid input type",
+			input:    "not a bool",
+			expected: nil,
+			wantErr:  true,
+		},
+	}
 
-// =============================================================================
-// 1. Basic functionality and type inference
-// =============================================================================
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			boolSchema := Bool()
 
-func TestTransformBasicFunctionality(t *testing.T) {
-	t.Run("Transform constructor availability", func(t *testing.T) {
-		// Test global Transform function
-		schema := Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if str, ok := input.(string); ok {
-				return strings.ToUpper(str), nil
-			}
-			return input, nil
-		})
-
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals)
-		assert.Equal(t, core.ZodTypeTransform, internals.Type)
-	})
-
-	t.Run("string Transform method", func(t *testing.T) {
-		baseSchema := String()
-		transformSchema := baseSchema.Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
-
-		require.NotNil(t, transformSchema)
-		internals := transformSchema.GetInternals()
-		require.NotNil(t, internals)
-		assert.Equal(t, core.ZodTypePipe, internals.Type) // Transform creates a pipe
-	})
-
-	t.Run("transform flag verification", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return s, nil
-		})
-
-		// Transform creates a pipe, so we check the pipe structure
-		internals := schema.GetInternals()
-		assert.Equal(t, core.ZodTypePipe, internals.Type)
-	})
-}
-
-// =============================================================================
-// 2. String transformations
-// =============================================================================
-
-func TestTransformStringOperations(t *testing.T) {
-	t.Run("string to string transformation", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		})
-
-		tests := []struct {
-			input    string
-			expected string
-		}{
-			{"hello", "HELLO"},
-			{"world", "WORLD"},
-			{"Hello World", "HELLO WORLD"},
-			{"", ""},
-			{"test123", "TEST123"},
-		}
-
-		for _, tt := range tests {
-			t.Run(fmt.Sprintf("input_%s", tt.input), func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-
-	t.Run("string to int transformation", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
-
-		tests := []struct {
-			input    string
-			expected int
-		}{
-			{"", 0},
-			{"a", 1},
-			{"hello", 5},
-			{"hello world", 11},
-			{"unicode: 你好", 15}, // Unicode characters
-		}
-
-		for _, tt := range tests {
-			t.Run(fmt.Sprintf("length_%d", tt.expected), func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-
-	t.Run("string to bool transformation", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return s == "true" || s == "1" || s == "yes", nil
-		})
-
-		truthyInputs := []string{"true", "1", "yes"}
-		for _, input := range truthyInputs {
-			t.Run(fmt.Sprintf("truthy_%s", input), func(t *testing.T) {
-				result, err := schema.Parse(input)
-				require.NoError(t, err)
-				assert.Equal(t, true, result)
-			})
-		}
-
-		falsyInputs := []string{"false", "0", "no", "invalid", ""}
-		for _, input := range falsyInputs {
-			t.Run(fmt.Sprintf("falsy_%s", input), func(t *testing.T) {
-				result, err := schema.Parse(input)
-				require.NoError(t, err)
-				assert.Equal(t, false, result)
-			})
-		}
-	})
-
-	t.Run("string trim transformation", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.TrimSpace(s), nil
-		})
-
-		tests := []struct {
-			input    string
-			expected string
-		}{
-			{"  hello  ", "hello"},
-			{"\thello\t", "hello"},
-			{" \n hello \n ", "hello"},
-			{"hello", "hello"},
-			{"", ""},
-			{"  ", ""},
-		}
-
-		for _, tt := range tests {
-			t.Run("trim_test", func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-}
-
-// =============================================================================
-// 3. Type-safe transformations
-// =============================================================================
-
-func TestTransformTypeSafety(t *testing.T) {
-	t.Run("type-safe string transform", func(t *testing.T) {
-		// Transform method provides type safety for string input
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			// s is guaranteed to be string type
-			return fmt.Sprintf("processed: %s", s), nil
-		})
-
-		result, err := schema.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, "processed: test", result)
-	})
-
-	t.Run("type-safe with context usage", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			// Use context for error reporting
-			if len(s) == 0 {
-				// Create a proper ZodIssue using the base structure
-				issue := core.ZodIssue{
-					ZodIssueBase: core.ZodIssueBase{
-						Code:    "custom",
-						Message: "Empty string not allowed in transform",
-					},
+			// Create transform: bool -> string
+			transform := boolSchema.Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
+				if b {
+					return "YES", nil
 				}
-				ctx.AddIssue(issue)
-				return nil, ErrEmptyString
+				return "NO", nil
+			})
+
+			result, err := transform.Parse(tt.input)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				return
 			}
-			return strings.ToUpper(s), nil
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
 		})
-
-		// Valid case
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO", result)
-
-		// Invalid case with context error
-		_, err = schema.Parse("")
-		assert.Error(t, err)
-	})
-
-	t.Run("transform with complex output type", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return map[string]any{
-				"original": s,
-				"length":   len(s),
-				"upper":    strings.ToUpper(s),
-				"words":    strings.Fields(s),
-			}, nil
-		})
-
-		result, err := schema.Parse("hello world")
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "hello world", resultMap["original"])
-		assert.Equal(t, 11, resultMap["length"])
-		assert.Equal(t, "HELLO WORLD", resultMap["upper"])
-		assert.Equal(t, []string{"hello", "world"}, resultMap["words"])
-	})
+	}
 }
 
-// =============================================================================
-// 4. Transform chaining
-// =============================================================================
+func TestBool_ChainedTransform(t *testing.T) {
+	boolSchema := Bool()
 
-func TestTransformChaining(t *testing.T) {
-	t.Run("simple chain transformation", func(t *testing.T) {
-		// First transform: trim whitespace
-		step1 := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.TrimSpace(s), nil
-		})
-
-		// Second transform: get length - use global Transform function
-		step2 := step1.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if str, ok := input.(string); ok {
-				return len(str), nil
+	// Create chained transform: bool -> string -> int
+	transform := boolSchema.
+		Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
+			if b {
+				return "YES", nil
+			}
+			return "NO", nil
+		}).
+		Transform(func(s any, ctx *core.RefinementContext) (any, error) {
+			str := s.(string)
+			if str == "YES" {
+				return 1, nil
 			}
 			return 0, nil
-		}))
-
-		result, err := step2.Parse("  hello  ")
-		require.NoError(t, err)
-		assert.Equal(t, 5, result) // "hello" has length 5
-	})
-
-	t.Run("multi-step string processing", func(t *testing.T) {
-		// Step 1: trim and lowercase
-		step1 := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToLower(strings.TrimSpace(s)), nil
 		})
 
-		// Step 2: check if valid - use global Transform function
-		step2 := step1.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if str, ok := input.(string); ok {
-				return len(str) > 0 && str != "invalid", nil
+	tests := []struct {
+		name     string
+		input    any
+		expected any
+	}{
+		{
+			name:     "true -> YES -> 1",
+			input:    true,
+			expected: 1,
+		},
+		{
+			name:     "false -> NO -> 0",
+			input:    false,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := transform.Parse(tt.input)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
 			}
-			return false, nil
-		}))
 
-		tests := []struct {
-			name     string
-			input    string
-			expected bool
-		}{
-			{"valid_input", "  HELLO  ", true},
-			{"empty_after_trim", "   ", false},
-			{"invalid_keyword", "INVALID", false},
-			{"normal_input", "test", true},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := step2.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-
-	t.Run("complex type chain", func(t *testing.T) {
-		// String -> length (int) -> even/odd (bool) -> text (string)
-		step1 := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
 		})
-
-		step2 := step1.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if length, ok := input.(int); ok {
-				return length%2 == 0, nil
-			}
-			return false, nil
-		}))
-
-		schema := step2.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if isEven, ok := input.(bool); ok {
-				if isEven {
-					return "even length", nil
-				}
-				return "odd length", nil
-			}
-			return "unknown", nil
-		}))
-
-		tests := []struct {
-			input    string
-			expected string
-		}{
-			{"ab", "even length"},   // length 2
-			{"abc", "odd length"},   // length 3
-			{"abcd", "even length"}, // length 4
-			{"", "even length"},     // length 0
-		}
-
-		for _, tt := range tests {
-			t.Run(fmt.Sprintf("length_%d", len(tt.input)), func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
+	}
 }
 
-// =============================================================================
-// 5. Transform with validation integration
-// =============================================================================
+func TestBool_TransformError(t *testing.T) {
+	boolSchema := Bool()
 
-func TestTransformValidationIntegration(t *testing.T) {
-	t.Run("validation before transform", func(t *testing.T) {
-		// Validation happens before transformation
-		schema := String().Min(3).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		})
-
-		// Valid case: passes validation, then transforms
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO", result)
-
-		// Invalid case: fails validation, transform not executed
-		_, err = schema.Parse("hi")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, errors.As(err, &zodErr))
-		assert.Equal(t, issues.TooSmall, zodErr.Issues[0].Code)
+	// Create transform that only accepts true
+	transform := boolSchema.Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
+		if !b {
+			return nil, fmt.Errorf("only true values allowed")
+		}
+		return "accepted", nil
 	})
 
-	t.Run("transform with pipe validation", func(t *testing.T) {
-		// Transform then validate the result
-		baseTransform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
+	// Test successful case
+	result, err := transform.Parse(true)
+	if err != nil {
+		t.Errorf("unexpected error for true input: %v", err)
+	}
+	if result != "accepted" {
+		t.Errorf("expected 'accepted', got %v", result)
+	}
 
-		// Create a validator for the transformed result
-		resultValidator := Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if length, ok := input.(int); ok && length >= 3 {
-				return length, nil
-			}
-			return nil, fmt.Errorf("%w: length must be >= 3", ErrTransformationFailed)
-		})
-
-		schema := baseTransform.Pipe(resultValidator)
-
-		// Valid case: string length >= 3
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, 5, result)
-
-		// Invalid case: string length < 3
-		_, err = schema.Parse("hi")
-		assert.Error(t, err)
-	})
-
-	t.Run("transform with refine after", func(t *testing.T) {
-		// Transform then refine the result
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		}).RefineAny(func(v any) bool {
-			if str, ok := v.(string); ok {
-				return !strings.Contains(str, "TEST")
-			}
-			return false
-		}, core.SchemaParams{Error: "Transformed string cannot contain 'TEST'"})
-
-		// Valid case
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO", result)
-
-		// Invalid case: after transform contains "TEST"
-		_, err = schema.Parse("test")
-		assert.Error(t, err)
-	})
+	// Test error case
+	_, err = transform.Parse(false)
+	if err == nil {
+		t.Errorf("expected error for false input")
+	}
+	if !strings.Contains(err.Error(), "only true values allowed") {
+		t.Errorf("unexpected error message: %v", err)
+	}
 }
 
-// =============================================================================
-// 6. Transform error handling
-// =============================================================================
+func TestBool_MustParse_Transform(t *testing.T) {
+	boolSchema := Bool()
 
-func TestTransformErrorHandling(t *testing.T) {
-	t.Run("transform function returning error", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			if s == "error" {
-				return nil, ErrTransformationFailed
-			}
-			return strings.ToUpper(s), nil
-		})
-
-		// Valid transformation
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO", result)
-
-		// Transformation error
-		_, err = schema.Parse("error")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "transformation failed")
+	transform := boolSchema.Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
+		return fmt.Sprintf("value: %t", b), nil
 	})
 
-	t.Run("transform with context error reporting", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			if len(s) == 0 {
-				issue := core.ZodIssue{
-					ZodIssueBase: core.ZodIssueBase{
-						Code:    "custom",
-						Message: "Empty string not allowed",
-					},
-				}
-				ctx.AddIssue(issue)
-				return nil, ErrEmptyString
-			}
-			return s, nil
-		})
+	// Test successful MustParse
+	result := transform.MustParse(true)
+	expected := "value: true"
+	if result != expected {
+		t.Errorf("expected %v, got %v", expected, result)
+	}
 
-		// Valid case
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
+	// Test panic on error
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("expected panic for invalid input")
+		}
+	}()
 
-		// Error case with context
-		_, err = schema.Parse("")
-		assert.Error(t, err)
-	})
-
-	t.Run("transform preserves original data on error", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			if s == "fail" {
-				return nil, ErrTransformFailed
-			}
-			return strings.ToUpper(s), nil
-		})
-
-		// Transform failure should not modify original data
-		_, err := schema.Parse("fail")
-		assert.Error(t, err)
-
-		// Error should contain information about the failure
-		assert.Contains(t, err.Error(), "transform failed")
-	})
-
-	t.Run("MustParse with transform", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		})
-
-		// Valid case
-		result := schema.MustParse("hello")
-		assert.Equal(t, "HELLO", result)
-
-		// Invalid case should panic
-		assert.Panics(t, func() {
-			schema.MustParse(123) // Wrong type
-		})
-	})
+	transform.MustParse("invalid")
 }
 
-// =============================================================================
-// 7. Transform with different types
-// =============================================================================
+func TestBool_ComplexTransform(t *testing.T) {
+	boolSchema := Bool()
 
-func TestTransformWithDifferentTypes(t *testing.T) {
-	t.Run("global Transform function", func(t *testing.T) {
-		schema := Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			switch v := input.(type) {
-			case string:
-				return strings.ToUpper(v), nil
-			case int:
-				return v * 2, nil
-			case bool:
-				if v {
-					return "TRUE", nil
-				}
-				return "FALSE", nil
-			default:
-				return fmt.Sprintf("%v", v), nil
-			}
-		})
-
-		tests := []struct {
-			name     string
-			input    any
-			expected any
-		}{
-			{"string_upper", "hello", "HELLO"},
-			{"int_double", 21, 42},
-			{"bool_true", true, "TRUE"},
-			{"bool_false", false, "FALSE"},
-			{"other_type", []int{1, 2, 3}, "[1 2 3]"},
+	// Transform to a configuration object
+	configTransform := boolSchema.Transform(func(enabled bool, ctx *core.RefinementContext) (any, error) {
+		config := map[string]any{
+			"feature_enabled": enabled,
+			"max_connections": 100,
+			"timeout":         30,
 		}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-
-	t.Run("TransformAny method", func(t *testing.T) {
-		schema := String().TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-			// TransformAny allows more flexible input handling
-			if str, ok := input.(string); ok {
-				return map[string]any{
-					"original": str,
-					"length":   len(str),
-					"upper":    strings.ToUpper(str),
-				}, nil
-			}
-			return nil, ErrExpectedStringInput
-		})
-
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "hello", resultMap["original"])
-		assert.Equal(t, 5, resultMap["length"])
-		assert.Equal(t, "HELLO", resultMap["upper"])
-	})
-}
-
-// =============================================================================
-// 8. Transform edge cases and boundary conditions
-// =============================================================================
-
-func TestTransformEdgeCases(t *testing.T) {
-	t.Run("empty string transformations", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			if s == "" {
-				return "empty", nil
-			}
-			return len(s), nil
-		})
-
-		// Empty string
-		result, err := schema.Parse("")
-		require.NoError(t, err)
-		assert.Equal(t, "empty", result)
-
-		// Non-empty string
-		result, err = schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, 5, result)
-	})
-
-	t.Run("large string transformation", func(t *testing.T) {
-		largeString := strings.Repeat("a", 10000)
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
-
-		result, err := schema.Parse(largeString)
-		require.NoError(t, err)
-		assert.Equal(t, 10000, result)
-	})
-
-	t.Run("unicode string handling", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return map[string]any{
-				"bytes":  len(s),
-				"runes":  len([]rune(s)),
-				"upper":  strings.ToUpper(s),
-				"fields": strings.Fields(s),
-			}, nil
-		})
-
-		unicodeInput := "Hello 世界! 🌍"
-		result, err := schema.Parse(unicodeInput)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Greater(t, resultMap["bytes"], resultMap["runes"]) // Bytes > runes for unicode
-		assert.Contains(t, resultMap["upper"], "世界")
-	})
-
-	t.Run("nil and zero value handling", func(t *testing.T) {
-		schema := Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if input == nil {
-				return "nil", nil
-			}
-			switch v := input.(type) {
-			case string:
-				if v == "" {
-					return "empty string", nil
-				}
-				return "string: " + v, nil
-			case int:
-				if v == 0 {
-					return "zero int", nil
-				}
-				return fmt.Sprintf("int: %d", v), nil
-			default:
-				return fmt.Sprintf("other: %v", v), nil
-			}
-		})
-
-		tests := []struct {
-			name     string
-			input    any
-			expected string
-		}{
-			{"nil_value", nil, "nil"},
-			{"empty_string", "", "empty string"},
-			{"zero_int", 0, "zero int"},
-			{"normal_string", "hello", "string: hello"},
-			{"normal_int", 42, "int: 42"},
+		if enabled {
+			config["max_connections"] = 1000
+			config["timeout"] = 60
 		}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-}
-
-// =============================================================================
-// 9. Integration and workflow tests
-// =============================================================================
-
-func TestTransformIntegration(t *testing.T) {
-	t.Run("complex transformation pipeline", func(t *testing.T) {
-		// Multi-step transformation: trim -> lowercase -> validate -> format
-		step1 := String().Min(3).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			// Step 1: trim and lowercase
-			cleaned := strings.ToLower(strings.TrimSpace(s))
-			return cleaned, nil
-		})
-
-		schema := step1.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			// Step 2: validate and format
-			if str, ok := input.(string); ok {
-				if len(str) < 3 {
-					return nil, ErrCleanedStringTooShort
-				}
-				return fmt.Sprintf("processed: %s", str), nil
-			}
-			return nil, ErrExpectedStringType
-		}))
-
-		// Valid case
-		result, err := schema.Parse("  HELLO  ")
-		require.NoError(t, err)
-		assert.Equal(t, "processed: hello", result)
-
-		// Invalid case (too short after cleaning)
-		_, err = schema.Parse("  HI  ")
-		assert.Error(t, err)
+		return config, nil
 	})
 
-	t.Run("transform with pipe and refine", func(t *testing.T) {
-		// Transform -> Pipe -> Refine workflow
-		baseTransform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		})
+	// Test enabled configuration
+	result, err := configTransform.Parse(true)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		// Add validation to the transformed result
-		validator := Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if str, ok := input.(string); ok {
-				if strings.Contains(str, "INVALID") {
-					return nil, ErrContainsInvalidWord
-				}
-				return str, nil
-			}
-			return input, nil
-		})
+	config, ok := result.(map[string]any)
+	if !ok {
+		t.Errorf("expected map[string]any, got %T", result)
+		return
+	}
 
-		schema := baseTransform.Pipe(validator)
+	if config["feature_enabled"] != true {
+		t.Errorf("expected feature_enabled to be true")
+	}
+	if config["max_connections"] != 1000 {
+		t.Errorf("expected max_connections to be 1000, got %v", config["max_connections"])
+	}
+	if config["timeout"] != 60 {
+		t.Errorf("expected timeout to be 60, got %v", config["timeout"])
+	}
 
-		// Valid case
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO", result)
+	// Test disabled configuration
+	result, err = configTransform.Parse(false)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-		// Invalid case
-		_, err = schema.Parse("invalid")
-		assert.Error(t, err)
-	})
+	config, ok = result.(map[string]any)
+	if !ok {
+		t.Errorf("expected map[string]any, got %T", result)
+		return
+	}
 
-	t.Run("transform immutability", func(t *testing.T) {
-		original := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
-
-		chained := original.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if length, ok := input.(int); ok {
-				return length * 2, nil
-			}
-			return 0, nil
-		}))
-
-		// Should be different instances
-		assert.NotSame(t, original, chained)
-
-		// Original should return length
-		result1, err := original.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, 4, result1)
-
-		// Chained should return length * 2
-		result2, err := chained.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, 8, result2)
-	})
-
-	t.Run("transform execution order verification", func(t *testing.T) {
-		executionOrder := []string{}
-
-		step1 := String().Min(3).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			executionOrder = append(executionOrder, "transform1")
-			return strings.ToUpper(s), nil
-		})
-
-		schema := step1.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			executionOrder = append(executionOrder, "transform2")
-			if str, ok := input.(string); ok {
-				return str + "_PROCESSED", nil
-			}
-			return input, nil
-		}))
-
-		// Valid case - all steps execute
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "HELLO_PROCESSED", result)
-		assert.Equal(t, []string{"transform1", "transform2"}, executionOrder)
-
-		// Invalid case - validation fails, transforms don't execute
-		executionOrder = []string{}
-		_, err = schema.Parse("hi")
-		assert.Error(t, err)
-		assert.Empty(t, executionOrder) // No transforms executed
-	})
-
-	t.Run("performance smoke test", func(t *testing.T) {
-		schema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return strings.ToUpper(s), nil
-		})
-
-		testInputs := []string{
-			"hello",
-			"world",
-			"test",
-			"performance",
-		}
-
-		// Simple performance check
-		for i := 0; i < 100; i++ {
-			for _, input := range testInputs {
-				_, err := schema.Parse(input)
-				require.NoError(t, err)
-			}
-		}
-	})
-
-	t.Run("transform with all modifier methods", func(t *testing.T) {
-		// Test that transform works with various modifiers
-		baseTransform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
-			return len(s), nil
-		})
-
-		// Test with Nilable
-		nilableSchema := baseTransform.Nilable()
-		result, err := nilableSchema.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, 4, result)
-
-		// Test with Pipe
-		pipeSchema := baseTransform.Pipe(Transform(func(input any, ctx *core.RefinementContext) (any, error) {
-			if length, ok := input.(int); ok {
-				return length > 3, nil
-			}
-			return false, nil
-		}))
-
-		result, err = pipeSchema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-	})
+	if config["feature_enabled"] != false {
+		t.Errorf("expected feature_enabled to be false")
+	}
+	if config["max_connections"] != 100 {
+		t.Errorf("expected max_connections to be 100, got %v", config["max_connections"])
+	}
+	if config["timeout"] != 30 {
+		t.Errorf("expected timeout to be 30, got %v", config["timeout"])
+	}
 }

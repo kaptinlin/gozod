@@ -180,3 +180,14 @@ func formatStringValidationEn(raw core.ZodRawIssue, format string) string {
 		return fmt.Sprintf("Invalid %s", noun)
 	}
 }
+
+// EN returns a ZodConfig configured for the default English locale.
+func EN() *core.ZodConfig {
+	return &core.ZodConfig{
+		LocaleError: formatEn,
+	}
+}
+
+// =============================================================================
+// UNIFIED MESSAGE FORMATTING WITH TYPESCRIPT ZOD V4 COMPATIBILITY
+// =============================================================================

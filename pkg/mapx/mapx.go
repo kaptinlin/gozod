@@ -3,34 +3,12 @@ package mapx
 import (
 	"errors"
 	"reflect"
-	"strings"
 
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
 
-// =============================================================================
-// MAP TYPE CHECKING
-// =============================================================================
-
-// Is checks if the value is a map type
-func Is(v any) bool {
-	return reflectx.IsMap(v)
-}
-
-// IsStringKey checks if the value is a map with string keys
-func IsStringKey(v any) bool {
-	if !Is(v) {
-		return false
-	}
-
-	switch v.(type) {
-	case map[string]any:
-		return true
-	default:
-		return false
-	}
-}
+// ErrInputNotMap indicates that the provided input is not of map type.
+var ErrInputNotMap = errors.New("input is not a map type")
 
 // =============================================================================
 // BASIC PROPERTY OPERATIONS
@@ -301,25 +279,6 @@ func Keys(input any) []string {
 	}
 }
 
-// Value gets a value from an object by key
-func Value(input any, key string) (any, bool) {
-	if input == nil {
-		return nil, false
-	}
-
-	switch v := input.(type) {
-	case map[string]any:
-		value, exists := v[key]
-		return value, exists
-	case map[any]any:
-		value, exists := v[key]
-		return value, exists
-	default:
-		// Try to get value from struct
-		return getStructValue(input, key)
-	}
-}
-
 // =============================================================================
 // MAP CONVERSION FUNCTIONS
 // =============================================================================
@@ -361,7 +320,7 @@ func ToGeneric(input any) (map[any]any, error) {
 		// Use reflection for other map types
 		rv := reflect.ValueOf(input)
 		if rv.Kind() != reflect.Map {
-			return nil, errors.New("input is not a map type")
+			return nil, ErrInputNotMap
 		}
 
 		result := make(map[any]any)
@@ -371,192 +330,6 @@ func ToGeneric(input any) (map[any]any, error) {
 		}
 		return result, nil
 	}
-}
-
-// ToStringKey converts any map to map[string]any
-func ToStringKey(input any) (map[string]any, error) {
-	if input == nil {
-		return nil, nil
-	}
-
-	switch v := input.(type) {
-	case map[string]any:
-		return v, nil
-	case map[string]string:
-		result := make(map[string]any)
-		for k, val := range v {
-			result[k] = val
-		}
-		return result, nil
-	case map[string]int:
-		result := make(map[string]any)
-		for k, val := range v {
-			result[k] = val
-		}
-		return result, nil
-	case map[any]any:
-		result := make(map[string]any)
-		for k, val := range v {
-			if keyStr, ok := k.(string); ok {
-				result[keyStr] = val
-			}
-		}
-		return result, nil
-	default:
-		// Use reflection for other map types with string keys
-		rv := reflect.ValueOf(input)
-		if rv.Kind() != reflect.Map {
-			// Try to convert struct to map
-			if structMap := structx.Marshal(input); structMap != nil {
-				return structMap, nil
-			}
-			return nil, errors.New("input cannot be converted to map[string]any")
-		}
-
-		// Check if keys are strings
-		if rv.Type().Key().Kind() != reflect.String {
-			return nil, errors.New("map keys are not strings")
-		}
-
-		result := make(map[string]any)
-		for _, key := range rv.MapKeys() {
-			value := rv.MapIndex(key)
-			result[key.String()] = value.Interface()
-		}
-		return result, nil
-	}
-}
-
-// FromAny converts various types to map[string]any
-func FromAny(input any) map[string]any {
-	if input == nil {
-		return nil
-	}
-
-	switch v := input.(type) {
-	case map[string]any:
-		return v
-	case map[any]any:
-		// Convert map[any]any to map[string]any
-		result := make(map[string]any)
-		for k, val := range v {
-			if keyStr, ok := k.(string); ok {
-				result[keyStr] = val
-			}
-		}
-		return result
-	default:
-		// Try to convert struct to map using reflection
-		return structx.Marshal(input)
-	}
-}
-
-// =============================================================================
-// MAP MERGE FUNCTIONS
-// =============================================================================
-
-// MergeMaps merges two maps of any type
-func MergeMaps(a, b any) (any, error) {
-	if a == nil && b == nil {
-		return nil, nil
-	}
-	if a == nil {
-		return b, nil
-	}
-	if b == nil {
-		return a, nil
-	}
-
-	// Handle map[string]any
-	if mapA, okA := a.(map[string]any); okA {
-		if mapB, okB := b.(map[string]any); okB {
-			return mergeStringMaps(mapA, mapB), nil
-		}
-	}
-
-	// Handle map[any]any
-	if mapA, okA := a.(map[any]any); okA {
-		if mapB, okB := b.(map[any]any); okB {
-			return mergeGenericMaps(mapA, mapB), nil
-		}
-	}
-
-	// Try reflection-based merge for other map types
-	return mergeReflectionMaps(a, b)
-}
-
-// =============================================================================
-// MAP EXTRACTION FUNCTIONS
-// =============================================================================
-
-// Extract extracts map from input, returns the map and whether extraction was successful
-func Extract(input any) (any, bool) {
-	if input == nil {
-		return nil, false
-	}
-
-	switch v := input.(type) {
-	case map[string]any, map[any]any:
-		return v, true
-	default:
-		return nil, false
-	}
-}
-
-// ExtractRecord extracts a record (map[any]any) from input
-func ExtractRecord(input any) (map[any]any, bool) {
-	if input == nil {
-		return nil, false
-	}
-
-	// Fast-path: already generic map types we support
-	switch v := input.(type) {
-	case map[any]any:
-		return v, true
-	case map[string]any:
-		result := make(map[any]any, len(v))
-		for k, val := range v {
-			result[k] = val
-		}
-		return result, true
-	}
-
-	// ---------------------------------------------------------------------
-	// Reflection-based fallback – handle arbitrary map key types (e.g.
-	// map[int]string, map[custom]Struct). We convert the map into a generic
-	// map[any]any to align with Zod record/map processing, preserving original
-	// key values as-is. This broadens support beyond string-key maps which the
-	// original implementation was limited to.
-	// ---------------------------------------------------------------------
-	rv := reflect.ValueOf(input)
-	if rv.Kind() == reflect.Map {
-		result := make(map[any]any, rv.Len())
-		for _, key := range rv.MapKeys() {
-			result[key.Interface()] = rv.MapIndex(key).Interface()
-		}
-		return result, true
-	}
-
-	return nil, false
-}
-
-// =============================================================================
-// VALIDATION FUNCTIONS
-// =============================================================================
-
-// ValidateType checks if a property has the expected type
-func ValidateType(props map[string]any, key string, expectedType string) bool {
-	if props == nil {
-		return false
-	}
-
-	value, exists := props[key]
-	if !exists {
-		return false
-	}
-
-	actualType := reflectx.ParsedType(value)
-	return string(actualType) == expectedType
 }
 
 // =============================================================================
@@ -575,117 +348,4 @@ func getStructKeys(input any) []string {
 		keys = append(keys, key)
 	}
 	return keys
-}
-
-// getStructValue gets a value from a struct by field name or json tag
-func getStructValue(input any, key string) (any, bool) {
-	if input == nil {
-		return nil, false
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil, false
-		}
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil, false
-	}
-
-	t := v.Type()
-
-	// First, try to find by json tag
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		// Check json tag
-		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			parts := strings.Split(tag, ",")
-			if parts[0] == key {
-				return v.Field(i).Interface(), true
-			}
-		}
-	}
-
-	// Then, try to find by field name
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		if field.Name == key {
-			return v.Field(i).Interface(), true
-		}
-	}
-
-	return nil, false
-}
-
-// mergeStringMaps merges two map[string]any
-func mergeStringMaps(a, b map[string]any) map[string]any {
-	result := make(map[string]any)
-
-	// Copy from first map
-	for k, v := range a {
-		result[k] = v
-	}
-
-	// Merge from second map (overwrites)
-	for k, v := range b {
-		result[k] = v
-	}
-
-	return result
-}
-
-// mergeGenericMaps merges two map[any]any
-func mergeGenericMaps(a, b map[any]any) map[any]any {
-	result := make(map[any]any)
-
-	// Copy from first map
-	for k, v := range a {
-		result[k] = v
-	}
-
-	// Merge from second map (overwrites)
-	for k, v := range b {
-		result[k] = v
-	}
-
-	return result
-}
-
-// mergeReflectionMaps merges maps using reflection
-func mergeReflectionMaps(a, b any) (any, error) {
-	va := reflect.ValueOf(a)
-	vb := reflect.ValueOf(b)
-
-	if va.Kind() != reflect.Map || vb.Kind() != reflect.Map {
-		return nil, errors.New("both values must be maps")
-	}
-
-	if va.Type() != vb.Type() {
-		return nil, errors.New("maps must have the same type")
-	}
-
-	result := reflect.MakeMap(va.Type())
-
-	// Copy from first map
-	for _, key := range va.MapKeys() {
-		result.SetMapIndex(key, va.MapIndex(key))
-	}
-
-	// Merge from second map (overwrites)
-	for _, key := range vb.MapKeys() {
-		result.SetMapIndex(key, vb.MapIndex(key))
-	}
-
-	return result.Interface(), nil
 }

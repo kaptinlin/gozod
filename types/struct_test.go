@@ -1,7 +1,6 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
@@ -10,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test structs for validation
+// Test data structures
 type User struct {
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
@@ -29,813 +28,979 @@ type Profile struct {
 	Country string `json:"country"`
 }
 
-// =============================================================================
-// 1. Basic functionality and type inference
-// =============================================================================
-
-func TestStructBasicFunctionality(t *testing.T) {
-	t.Run("basic validation", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-
-		// Valid struct
-		user := User{Name: "Alice", Age: 30}
-		result, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Invalid field values
-		invalidUser := User{Name: "", Age: -1}
-		_, err = schema.Parse(invalidUser)
-		// Note: Empty string and negative age might be valid depending on constraints
-		// This test focuses on basic parsing, not validation rules
-		require.NoError(t, err) // Basic parsing should succeed
-	})
-
-	t.Run("smart type inference", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-
-		// Struct input returns struct
-		user := User{Name: "Alice", Age: 30}
-		result1, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.IsType(t, User{}, result1)
-
-		// Pointer input returns pointer
-		result2, err := schema.Parse(&user)
-		require.NoError(t, err)
-		assert.IsType(t, (*User)(nil), result2)
-
-		// Map input returns map
-		userMap := map[string]any{"name": "Bob", "age": 25}
-		result3, err := schema.Parse(userMap)
-		require.NoError(t, err)
-		assert.IsType(t, map[string]any{}, result3)
-	})
-
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
-		}).Nilable()
-
-		// nil input should succeed
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Valid input normal validation
-		user := User{Name: "Alice"}
-		result2, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result2)
-	})
+type Person struct {
+	ID       int    `json:"id"`
+	FullName string `json:"full_name"`
+	Active   bool   `json:"active"`
 }
 
 // =============================================================================
-// 2. Shape and Keyof methods
+// Basic functionality tests
 // =============================================================================
 
-func TestStructShapeAndKeyof(t *testing.T) {
-	schema := Struct(core.StructSchema{
-		"name":  String(),
-		"age":   Int(),
-		"email": String().Email(),
+func TestStruct_BasicFunctionality(t *testing.T) {
+	t.Run("valid struct inputs", func(t *testing.T) {
+		schema := Struct[User]()
+
+		validUser := User{
+			Name:  "John Doe",
+			Age:   30,
+			Email: "john@example.com",
+		}
+
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
 	})
 
-	t.Run("shape access", func(t *testing.T) {
-		shape := schema.Shape()
+	t.Run("valid struct with pointer input", func(t *testing.T) {
+		schema := Struct[User]()
 
-		assert.Equal(t, 3, len(shape))
-		assert.Contains(t, shape, "name")
-		assert.Contains(t, shape, "age")
-		assert.Contains(t, shape, "email")
+		validUser := User{
+			Name:  "John Doe",
+			Age:   30,
+			Email: "john@example.com",
+		}
 
-		// Verify we can access individual field schemas
-		nameSchema := shape["name"]
-		assert.NotNil(t, nameSchema)
-
-		// Test that shape returns the actual schemas
-		_, err := nameSchema.Parse("test")
+		result, err := schema.Parse(&validUser)
 		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
 	})
 
-	t.Run("keyof method", func(t *testing.T) {
-		keySchema := schema.Keyof()
+	t.Run("empty struct", func(t *testing.T) {
+		type Empty struct{}
+		schema := Struct[Empty]()
 
-		// Test valid keys
-		result1, err := keySchema.Parse("name")
+		result, err := schema.Parse(Empty{})
 		require.NoError(t, err)
-		assert.Equal(t, "name", result1)
-
-		result2, err := keySchema.Parse("age")
-		require.NoError(t, err)
-		assert.Equal(t, "age", result2)
-
-		result3, err := keySchema.Parse("email")
-		require.NoError(t, err)
-		assert.Equal(t, "email", result3)
-
-		// Test invalid key
-		_, err = keySchema.Parse("invalid")
-		assert.Error(t, err)
+		assert.Equal(t, Empty{}, result)
 	})
 
-	t.Run("empty struct keyof", func(t *testing.T) {
-		emptySchema := Struct(core.StructSchema{})
-		keySchema := emptySchema.Keyof()
+	t.Run("invalid type inputs", func(t *testing.T) {
+		schema := Struct[User]()
 
-		// Should be Never type for empty structs
-		_, err := keySchema.Parse("anything")
+		invalidInputs := []any{
+			"not a struct", 123, []int{1, 2, 3}, true, nil,
+			map[string]any{"name": "John"}, // map is not a struct
+		}
+
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
+		}
+	})
+
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		schema := Struct[User]()
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+
+		// Test Parse method
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+
+		// Test MustParse method
+		mustResult := schema.MustParse(validUser)
+		assert.Equal(t, validUser, mustResult)
+
+		// Test panic on invalid input
+		assert.Panics(t, func() {
+			schema.MustParse("invalid")
+		})
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		schema := Struct[User](core.SchemaParams{Error: "Expected a valid User struct"})
+
+		require.NotNil(t, schema)
+
+		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 3. Catchall and mode methods
+// Type safety tests
 // =============================================================================
 
-func TestStructCatchallAndModes(t *testing.T) {
-	baseSchema := Struct(core.StructSchema{
-		"name": String(),
-		"age":  Int(),
+func TestStruct_TypeSafety(t *testing.T) {
+	t.Run("struct returns correct type", func(t *testing.T) {
+		schema := Struct[User]()
+		require.NotNil(t, schema)
+
+		validUser := User{Name: "John", Age: 30, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+		assert.IsType(t, User{}, result)
 	})
 
-	t.Run("catchall method", func(t *testing.T) {
-		catchallSchema := baseSchema.Catchall(String())
+	t.Run("different struct types", func(t *testing.T) {
+		userSchema := Struct[User]()
+		personSchema := Struct[Person]()
 
-		// Test with map input (struct validation works with maps)
-		input := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"extra":   "should be validated as string",
-			"another": "also string",
-		}
+		user := User{Name: "John", Age: 30, Email: "john@test.com"}
+		person := Person{ID: 1, FullName: "John Doe", Active: true}
 
-		result, err := catchallSchema.Parse(input)
+		// User schema should accept User struct
+		result1, err := userSchema.Parse(user)
 		require.NoError(t, err)
+		assert.Equal(t, user, result1)
 
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		assert.Equal(t, "should be validated as string", resultMap["extra"])
-		assert.Equal(t, "also string", resultMap["another"])
+		// Person schema should accept Person struct
+		result2, err := personSchema.Parse(person)
+		require.NoError(t, err)
+		assert.Equal(t, person, result2)
 
-		// Test catchall validation failure
-		invalidInput := map[string]any{
-			"name":  "Alice",
-			"age":   30,
-			"extra": 123, // Should fail string validation
-		}
+		// User schema should reject Person struct
+		_, err = userSchema.Parse(person)
+		assert.Error(t, err)
 
-		_, err = catchallSchema.Parse(invalidInput)
+		// Person schema should reject User struct
+		_, err = personSchema.Parse(user)
 		assert.Error(t, err)
 	})
 
-	t.Run("passthrough method", func(t *testing.T) {
-		passthroughSchema := baseSchema.Passthrough()
+	t.Run("MustParse type safety", func(t *testing.T) {
+		schema := Struct[User]()
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
 
-		input := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"unknown": "any value",
-			"number":  123,
-			"bool":    true,
-		}
-
-		result, err := passthroughSchema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		assert.Equal(t, "any value", resultMap["unknown"])
-		assert.Equal(t, 123, resultMap["number"])
-		assert.Equal(t, true, resultMap["bool"])
-	})
-
-	t.Run("strict method", func(t *testing.T) {
-		strictSchema := baseSchema.Strict()
-
-		// Valid input should work
-		validInput := map[string]any{
-			"name": "Alice",
-			"age":  30,
-		}
-
-		result, err := strictSchema.Parse(validInput)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Input with unknown keys should fail
-		invalidInput := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"unknown": "should cause error",
-		}
-
-		_, err = strictSchema.Parse(invalidInput)
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		hasUnrecognizedKeys := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.UnrecognizedKeys {
-				hasUnrecognizedKeys = true
-				break
-			}
-		}
-		assert.True(t, hasUnrecognizedKeys)
-	})
-
-	t.Run("strip method", func(t *testing.T) {
-		stripSchema := baseSchema.Strip()
-
-		input := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"unknown": "should be stripped",
-		}
-
-		result, err := stripSchema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		_, hasUnknown := resultMap["unknown"]
-		assert.False(t, hasUnknown, "Unknown key should be stripped")
+		result := schema.MustParse(validUser)
+		assert.IsType(t, User{}, result)
+		assert.Equal(t, validUser, result)
 	})
 }
 
 // =============================================================================
-// 4. Validation modes
+// Struct Schema validation tests
 // =============================================================================
 
-func TestStructModes(t *testing.T) {
-	type UserWithExtra struct {
-		Name  string `json:"name"`
-		Age   int    `json:"age"`
-		Extra string `json:"extra"`
-	}
-
-	baseSchema := core.StructSchema{
-		"name": String(),
-		"age":  Int(),
-	}
-
-	t.Run("strip mode default", func(t *testing.T) {
-		schema := Struct(baseSchema)
-		user := UserWithExtra{Name: "Alice", Age: 30, Extra: "should be stripped"}
-
-		result, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("strict mode rejects unknown fields", func(t *testing.T) {
-		schema := StrictStruct(baseSchema)
-		user := UserWithExtra{Name: "Alice", Age: 30, Extra: "should cause error"}
-
-		_, err := schema.Parse(user)
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		// Check for unrecognized keys error
-		hasUnrecognizedKeys := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.UnrecognizedKeys {
-				hasUnrecognizedKeys = true
-				break
-			}
-		}
-		assert.True(t, hasUnrecognizedKeys)
-	})
-
-	t.Run("loose mode allows unknown fields", func(t *testing.T) {
-		schema := LooseStruct(baseSchema)
-		user := UserWithExtra{Name: "Alice", Age: 30, Extra: "should pass through"}
-
-		result, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-}
-
-// =============================================================================
-// 5. Schema manipulation methods
-// =============================================================================
-
-func TestStructManipulation(t *testing.T) {
-	baseSchema := Struct(core.StructSchema{
-		"name":    String(),
-		"age":     Int(),
-		"email":   String().Email(),
-		"address": String().Optional(),
-	})
-
-	t.Run("pick method", func(t *testing.T) {
-		pickedSchema := baseSchema.Pick([]string{"name", "email"})
-
-		assert.Equal(t, 2, len(pickedSchema.internals.Shape))
-		assert.Contains(t, pickedSchema.internals.Shape, "name")
-		assert.Contains(t, pickedSchema.internals.Shape, "email")
-		assert.NotContains(t, pickedSchema.internals.Shape, "age")
-	})
-
-	t.Run("omit method", func(t *testing.T) {
-		omittedSchema := baseSchema.Omit([]string{"age", "address"})
-
-		assert.Equal(t, 2, len(omittedSchema.internals.Shape))
-		assert.Contains(t, omittedSchema.internals.Shape, "name")
-		assert.Contains(t, omittedSchema.internals.Shape, "email")
-		assert.NotContains(t, omittedSchema.internals.Shape, "age")
-	})
-
-	t.Run("extend method", func(t *testing.T) {
-		extension := core.StructSchema{
-			"phone":   String(),
-			"country": String().Default("US"),
-		}
-
-		extendedSchema := baseSchema.Extend(extension)
-
-		assert.Equal(t, 6, len(extendedSchema.internals.Shape))
-		assert.Contains(t, extendedSchema.internals.Shape, "phone")
-		assert.Contains(t, extendedSchema.internals.Shape, "country")
-	})
-
-	t.Run("partial method", func(t *testing.T) {
-		partialSchema := baseSchema.Partial()
-
-		assert.Equal(t, 4, len(partialSchema.internals.Shape))
-
-		for fieldName, fieldSchema := range partialSchema.internals.Shape {
-			if fieldName != "address" { // address is already optional
-				_, isOptional := fieldSchema.(*ZodOptional[core.ZodType[any, any]])
-				assert.True(t, isOptional, "Field '%s' should be optional", fieldName)
-			}
-		}
-	})
-
-	t.Run("merge schemas", func(t *testing.T) {
-		otherSchema := Struct(core.StructSchema{
-			"country": String(),
-			"phone":   String(),
+func TestStruct_WithSchema(t *testing.T) {
+	t.Run("valid struct with schema validation", func(t *testing.T) {
+		// Define schema for User fields
+		schema := Struct[User](core.StructSchema{
+			"name":  String().Min(2),
+			"age":   Int().Min(0).Max(150),
+			"email": String().Email(),
 		})
 
-		mergedSchema := baseSchema.Merge(otherSchema)
+		validUser := User{
+			Name:  "John Doe",
+			Age:   30,
+			Email: "john@example.com",
+		}
 
-		assert.Equal(t, 6, len(mergedSchema.internals.Shape))
-		assert.Contains(t, mergedSchema.internals.Shape, "country")
-		assert.Contains(t, mergedSchema.internals.Shape, "phone")
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+	})
+
+	t.Run("struct with schema validation failures", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name":  String().Min(5),  // Name too short
+			"age":   Int().Min(18),    // Age too low
+			"email": String().Email(), // Invalid email format
+		})
+
+		// Test name too short
+		invalidUser1 := User{Name: "Jo", Age: 25, Email: "john@example.com"}
+		_, err := schema.Parse(invalidUser1)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "name")
+
+		// Test age too low
+		invalidUser2 := User{Name: "John Doe", Age: 16, Email: "john@example.com"}
+		_, err = schema.Parse(invalidUser2)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "age")
+
+		// Test invalid email
+		invalidUser3 := User{Name: "John Doe", Age: 25, Email: "not-an-email"}
+		_, err = schema.Parse(invalidUser3)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "email")
+	})
+
+	t.Run("struct with partial schema (only some fields)", func(t *testing.T) {
+		// Only validate name and email, not age
+		schema := Struct[User](core.StructSchema{
+			"name":  String().Min(2),
+			"email": String().Email(),
+		})
+
+		validUser := User{
+			Name:  "John Doe",
+			Age:   30, // Age not validated by schema
+			Email: "john@example.com",
+		}
+
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+	})
+
+	t.Run("struct with optional field schema", func(t *testing.T) {
+		schema := Struct[UserWithOptional](core.StructSchema{
+			"name":    String().Min(2),
+			"age":     Int().Min(0),
+			"email":   String().Email(),
+			"address": String().Optional(), // Optional field
+		})
+
+		// Test with address present
+		userWithAddress := UserWithOptional{
+			Name:    "John Doe",
+			Age:     30,
+			Email:   "john@example.com",
+			Address: stringPtr("123 Main St"),
+		}
+
+		result, err := schema.Parse(userWithAddress)
+		require.NoError(t, err)
+		assert.Equal(t, userWithAddress, result)
+
+		// Test with address nil
+		userNoAddress := UserWithOptional{
+			Name:    "John Doe",
+			Age:     30,
+			Email:   "john@example.com",
+			Address: nil,
+		}
+
+		result, err = schema.Parse(userNoAddress)
+		require.NoError(t, err)
+		assert.Equal(t, userNoAddress, result)
+	})
+
+	t.Run("struct with nested validation", func(t *testing.T) {
+		// Schema for nested Profile struct
+		profileSchema := Struct[Profile](core.StructSchema{
+			"user": Struct[User](core.StructSchema{
+				"name":  String().Min(2),
+				"age":   Int().Min(0),
+				"email": String().Email(),
+			}),
+			"country": String().Min(2),
+		})
+
+		validProfile := Profile{
+			User: User{
+				Name:  "John Doe",
+				Age:   30,
+				Email: "john@example.com",
+			},
+			Country: "USA",
+		}
+
+		result, err := profileSchema.Parse(validProfile)
+		require.NoError(t, err)
+		assert.Equal(t, validProfile, result)
+
+		// Test with invalid nested user
+		invalidProfile := Profile{
+			User: User{
+				Name:  "J", // Too short
+				Age:   30,
+				Email: "john@example.com",
+			},
+			Country: "USA",
+		}
+
+		_, err = profileSchema.Parse(invalidProfile)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "user")
+	})
+
+	t.Run("struct with json tag field mapping", func(t *testing.T) {
+		// Person has json tags that differ from field names
+		personSchema := Struct[Person](core.StructSchema{
+			"id":        Int().Min(1),    // Maps to ID field
+			"full_name": String().Min(2), // Maps to FullName field
+			"active":    Bool(),          // Maps to Active field
+		})
+
+		validPerson := Person{
+			ID:       123,
+			FullName: "John Doe",
+			Active:   true,
+		}
+
+		result, err := personSchema.Parse(validPerson)
+		require.NoError(t, err)
+		assert.Equal(t, validPerson, result)
+
+		// Test validation failure
+		invalidPerson := Person{
+			ID:       0, // ID too small
+			FullName: "John Doe",
+			Active:   true,
+		}
+
+		_, err = personSchema.Parse(invalidPerson)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "id")
 	})
 }
 
-// =============================================================================
-// 6. Modifiers and wrappers
-// =============================================================================
+func TestStruct_SchemaConstructors(t *testing.T) {
+	t.Run("StructPtr with schema", func(t *testing.T) {
+		schema := StructPtr[User](core.StructSchema{
+			"name":  String().Min(2),
+			"email": String().Email(),
+		})
 
-func TestStructModifiers(t *testing.T) {
-	schema := Struct(core.StructSchema{
-		"name": String(),
-		"age":  Int(),
+		validUser := User{
+			Name:  "John Doe",
+			Age:   30,
+			Email: "john@example.com",
+		}
+
+		// Test with pointer input
+		result, err := schema.Parse(&validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+
+		// Test with value input
+		result, err = schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
 	})
+}
 
-	t.Run("optional modifier", func(t *testing.T) {
+// Helper function to create string pointer
+func stringPtr(s string) *string {
+	return &s
+}
+
+// =============================================================================
+// Modifier methods tests
+// =============================================================================
+
+func TestStruct_Modifiers(t *testing.T) {
+	t.Run("Optional allows nil values", func(t *testing.T) {
+		schema := Struct[User]()
 		optionalSchema := schema.Optional()
 
-		// nil input should succeed
-		result, err := optionalSchema.Parse(nil)
+		// Test non-nil value - should return pointer
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := optionalSchema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+
+		// Test nil value (should be allowed for optional)
+		result, err = optionalSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
-
-		// Valid input normal validation
-		user := User{Name: "Alice", Age: 30}
-		result2, err := optionalSchema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result2)
 	})
 
-	t.Run("nilable modifier", func(t *testing.T) {
+	t.Run("Nilable allows nil values", func(t *testing.T) {
+		schema := Struct[User]()
 		nilableSchema := schema.Nilable()
 
-		// nil input should succeed
+		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
-		// Valid input normal validation
-		user := User{Name: "Alice", Age: 30}
-		result2, err := nilableSchema.Parse(user)
+		// Test valid value - should return pointer
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err = nilableSchema.Parse(validUser)
 		require.NoError(t, err)
-		assert.NotNil(t, result2)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
 	})
 
-	t.Run("must parse", func(t *testing.T) {
-		// Valid input should not panic
-		user := User{Name: "Alice", Age: 30}
-		result := schema.MustParse(user)
-		assert.NotNil(t, result)
+	t.Run("Default preserves current type", func(t *testing.T) {
+		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
+		schema := Struct[User]()
+		defaultSchema := schema.Default(defaultUser)
 
-		// Invalid input should panic
-		assert.Panics(t, func() {
-			schema.MustParse("not a struct")
-		})
+		// Valid input should override default
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := defaultSchema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+		assert.IsType(t, User{}, result)
+	})
+
+	t.Run("Prefault preserves current type", func(t *testing.T) {
+		prefaultUser := User{Name: "Prefault", Age: 0, Email: "prefault@test.com"}
+		schema := Struct[User]()
+		prefaultSchema := schema.Prefault(prefaultUser)
+
+		// Valid input should override prefault
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := prefaultSchema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+		assert.IsType(t, User{}, result)
 	})
 }
 
 // =============================================================================
-// 7. Transform and refine
+// Chaining tests
 // =============================================================================
 
-func TestStructTransformAndRefine(t *testing.T) {
-	schema := Struct(core.StructSchema{
-		"name": String(),
-		"age":  Int(),
-	})
+func TestStruct_Chaining(t *testing.T) {
+	t.Run("type evolution through chaining", func(t *testing.T) {
+		// Chain with type evolution
+		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
+		schema := Struct[User]().
+			Default(defaultUser). // Preserves struct type
+			Optional()            // Now returns pointer type
 
-	t.Run("transform", func(t *testing.T) {
-		// Transform works on the final parsed result, which might be a struct with empty fields
-		// This is a known limitation - we'll test the transform mechanism itself
-		transformSchema := schema.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-			// Transform receives the parsed result, which might be an empty struct
-			// For now, just test that transform mechanism works
-			return map[string]any{
-				"display_name": "Transformed",
-				"is_adult":     true,
-			}, nil
-		})
-
-		user := User{Name: "Alice", Age: 30}
-		result, err := transformSchema.Parse(user)
+		// Test final behavior - should return pointer
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
 		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
 
-		transformed, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "Transformed", transformed["display_name"])
-		assert.Equal(t, true, transformed["is_adult"])
+		// Test nil handling
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := Struct[User]().
+			Nilable()
+
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+
+		// Test nil handling
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
+		prefaultUser := User{Name: "Prefault", Age: 0, Email: "prefault@test.com"}
+		schema := Struct[User]().
+			Default(defaultUser).
+			Prefault(prefaultUser)
+
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestStruct_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value behavior", func(t *testing.T) {
+		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
+		schema := Struct[User]().Default(defaultUser)
+
+		// Valid input should override default
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+
+		// Test default function
+		userFunc := Struct[User]().DefaultFunc(func() User {
+			return User{Name: "Func", Age: 0, Email: "func@test.com"}
+		})
+		result2, err := userFunc.Parse(User{Name: "John", Age: 25, Email: "john@test.com"})
+		require.NoError(t, err)
+		assert.Equal(t, User{Name: "John", Age: 25, Email: "john@test.com"}, result2)
+	})
+
+	t.Run("prefault value behavior", func(t *testing.T) {
+		prefaultUser := User{Name: "Prefault", Age: 0, Email: "prefault@test.com"}
+		schema := Struct[User]().Prefault(prefaultUser)
+
+		// Valid input should work normally
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+
+		// Test prefault function
+		userFunc := Struct[User]().PrefaultFunc(func() User {
+			return User{Name: "Func", Age: 0, Email: "func@test.com"}
+		})
+		result2, err := userFunc.Parse(User{Name: "John", Age: 25, Email: "john@test.com"})
+		require.NoError(t, err)
+		assert.Equal(t, User{Name: "John", Age: 25, Email: "john@test.com"}, result2)
+	})
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+
+func TestStruct_Refine(t *testing.T) {
 	t.Run("refine validation", func(t *testing.T) {
-		// First test basic parsing without refine
-		validUser := User{Name: "Alice", Age: 30}
-		invalidUser := User{Name: "", Age: 30}
-
-		// Both should succeed at basic parsing level since empty string is valid for String()
-		_, basicErr1 := schema.Parse(validUser)
-		require.NoError(t, basicErr1)
-
-		_, basicErr2 := schema.Parse(invalidUser)
-		require.NoError(t, basicErr2)
-
-		// Now test with refine
-		refinedSchema := schema.RefineAny(func(data any) bool {
-			if userMap, ok := data.(map[string]any); ok {
-				// Use lowercase schema field names (consistent with field mappings)
-				name, nameOk := userMap["name"].(string)
-				age, ageOk := userMap["age"].(int)
-				return nameOk && ageOk && len(name) > 0 && age >= 0
-			}
-			return true
+		// Only accept users with name length > 3
+		schema := Struct[User]().Refine(func(u User) bool {
+			return len(u.Name) > 3
 		})
 
-		// Valid data should pass refine
-		result, err := refinedSchema.Parse(validUser)
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		assert.Equal(t, validUser, result)
 
-		// Invalid data (empty name) should fail refine
-		_, err = refinedSchema.Parse(invalidUser)
+		invalidUser := User{Name: "Jo", Age: 25, Email: "jo@test.com"}
+		_, err = schema.Parse(invalidUser)
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Name must be longer than 3 characters"
+		schema := Struct[User]().Refine(func(u User) bool {
+			return len(u.Name) > 3
+		}, core.SchemaParams{Error: errorMessage})
+
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+
+		invalidUser := User{Name: "Jo", Age: 25, Email: "jo@test.com"}
+		_, err = schema.Parse(invalidUser)
+		assert.Error(t, err)
+	})
+
+	t.Run("refine nilable struct", func(t *testing.T) {
+		schema := Struct[User]().Nilable().Refine(func(u *User) bool {
+			// Allow nil or user with valid name
+			if u == nil {
+				return true
+			}
+			return len(u.Name) > 0
+		})
+
+		// nil should pass
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// valid struct should pass and return pointer
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err = schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+	})
+}
+
+func TestStruct_RefineAny(t *testing.T) {
+	t.Run("refineAny flexible validation", func(t *testing.T) {
+		schema := Struct[User]().RefineAny(func(v any) bool {
+			u, ok := v.(User)
+			return ok && len(u.Name) >= 1
+		})
+
+		// user with valid name should pass
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+
+		// user with empty name should fail
+		invalidUser := User{Name: "", Age: 25, Email: "john@test.com"}
+		_, err = schema.Parse(invalidUser)
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny with type checking", func(t *testing.T) {
+		schema := Struct[User]().RefineAny(func(v any) bool {
+			u, ok := v.(User)
+			if !ok {
+				return false
+			}
+			// Only allow users with even age
+			return u.Age%2 == 0
+		})
+
+		evenAgeUser := User{Name: "John", Age: 30, Email: "john@test.com"}
+		result, err := schema.Parse(evenAgeUser)
+		require.NoError(t, err)
+		assert.Equal(t, evenAgeUser, result)
+
+		oddAgeUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		_, err = schema.Parse(oddAgeUser)
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 8. Error handling
+// Error handling and edge case tests
 // =============================================================================
 
-func TestStructErrorHandling(t *testing.T) {
-	t.Run("field validation errors", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name":  String().Min(2),
-			"age":   Int().Min(0),
-			"email": String().Email(),
-		})
+func TestStruct_ErrorHandling(t *testing.T) {
+	t.Run("invalid struct type error", func(t *testing.T) {
+		schema := Struct[User]()
 
-		user := User{Name: "A", Age: -1, Email: "invalid-email"}
+		_, err := schema.Parse("not a struct")
+		assert.Error(t, err)
+	})
 
-		_, err := schema.Parse(user)
-		// Note: Some field validations might not trigger depending on implementation
-		// This test verifies the error handling mechanism works
-		if err != nil {
-			var zodErr *issues.ZodError
-			require.True(t, issues.IsZodError(err, &zodErr))
-			assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
+	t.Run("wrong struct type error", func(t *testing.T) {
+		schema := Struct[User]()
+
+		wrongStruct := Person{ID: 1, FullName: "John", Active: true}
+		_, err := schema.Parse(wrongStruct)
+		assert.Error(t, err)
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		schema := Struct[User](core.SchemaParams{Error: "Expected a valid User struct"})
+
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
+	})
+}
+
+func TestStruct_EdgeCases(t *testing.T) {
+	t.Run("empty struct", func(t *testing.T) {
+		type Empty struct{}
+		schema := Struct[Empty]()
+
+		result, err := schema.Parse(Empty{})
+		require.NoError(t, err)
+		assert.Equal(t, Empty{}, result)
+	})
+
+	t.Run("nil handling with nilable struct", func(t *testing.T) {
+		schema := Struct[User]().Nilable()
+
+		// Test nil input
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid struct - should return pointer
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err = schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+	})
+
+	t.Run("deeply nested struct validation", func(t *testing.T) {
+		schema := Struct[Profile]()
+
+		validProfile := Profile{
+			User: User{
+				Name:  "John",
+				Age:   25,
+				Email: "john@test.com",
+			},
+			Country: "USA",
+		}
+
+		result, err := schema.Parse(validProfile)
+		require.NoError(t, err)
+		assert.Equal(t, validProfile, result)
+	})
+
+	t.Run("optional fields handling", func(t *testing.T) {
+		schema := Struct[UserWithOptional]()
+
+		// Should work with optional field nil
+		user := UserWithOptional{
+			Name:    "John",
+			Age:     25,
+			Email:   "john@test.com",
+			Address: nil,
+		}
+		result, err := schema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should work with optional field set
+		address := "123 Main St"
+		userWithAddress := UserWithOptional{
+			Name:    "John",
+			Age:     25,
+			Email:   "john@test.com",
+			Address: &address,
+		}
+		result, err = schema.Parse(userWithAddress)
+		require.NoError(t, err)
+		assert.Equal(t, userWithAddress, result)
+	})
+
+	t.Run("pointer value handling", func(t *testing.T) {
+		schema := Struct[User]()
+
+		// Test with pointer to struct
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		validUserPtr := &validUser
+
+		result, err := schema.Parse(validUserPtr)
+		require.NoError(t, err)
+		assert.Equal(t, validUser, result)
+	})
+
+	t.Run("concurrent access safety", func(t *testing.T) {
+		schema := Struct[User]()
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+
+		// Run multiple goroutines parsing the same schema
+		const numGoroutines = 10
+		results := make(chan error, numGoroutines)
+
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				_, err := schema.Parse(validUser)
+				results <- err
+			}()
+		}
+
+		// Check all results
+		for i := 0; i < numGoroutines; i++ {
+			err := <-results
+			assert.NoError(t, err)
 		}
 	})
 
-	t.Run("type mismatch error", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
+	t.Run("transform operations", func(t *testing.T) {
+		schema := Struct[User]()
+
+		// Test Transform
+		transform := schema.Transform(func(u User, ctx *core.RefinementContext) (any, error) {
+			return len(u.Name), nil
 		})
+		require.NotNil(t, transform)
+	})
+}
 
-		_, err := schema.Parse("not a struct")
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		if issues.IsZodError(err, &zodErr) {
-			assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-		}
+func TestStruct_Constructors(t *testing.T) {
+	t.Run("Struct constructor", func(t *testing.T) {
+		schema := Struct[User]()
+		require.NotNil(t, schema)
 	})
 
-	t.Run("custom error messages", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
-		}, core.SchemaParams{
-			Error: "core.Custom struct error",
-		})
+	t.Run("StructPtr constructor", func(t *testing.T) {
+		schema := StructPtr[User]()
+		require.NotNil(t, schema)
 
-		_, err := schema.Parse("not a struct")
-		require.Error(t, err)
+		// Test nil handling
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 
-		var zodErr *issues.ZodError
-		if issues.IsZodError(err, &zodErr) {
-			assert.Greater(t, len(zodErr.Issues), 0)
-		}
+		// Test valid struct
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err = schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
 	})
 }
 
 // =============================================================================
-// 9. Edge cases and complex scenarios
+// StructPtr tests
 // =============================================================================
 
-func TestStructEdgeCases(t *testing.T) {
-	t.Run("empty schema validation", func(t *testing.T) {
-		schema := Struct(core.StructSchema{})
+func TestStructPtr_Functionality(t *testing.T) {
+	t.Run("StructPtr basic functionality", func(t *testing.T) {
+		schema := StructPtr[User]()
 
-		type Empty struct{}
-		empty := Empty{}
-
-		result, err := schema.Parse(empty)
+		// Test valid struct
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+
+		// Test nil input
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("nested structs", func(t *testing.T) {
-		// Use Object schema for nested validation since nested structs get converted to maps
-		userSchema := Object(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
+	t.Run("StructPtr with pointer input", func(t *testing.T) {
+		schema := StructPtr[User]()
+
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(&validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+	})
+
+	t.Run("StructPtr with modifiers", func(t *testing.T) {
+		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
+		schema := StructPtr[User]().Default(defaultUser)
+
+		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
+		result, err := schema.Parse(validUser)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validUser, *result)
+	})
+}
+
+// =============================================================================
+// OVERWRITE TESTS
+// =============================================================================
+
+func TestStruct_Overwrite(t *testing.T) {
+	t.Run("type preservation", func(t *testing.T) {
+		schema := Struct[User]().
+			Overwrite(func(u User) User {
+				return u // Identity transformation
+			})
+
+		input := User{
+			Name:  "John",
+			Age:   25,
+			Email: "john@test.com",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.IsType(t, User{}, result)
+		assert.Equal(t, input, result)
+	})
+}
+
+// =============================================================================
+// Check Method Tests
+// =============================================================================
+
+func TestStruct_Check(t *testing.T) {
+	type Foo struct {
+		Value int
+	}
+
+	t.Run("invalid struct triggers issue", func(t *testing.T) {
+		schema := Struct[Foo]().Check(func(value Foo, p *core.ParsePayload) {
+			if value.Value < 0 {
+				p.AddIssueWithMessage("value must be >= 0")
+			}
 		})
 
-		profileSchema := Struct(core.StructSchema{
-			"user":    userSchema,
-			"country": String(),
+		_, err := schema.Parse(Foo{Value: -1})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+	})
+
+	t.Run("pointer schema adapts to struct value", func(t *testing.T) {
+		schema := StructPtr[Foo]().Check(func(value *Foo, p *core.ParsePayload) {
+			if value == nil || value.Value == 0 {
+				p.AddIssueWithMessage("zero value")
+			}
 		})
+
+		_, err := schema.Parse(Foo{})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+	})
+}
+
+func TestStruct_NonOptional(t *testing.T) {
+	t.Run("basic non-optional", func(t *testing.T) {
+		schema := StructPtr[User]().Optional().NonOptional()
+
+		// A valid struct should still pass
+		user := User{Name: "test", Age: 1, Email: "test@test.com"}
+		result, err := schema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+		assert.IsType(t, User{}, result)
+
+		// A pointer to a valid struct should also pass
+		result, err = schema.Parse(&user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// nil should now fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("chained optional and non-optional", func(t *testing.T) {
+		schema := Struct[User]().Optional().NonOptional().Optional().NonOptional()
+
+		// A valid struct should still pass
+		user := User{Name: "test", Age: 1, Email: "test@test.com"}
+		result, err := schema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+		assert.IsType(t, User{}, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("non-optional on already non-optional schema", func(t *testing.T) {
+		schema := Struct[User]().NonOptional()
+
+		// A valid struct should still pass
+		user := User{Name: "test", Age: 1, Email: "test@test.com"}
+		result, err := schema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+		assert.IsType(t, User{}, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("non-optional with nested struct", func(t *testing.T) {
+		profileSchema := Struct[Profile](core.StructSchema{
+			"user":    Struct[User]().Optional().NonOptional(),
+			"country": String(),
+		}).Optional().NonOptional()
 
 		profile := Profile{
-			User:    User{Name: "Alice", Age: 30},
-			Country: "US",
+			User: User{
+				Name:  "test",
+				Age:   10,
+				Email: "test@test.com",
+			},
+			Country: "USA",
 		}
 
 		result, err := profileSchema.Parse(profile)
 		require.NoError(t, err)
+		assert.Equal(t, profile, result)
 
-		// Handle both struct and map results
-		if resultProfile, ok := result.(Profile); ok {
-			// Note: Due to struct parsing limitations, fields might be empty
-			// This test verifies the parsing mechanism works, not field preservation
-			assert.NotNil(t, resultProfile)
-		} else if resultMap, ok := result.(map[string]any); ok {
-			// If result is a map, check the nested structure
-			assert.Contains(t, resultMap, "user")
-			assert.Contains(t, resultMap, "country")
-			assert.Equal(t, "US", resultMap["country"])
+		// Test with nil for the top-level optional
+		_, err = profileSchema.Parse(nil)
+		assert.Error(t, err)
 
-			if userMap, ok := resultMap["user"].(map[string]any); ok {
-				assert.Equal(t, "Alice", userMap["name"])
-				assert.Equal(t, 30, userMap["age"])
-			} else {
-				t.Fatalf("Expected user field to be map[string]any, got %T", resultMap["user"])
-			}
-		} else {
-			t.Fatalf("Unexpected result type: %T", result)
-		}
-	})
-
-	t.Run("struct with interface fields", func(t *testing.T) {
-		type UserWithData struct {
-			Name string `json:"name"`
-			Data any    `json:"data"`
-		}
-
-		schema := Struct(core.StructSchema{
-			"name": String(),
-			"data": Any(),
-		})
-
-		user := UserWithData{
-			Name: "Alice",
-			Data: map[string]any{"key": "value"},
-		}
-
-		result, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("nil pointer handling", func(t *testing.T) {
-		schema := Struct(core.StructSchema{
-			"name": String(),
-		})
-
-		var user *User = nil
-
-		_, err := schema.Parse(user)
-		require.Error(t, err)
-
-		// With nilable
-		nilableSchema := schema.Nilable()
-		result, err := nilableSchema.Parse(user)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-}
-
-// =============================================================================
-// 10. Default and Prefault tests
-// =============================================================================
-
-func TestStructDefaultAndPrefault(t *testing.T) {
-	t.Run("default value", func(t *testing.T) {
-		defaultUser := map[string]any{
-			"name": "Default",
-			"age":  0,
-		}
-		schema := Default(Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-		}), defaultUser)
-
-		// nil input uses default value
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Valid input normal validation
-		user := User{Name: "Alice", Age: 30}
-		result2, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result2)
-	})
-
-	t.Run("defaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := Struct(core.StructSchema{
-			"name": String(),
-			"age":  Int(),
-			"id":   Int(),
-		}).DefaultFunc(func() map[string]any {
-			counter++
-			return map[string]any{
-				"name": "Generated",
-				"age":  25,
-				"id":   counter,
-			}
-		})
-
-		// nil input should call function and use default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.NotNil(t, result1)
-		assert.Equal(t, 1, counter, "Function should be called once for nil input")
-
-		// Another nil input should call function again
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		assert.NotNil(t, result2)
-		assert.Equal(t, 2, counter, "Function should be called twice for second nil input")
-
-		// Valid input should not call function
-		// Use a map that matches the schema (name, age, id)
-		validUser := map[string]any{
-			"name": "Alice",
-			"age":  30,
-			"id":   999,
-		}
-		result3, err3 := schema.Parse(validUser)
-		require.NoError(t, err3)
-		assert.NotNil(t, result3)
-		assert.Equal(t, 2, counter, "Function should not be called for valid input")
-	})
-
-	t.Run("prefault value", func(t *testing.T) {
-		fallbackUser := map[string]any{
-			"name": "Fallback",
-			"age":  0,
-		}
-		schema := Struct(core.StructSchema{
-			"name": String().Min(2),
-			"age":  Int().Min(0),
-		}).Prefault(fallbackUser)
-
-		// Valid input normal validation
-		user := User{Name: "Alice", Age: 30}
-		result, err := schema.Parse(user)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Invalid input uses fallback
-		invalidUser := User{Name: "A", Age: -1}
-		result2, err := schema.Parse(invalidUser)
-		require.NoError(t, err)
-		assert.NotNil(t, result2)
-	})
-
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := Struct(core.StructSchema{
-			"name": String().Min(3), // Require name with at least 3 characters
-			"age":  Int().Min(0),
-		}).PrefaultFunc(func() map[string]any {
-			counter++
-			return map[string]any{
-				"name": fmt.Sprintf("Fallback-%d", counter),
-				"age":  20 + counter,
-			}
-		})
-
-		// Valid input should not call function
-		user := User{Name: "Alice", Age: 30}
-		result1, err1 := schema.Parse(user)
-		require.NoError(t, err1)
-		assert.NotNil(t, result1)
-		assert.Equal(t, 0, counter, "Function should not be called for valid input")
-
-		// Invalid input should call prefault function (name too short)
-		invalidUser := User{Name: "Al", Age: 25}
-		result2, err2 := schema.Parse(invalidUser)
-		require.NoError(t, err2)
-		assert.NotNil(t, result2)
-		assert.Equal(t, 1, counter, "Function should be called once for invalid input")
-
-		// Another invalid input should call function again
-		invalidUser2 := User{Name: "Bo", Age: 30}
-		result3, err3 := schema.Parse(invalidUser2)
-		require.NoError(t, err3)
-		assert.NotNil(t, result3)
-		assert.Equal(t, 2, counter, "Function should increment counter for each invalid input")
-
-		// Valid input still doesn't call function
-		validUser := User{Name: "Charlie", Age: 35}
-		result4, err4 := schema.Parse(validUser)
-		require.NoError(t, err4)
-		assert.NotNil(t, result4)
-		assert.Equal(t, 2, counter, "Counter should remain unchanged for valid input")
-	})
-
-	t.Run("default vs prefault distinction", func(t *testing.T) {
-		defaultValue := map[string]any{
-			"name": "DefaultUser",
-			"age":  18,
-		}
-		prefaultValue := map[string]any{
-			"name": "PrefaultUser",
-			"age":  21,
-		}
-
-		// Create schema with both default and prefault
-		baseSchema := Struct(core.StructSchema{
-			"name": String().Min(3),
-			"age":  Int().Min(18),
-		})
-
-		// First add prefault, then default (since Default returns core.ZodType[any, any])
-		schema := Default(baseSchema.Prefault(prefaultValue), defaultValue)
-
-		// nil input uses default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.NotNil(t, result1)
-		// Note: Due to struct parsing complexity, we verify parse succeeds
-
-		// Valid input succeeds
-		validUser := User{Name: "Alice", Age: 25}
-		result2, err2 := schema.Parse(validUser)
-		require.NoError(t, err2)
-		assert.NotNil(t, result2)
-
-		// Invalid input uses prefault (name too short)
-		invalidUser := User{Name: "Al", Age: 20}
-		result3, err3 := schema.Parse(invalidUser)
-		require.NoError(t, err3)
-		assert.NotNil(t, result3)
+		// Test with nil for the nested user struct (should fail as it is NonOptional)
+		// Note: This case is tricky because Go will initialize the nested struct,
+		// so we cannot pass a nil for it directly in the Profile literal.
+		// Instead we check if the parser would have caught a truly nil field,
+		// which our current implementation should.
+		// A struct with a nil field that is NonOptional should fail validation.
+		// The current struct validation logic might not check this deeply for nil fields.
+		// Let's create a test case that would expose this.
+		// A schema with a field that is `Struct[User]().Optional().NonOptional()` should not allow that field to be nil.
+		// But in Go, a field of type `User` can't be nil. A pointer `*User` can.
+		// The `Optional` call on the User struct returns a `ZodStruct[User, *User]`, so `NonOptional`
+		// takes it back to `ZodStruct[User, User]`. The validation for the field will be on `User`.
+		// Let's re-verify the logic.
+		// The `parseGoStruct` function handles `nil` at the beginning. If the input is not nil, it proceeds.
+		// The validation of fields happens in `validateStructFields`.
+		// It gets the field value. If the field is a struct, it's not a pointer and can't be nil.
+		// The logic seems correct. The test case is valid.
 	})
 }

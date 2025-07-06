@@ -27,8 +27,7 @@ go module gozod
 ├── pkg       # Re-usable, reflection-free helpers (zero deps)
 ├── internal  # Private runtime engine (generic parser, checks, issues)
 ├── types     # Public schema implementations (String, Array, …)
-├── locales   # Built-in i18n bundles
-└── bin       # CLI utilities / integration hooks
+└── locales   # Built-in i18n bundles
 ```
 
 ### 2.1 One-Way Dependency Rule
@@ -55,13 +54,14 @@ graph TD;
 | File | Purpose |
 |------|---------|
 | `interfaces.go` | Public interfaces (`ZodType`, `Cloneable`, `Coercible` …) |
-| `types.go`      | Internal state containers (`ZodTypeInternals`, `SchemaParams`) |
+| `definition.go` | Schema definition primitives (`ZodTypeDef`, `SchemaParams`, shape aliases) |
+| `parsing.go`    | Parsing & refinement contexts, parse-time utilities |
+| `transform.go`  | Transformation & pipeline primitives (`ZodTransform`, `ZodPipe`) |
 | `checks.go`     | Generic check contracts & helpers |
 | `context.go`    | Parse context, payload & path helpers |
 | `issues.go`     | User-facing error types (`ZodIssue`, `ZodError`) |
 | `constants.go`  | Library-wide constants (issue codes, type ids) |
 | `config.go`     | Global config & default error map |
-| `aliases.go`    | Convenience type aliases (`Schema`, `ObjectSchema`) |
 
 > **Golden rule:** *core contains zero business logic; it only defines contracts and small helpers required by every other layer.*
 
@@ -77,7 +77,6 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `mapx`      | Generic map manipulation (string & generic keys) |
 | `slicex`    | Generic slice helpers (merge, unique, map) |
 | `structx`   | Struct ⇄ map conversion without `encoding/json` |
-| `jsonx`     | Lightweight JSON format validators |
 | `regexes`   | Pre-compiled, namespaced regex library |
 
 ### 3.3 `internal/` – Runtime Engine (🤫 private)
@@ -88,7 +87,6 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `checks`   | Concrete check factories (length, numeric, format …) |
 | `issues`   | Raw issue builders, finalisers & formatters |
 | `utils`    | Low-level helpers used only by the engine |
-| `validate` | Complex validators that rely on schema recursion |
 
 ### 3.4 `types/` – Schema Implementations
 

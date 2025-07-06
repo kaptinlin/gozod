@@ -26,9 +26,9 @@ func CreateIssue(code core.IssueCode, message string, properties map[string]any,
 }
 
 // CreateInvalidTypeIssue creates an invalid type issue
-func CreateInvalidTypeIssue(expected string, input any) core.ZodRawIssue {
+func CreateInvalidTypeIssue(expected core.ZodTypeCode, input any) core.ZodRawIssue {
 	properties := map[string]any{
-		"expected": expected,
+		"expected": string(expected),
 		"received": string(reflectx.ParsedType(input)),
 	}
 
@@ -38,8 +38,8 @@ func CreateInvalidTypeIssue(expected string, input any) core.ZodRawIssue {
 // CreateInvalidTypeIssueFromCode creates an invalid type issue using ZodTypeCode
 func CreateInvalidTypeIssueFromCode(expected core.ZodTypeCode, input any) core.ZodRawIssue {
 	properties := map[string]any{
-		"expected": expected,
-		"received": reflectx.ParsedType(input),
+		"expected": string(expected),
+		"received": string(reflectx.ParsedType(input)),
 	}
 
 	return CreateIssue(core.InvalidType, "", properties, input)
@@ -266,4 +266,13 @@ func CreateInvalidUnionIssueWithResults(unionErrors []core.ZodRawIssue, input an
 	}
 
 	return CreateIssue(core.InvalidUnion, "", properties, input)
+}
+
+// CreateNonOptionalIssue returns invalid_type issue with expected "nonoptional" – used by .NonOptional()
+func CreateNonOptionalIssue(input any) core.ZodRawIssue {
+	props := map[string]any{
+		"expected": "nonoptional",
+		"received": string(reflectx.ParsedType(input)),
+	}
+	return CreateIssue(core.InvalidType, "", props, input)
 }

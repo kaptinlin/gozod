@@ -2,12 +2,14 @@ package validate
 
 import (
 	"math"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
+	json "github.com/go-json-experiment/json"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/kaptinlin/gozod/pkg/coerce"
-	"github.com/kaptinlin/gozod/pkg/jsonx"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/regexes"
@@ -93,17 +95,33 @@ func MultipleOf(value, divisor any) bool {
 
 // MaxLength validates if value's length is at most maximum
 func MaxLength(value any, maximum int) bool {
-	return reflectx.HasLength(value) && reflectx.Length(value) <= maximum
+	if !reflectx.HasLength(value) {
+		return false
+	}
+	l, _ := reflectx.GetLength(value)
+	return l <= maximum
 }
 
 // MinLength validates if value's length is at least minimum
 func MinLength(value any, minimum int) bool {
-	return reflectx.HasLength(value) && reflectx.Length(value) >= minimum
+	if !reflectx.HasLength(value) {
+		return false
+	}
+	if l, _ := reflectx.GetLength(value); l >= minimum {
+		return true
+	}
+	return false
 }
 
 // Length validates if value's length equals exactly the expected length
 func Length(value any, expected int) bool {
-	return reflectx.HasLength(value) && reflectx.Length(value) == expected
+	if !reflectx.HasLength(value) {
+		return false
+	}
+	if l, _ := reflectx.GetLength(value); l == expected {
+		return true
+	}
+	return false
 }
 
 // =============================================================================
@@ -113,12 +131,18 @@ func Length(value any, expected int) bool {
 // MaxSize validates if collection's size is at most maximum
 func MaxSize(value any, maximum int) bool {
 	if reflectx.IsMap(value) {
+		// Support both map[string]any and map[any]any
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) <= maximum
 		}
+		if m, ok := value.(map[any]any); ok {
+			return len(m) <= maximum
+		}
 	}
 	if reflectx.HasLength(value) {
-		return reflectx.Length(value) <= maximum
+		if l, ok := reflectx.GetLength(value); ok {
+			return l <= maximum
+		}
 	}
 	return false
 }
@@ -126,12 +150,18 @@ func MaxSize(value any, maximum int) bool {
 // MinSize validates if collection's size is at least minimum
 func MinSize(value any, minimum int) bool {
 	if reflectx.IsMap(value) {
+		// Support both map[string]any and map[any]any
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) >= minimum
 		}
+		if m, ok := value.(map[any]any); ok {
+			return len(m) >= minimum
+		}
 	}
 	if reflectx.HasLength(value) {
-		return reflectx.Length(value) >= minimum
+		if l, ok := reflectx.GetLength(value); ok {
+			return l >= minimum
+		}
 	}
 	return false
 }
@@ -139,12 +169,18 @@ func MinSize(value any, minimum int) bool {
 // Size validates if collection's size equals exactly the expected size
 func Size(value any, expected int) bool {
 	if reflectx.IsMap(value) {
+		// Support both map[string]any and map[any]any
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) == expected
 		}
+		if m, ok := value.(map[any]any); ok {
+			return len(m) == expected
+		}
 	}
 	if reflectx.HasLength(value) {
-		return reflectx.Length(value) == expected
+		if l, ok := reflectx.GetLength(value); ok {
+			return l == expected
+		}
 	}
 	return false
 }
@@ -341,10 +377,126 @@ func E164(value any) bool {
 	return false
 }
 
+// =============================================================================
+// JWT TOKEN VALIDATION FUNCTIONS
+// =============================================================================
+
+// JWTOptions defines options for JWT validation
+type JWTOptions struct {
+	// Algorithm specifies the expected signing algorithm
+	// If nil, any algorithm is accepted (not recommended for production)
+	Algorithm *string
+}
+
 // JWT validates if string is a valid JWT token format
+// This function only validates the JWT structure and basic claims
+// It does NOT verify the signature (use JWTWithSecret for signature verification)
 func JWT(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.JWT.MatchString(str)
+		return isValidJWTStructure(str, nil)
+	}
+	return false
+}
+
+// JWTWithOptions validates if string is a valid JWT token format with algorithm constraint
+// This function only validates the JWT structure and basic claims
+// It does NOT verify the signature (use JWTWithSecret for signature verification)
+func JWTWithOptions(value any, options JWTOptions) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return isValidJWTStructure(str, options.Algorithm)
+	}
+	return false
+}
+
+// isValidJWTStructure validates JWT structure without signature verification
+// This is based on the Zod TypeScript implementation but uses golang-jwt for parsing
+func isValidJWTStructure(token string, expectedAlgorithm *string) bool {
+	// Use golang-jwt to parse the token without verification
+	// This validates the structure and basic claims
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+
+	// Parse without verification to check structure
+	parsedToken, _, err := parser.ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		return false
+	}
+
+	// Validate header
+	if !validateJWTHeaderWithGolangJWT(parsedToken.Header, expectedAlgorithm) {
+		return false
+	}
+
+	return true
+}
+
+// validateJWTHeaderWithGolangJWT validates JWT header using golang-jwt parsed data
+func validateJWTHeaderWithGolangJWT(header map[string]interface{}, expectedAlgorithm *string) bool {
+	// Check if typ claim exists and is "JWT" (if present)
+	if typ, exists := header["typ"]; exists {
+		if typStr, ok := typ.(string); ok && typStr != "JWT" {
+			return false
+		}
+	}
+
+	// Check if alg claim exists
+	alg, exists := header["alg"]
+	if !exists {
+		return false
+	}
+
+	algStr, ok := alg.(string)
+	if !ok {
+		return false
+	}
+
+	// Reject "none" algorithm for security
+	if algStr == "none" {
+		return false
+	}
+
+	// Validate expected algorithm if specified
+	if expectedAlgorithm != nil && algStr != *expectedAlgorithm {
+		return false
+	}
+
+	return true
+}
+
+// =============================================================================
+// EMOJI VALIDATION FUNCTIONS
+// =============================================================================
+
+// Emoji validates if string is valid emoji
+func Emoji(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regexes.Emoji.MatchString(str)
+	}
+	return false
+}
+
+// ISODateTimeOptions defines parameters for ISO datetime validation
+type ISODateTimeOptions struct {
+	// Precision specifies number of decimal places for seconds
+	// If nil, matches any number of decimal places
+	// If 0 or negative, no decimal places allowed
+	Precision *int
+
+	// Offset if true, allows timezone offsets like +01:00
+	Offset bool
+
+	// Local if true, makes the 'Z' timezone marker optional
+	Local bool
+}
+
+// ISODateTimeWithOptions validates if string is a valid ISO datetime format with options
+func ISODateTimeWithOptions(value any, options ISODateTimeOptions) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		datetimeRegex := regexes.Datetime(regexes.DatetimeOptions{
+			Precision: options.Precision,
+			Offset:    options.Offset,
+			Local:     options.Local,
+		})
+		return datetimeRegex.MatchString(str)
 	}
 	return false
 }
@@ -363,6 +515,26 @@ func ISODate(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
 		_, err := time.Parse("2006-01-02", str)
 		return err == nil
+	}
+	return false
+}
+
+// ISOTimeOptions defines parameters for ISO time validation
+type ISOTimeOptions struct {
+	// Precision specifies number of decimal places for seconds
+	// If nil, matches any number of decimal places
+	// If 0 or negative, no decimal places allowed
+	// Special case: -1 means minute precision only (no seconds)
+	Precision *int
+}
+
+// ISOTimeWithOptions validates if string is a valid ISO time format with options
+func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		timeRegex := regexes.Time(regexes.TimeOptions{
+			Precision: options.Precision,
+		})
+		return timeRegex.MatchString(str)
 	}
 	return false
 }
@@ -448,7 +620,12 @@ func ISODuration(value any) bool {
 
 // JSON validates if string is valid JSON
 func JSON(value any) bool {
-	return jsonx.IsValid(value)
+	str, err := coerce.ToString(value)
+	if err != nil {
+		return false
+	}
+	var v any
+	return json.Unmarshal([]byte(str), &v) == nil
 }
 
 // =============================================================================
@@ -494,4 +671,52 @@ func toFloat64(value any) float64 {
 		return result
 	}
 	return 0
+}
+
+// =============================================================================
+// URL VALIDATION WITH OPTIONS
+// =============================================================================
+
+// URLOptions defines options for URL validation
+type URLOptions struct {
+	// Hostname validation pattern
+	Hostname *regexp.Regexp
+	// Protocol validation pattern
+	Protocol *regexp.Regexp
+}
+
+// URLWithOptions validates if string is a valid URL format with optional constraints
+func URLWithOptions(value any, options URLOptions) bool {
+	str, ok := reflectx.ExtractString(value)
+	if !ok {
+		return false
+	}
+
+	// First check basic URL format using regex
+	if !regexes.URL.MatchString(str) {
+		return false
+	}
+
+	// If no constraints, basic validation is sufficient
+	if options.Hostname == nil && options.Protocol == nil {
+		return true
+	}
+
+	// Parse URL for constraint validation
+	u, err := url.Parse(str)
+	if err != nil {
+		return false
+	}
+
+	// Validate hostname constraint if provided
+	if options.Hostname != nil && !options.Hostname.MatchString(u.Hostname()) {
+		return false
+	}
+
+	// Validate protocol constraint if provided
+	if options.Protocol != nil && !options.Protocol.MatchString(u.Scheme) {
+		return false
+	}
+
+	return true
 }

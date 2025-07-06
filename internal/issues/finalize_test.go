@@ -530,7 +530,7 @@ func TestFinalizationIntegration(t *testing.T) {
 
 	t.Run("finalization with creation helpers", func(t *testing.T) {
 		// Test that creation helpers work well with finalization
-		rawIssue := CreateInvalidTypeIssue("string", "123")
+		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "123")
 		rawIssue.Path = []any{"data", "field"}
 
 		ctx := &core.ParseContext{ReportInput: false}

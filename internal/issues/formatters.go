@@ -317,9 +317,7 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 		if slicex.IsEmpty(values) {
 			return "Invalid value"
 		}
-		if len(values) == 1 {
-			return fmt.Sprintf("Invalid input: expected %s", StringifyPrimitive(values[0]))
-		}
+		// TypeScript always uses "Invalid option: expected one of" format, even for single values
 		return fmt.Sprintf("Invalid option: expected one of %s", JoinValuesWithSeparator(values, "|"))
 
 	case core.TooBig:

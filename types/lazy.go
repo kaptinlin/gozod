@@ -5,140 +5,128 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-//////////////////////////
-// CORE TYPE DEFINITIONS
-//////////////////////////
+// =============================================================================
+// TYPE CONSTRAINTS
+// =============================================================================
 
-// ZodLazyDef defines a lazy schema that gets its inner type from a function
-type ZodLazyDef struct {
-	core.ZodTypeDef
-	Type   core.ZodTypeCode              // "lazy"
-	Getter func() core.ZodType[any, any] // Schema getter function
+// LazyConstraint restricts values to any or *any for lazy schema types
+type LazyConstraint interface {
+	any | *any
 }
 
-// ZodLazyInternals contains lazy validator internal state with cached schema resolution
+// ZodSchemaType represents any Zod schema type that implements the basic interface
+type ZodSchemaType interface {
+	GetInternals() *core.ZodTypeInternals
+}
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+// ZodLazyDef defines the configuration for lazy validation
+type ZodLazyDef struct {
+	core.ZodTypeDef
+	Getter func() any // Schema getter function that returns any schema type
+}
+
+// ZodLazyInternals contains lazy validator internal state
 type ZodLazyInternals struct {
 	core.ZodTypeInternals
-	Def       *ZodLazyDef            // Definition
-	InnerType core.ZodType[any, any] // Cached inner schema
-	Cached    bool                   // Whether inner schema is cached
-	Bag       map[string]any         // Additional metadata
+	Def       *ZodLazyDef       // Schema definition
+	Getter    func() any        // Schema getter function that returns any schema type
+	InnerType core.ZodType[any] // Cached inner schema (converted to interface)
+	Cached    bool              // Whether inner schema is cached
 }
 
 // ZodLazy represents a lazy validation schema for recursive type definitions
-type ZodLazy struct {
+type ZodLazy[T LazyConstraint] struct {
 	internals *ZodLazyInternals
 }
 
-//////////////////////////
-// CONSTRUCTOR FUNCTIONS
-//////////////////////////
-
-// Lazy creates a lazy schema that defers evaluation until needed, enabling recursive type definitions
-func Lazy(getter func() core.ZodType[any, any]) core.ZodType[any, any] {
-	def := &ZodLazyDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   "lazy",
-			Checks: make([]core.ZodCheck, 0),
-		},
-		Type:   "lazy",
-		Getter: getter,
-	}
-
-	return createZodLazyFromDef(def)
+// ZodLazyTyped is a type-safe wrapper that preserves the inner schema type
+type ZodLazyTyped[S ZodSchemaType] struct {
+	*ZodLazy[any]
+	getter func() S
 }
 
-// createZodLazyFromDef creates a ZodLazy schema from definition
-func createZodLazyFromDef(def *ZodLazyDef) core.ZodType[any, any] {
-	internals := &ZodLazyInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Cached:           false,
-		Bag:              make(map[string]any),
-	}
+// =============================================================================
+// CORE METHODS
+// =============================================================================
 
-	// Set up constructor for cloning support
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
-		lazyDef := &ZodLazyDef{
-			ZodTypeDef: *newDef,
-			Type:       "lazy",
-			Getter:     def.Getter, // Preserve the original getter function
-		}
-		return createZodLazyFromDef(lazyDef)
-	}
-
-	// Set up parse function
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		// Handle Nilable nil values
-		if payload.GetValue() == nil && internals.Nilable {
-			return payload
-		}
-
-		// Run lazy-level checks first
-		payload = engine.RunChecks(internals.Checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return payload
-		}
-
-		// Get inner type and delegate parsing
-		inner := internals.getInnerType()
-		if inner == nil {
-			issue := issues.CreateInvalidTypeIssue(
-				"lazy",
-				payload.GetValue(),
-			)
-			payload.AddIssue(issue)
-			return payload
-		}
-
-		// Delegate to inner schema for actual parsing
-		return inner.GetInternals().Parse(payload, ctx)
-	}
-
-	lazySchema := &ZodLazy{internals: internals}
-	engine.InitZodType(any(lazySchema).(core.ZodType[any, any]), &def.ZodTypeDef)
-	return any(lazySchema).(core.ZodType[any, any])
+// GetInternals returns the internal state of the schema
+func (z *ZodLazy[T]) GetInternals() *core.ZodTypeInternals {
+	return &z.internals.ZodTypeInternals
 }
 
-// getInnerType implements lazy evaluation with caching
-func (z *ZodLazyInternals) getInnerType() core.ZodType[any, any] {
-	if !z.Cached {
-		z.InnerType = z.Def.Getter()
-		z.Cached = true
-	}
-	return z.InnerType
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodLazy[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse validates and parses input with smart type inference
-// Delegates completely to inner schema while maintaining lazy evaluation
-func (z *ZodLazy) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodLazy[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Coerce implements Coercible interface - lazy schemas delegate to inner schema
+func (z *ZodLazy[T]) Coerce(input any) (any, bool) {
+	innerSchema := z.getInnerType()
+	if innerSchema == nil {
+		return input, false
 	}
 
-	// Use constructor instead of direct struct literal to respect private fields
-	payload := core.NewParsePayload(input)
+	// Check if inner schema supports coercion using type assertion
+	type Coercible interface {
+		Coerce(any) (any, bool)
+	}
 
-	result := z.internals.Parse(payload, parseCtx)
-	// Use getter method instead of direct field access
-	if len(result.GetIssues()) > 0 {
-		config := core.GetConfig()
-		finalizedIssues := make([]core.ZodIssue, len(result.GetIssues()))
-		for i, rawIssue := range result.GetIssues() {
-			finalizedIssues[i] = issues.FinalizeIssue(rawIssue, parseCtx, config)
+	if coercible, ok := innerSchema.(Coercible); ok {
+		result, success := coercible.Coerce(input)
+		if success {
+			return result, true
 		}
-		return nil, issues.NewZodError(finalizedIssues)
+		// If coercion failed, return original input
+		return input, false
 	}
 
-	// Use getter method instead of direct field access
-	return result.GetValue(), nil
+	return input, false
 }
 
-// MustParse validates a value and panics on failure
-func (z *ZodLazy) MustParse(input any, ctx ...*core.ParseContext) any {
+// Parse validates and returns the parsed value using lazy evaluation
+func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	result, err := engine.ParseComplex[any](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeLazy,
+		z.extractLazy,
+		z.extractLazyPtr,
+		z.validateLazy,
+		ctx...,
+	)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
+	// Type assert the result to T
+	if result == nil {
+		var zero T
+		return zero, nil
+	}
+
+	if typedResult, ok := result.(T); ok {
+		return typedResult, nil
+	}
+
+	// For any type, return result directly
+	return any(result).(T), nil //nolint:unconvert
+}
+
+// MustParse is the type-safe variant that panics on error
+func (z *ZodLazy[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -146,124 +134,528 @@ func (z *ZodLazy) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// TransformAny provides flexible transformation
-func (z *ZodLazy) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodLazy[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-// Pipe creates a validation pipeline
-func (z *ZodLazy) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-//////////////////////////
+// =============================================================================
 // MODIFIER METHODS
-//////////////////////////
+// =============================================================================
 
-// Optional makes the lazy schema optional
-func (z *ZodLazy) Optional() core.ZodType[any, any] {
-	return Optional(any(z).(core.ZodType[any, any]))
+// Optional allows the lazy schema to be nil, returns pointer type
+func (z *ZodLazy[T]) Optional() *ZodLazy[*any] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
-// Nilable makes the lazy schema nilable
-func (z *ZodLazy) Nilable() core.ZodType[any, any] {
-	cloned := engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
-		// Nilable only changes nil handling
-	})
-	cloned.(*ZodLazy).internals.Nilable = true
-	return cloned
+// Nilable allows the lazy schema to be nil, returns pointer type
+func (z *ZodLazy[T]) Nilable() *ZodLazy[*any] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
-// Nullish makes the lazy schema both optional and nilable
-func (z *ZodLazy) Nullish() core.ZodType[any, any] {
-	return Nullish(any(z).(core.ZodType[any, any]))
+// Nullish combines optional and nilable modifiers, returns pointer type
+func (z *ZodLazy[T]) Nullish() *ZodLazy[*any] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
-// Refine adds type-safe custom validation
-func (z *ZodLazy) Refine(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return z.RefineAny(fn, params...)
+// NonOptional removes Optional flag and enforces non-nil value (any).
+func (z *ZodLazy[T]) NonOptional() *ZodLazy[any] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+
+	return &ZodLazy[any]{
+		internals: &ZodLazyInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Getter:           z.internals.Getter,
+		},
+	}
 }
 
-// RefineAny adds flexible custom validation
-func (z *ZodLazy) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+// Default preserves the current generic type T
+func (z *ZodLazy[T]) Default(v any) *ZodLazy[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
 }
+
+// DefaultFunc preserves the current generic type T
+func (z *ZodLazy[T]) DefaultFunc(fn func() any) *ZodLazy[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(fn)
+	return z.withInternals(in)
+}
+
+// Prefault preserves the current generic type T
+func (z *ZodLazy[T]) Prefault(v any) *ZodLazy[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc preserves the current generic type T
+func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(fn)
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates a type-safe transformation using WrapFn pattern
+func (z *ZodLazy[T]) Transform(fn func(any, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		return fn(any(input), ctx)
+	}
+	return core.NewZodTransform[T, any](z, wrapperFn)
+}
+
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodLazy[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		return target.Parse(any(input), ctx)
+	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
+}
+
+// =============================================================================
+// TYPE CONVERSION - NO LONGER NEEDED (USING WRAPFN PATTERN)
+// =============================================================================
+
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
+
+// Refine applies custom validation function
+func (z *ZodLazy[T]) Refine(fn func(T) bool, params ...any) *ZodLazy[T] {
+	wrapper := func(v any) bool {
+		if typedVal, ok := v.(T); ok {
+			return fn(typedVal)
+		}
+		return false
+	}
+
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny adds flexible custom validation logic
+func (z *ZodLazy[T]) RefineAny(fn func(any) bool, params ...any) *ZodLazy[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TYPE-SPECIFIC METHODS
+// =============================================================================
 
 // Unwrap resolves and returns the inner schema
-func (z *ZodLazy) Unwrap() core.ZodType[any, any] {
-	return z.internals.getInnerType()
+func (z *ZodLazy[T]) Unwrap() core.ZodType[any] {
+	return z.getInnerType()
 }
 
-// GetInternals returns the internal structure
-func (z *ZodLazy) GetInternals() *core.ZodTypeInternals {
-	return &z.internals.ZodTypeInternals
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// getInnerType implements lazy evaluation with caching
+func (z *ZodLazy[T]) getInnerType() core.ZodType[any] {
+	if !z.internals.Cached {
+		rawSchema := z.internals.Getter()
+		z.internals.InnerType = convertToAnyInterface(rawSchema)
+		z.internals.Cached = true
+	}
+	return z.internals.InnerType
 }
 
-// GetZod returns the lazy-specific internals
-func (z *ZodLazy) GetZod() *ZodLazyInternals {
-	return z.internals
+// convertToAnyInterface converts any schema type to ZodType[any]
+func convertToAnyInterface(schema any) core.ZodType[any] {
+	if schema == nil {
+		return nil
+	}
+
+	// Check if it already implements ZodType[any]
+	if anySchema, ok := schema.(core.ZodType[any]); ok {
+		return anySchema
+	}
+
+	// Create wrapper for different schema types
+	return &schemaWrapper{inner: schema}
 }
 
-// CloneFrom implements the Cloneable interface
-func (z *ZodLazy) CloneFrom(source any) {
-	if src, ok := source.(*ZodLazy); ok {
-		if src.internals.Bag != nil {
-			z.internals.Bag = make(map[string]any)
-			for k, v := range src.internals.Bag {
-				z.internals.Bag[k] = v
-			}
-		}
+// schemaWrapper implements ZodType[any] by wrapping any schema type
+type schemaWrapper struct {
+	inner any
+}
+
+func (w *schemaWrapper) Parse(input any, ctx ...*core.ParseContext) (any, error) {
+	// Use type assertion to call the correct Parse method
+	switch s := w.inner.(type) {
+	case interface {
+		Parse(any, ...*core.ParseContext) (any, error)
+	}:
+		return s.Parse(input, ctx...)
+	case interface {
+		Parse(any, ...*core.ParseContext) (string, error)
+	}:
+		return s.Parse(input, ctx...)
+	case interface {
+		Parse(any, ...*core.ParseContext) (bool, error)
+	}:
+		return s.Parse(input, ctx...)
+	case interface {
+		Parse(any, ...*core.ParseContext) (int, error)
+	}:
+		return s.Parse(input, ctx...)
+	case interface {
+		Parse(any, ...*core.ParseContext) (*string, error)
+	}:
+		return s.Parse(input, ctx...)
+	case interface {
+		Parse(any, ...*core.ParseContext) (*bool, error)
+	}:
+		return s.Parse(input, ctx...)
+	default:
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, input)
+		return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(rawIssue, nil, nil)})
 	}
 }
 
-// Check adds a validation check to the lazy type
-func (z *ZodLazy) Check(fn core.CheckFn) core.ZodType[any, any] {
-	check := checks.NewCustom[any](func(v any) bool {
-		payload := core.NewParsePayload(v)
-		fn(payload)
-		return len(payload.GetIssues()) == 0
-	}, core.SchemaParams{})
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
+func (w *schemaWrapper) MustParse(input any, ctx ...*core.ParseContext) any {
+	result, err := w.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
-// Transform adds type-safe data transformation
-func (z *ZodLazy) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(fn)
+func (w *schemaWrapper) GetInternals() *core.ZodTypeInternals {
+	// Use type assertion to call the correct GetInternals method
+	if s, ok := w.inner.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+		return s.GetInternals()
+	}
+	return &core.ZodTypeInternals{}
 }
 
-//////////////////////////
-// WRAPPER TYPES
-//////////////////////////
-
-// Lazy type uses generic wrappers - no specific wrapper types needed
-// The lazy evaluation pattern delegates to inner types
-
-// Default adds default value support for lazy type
-func (z *ZodLazy) Default(value any) core.ZodType[any, any] {
-	return Default(any(z).(core.ZodType[any, any]), value)
+func (w *schemaWrapper) Coerce(input any) (any, bool) {
+	// Use type assertion to call the correct Coerce method
+	if s, ok := w.inner.(interface{ Coerce(any) (any, bool) }); ok {
+		return s.Coerce(input)
+	}
+	return input, false
 }
 
-// DefaultFunc adds function default value support
-func (z *ZodLazy) DefaultFunc(fn func() any) core.ZodType[any, any] {
-	return DefaultFunc(any(z).(core.ZodType[any, any]), fn)
+// IsOptional returns true if this schema accepts undefined/missing values
+func (w *schemaWrapper) IsOptional() bool {
+	if s, ok := w.inner.(interface{ IsOptional() bool }); ok {
+		return s.IsOptional()
+	}
+	return false
 }
 
-// Prefault adds fallback value support for lazy type
-func (z *ZodLazy) Prefault(value any) core.ZodType[any, any] {
-	return Prefault(any(z).(core.ZodType[any, any]), value)
+// IsNilable returns true if this schema accepts nil values
+func (w *schemaWrapper) IsNilable() bool {
+	if s, ok := w.inner.(interface{ IsNilable() bool }); ok {
+		return s.IsNilable()
+	}
+	return false
 }
 
-// PrefaultFunc adds function fallback value support
-func (z *ZodLazy) PrefaultFunc(fn func() any) core.ZodType[any, any] {
-	return PrefaultFunc(any(z).(core.ZodType[any, any]), fn)
+// extractLazy extracts a value from input by delegating to inner schema
+func (z *ZodLazy[T]) extractLazy(value any) (any, bool) {
+	innerSchema := z.getInnerType()
+	if innerSchema == nil {
+		return nil, false
+	}
+
+	// Delegate to inner schema for parsing
+	result, err := innerSchema.Parse(value)
+	if err != nil {
+		// Recursive reference case – treat current value as already validated
+		if isExpectedLazyError(err) {
+			return value, true
+		}
+		return nil, false
+	}
+	return result, true
+}
+
+// extractLazyPtr extracts a pointer value from input by delegating to inner schema
+func (z *ZodLazy[T]) extractLazyPtr(value any) (*any, bool) {
+	// Check if T is actually a pointer type first
+	var zero T
+	if _, isPtr := any(zero).(*any); !isPtr {
+		// T is not a pointer type, so this extractor should not handle it
+		return nil, false
+	}
+
+	if value == nil {
+		return nil, true
+	}
+
+	// If it's already a pointer
+	if ptr, ok := value.(*any); ok {
+		return ptr, true
+	}
+
+	// Otherwise, delegate to inner schema and create pointer
+	innerSchema := z.getInnerType()
+	if innerSchema == nil {
+		return nil, false
+	}
+
+	result, err := innerSchema.Parse(value)
+	if err != nil {
+		return nil, false
+	}
+
+	return &result, true
+}
+
+// validateLazy validates that the lazy schema can be resolved and the value is valid
+func (z *ZodLazy[T]) validateLazy(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
+	if value == nil {
+		internals := z.GetInternals()
+		if internals.Optional || internals.Nilable {
+			return value, nil
+		}
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, value)
+		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
+		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// Get inner schema
+	innerSchema := z.getInnerType()
+	if innerSchema == nil {
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, value)
+		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
+		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// Delegate validation to inner schema
+	result, err := innerSchema.Parse(value, ctx)
+	if err != nil {
+		// Recursive reference case – treat current value as already validated
+		if isExpectedLazyError(err) {
+			result = value
+		} else {
+			return nil, err
+		}
+	}
+
+	// Run standard checks validation on the result
+	return engine.ApplyChecks[any](result, checks, ctx)
+}
+
+// withPtrInternals creates a new ZodLazy instance with pointer type
+func (z *ZodLazy[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodLazy[*any] {
+	return &ZodLazy[*any]{internals: &ZodLazyInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Getter:           z.internals.Getter,
+		InnerType:        z.internals.InnerType,
+		Cached:           z.internals.Cached,
+	}}
+}
+
+// withInternals creates a new ZodLazy instance preserving generic type T
+func (z *ZodLazy[T]) withInternals(in *core.ZodTypeInternals) *ZodLazy[T] {
+	return &ZodLazy[T]{internals: &ZodLazyInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Getter:           z.internals.Getter,
+		InnerType:        z.internals.InnerType,
+		Cached:           z.internals.Cached,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodLazy[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodLazy[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// newZodLazyFromDef constructs a new ZodLazy from the given definition
+func newZodLazyFromDef[T LazyConstraint](def *ZodLazyDef) *ZodLazy[T] {
+	internals := &ZodLazyInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def:    def,
+		Getter: def.Getter,
+		Cached: false,
+	}
+
+	// Provide a constructor so that AddCheck can create new schema instances
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		lazyDef := &ZodLazyDef{
+			ZodTypeDef: *newDef,
+			Getter:     def.Getter,
+		}
+		return any(newZodLazyFromDef[T](lazyDef)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodLazy[T]{internals: internals}
+}
+
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// Lazy creates a type-safe lazy schema with compile-time type checking.
+// This allows for syntax like: Lazy[*ZodString[string]](func() *ZodString[string] { return String().Min(3) })
+func Lazy[S ZodSchemaType](getter func() S, params ...any) *ZodLazyTyped[S] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodLazyDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeLazy,
+			Checks: []core.ZodCheck{},
+		},
+		Getter: func() any { return getter() },
+	}
+
+	// Apply the normalized parameters to the schema definition
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	return newZodLazyTypedFromDef[S](def, getter)
+}
+
+// LazyAny creates a lazy schema that defers evaluation until needed, enabling recursive type definitions
+func LazyAny(getter func() any, params ...any) *ZodLazy[any] {
+	return LazyTyped[any](getter, params...)
+}
+
+// LazyPtr creates a schema for *any lazy type
+func LazyPtr(getter func() any, params ...any) *ZodLazy[*any] {
+	return LazyTyped[*any](getter, params...)
+}
+
+// LazyTyped is the underlying generic function for creating lazy schemas
+func LazyTyped[T LazyConstraint](getter func() any, params ...any) *ZodLazy[T] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodLazyDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeLazy,
+			Checks: []core.ZodCheck{},
+		},
+		Getter: getter,
+	}
+
+	// Apply the normalized parameters to the schema definition
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	return newZodLazyFromDef[T](def)
+}
+
+// =============================================================================
+// TYPE-SAFE LAZY SCHEMA IMPLEMENTATION
+// =============================================================================
+
+// Parse validates and returns the parsed value with type safety
+func (z *ZodLazyTyped[S]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.ZodLazy.Parse(input, ctx...)
+}
+
+// MustParse is the type-safe variant that panics on error
+func (z *ZodLazyTyped[S]) MustParse(input any, ctx ...*core.ParseContext) any {
+	return z.ZodLazy.MustParse(input, ctx...)
+}
+
+// GetInnerSchema returns the inner schema with its original type
+func (z *ZodLazyTyped[S]) GetInnerSchema() S {
+	return z.getter()
+}
+
+// Optional creates an optional version
+func (z *ZodLazyTyped[S]) Optional() *ZodLazy[*any] {
+	return z.ZodLazy.Optional()
+}
+
+// Nilable creates a nilable version
+func (z *ZodLazyTyped[S]) Nilable() *ZodLazy[*any] {
+	return z.ZodLazy.Nilable()
+}
+
+// NonOptional removes Optional flag and enforces non-nil value.
+func (z *ZodLazyTyped[S]) NonOptional() *ZodLazy[any] {
+	return z.ZodLazy.NonOptional()
+}
+
+// Default provides a default value for the lazy schema
+func (z *ZodLazyTyped[S]) Default(v any) *ZodLazyTyped[S] {
+	newLazy := z.ZodLazy.Default(v)
+	return &ZodLazyTyped[S]{ZodLazy: newLazy, getter: z.getter}
+}
+
+// Refine applies custom validation with type safety
+func (z *ZodLazyTyped[S]) Refine(fn func(any) bool, params ...any) *ZodLazyTyped[S] {
+	newLazy := z.ZodLazy.RefineAny(fn, params...)
+	return &ZodLazyTyped[S]{ZodLazy: newLazy, getter: z.getter}
+}
+
+// newZodLazyTypedFromDef creates a new type-safe lazy schema
+func newZodLazyTypedFromDef[S ZodSchemaType](def *ZodLazyDef, getter func() S) *ZodLazyTyped[S] {
+	lazySchema := newZodLazyFromDef[any](def)
+	return &ZodLazyTyped[S]{
+		ZodLazy: lazySchema,
+		getter:  getter,
+	}
+}
+
+// isExpectedLazyError returns true if the provided error represents an
+// `invalid_type` issue whose expected type is `lazy`. This is used to detect
+// recursive lazy-schema validation without relying on fragile string matching.
+func isExpectedLazyError(err error) bool {
+	var zErr *issues.ZodError
+	if !issues.IsZodError(err, &zErr) {
+		return false
+	}
+	for _, iss := range zErr.Issues {
+		if iss.Code == core.InvalidType && iss.Expected == core.ZodTypeLazy {
+			return true
+		}
+	}
+	return false
 }

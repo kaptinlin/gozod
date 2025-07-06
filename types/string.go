@@ -1,81 +1,90 @@
 package types
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
-	"github.com/kaptinlin/gozod/pkg/jsonx"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// Error definitions for string transformations
-var (
-	ErrExpectedString     = errors.New("expected string type")
-	ErrTransformNilString = errors.New("cannot transform nil string")
-)
+// =============================================================================
+// TYPE CONSTRAINTS
+// =============================================================================
 
-//////////////////////////
-// CORE TYPE DEFINITIONS
-//////////////////////////
+// StringConstraint restricts values to string or *string.
+type StringConstraint interface {
+	string | *string
+}
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
 // ZodStringDef defines the configuration for string validation
 type ZodStringDef struct {
 	core.ZodTypeDef
-	Type   core.ZodTypeCode // Type identifier using type-safe constants
-	Checks []core.ZodCheck  // String-specific validation checks
 }
 
 // ZodStringInternals contains string validator internal state
 type ZodStringInternals struct {
 	core.ZodTypeInternals
-	Def     *ZodStringDef              // Schema definition
-	Checks  []core.ZodCheck            // Validation checks
-	Isst    issues.ZodIssueInvalidType // Invalid type issue template
-	Pattern *regexp.Regexp             // Regex pattern (if any)
-	Values  map[string]struct{}        // Allowed string values set
-	Bag     map[string]any             // Additional metadata (formats, etc.)
+	Def *ZodStringDef // Schema definition
 }
 
 // ZodString represents a string validation schema with type safety
-type ZodString struct {
+type ZodString[T StringConstraint] struct {
 	internals *ZodStringInternals
 }
 
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodString) GetInternals() *core.ZodTypeInternals {
+func (z *ZodString[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodString[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
+}
+
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodString[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
 // Coerce implements Coercible interface for string type conversion
-func (z *ZodString) Coerce(input any) (any, bool) {
+func (z *ZodString[T]) Coerce(input any) (any, bool) {
 	result, err := coerce.ToString(input)
 	return result, err == nil
 }
 
-// Parse implements intelligent type inference and validation
-func (z *ZodString) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
+// Parse returns a value that matches the generic type T with full type safety.
+func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	// Use the internally recorded type code by default, fall back to string if not set
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeString
 	}
 
-	return engine.ParsePrimitive[string](
+	return engine.ParsePrimitive[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
-		core.ZodTypeString,
-		validateString,
-		parseCtx,
+		expectedType,
+		engine.ApplyChecks[string],
+		engine.ConvertToConstraintType[string, T],
+		ctx...,
 	)
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodString) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the type-safe variant that panics on error.
+func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -83,1188 +92,499 @@ func (z *ZodString) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////
-// VALIDATION METHODS
-//////////////////////////
+// ParseAny validates input and returns untyped result for runtime scenarios.
+// Zero-overhead wrapper around Parse to eliminate reflection calls.
+func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
 
-// Basic Length Validation
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+// Optional always returns *string because the optional value may be nil.
+func (z *ZodString[T]) Optional() *ZodString[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable always returns *string because the value may be nil.
+func (z *ZodString[T]) Nilable() *ZodString[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers for maximum flexibility
+func (z *ZodString[T]) Nullish() *ZodString[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default keeps the current generic type T.
+func (z *ZodString[T]) Default(v string) *ZodString[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc keeps the current generic type T.
+func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault keeps the current generic type T.
+func (z *ZodString[T]) Prefault(v string) *ZodString[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc keeps the current generic type T.
+func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
 
 // Min adds minimum length validation
-func (z *ZodString) Min(minLen int, params ...any) *ZodString {
+func (z *ZodString[T]) Min(minLen int, params ...any) *ZodString[T] {
 	check := checks.MinLength(minLen, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Max adds maximum length validation
-func (z *ZodString) Max(maxLen int, params ...any) *ZodString {
+func (z *ZodString[T]) Max(maxLen int, params ...any) *ZodString[T] {
 	check := checks.MaxLength(maxLen, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Length adds exact length validation
-func (z *ZodString) Length(length int, params ...any) *ZodString {
+func (z *ZodString[T]) Length(length int, params ...any) *ZodString[T] {
 	check := checks.Length(length, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
-
-// Format Validation
-
-// Email adds email format validation
-func (z *ZodString) Email(params ...any) *ZodString {
-	check := checks.Email(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// URL adds URL format validation
-func (z *ZodString) URL(params ...any) *ZodString {
-	check := checks.URL(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// UUID adds UUID format validation
-func (z *ZodString) UUID(params ...any) *ZodString {
-	check := checks.UUID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Base64 adds base64 format validation
-func (z *ZodString) Base64(params ...any) *ZodString {
-	check := checks.Base64(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// GUID adds GUID format validation
-func (z *ZodString) GUID(params ...any) *ZodString {
-	check := checks.GUID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// CUID adds CUID format validation
-func (z *ZodString) CUID(params ...any) *ZodString {
-	check := checks.CUID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// CUID2 adds CUID2 format validation
-func (z *ZodString) CUID2(params ...any) *ZodString {
-	check := checks.CUID2(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// ULID adds ULID format validation
-func (z *ZodString) ULID(params ...any) *ZodString {
-	check := checks.ULID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// NanoID adds NanoID format validation
-func (z *ZodString) NanoID(params ...any) *ZodString {
-	check := checks.NanoID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// XID adds XID format validation
-func (z *ZodString) XID(params ...any) *ZodString {
-	check := checks.XID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// KSUID adds KSUID format validation
-func (z *ZodString) KSUID(params ...any) *ZodString {
-	check := checks.KSUID(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Base64URL adds base64url format validation
-func (z *ZodString) Base64URL(params ...any) *ZodString {
-	check := checks.Base64URL(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// E164 adds E164 phone number format validation
-func (z *ZodString) E164(params ...any) *ZodString {
-	check := checks.E164(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// JWT adds JWT format validation
-func (z *ZodString) JWT(params ...any) *ZodString {
-	check := checks.JWT(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Pattern Validation
 
 // Regex adds custom regex validation
-func (z *ZodString) Regex(pattern *regexp.Regexp, params ...any) *ZodString {
+func (z *ZodString[T]) Regex(pattern *regexp.Regexp, params ...any) *ZodString[T] {
 	check := checks.Regex(pattern, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RegexString adds custom regex validation using string pattern (convenience method)
+func (z *ZodString[T]) RegexString(pattern string, params ...any) *ZodString[T] {
+	compiled := regexp.MustCompile(pattern)
+	return z.Regex(compiled, params...)
 }
 
 // StartsWith adds prefix validation
-func (z *ZodString) StartsWith(prefix string, params ...any) *ZodString {
+func (z *ZodString[T]) StartsWith(prefix string, params ...any) *ZodString[T] {
 	check := checks.StartsWith(prefix, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // EndsWith adds suffix validation
-func (z *ZodString) EndsWith(suffix string, params ...any) *ZodString {
+func (z *ZodString[T]) EndsWith(suffix string, params ...any) *ZodString[T] {
 	check := checks.EndsWith(suffix, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // Includes adds substring validation
-func (z *ZodString) Includes(substring string, params ...any) *ZodString {
+func (z *ZodString[T]) Includes(substring string, params ...any) *ZodString[T] {
 	check := checks.Includes(substring, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// LowerCase adds lowercase validation
-func (z *ZodString) LowerCase(params ...any) *ZodString {
-	check := checks.Lowercase(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// UpperCase adds uppercase validation
-func (z *ZodString) UpperCase(params ...any) *ZodString {
-	check := checks.Uppercase(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Date/Time Validation
-
-// DateTime adds ISO 8601 datetime validation
-func (z *ZodString) DateTime(params ...any) *ZodString {
-	check := checks.ISODateTime(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Date adds ISO 8601 date validation (YYYY-MM-DD)
-func (z *ZodString) Date(params ...any) *ZodString {
-	check := checks.ISODate(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Time adds ISO 8601 time validation (HH:MM:SS with optional milliseconds)
-func (z *ZodString) Time(params ...any) *ZodString {
-	check := checks.ISOTime(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Duration adds ISO 8601 duration validation (P1Y2M3DT4H5M6S format)
-func (z *ZodString) Duration(params ...any) *ZodString {
-	check := checks.ISODuration(params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
-}
-
-// Content Validation
-
-// JSON adds JSON string validation
-func (z *ZodString) JSON(params ...any) *ZodString {
-	// Create custom error message from params if provided
-	var errorMap *core.ZodErrorMap
-	if len(params) > 0 {
-		if errStr, ok := params[0].(string); ok {
-			em := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return errStr
-			})
-			errorMap = &em
-		} else if schemaParams, ok := params[0].(core.SchemaParams); ok && schemaParams.Error != nil {
-			if errStr, ok := schemaParams.Error.(string); ok {
-				em := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-					return errStr
-				})
-				errorMap = &em
+// Trim adds string trimming transformation
+func (z *ZodString[T]) Trim(params ...any) *ZodString[T] {
+	// Use Overwrite to transform the value by trimming surrounding whitespace.
+	transform := func(val T) T {
+		switch v := any(val).(type) {
+		case string:
+			return any(strings.TrimSpace(v)).(T)
+		case *string:
+			if v == nil {
+				return val // keep nil pointer untouched
 			}
+			trimmed := strings.TrimSpace(*v)
+			ptr := &trimmed
+			return any(ptr).(T)
+		default:
+			return val
 		}
 	}
-
-	def := &core.ZodCheckDef{Check: "json"}
-	if errorMap != nil {
-		def.Error = errorMap
-	}
-
-	check := &core.ZodCheckInternals{
-		Def: def,
-		Check: func(payload *core.ParsePayload) {
-			// Use pkg/jsonx JSON validation directly
-			if !jsonx.IsValid(payload.GetValue()) {
-				rawIssue := issues.CreateInvalidFormatIssue("json", payload.GetValue(), nil)
-				payload.AddIssue(rawIssue)
-			}
-		},
-		OnAttach: []func(any){
-			func(schema any) {
-				// Set JSON format for JSON Schema
-				if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-					internals := s.GetInternals()
-					if internals.Bag == nil {
-						internals.Bag = make(map[string]any)
-					}
-					internals.Bag["format"] = "json"
-					internals.Bag["type"] = "string"
-				}
-			},
-		},
-	}
-	result := engine.AddCheck(z, check)
-	return result.(*ZodString)
+	return z.Overwrite(transform, params...)
 }
 
-//////////////////////////
-// TRANSFORM METHODS
-//////////////////////////
+// JSON adds JSON format validation
+func (z *ZodString[T]) JSON(params ...any) *ZodString[T] {
+	check := checks.JSON(params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
 
-// Transform provides type-safe string transformation with smart dereferencing
-func (z *ZodString) Transform(fn func(string, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		str, ok := reflectx.ExtractString(input)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(input); ptrOk {
-				if str, ok = reflectx.ExtractString(ptr); !ok {
-					return nil, ErrExpectedString
-				}
-			} else {
-				return nil, ErrExpectedString
-			}
-		}
+// Email adds email format validation
+func (z *ZodString[T]) Email(params ...any) *ZodString[T] {
+	check := checks.Email(params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
 
+// =============================================================================
+// TRANSFORMATION METHODS
+// =============================================================================
+
+// Transform applies a transformation function to the validated string
+func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	return core.NewZodTransform(z, func(input T, ctx *core.RefinementContext) (any, error) {
+		str := extractString(input)
 		return fn(str, ctx)
 	})
 }
 
-// TransformAny flexible version of transformation
-func (z *ZodString) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-// String Transformations
-
-// Trim creates a transform that trims whitespace
-func (z *ZodString) Trim() core.ZodType[any, any] {
-	return z.createStringTransform(strings.TrimSpace)
-}
-
-// ToLowerCase creates a transform to lowercase
-func (z *ZodString) ToLowerCase() core.ZodType[any, any] {
-	return z.createStringTransform(strings.ToLower)
-}
-
-// ToUpperCase creates a transform to uppercase
-func (z *ZodString) ToUpperCase() core.ZodType[any, any] {
-	return z.createStringTransform(strings.ToUpper)
-}
-
-// Pipe operation for pipeline chaining
-func (z *ZodString) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  z,
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-//////////////////////////
-// MODIFIER METHODS
-//////////////////////////
-
-// Optional makes the string optional
-func (z *ZodString) Optional() core.ZodType[any, any] {
-	return any(Optional(any(z).(core.ZodType[any, any]))).(core.ZodType[any, any])
-}
-
-// Nilable makes the string nilable while preserving type inference
-func (z *ZodString) Nilable() core.ZodType[any, any] {
-	return Nilable(any(z).(core.ZodType[any, any]))
-}
-
-// Nullish makes the string both optional and nilable
-func (z *ZodString) Nullish() core.ZodType[any, any] {
-	return any(Nullish(any(z).(core.ZodType[any, any]))).(core.ZodType[any, any])
-}
-
-// Refine adds type-safe custom validation logic
-func (z *ZodString) Refine(fn func(string) bool, params ...any) *ZodString {
-	result := z.RefineAny(func(v any) bool {
-		str, ok := reflectx.ExtractString(v)
+// Overwrite applies a transformation function that must return the same type T
+func (z *ZodString[T]) Overwrite(transform func(T) T, params ...any) *ZodString[T] {
+	// Create a transformation function that works with the exact type T
+	transformAny := func(input any) any {
+		// Try to convert input to type T
+		converted, ok := convertToStringType[T](input)
 		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(v); ptrOk {
-				str, ok = reflectx.ExtractString(ptr)
+			// If conversion fails, return original value unchanged
+			return input
+		}
+		// Apply transformation directly on type T
+		return transform(converted)
+	}
+
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Pipe creates a pipeline with another schema
+func (z *ZodString[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	return core.NewZodPipe(z, func(input T, ctx *core.ParseContext) (any, error) {
+		str := extractString(input)
+		return target.Parse(str, ctx)
+	})
+}
+
+// Check adds a custom validation function that can push multiple issues via ParsePayload.
+func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
+	// Wrap the user callback to support both value and pointer generic forms transparently.
+	wrapped := func(payload *core.ParsePayload) {
+		// First attempt: direct type assertion to the generic type T.
+		if val, ok := payload.GetValue().(T); ok {
+			fn(val, payload)
+			return
+		}
+
+		// Special handling when T is a pointer type (*string) but the underlying value is its base type (string).
+		var zero T
+		// Use type switch on the zero value's dynamic type to detect pointer scenarios without reflection overhead.
+		switch any(zero).(type) {
+		case *string:
+			if strVal, ok := payload.GetValue().(string); ok {
+				strCopy := strVal // Create a new copy to take address safely
+				ptr := &strCopy
+				fn(any(ptr).(T), payload)
 			}
+		// Additional pointer specialisations can be added here if required in the future.
+		default:
+			// No convertible path found – do nothing.
 		}
-		if !ok {
-			return false // Let type validation handle wrong types
+	}
+
+	check := checks.NewCustom[T](wrapped, utils.GetFirstParam(params...))
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
+
+// Refine applies a custom validation function that matches the schema's output type T.
+func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
+	// Wrapper converts the raw value (always string or nil) into T before calling fn.
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			// Schema output is string
+			if v == nil {
+				return false
+			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			// Schema output is *string – convert incoming value (string or nil) to *string
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
 		}
-		return fn(str)
-	}, params...)
-	return result.(*ZodString)
+	}
+
+	check := checks.NewCustom[any](wrapper, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // RefineAny adds flexible custom validation logic
-func (z *ZodString) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
+func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T] {
 	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(z, check)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodString) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
+// =============================================================================
+// INTERNAL HELPER METHODS
+// =============================================================================
 
-//////////////////////////
-// WRAPPER TYPES
-//////////////////////////
-
-// ZodStringDefault is a default value wrapper for string type
-type ZodStringDefault struct {
-	*ZodDefault[*ZodString]
-}
-
-// DEFAULT METHODS
-
-// Default creates a default wrapper with type safety
-func (z *ZodString) Default(value string) ZodStringDefault {
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
+// withPtrInternals creates a new ZodString instance of type *string.
+func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*string] {
+	return &ZodString[*string]{
+		internals: &ZodStringInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
 		},
 	}
 }
 
-// DefaultFunc creates a default wrapper with function
-func (z *ZodString) DefaultFunc(fn func() string) ZodStringDefault {
-	genericFn := func() any { return fn() }
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
+// withInternals creates a new ZodString instance that keeps the original generic type T.
+func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
+	return &ZodString[T]{
+		internals: &ZodStringInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
 		},
 	}
 }
 
-// ZodStringDefault chainable validation methods
-
-func (s ZodStringDefault) Min(minLen int, params ...any) ZodStringDefault {
-	newInner := s.innerType.Min(minLen, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Max(maxLen int, params ...any) ZodStringDefault {
-	newInner := s.innerType.Max(maxLen, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Length(length int, params ...any) ZodStringDefault {
-	newInner := s.innerType.Length(length, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Email(params ...any) ZodStringDefault {
-	newInner := s.innerType.Email(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) URL(params ...any) ZodStringDefault {
-	newInner := s.innerType.URL(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) UUID(params ...any) ZodStringDefault {
-	newInner := s.innerType.UUID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Regex(pattern *regexp.Regexp, params ...any) ZodStringDefault {
-	newInner := s.innerType.Regex(pattern, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) StartsWith(prefix string, params ...any) ZodStringDefault {
-	newInner := s.innerType.StartsWith(prefix, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) EndsWith(suffix string, params ...any) ZodStringDefault {
-	newInner := s.innerType.EndsWith(suffix, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Includes(substring string, params ...any) ZodStringDefault {
-	newInner := s.innerType.Includes(substring, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) LowerCase(params ...any) ZodStringDefault {
-	newInner := s.innerType.LowerCase(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) UpperCase(params ...any) ZodStringDefault {
-	newInner := s.innerType.UpperCase(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) DateTime(params ...any) ZodStringDefault {
-	newInner := s.innerType.DateTime(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Date(params ...any) ZodStringDefault {
-	newInner := s.innerType.Date(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Time(params ...any) ZodStringDefault {
-	newInner := s.innerType.Time(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Duration(params ...any) ZodStringDefault {
-	newInner := s.innerType.Duration(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) JSON(params ...any) ZodStringDefault {
-	newInner := s.innerType.JSON(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Base64(params ...any) ZodStringDefault {
-	newInner := s.innerType.Base64(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) CUID(params ...any) ZodStringDefault {
-	newInner := s.innerType.CUID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) CUID2(params ...any) ZodStringDefault {
-	newInner := s.innerType.CUID2(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) ULID(params ...any) ZodStringDefault {
-	newInner := s.innerType.ULID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) NanoID(params ...any) ZodStringDefault {
-	newInner := s.innerType.NanoID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) XID(params ...any) ZodStringDefault {
-	newInner := s.innerType.XID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) KSUID(params ...any) ZodStringDefault {
-	newInner := s.innerType.KSUID(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Base64URL(params ...any) ZodStringDefault {
-	newInner := s.innerType.Base64URL(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) E164(params ...any) ZodStringDefault {
-	newInner := s.innerType.E164(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) JWT(params ...any) ZodStringDefault {
-	newInner := s.innerType.JWT(params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Refine(fn func(string) bool, params ...any) ZodStringDefault {
-	newInner := s.innerType.Refine(fn, params...)
-	return ZodStringDefault{
-		&ZodDefault[*ZodString]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringDefault) Transform(fn func(string, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return s.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		str, ok := reflectx.ExtractString(input)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(input); ptrOk {
-				if str, ok = reflectx.ExtractString(ptr); !ok {
-					return nil, ErrExpectedString
-				}
-			} else {
-				return nil, ErrExpectedString
-			}
+// CloneFrom copies the internal state from another schema
+func (z *ZodString[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodString[T]); ok && src != nil {
+		z.internals = &ZodStringInternals{
+			ZodTypeInternals: *src.internals.ZodTypeInternals.Clone(),
+			Def:              src.internals.Def,
 		}
-		return fn(str, ctx)
-	})
-}
-
-func (s ZodStringDefault) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-func (s ZodStringDefault) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-// ZodStringPrefault is a prefault value wrapper for string type
-type ZodStringPrefault struct {
-	*ZodPrefault[*ZodString]
-}
-
-// PREFAULT METHODS
-
-// Prefault creates a prefault wrapper with type safety
-func (z *ZodString) Prefault(value string) ZodStringPrefault {
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: value,
-			prefaultFunc:  nil,
-			isFunction:    false,
-		},
 	}
 }
 
-// PrefaultFunc creates a prefault wrapper with function
-func (z *ZodString) PrefaultFunc(fn func() string) ZodStringPrefault {
-	genericFn := func() any { return fn() }
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
 
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
+// convertToStringType converts any value to the constrained string type T
+func convertToStringType[T StringConstraint](v any) (T, bool) {
+	var zero T
 
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: nil,
-			prefaultFunc:  genericFn,
-			isFunction:    true,
-		},
-	}
-}
-
-// ZodStringPrefault chainable validation methods
-
-func (s ZodStringPrefault) Min(minLen int, params ...any) ZodStringPrefault {
-	newInner := s.innerType.Min(minLen, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: s.prefaultValue,
-			prefaultFunc:  s.prefaultFunc,
-			isFunction:    s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringPrefault) Max(maxLen int, params ...any) ZodStringPrefault {
-	newInner := s.innerType.Max(maxLen, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: s.prefaultValue,
-			prefaultFunc:  s.prefaultFunc,
-			isFunction:    s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringPrefault) Email(params ...any) ZodStringPrefault {
-	newInner := s.innerType.Email(params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: s.prefaultValue,
-			prefaultFunc:  s.prefaultFunc,
-			isFunction:    s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringPrefault) Refine(fn func(string) bool, params ...any) ZodStringPrefault {
-	newInner := s.innerType.Refine(fn, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodStringPrefault{
-		&ZodPrefault[*ZodString]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: s.prefaultValue,
-			prefaultFunc:  s.prefaultFunc,
-			isFunction:    s.isFunction,
-		},
-	}
-}
-
-func (s ZodStringPrefault) Transform(fn func(string, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return s.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		str, ok := reflectx.ExtractString(input)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(input); ptrOk {
-				if str, ok = reflectx.ExtractString(ptr); !ok {
-					return nil, ErrExpectedString
-				}
-			} else {
-				return nil, ErrExpectedString
-			}
+	switch any(zero).(type) {
+	case string:
+		if str, ok := v.(string); ok {
+			return any(str).(T), true
 		}
-		return fn(str, ctx)
-	})
+	case *string:
+		if v == nil {
+			return any((*string)(nil)).(T), true
+		}
+		if str, ok := v.(string); ok {
+			sCopy := str
+			return any(&sCopy).(T), true
+		}
+		if strPtr, ok := v.(*string); ok {
+			return any(strPtr).(T), true
+		}
+	}
+
+	return zero, false
 }
 
-func (s ZodStringPrefault) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
+// extractString extracts the string value from a StringConstraint type
+func extractString[T StringConstraint](value T) string {
+	switch v := any(value).(type) {
+	case string:
+		return v
+	case *string:
+		if v == nil {
+			return ""
+		}
+		return *v
+	default:
+		return ""
+	}
 }
 
-func (s ZodStringPrefault) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-//////////////////////////
-// CONSTRUCTOR FUNCTIONS
-//////////////////////////
-
-// createZodStringFromDef creates a ZodString from definition using unified patterns
-func createZodStringFromDef(def *ZodStringDef) *ZodString {
+// newZodStringFromDef constructs a new ZodString from the given definition.
+func newZodStringFromDef[T StringConstraint](def *ZodStringDef) *ZodString[T] {
 	internals := &ZodStringInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Checks:           def.Checks,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeString},
-		Pattern:          nil,
-		Values:           make(map[string]struct{}),
-		Bag:              make(map[string]any),
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   core.ZodTypeString,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
 	}
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
+	// Provide a constructor so that AddCheck can create new schema instances.
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		stringDef := &ZodStringDef{
 			ZodTypeDef: *newDef,
-			Type:       core.ZodTypeString,
-			Checks:     newDef.Checks,
 		}
-		return any(createZodStringFromDef(stringDef)).(core.ZodType[any, any])
+		return any(newZodStringFromDef[T](stringDef)).(core.ZodType[any])
 	}
 
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := engine.ParsePrimitive[string](
-			payload.GetValue(),
-			&internals.ZodTypeInternals,
-			core.ZodTypeString,
-			validateString,
-			ctx,
-		)
-
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
-
-		payload.SetValue(result)
-		return payload
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
-	zodSchema := &ZodString{internals: internals}
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-	return zodSchema
+	return &ZodString[T]{
+		internals: internals,
+	}
 }
 
-// String creates a new string schema with unified parameter handling
-func String(params ...any) *ZodString {
+// =============================================================================
+// CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// String creates a new string schema
+func String(params ...any) *ZodString[string] {
+	return StringTyped[string](params...)
+}
+
+// StringPtr creates a new string schema with pointer type
+func StringPtr(params ...any) *ZodString[*string] {
+	return StringTyped[*string](params...)
+}
+
+// StringTyped creates a new string schema with specific type
+func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
+	schemaParams := utils.NormalizeParams(params...)
 	def := &ZodStringDef{
 		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeString,
-			Checks: make([]core.ZodCheck, 0),
+			Type:     core.ZodTypeString,
+			Required: true,
+			Checks:   []core.ZodCheck{},
 		},
-		Type:   core.ZodTypeString,
-		Checks: make([]core.ZodCheck, 0),
 	}
 
-	schema := createZodStringFromDef(def)
-
-	if len(params) > 0 {
-		param := params[0]
-
-		// Handle different parameter types
-		switch p := param.(type) {
-		case string:
-			// String parameter becomes Error field
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return p
-			})
-			def.Error = &errorMap
-			schema.internals.Error = &errorMap
-		case core.SchemaParams:
-			// Handle core.SchemaParams
-			if p.Error != nil {
-				// Handle string error messages by converting to ZodErrorMap
-				if errStr, ok := p.Error.(string); ok {
-					errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-						return errStr
-					})
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				} else if errorMap, ok := p.Error.(core.ZodErrorMap); ok {
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				}
-			}
-
-			if p.Description != "" {
-				schema.internals.Bag["description"] = p.Description
-			}
-			if p.Abort {
-				schema.internals.Bag["abort"] = true
-			}
-			if len(p.Path) > 0 {
-				schema.internals.Bag["path"] = p.Path
-			}
-		}
+	// Parse parameters for custom configuration
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
 
+	return newZodStringFromDef[T](def)
+}
+
+// CoercedString creates a new string schema with coercion enabled
+func CoercedString(params ...any) *ZodString[string] {
+	schema := StringTyped[string](params...)
+	schema.internals.Coerce = true
 	return schema
 }
 
-//////////////////////////
-// UTILITY FUNCTIONS
-//////////////////////////
+// CoercedStringPtr creates a new string schema with pointer type and coercion enabled
+func CoercedStringPtr(params ...any) *ZodString[*string] {
+	schema := StringTyped[*string](params...)
+	schema.internals.Coerce = true
+	return schema
+}
 
-//nolint:unused // retained for API compatibility
-func convertToSchemaParams(params ...any) []core.SchemaParams {
-	if len(params) == 0 {
-		return []core.SchemaParams{}
-	}
-
-	result := make([]core.SchemaParams, 0, len(params))
-	for _, param := range params {
-		switch p := param.(type) {
+// ToLowerCase transforms the string to lower case
+func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {
+	transform := func(val T) T {
+		switch v := any(val).(type) {
 		case string:
-			// String parameter becomes Error field
-			result = append(result, core.SchemaParams{Error: p})
-		case core.SchemaParams:
-			// Already a SchemaParams
-			result = append(result, p)
+			return any(strings.ToLower(v)).(T)
+		case *string:
+			if v == nil {
+				return val
+			}
+			lower := strings.ToLower(*v)
+			ptr := &lower
+			return any(ptr).(T)
 		default:
-			// For other types, try to use as Error
-			result = append(result, core.SchemaParams{Error: p})
+			return val
 		}
 	}
-	return result
+	return z.Overwrite(transform, params...)
 }
 
-// GetZod returns the string-specific internals
-func (z *ZodString) GetZod() *ZodStringInternals {
-	return z.internals
-}
-
-// CloneFrom implements Cloneable interface
-func (z *ZodString) CloneFrom(source any) {
-	if src, ok := source.(interface{ GetZod() *ZodStringInternals }); ok {
-		srcState := src.GetZod()
-		tgtState := z.GetZod()
-
-		if len(srcState.Bag) > 0 {
-			if tgtState.Bag == nil {
-				tgtState.Bag = make(map[string]any)
+// ToUpperCase transforms the string to upper case
+func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
+	transform := func(val T) T {
+		switch v := any(val).(type) {
+		case string:
+			return any(strings.ToUpper(v)).(T)
+		case *string:
+			if v == nil {
+				return val
 			}
-			for key, value := range srcState.Bag {
-				tgtState.Bag[key] = value
-			}
-		}
-
-		if len(srcState.ZodTypeInternals.Bag) > 0 {
-			if tgtState.ZodTypeInternals.Bag == nil {
-				tgtState.ZodTypeInternals.Bag = make(map[string]any)
-			}
-			for key, value := range srcState.ZodTypeInternals.Bag {
-				tgtState.ZodTypeInternals.Bag[key] = value
-			}
-		}
-
-		if len(srcState.Values) > 0 {
-			if tgtState.Values == nil {
-				tgtState.Values = make(map[string]struct{})
-			}
-			for key, value := range srcState.Values {
-				tgtState.Values[key] = value
-			}
-		}
-
-		if srcState.Pattern != nil {
-			tgtState.Pattern = srcState.Pattern
+			upper := strings.ToUpper(*v)
+			ptr := &upper
+			return any(ptr).(T)
+		default:
+			return val
 		}
 	}
+	return z.Overwrite(transform, params...)
 }
 
-// createStringTransform creates string transformation helper
-func (z *ZodString) createStringTransform(transformFn func(string) string) core.ZodType[any, any] {
-	transform := Transform[any, any](func(input any, _ctx *core.RefinementContext) (any, error) {
-		str, ok := reflectx.ExtractString(input)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(input); ptrOk {
-				if str, ok = reflectx.ExtractString(ptr); !ok {
-					return nil, ErrExpectedString
-				}
-			} else {
-				return nil, ErrExpectedString
-			}
-		}
+// NonOptional removes the optional flag and returns a new schema with string value type
+func (z *ZodString[T]) NonOptional() *ZodString[string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
 
-		return transformFn(str), nil
-	})
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+	return &ZodString[string]{
+		internals: &ZodStringInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
 	}
-}
-
-//////////////////////////
-// VALIDATION FUNCTIONS
-//////////////////////////
-
-// validateString validates string values with checks
-func validateString(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-	if len(checks) > 0 {
-		// Use constructor instead of direct struct literal to respect private fields
-		payload := core.NewParsePayload(value)
-		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-		}
-	}
-	return nil
 }

@@ -59,22 +59,6 @@ func TestDirectCheckCreation(t *testing.T) {
 	}
 }
 
-func TestNormalizeParams(t *testing.T) {
-	def := &core.ZodCheckDef{
-		Check: "test",
-	}
-
-	normalizeParams(def, []string{})
-	if def.Error != nil {
-		t.Error("Expected no error mapping for empty params")
-	}
-
-	normalizeParams(def, []string{"custom error message"})
-	if def.Error == nil {
-		t.Error("Expected error mapping for string param")
-	}
-}
-
 func TestCheckExecution(t *testing.T) {
 	def := &core.ZodCheckDef{
 		Check: "length_check",
@@ -169,11 +153,9 @@ func BenchmarkCheckExecution(b *testing.B) {
 		},
 	}
 
-	payload := core.NewParsePayload("test")
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		payload.ClearIssues()
-		executeCheck(check, payload)
+		newPayload := core.NewParsePayload("test")
+		executeCheck(check, newPayload)
 	}
 }

@@ -1,114 +1,95 @@
 package types
 
 import (
-	"errors"
+	"fmt"
+	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// Error definitions for record transformations
-var (
-	ErrTransformNilRecord = errors.New("cannot transform nil record value")
-	ErrExpectedRecord     = errors.New("expected record type")
-)
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
-//////////////////////////
-////   RECORD TYPES  ////
-//////////////////////////
-
-// ZodRecordDef defines the configuration for record validation
+// ZodRecordDef defines the schema definition for record validation
 type ZodRecordDef struct {
 	core.ZodTypeDef
-	Type      core.ZodTypeCode       // "record"
-	KeyType   core.ZodType[any, any] // Schema for validating keys
-	ValueType core.ZodType[any, any] // Schema for validating values
-	Checks    []core.ZodCheck        // Record-specific validation checks
+	ValueType any // The value schema (type-erased for flexibility)
 }
 
-// ZodRecordInternals contains record validator internal state
+// ZodRecordInternals contains the internal state for record schema
 type ZodRecordInternals struct {
 	core.ZodTypeInternals
-	Def       *ZodRecordDef              // Schema definition
-	KeyType   core.ZodType[any, any]     // Key validation schema
-	ValueType core.ZodType[any, any]     // Value validation schema
-	Isst      issues.ZodIssueInvalidType // Invalid type issue template
-	Bag       map[string]any             // Additional metadata
+	Def       *ZodRecordDef // Schema definition reference
+	ValueType any           // Value schema for runtime validation
 }
 
-// ZodRecord represents a record validation schema for key-value pairs
-type ZodRecord struct {
+// ZodRecord represents a type-safe record validation schema with dual generic parameters
+// T = base type (map[string]any), R = constraint type (map[string]any or *map[string]any)
+type ZodRecord[T any, R any] struct {
 	internals *ZodRecordInternals
 }
 
-// GetInternals returns the internal state of the schema
-func (z *ZodRecord) GetInternals() *core.ZodTypeInternals {
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
+// GetInternals exposes internal state for framework usage
+func (z *ZodRecord[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetZod returns the record-specific internals for framework usage
-func (z *ZodRecord) GetZod() *ZodRecordInternals {
-	return z.internals
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodRecord[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// CloneFrom implements Cloneable interface for type-specific state copying
-func (z *ZodRecord) CloneFrom(source any) {
-	if src, ok := source.(*ZodRecord); ok {
-		// Copy type-specific fields from Bag
-		if src.internals.Bag != nil {
-			if z.internals.Bag == nil {
-				z.internals.Bag = make(map[string]any)
-			}
-			for k, v := range src.internals.Bag {
-				z.internals.Bag[k] = v
-			}
-		}
-
-		// Copy key and value schemas
-		z.internals.KeyType = src.internals.KeyType
-		z.internals.ValueType = src.internals.ValueType
-	}
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodRecord[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse validates input using unified parsing template
-func (z *ZodRecord) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
+// Parse validates input using direct validation approach
+func (z *ZodRecord[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
 	}
 
-	// Use engine.ParseType unified template
-	return engine.ParseType[map[any]any](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeRecord,
-		mapx.ExtractRecord,
-		func(v any) (*map[any]any, bool) {
-			// Handle pointer types using reflectx
-			if reflectx.IsPointer(v) {
-				if deref, ok := reflectx.Deref(v); ok {
-					if record, ok := mapx.ExtractRecord(deref); ok {
-						return &record, true
-					}
-				}
-			}
-			return nil, false
-		},
-		func(value map[any]any, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// Validate record and run checks
-			_, err := z.validateRecordAndRunChecks(value, ctx)
-			return err
-		},
-		parseCtx,
-	)
+	// Handle nil values for optional/nilable cases
+	if input == nil {
+		if z.internals.Nilable || z.internals.Optional {
+			var zero R
+			return zero, nil
+		}
+		return *new(R), fmt.Errorf("input cannot be nil")
+	}
+
+	// Extract record value using proper conversion
+	recordValue, err := z.extractRecord(input)
+	if err != nil {
+		return *new(R), err
+	}
+
+	// Validate the record content
+	transformedRecord, err := z.validateRecord(recordValue, z.internals.Checks, parseCtx)
+	if err != nil {
+		return *new(R), err
+	}
+
+	// Convert to constraint type R using safe conversion
+	return convertRecordFromGeneric[T, R](transformedRecord), nil
 }
 
 // MustParse validates the input value and panics on failure
-func (z *ZodRecord) MustParse(input any, ctx ...*core.ParseContext) any {
+func (z *ZodRecord[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -116,368 +97,639 @@ func (z *ZodRecord) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// validateRecordAndRunChecks validates record keys/values and runs checks
-func (z *ZodRecord) validateRecordAndRunChecks(recordMap map[any]any, ctx *core.ParseContext) (map[any]any, error) {
-	// Run basic checks first
-	if len(z.internals.Checks) > 0 {
-		// Use constructor instead of direct struct literal to respect private fields
-		payload := core.NewParsePayloadWithPath(recordMap, make([]any, 0))
-		engine.RunChecksOnValue(recordMap, z.internals.Checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return nil, issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-		}
-	}
-
-	// Validate keys and values
-	result := make(map[any]any)
-	for key, value := range recordMap {
-		// Validate key - use engine.TryApplyCoercion
-		var validatedKey any
-		var err error
-
-		validatedKey, err = z.internals.KeyType.Parse(key, ctx)
-
-		if err != nil {
-			// Use issues.CreateInvalidKeyIssue with correct parameters
-			keyStr, _ := reflectx.ToString(key)
-			rawIssue := issues.CreateInvalidKeyIssue(
-				keyStr,
-				"record",
-				recordMap,
-			)
-			finalIssue := issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-		}
-
-		// Validate value - use engine.TryApplyCoercion
-		var validatedValue any
-
-		validatedValue, err = z.internals.ValueType.Parse(value, ctx)
-
-		if err != nil {
-			rawIssue := issues.NewRawIssue("invalid_value", recordMap)
-			rawIssue.Message = err.Error()
-			rawIssue.Path = []any{key}
-			finalIssue := issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-		}
-
-		result[validatedKey] = validatedValue
-	}
-	return result, nil
+// ParseAny validates input and returns untyped result for runtime scenarios.
+// Zero-overhead wrapper around Parse to eliminate reflection calls.
+func (z *ZodRecord[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-//////////////////////////
-// TRANSFORM METHODS
-//////////////////////////
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
 
-// Transform provides type-safe record transformation
-func (z *ZodRecord) Transform(fn func(map[any]any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	wrappedFn := func(input any, ctx *core.RefinementContext) (any, error) {
-		recordVal, isNil, err := extractRecordPointerValue(input)
-		if err != nil {
-			return nil, err
-		}
-		if isNil {
-			return nil, ErrTransformNilRecord
-		}
-		return fn(recordVal, ctx)
-	}
-	return z.TransformAny(wrappedFn)
+// Optional creates optional record schema that returns pointer constraint
+func (z *ZodRecord[T, R]) Optional() *ZodRecord[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
-// TransformAny provides flexible transformation that accepts any input type
-func (z *ZodRecord) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// Create a generic Transform schema wrapping provided function
-	transform := Transform[any, any](fn)
+// Nilable allows nil values and returns pointer constraint
+func (z *ZodRecord[T, R]) Nilable() *ZodRecord[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
 
-	// Chain current record schema with transform via ZodPipe so that:
-	// 1) input is validated by the record schema (z)
-	// 2) output of validation is passed into transform
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+// Nullish combines optional and nilable modifiers
+func (z *ZodRecord[T, R]) Nullish() *ZodRecord[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// NonOptional removes Optional flag and enforces record presence.
+func (z *ZodRecord[T, R]) NonOptional() *ZodRecord[T, T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+
+	return &ZodRecord[T, T]{
+		internals: &ZodRecordInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			ValueType:        z.internals.ValueType,
+		},
 	}
 }
 
-// Pipe chains the current record schema with another schema, mirroring zod.pipe behaviour.
-// The resulting schema first validates using the record schema, and then feeds the result
-// into the provided `out` schema.
-func (z *ZodRecord) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
+// Default preserves current constraint type R
+func (z *ZodRecord[T, R]) Default(v T) *ZodRecord[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
 }
 
-///////////////////////////
-////   RECORD WRAPPERS ////
-///////////////////////////
-
-// Optional makes the record schema optional (equivalent to TypeScript z.record().optional())
-func (z *ZodRecord) Optional() core.ZodType[any, any] {
-	return Optional(any(z).(core.ZodType[any, any]))
-}
-
-// Nilable makes the record nilable
-func (z *ZodRecord) Nilable() core.ZodType[any, any] {
-	cloned := engine.Clone(any(z).(core.ZodType[any, any]), func(def *core.ZodTypeDef) {
-		// setNilable only changes nil handling, not other logic
+// DefaultFunc preserves current constraint type R
+func (z *ZodRecord[T, R]) DefaultFunc(fn func() T) *ZodRecord[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
 	})
-	internals := cloned.GetInternals()
-	internals.SetNilable()
-	return cloned
+	return z.withInternals(in)
 }
 
-// Nullish makes the record both optional and nilable (equivalent to TypeScript z.record().nullish())
-func (z *ZodRecord) Nullish() core.ZodType[any, any] {
-	return Nullish(any(z).(core.ZodType[any, any]))
+// Prefault provides fallback values on validation failure
+func (z *ZodRecord[T, R]) Prefault(v T) *ZodRecord[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
 }
 
-////////////////////////////
-////   INTERNAL METHODS ////
-////////////////////////////
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
 
-// Refine provides type-safe record validation
-func (z *ZodRecord) Refine(fn func(map[any]any) bool, params ...any) *ZodRecord {
-	result := z.RefineAny(func(v any) bool {
-		// Use mapx.ExtractRecord for robust extraction
-		recordMap, ok := mapx.ExtractRecord(v)
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// Min sets minimum number of entries
+func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+	check := checks.MinSize(minLen, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Max sets maximum number of entries
+func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+	check := checks.MaxSize(maxLen, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Size sets exact number of entries
+func (z *ZodRecord[T, R]) Size(exactLen int, params ...any) *ZodRecord[T, R] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+	check := checks.Size(exactLen, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform applies a transformation function using the WrapFn pattern.
+// Record types implement direct extraction of T values for transformation.
+func (z *ZodRecord[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	// WrapFn Pattern: Create wrapper function for type-safe extraction
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		recordValue := extractRecordValue[T, R](input) // Use existing extraction logic
+		return fn(recordValue, ctx)
+	}
+
+	// Use the new factory function for ZodTransform
+	return core.NewZodTransform[R, any](z, wrapperFn)
+}
+
+// Pipe creates a pipeline using the WrapFn pattern.
+// Instead of using adapter structures, this creates a target function that handles type conversion.
+func (z *ZodRecord[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	// WrapFn Pattern: Create target function for type conversion and validation
+	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+		// Extract T value from constraint type R
+		recordValue := extractRecordValue[T, R](input)
+		// Apply target schema to the extracted T
+		return target.Parse(recordValue, ctx)
+	}
+
+	// Use the new factory function for ZodPipe
+	return core.NewZodPipe[R, any](z, targetFn)
+}
+
+// Overwrite transforms the input value while preserving the original type.
+// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
+// The transformation function is stored as a check, so it doesn't modify the inferred type.
+func (z *ZodRecord[T, R]) Overwrite(transform func(R) R, params ...any) *ZodRecord[T, R] {
+	// Create a transformation function that works with the constraint type R
+	transformAny := func(input any) any {
+		// Try to convert input to constraint type R
+		converted, ok := convertToRecordType[T, R](input)
 		if !ok {
-			return false
+			// If conversion fails, return original value
+			return input
 		}
-		return fn(recordMap)
-	}, params...)
-	return result.(*ZodRecord)
-}
 
-// RefineAny flexible version of validation that accepts any type
-func (z *ZodRecord) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(any(z).(core.ZodType[any, any]), check)
-}
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodRecord) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-// --- Default & Prefault wrappers --------------------------------------------------
-
-// ZodRecordDefault embeds ZodDefault for method promotion
-type ZodRecordDefault struct {
-	*ZodDefault[*ZodRecord]
-}
-
-// ZodRecordPrefault embeds ZodPrefault for method promotion
-type ZodRecordPrefault struct {
-	*ZodPrefault[*ZodRecord]
-}
-
-// Default adds a default value to the record schema
-func (z *ZodRecord) Default(value map[any]any) ZodRecordDefault {
-	return ZodRecordDefault{
-		&ZodDefault[*ZodRecord]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
-	}
-}
-
-// DefaultFunc adds a default function to the record schema
-func (z *ZodRecord) DefaultFunc(fn func() map[any]any) ZodRecordDefault {
-	genericFn := func() any { return fn() }
-	return ZodRecordDefault{
-		&ZodDefault[*ZodRecord]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
-
-// Prefault adds a prefault value to the record schema
-func (z *ZodRecord) Prefault(value map[any]any) ZodRecordPrefault {
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
+		// Apply transformation directly on constraint type R
+		return transform(converted)
 	}
 
-	return ZodRecordPrefault{
-		&ZodPrefault[*ZodRecord]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: value,
-			prefaultFunc:  nil,
-			isFunction:    false,
-		},
-	}
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// PrefaultFunc adds a prefault function to the record schema
-func (z *ZodRecord) PrefaultFunc(fn func() map[any]any) ZodRecordPrefault {
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Coerce:      baseInternals.Coerce,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
 
-	genericFn := func() any { return fn() }
-	return ZodRecordPrefault{
-		&ZodPrefault[*ZodRecord]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: nil,
-			prefaultFunc:  genericFn,
-			isFunction:    true,
-		},
-	}
-}
-
-// createZodRecordFromDef creates a ZodRecord from definition
-func createZodRecordFromDef(def *ZodRecordDef) *ZodRecord {
-	internals := &ZodRecordInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		KeyType:          def.KeyType,
-		ValueType:        def.ValueType,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeRecord},
-		Bag:              make(map[string]any),
-	}
-
-	// Set up simplified constructor for cloning
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
-		recordDef := &ZodRecordDef{
-			ZodTypeDef: *newDef,
-			Type:       core.ZodTypeRecord,
-			KeyType:    def.KeyType,   // Preserve original key type
-			ValueType:  def.ValueType, // Preserve original value type
+// Refine applies type-safe validation with constraint type R
+func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R] {
+	// Wrapper converts the raw value to R before calling fn
+	wrapper := func(v any) bool {
+		// Convert value to constraint type R and call the refinement function
+		if constraintValue, ok := convertToRecordConstraintValue[T, R](v); ok {
+			return fn(constraintValue)
 		}
-		return any(createZodRecordFromDef(recordDef)).(core.ZodType[any, any])
+		return false
 	}
 
-	// Set up parse function
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		schema := &ZodRecord{internals: internals}
-		result, err := schema.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
+	// Use unified parameter handling
+	schemaParams := utils.NormalizeParams(params...)
+
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny provides flexible validation without type conversion
+func (z *ZodRecord[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodRecord[T, R] {
+	// Use unified parameter handling
+	schemaParams := utils.NormalizeParams(params...)
+
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// HELPER METHODS
+// =============================================================================
+
+func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord[T, *T] {
+	return &ZodRecord[T, *T]{internals: &ZodRecordInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		ValueType:        z.internals.ValueType,
+	}}
+}
+
+func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T, R] {
+	return &ZodRecord[T, R]{internals: &ZodRecordInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		ValueType:        z.internals.ValueType,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodRecord[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodRecord[T, R]); ok {
+		z.internals = src.internals
+	}
+}
+
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
+
+// convertRecordFromGeneric safely converts map[string]any to constraint type R
+func convertRecordFromGeneric[T any, R any](recordValue map[string]any) R {
+	// First convert to base type T
+	var baseValue T
+	switch any(baseValue).(type) {
+	case map[string]int:
+		// Convert map[string]any to map[string]int
+		converted := make(map[string]int)
+		for k, v := range recordValue {
+			if intVal, ok := v.(int); ok {
+				converted[k] = intVal
+			}
+		}
+		baseValue = any(converted).(T)
+	case map[string]string:
+		// Convert map[string]any to map[string]string
+		converted := make(map[string]string)
+		for k, v := range recordValue {
+			if strVal, ok := v.(string); ok {
+				converted[k] = strVal
+			}
+		}
+		baseValue = any(converted).(T)
+	case map[string]any:
+		// Direct assignment for map[string]any
+		baseValue = any(recordValue).(T)
+	default:
+		// For other types, try direct conversion
+		baseValue = any(recordValue).(T)
+	}
+
+	// Then convert base type to constraint type
+	return convertToRecordConstraintType[T, R](baseValue)
+}
+
+// convertToRecordConstraintType converts a base type T to constraint type R
+func convertToRecordConstraintType[T any, R any](value T) R {
+	var zero R
+	switch any(zero).(type) {
+	case *map[string]any:
+		// Need to return *map[string]any from map[string]any
+		if recordVal, ok := any(value).(map[string]any); ok {
+			recordCopy := recordVal
+			return any(&recordCopy).(R)
+		}
+		return any((*map[string]any)(nil)).(R)
+	default:
+		// Return T directly
+		return any(value).(R)
+	}
+}
+
+// extractRecordValue extracts base type T from constraint type R
+func extractRecordValue[T any, R any](value R) T {
+	switch v := any(value).(type) {
+	case *map[string]any:
+		if v != nil {
+			return any(*v).(T)
+		}
+		var zero T
+		return zero
+	default:
+		return any(value).(T)
+	}
+}
+
+// convertToRecordConstraintValue converts any value to constraint type R if possible
+func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
+	var zero R
+
+	// Direct type match
+	if r, ok := any(value).(R); ok {
+		return r, true
+	}
+
+	// Handle pointer conversion for record types
+	if _, ok := any(zero).(*map[string]any); ok {
+		// Need to convert map[string]any to *map[string]any
+		if recordVal, ok := value.(map[string]any); ok {
+			recordCopy := recordVal
+			return any(&recordCopy).(R), true
+		}
+	}
+
+	return zero, false
+}
+
+// convertToRecordType converts any value to the record constraint type R with strict type checking
+func convertToRecordType[T any, R any](v any) (R, bool) {
+	var zero R
+
+	if v == nil {
+		// Handle nil values for pointer types
+		zeroType := reflect.TypeOf((*R)(nil)).Elem()
+		if zeroType.Kind() == reflect.Ptr {
+			return zero, true // zero value for pointer types is nil
+		}
+		return zero, false // nil not allowed for value types
+	}
+
+	// Extract record value from input
+	var recordValue map[string]any
+	var isValid bool
+
+	switch val := v.(type) {
+	case map[string]any:
+		recordValue, isValid = val, true
+	case *map[string]any:
+		if val != nil {
+			recordValue, isValid = *val, true
+		}
+	case map[any]any:
+		// Convert map[any]any to map[string]any
+		recordValue = make(map[string]any)
+		for k, v := range val {
+			if strKey, ok := k.(string); ok {
+				recordValue[strKey] = v
+			} else {
+				return zero, false // Non-string key found
+			}
+		}
+		isValid = true
+	default:
+		return zero, false // Reject all non-map types
+	}
+
+	if !isValid {
+		return zero, false
+	}
+
+	// Convert to target constraint type R
+	zeroType := reflect.TypeOf((*R)(nil)).Elem()
+	if zeroType.Kind() == reflect.Ptr {
+		// R is *map[string]any
+		if converted, ok := any(&recordValue).(R); ok {
+			return converted, true
+		}
+	} else {
+		// R is map[string]any
+		if converted, ok := any(recordValue).(R); ok {
+			return converted, true
+		}
+	}
+
+	return zero, false
+}
+
+// =============================================================================
+// EXTRACTION AND VALIDATION
+// =============================================================================
+
+// extractRecord converts input to map[string]any
+func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
+	// Handle direct map[string]any
+	if recordVal, ok := value.(map[string]any); ok {
+		return recordVal, nil
+	}
+
+	// Handle pointer to map
+	if recordPtr, ok := value.(*map[string]any); ok {
+		if recordPtr != nil {
+			return *recordPtr, nil
+		}
+		return nil, fmt.Errorf("nil pointer to record")
+	}
+
+	// Handle map[any]any and convert to map[string]any
+	if mapVal, ok := value.(map[any]any); ok {
+		result := make(map[string]any)
+		for k, v := range mapVal {
+			if strKey, ok := k.(string); ok {
+				result[strKey] = v
+			} else {
+				// Non-string key found, invalid for record
+				return nil, fmt.Errorf("non-string key found in map: %T, records require string keys", k)
+			}
+		}
+		return result, nil
+	}
+
+	// Try to convert using mapx
+	if reflectx.IsMap(value) {
+		if converted, err := mapx.ToGeneric(value); err == nil && converted != nil {
+			// Convert to map[string]any
+			result := make(map[string]any)
+			for k, v := range converted {
+				if strKey, ok := k.(string); ok {
+					result[strKey] = v
+				} else {
+					// Non-string key found, invalid for record
+					return nil, fmt.Errorf("non-string key found in map: %T, records require string keys", k)
 				}
 			}
-			return payload
+			return result, nil
 		}
-		payload.SetValue(result)
-		return payload
 	}
 
-	zodSchema := &ZodRecord{internals: internals}
-
-	// Initialize the schema with proper error handling support
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-
-	return zodSchema
+	return nil, fmt.Errorf("expected map[string]any, got %T", value)
 }
 
-// Record creates a new record schema
-func Record(keyType, valueType core.ZodType[any, any], params ...any) *ZodRecord {
+// validateRecord validates record entries using value schema
+func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.ZodCheck, ctx *core.ParseContext) (map[string]any, error) {
+	// First apply checks (including Overwrite transformations) to get the transformed value
+	transformedValue, err := engine.ApplyChecks[any](value, checks, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle potential pointer type from Overwrite transformations
+	switch v := transformedValue.(type) {
+	case map[string]any:
+		value = v
+	case *map[string]any:
+		if v != nil {
+			value = *v
+		}
+	default:
+		// If transformation returned unexpected type, keep original value
+		// This handles the case where no transformation was applied
+	}
+
+	// Always validate each value if value schema is provided - this is what makes Record different from map[string]any
+	if z.internals.ValueType != nil {
+		for key, val := range value {
+			if err := z.validateValue(val, z.internals.ValueType, ctx, key); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return value, nil
+}
+
+// validateValue validates a single value using the provided schema
+func (z *ZodRecord[T, R]) validateValue(value any, schema any, ctx *core.ParseContext, key string) error {
+	if schema == nil {
+		return nil
+	}
+
+	// Try using reflection to call Parse method - this handles all schema types
+	schemaValue := reflect.ValueOf(schema)
+	if !schemaValue.IsValid() || schemaValue.IsNil() {
+		return nil
+	}
+
+	parseMethod := schemaValue.MethodByName("Parse")
+	if !parseMethod.IsValid() {
+		return nil
+	}
+
+	methodType := parseMethod.Type()
+	if methodType.NumIn() < 1 {
+		return nil
+	}
+
+	// Build arguments for Parse call
+	args := []reflect.Value{reflect.ValueOf(value)}
+	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
+		// Add context parameter if expected
+		args = append(args, reflect.ValueOf(ctx))
+	}
+
+	// Call Parse method
+	results := parseMethod.Call(args)
+	if len(results) >= 2 {
+		// Check if there's an error (second return value)
+		if errInterface := results[1].Interface(); errInterface != nil {
+			if err, ok := errInterface.(error); ok {
+				return fmt.Errorf("value validation failed for key '%s': %w", key, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// =============================================================================
+// CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// newZodRecordFromDef constructs new ZodRecord from definition
+func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
+	internals := &ZodRecordInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def:       def,
+		ValueType: def.ValueType,
+	}
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		recordDef := &ZodRecordDef{
+			ZodTypeDef: *newDef,
+			ValueType:  def.ValueType,
+		}
+		return any(newZodRecordFromDef[T, R](recordDef)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodRecord[T, R]{internals: internals}
+}
+
+// =============================================================================
+// FACTORY FUNCTIONS
+// =============================================================================
+
+// Record creates record schema with string keys and typed values - returns value constraint
+func Record(valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, map[string]any] {
+	return RecordTyped[map[string]any, map[string]any](valueSchema, paramArgs...)
+}
+
+// RecordPtr creates record schema with string keys and typed values - returns pointer constraint
+func RecordPtr(valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, *map[string]any] {
+	return RecordTyped[map[string]any, *map[string]any](valueSchema, paramArgs...)
+}
+
+// RecordTyped creates typed record schema with generic constraints
+func RecordTyped[T any, R any](valueSchema any, paramArgs ...any) *ZodRecord[T, R] {
+	param := utils.GetFirstParam(paramArgs...)
+	normalizedParams := utils.NormalizeParams(param)
+
 	def := &ZodRecordDef{
 		ZodTypeDef: core.ZodTypeDef{
 			Type:   core.ZodTypeRecord,
-			Checks: make([]core.ZodCheck, 0),
+			Checks: []core.ZodCheck{},
 		},
-		Type:      core.ZodTypeRecord,
-		KeyType:   keyType,
-		ValueType: valueType,
+		ValueType: valueSchema,
 	}
 
-	schema := createZodRecordFromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		if param, ok := params[0].(core.SchemaParams); ok {
-			// Apply parameters using engine.ApplySchemaParams
-			engine.ApplySchemaParams(&def.ZodTypeDef, param)
-
-			// Handle additional parameters
-			if param.Description != "" {
-				schema.internals.Bag["description"] = param.Description
-			}
-			if param.Abort {
-				schema.internals.Bag["abort"] = true
-			}
-			if len(param.Path) > 0 {
-				schema.internals.Bag["path"] = param.Path
-			}
-			if len(param.Params) > 0 {
-				schema.internals.Bag["params"] = param.Params
-			}
-		}
+	// Apply normalized parameters to schema definition
+	if normalizedParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
-	return schema
+	recordSchema := newZodRecordFromDef[T, R](def)
+
+	// Ensure validator is called when value schema exists
+	// Add a minimal check that always passes to trigger validation
+	if valueSchema != nil {
+		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
+		recordSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+	}
+
+	return recordSchema
 }
 
-////////////////////////////
-////   HELPER FUNCTIONS ////
-////////////////////////////
-
-// extractRecordPointerValue extract record pointer value
-func extractRecordPointerValue(input any) (map[any]any, bool, error) {
-	// Use mapx.ExtractRecord for robust extraction
-	if record, ok := mapx.ExtractRecord(input); ok {
-		return record, false, nil
-	}
-
-	// Handle pointer to record types
-	if reflectx.IsPointer(input) {
-		if reflectx.IsNilPointer(input) {
-			return nil, true, nil
+// Check adds a custom validation function that can report multiple issues for record schema.
+func (z *ZodRecord[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodRecord[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		// Try direct assertion.
+		if val, ok := payload.GetValue().(R); ok {
+			fn(val, payload)
+			return
 		}
-		if deref, ok := reflectx.Deref(input); ok {
-			if record, ok := mapx.ExtractRecord(deref); ok {
-				return record, false, nil
+
+		// Pointer/value mismatch adaptation.
+		var zero R
+		zeroTyp := reflect.TypeOf(zero)
+		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
+			elemTyp := zeroTyp.Elem()
+			valRV := reflect.ValueOf(payload.GetValue())
+			if valRV.IsValid() && valRV.Type() == elemTyp {
+				ptr := reflect.New(elemTyp)
+				ptr.Elem().Set(valRV)
+				if casted, ok := ptr.Interface().(R); ok {
+					fn(casted, payload)
+				}
 			}
 		}
 	}
 
-	return nil, false, ErrExpectedRecord
-}
-
-////////////////////////////
-////   PARTIAL RECORD   ////
-////////////////////////////
-
-// PartialRecord creates a partial record schema where keys are optional
-func PartialRecord(keyType, valueType core.ZodType[any, any], params ...any) *ZodRecord {
-	// For simplicity, just use the original keyType for now
-	// In a full implementation, this would create a union with optional keys
-	return Record(keyType, valueType, params...)
+	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }

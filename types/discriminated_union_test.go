@@ -1,95 +1,104 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestDiscriminatedUnionBasicFunctionality(t *testing.T) {
-	t.Run("constructor with invalid options", func(t *testing.T) {
-		// Test that using basic types as options should panic because they have no discriminator fields
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(), // Basic types have no discriminator fields, should panic
-				Int(),
-			})
+func TestDiscriminatedUnion_BasicFunctionality(t *testing.T) {
+	t.Run("valid discriminated union inputs", func(t *testing.T) {
+		// Create discriminated union with object schemas
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"name": String(),
 		})
-	})
-
-	t.Run("constructor with params and valid options", func(t *testing.T) {
-		// Test that using valid Object + Literal combinations should succeed
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "value": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "value": Int()}),
-		}, core.SchemaParams{Error: "Must match one of the discriminated types"})
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals.Error)
-	})
-
-	t.Run("discriminator accessor with invalid options", func(t *testing.T) {
-		// Test accessing discriminator field name, should panic even though trying to access it
-		assert.Panics(t, func() {
-			schema := DiscriminatedUnion("status", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
-			_ = schema.Discriminator() // This line won't execute because constructor will panic
-		})
-	})
-
-	t.Run("options accessor with invalid options", func(t *testing.T) {
-		// Test accessing options, should panic even though trying to access them
-		assert.Panics(t, func() {
-			stringSchema := String()
-			intSchema := Int()
-			schema := DiscriminatedUnion("type", []core.ZodType[any, any]{stringSchema, intSchema})
-			_ = schema.Options() // This line won't execute because constructor will panic
-		})
-	})
-}
-
-// =============================================================================
-// 2. Validation methods
-// =============================================================================
-
-func TestDiscriminatedUnionValidations(t *testing.T) {
-	t.Run("valid parse - object", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "a": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "b": String()}),
+		adminSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"admin"}),
+			"name": String(),
+			"role": String(),
 		})
 
-		result, err := schema.Parse(map[string]any{
-			"type": "a",
-			"a":    "abc",
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema})
+
+		// Test user type
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"name": "John",
 		})
 		require.NoError(t, err)
 		expected := map[string]any{
-			"type": "a",
-			"a":    "abc",
+			"type": "user",
+			"name": "John",
+		}
+		assert.Equal(t, expected, result)
+
+		// Test admin type
+		result, err = discriminatedUnion.Parse(map[string]any{
+			"type": "admin",
+			"name": "Jane",
+			"role": "superuser",
+		})
+		require.NoError(t, err)
+		expected = map[string]any{
+			"type": "admin",
+			"name": "Jane",
+			"role": "superuser",
 		}
 		assert.Equal(t, expected, result)
 	})
 
-	t.Run("performance optimization - direct lookup", func(t *testing.T) {
-		// Test that discriminated union uses direct lookup instead of trying each option
-		schema := DiscriminatedUnion("status", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"status": Literal("success"), "data": String()}),
-			Object(core.ObjectSchema{"status": Literal("failed"), "error": String()}),
+	t.Run("invalid discriminated union inputs", func(t *testing.T) {
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"name": String(),
+		})
+		adminSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"admin"}),
+			"name": String(),
+			"role": String(),
 		})
 
-		// Success case
-		result, err := schema.Parse(map[string]any{
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema})
+
+		// Test invalid discriminator value
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"type": "guest",
+			"name": "Unknown",
+		})
+		assert.Error(t, err)
+
+		// Test missing discriminator field
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"name": "John",
+		})
+		assert.Error(t, err)
+
+		// Test non-object input
+		_, err = discriminatedUnion.Parse("not an object")
+		assert.Error(t, err)
+	})
+
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		successSchema := Object(core.ObjectSchema{
+			"status": LiteralOf([]string{"success"}),
+			"data":   String(),
+		})
+		errorSchema := Object(core.ObjectSchema{
+			"status": LiteralOf([]string{"error"}),
+			"error":  String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("status", []any{successSchema, errorSchema})
+
+		// Test Parse method
+		result, err := discriminatedUnion.Parse(map[string]any{
 			"status": "success",
 			"data":   "operation completed",
 		})
@@ -100,724 +109,923 @@ func TestDiscriminatedUnionValidations(t *testing.T) {
 		}
 		assert.Equal(t, expected, result)
 
-		// Failed case
-		result, err = schema.Parse(map[string]any{
-			"status": "failed",
+		// Test MustParse method
+		mustResult := discriminatedUnion.MustParse(map[string]any{
+			"status": "error",
 			"error":  "operation failed",
 		})
-		require.NoError(t, err)
 		expected = map[string]any{
-			"status": "failed",
+			"status": "error",
 			"error":  "operation failed",
 		}
-		assert.Equal(t, expected, result)
-	})
+		assert.Equal(t, expected, mustResult)
 
-	t.Run("discriminator value of various primitive types", func(t *testing.T) {
-		// Test discriminated union with different primitive discriminator types
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("1"), "val": String()}),
-			Object(core.ObjectSchema{"type": Literal(1), "val": String()}),
-			Object(core.ObjectSchema{"type": Literal("true"), "val": String()}),
-			Object(core.ObjectSchema{"type": Literal(true), "val": String()}),
-		})
-
-		// String discriminator
-		result, err := schema.Parse(map[string]any{
-			"type": "1",
-			"val":  "string_val",
-		})
-		require.NoError(t, err)
-		expected := map[string]any{
-			"type": "1",
-			"val":  "string_val",
-		}
-		assert.Equal(t, expected, result)
-
-		// Integer discriminator
-		result, err = schema.Parse(map[string]any{
-			"type": 1,
-			"val":  "int_val",
-		})
-		require.NoError(t, err)
-		expected = map[string]any{
-			"type": 1,
-			"val":  "int_val",
-		}
-		assert.Equal(t, expected, result)
-
-		// Boolean discriminator
-		result, err = schema.Parse(map[string]any{
-			"type": true,
-			"val":  "bool_val",
-		})
-		require.NoError(t, err)
-		expected = map[string]any{
-			"type": true,
-			"val":  "bool_val",
-		}
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("performance optimization concept", func(t *testing.T) {
-		// Test discriminated union concept - direct lookup instead of trying each option
-		// Using invalid options will panic
+		// Test panic on invalid input
 		assert.Panics(t, func() {
-			DiscriminatedUnion("status", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
-		})
-	})
-}
-
-// =============================================================================
-// 3. Modifiers and wrappers
-// =============================================================================
-
-func TestDiscriminatedUnionModifiers(t *testing.T) {
-	t.Run("optional with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
+			discriminatedUnion.MustParse("invalid")
 		})
 	})
 
-	t.Run("nilable with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
-		})
-	})
-
-	t.Run("nilable does not affect original schema concept", func(t *testing.T) {
-		// Test concept: Nilable does not affect original schema
-		// But using invalid options will panic
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			})
-		})
-	})
-
-	t.Run("must parse with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			})
-		})
-	})
-}
-
-// =============================================================================
-// 4. Chaining and method composition
-// =============================================================================
-
-func TestDiscriminatedUnionChaining(t *testing.T) {
-	t.Run("validation with constraints", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("string"), "value": String().Min(5)}),
-			Object(core.ObjectSchema{"type": Literal("number"), "value": Int().Min(10)}),
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected discriminated union match"
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"name": String(),
 		})
 
-		// Valid cases
-		result, err := schema.Parse(map[string]any{
-			"type":  "string",
-			"value": "hello",
-		})
-		require.NoError(t, err)
-		expected := map[string]any{
-			"type":  "string",
-			"value": "hello",
-		}
-		assert.Equal(t, expected, result)
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema}, core.SchemaParams{Error: customError})
 
-		result, err = schema.Parse(map[string]any{
-			"type":  "number",
-			"value": 15,
-		})
-		require.NoError(t, err)
-		expected = map[string]any{
-			"type":  "number",
-			"value": 15,
-		}
-		assert.Equal(t, expected, result)
+		require.NotNil(t, discriminatedUnion)
 
-		// Invalid cases - constraint violations
-		_, err = schema.Parse(map[string]any{
-			"type":  "string",
-			"value": "hi", // Too short
-		})
-		assert.Error(t, err)
-
-		_, err = schema.Parse(map[string]any{
-			"type":  "number",
-			"value": 5, // Too small
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"type": "invalid",
+			"name": "test",
 		})
 		assert.Error(t, err)
 	})
+}
 
-	t.Run("method chaining with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
+// =============================================================================
+// Type safety tests
+// =============================================================================
+
+func TestDiscriminatedUnion_TypeSafety(t *testing.T) {
+	t.Run("discriminated union returns correct type", func(t *testing.T) {
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"id":   Int(),
 		})
+		postSchema := Object(core.ObjectSchema{
+			"type":  LiteralOf([]string{"post"}),
+			"title": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, postSchema})
+		require.NotNil(t, discriminatedUnion)
+
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"id":   123,
+		})
+		require.NoError(t, err)
+		assert.IsType(t, map[string]any{}, result)
+
+		resultMap := result.(map[string]any)
+		assert.Equal(t, "user", resultMap["type"])
+		assert.Equal(t, 123, resultMap["id"])
+	})
+
+	t.Run("discriminator field access", func(t *testing.T) {
+		schema1 := Object(core.ObjectSchema{
+			"kind": LiteralOf([]string{"a"}),
+			"val":  String(),
+		})
+		schema2 := Object(core.ObjectSchema{
+			"kind": LiteralOf([]string{"b"}),
+			"val":  Int(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("kind", []any{schema1, schema2})
+
+		// Test discriminator accessor
+		assert.Equal(t, "kind", discriminatedUnion.Discriminator())
+
+		// Test options accessor
+		options := discriminatedUnion.Options()
+		assert.Len(t, options, 2)
+		assert.Equal(t, schema1, options[0])
+		assert.Equal(t, schema2, options[1])
+	})
+
+	t.Run("MustParse type safety", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": Bool(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+
+		result := discriminatedUnion.MustParse(map[string]any{
+			"type": "test",
+			"data": true,
+		})
+		assert.IsType(t, map[string]any{}, result)
+
+		resultMap := result.(map[string]any)
+		assert.Equal(t, "test", resultMap["type"])
+		assert.Equal(t, true, resultMap["data"])
 	})
 }
 
 // =============================================================================
-// 5. Transform/Pipe
+// Modifier methods tests
 // =============================================================================
 
-func TestDiscriminatedUnionTransform(t *testing.T) {
-	t.Run("basic transform with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-				return map[string]any{
-					"original":    val,
-					"transformed": true,
-				}, nil
-			})
+func TestDiscriminatedUnion_Modifiers(t *testing.T) {
+	t.Run("Optional makes discriminated union optional", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		optionalDiscriminatedUnion := discriminatedUnion.Optional()
+
+		// Test non-nil value - should return pointer
+		result, err := optionalDiscriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, *result)
+
+		// Test nil value (should be handled by Optional)
+		result, err = optionalDiscriminatedUnion.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("pipe to another schema with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
+	t.Run("Nilable allows nil values", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		nilableDiscriminatedUnion := discriminatedUnion.Nilable()
+
+		// Test nil handling
+		result, err := nilableDiscriminatedUnion.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value - should return pointer
+		result, err = nilableDiscriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, *result)
+	})
+
+	t.Run("Default preserves discriminated union type", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		defaultValue := map[string]any{
+			"type": "test",
+			"data": "default",
+		}
+		defaultDiscriminatedUnion := discriminatedUnion.Default(defaultValue)
+
+		// Valid input should override default
+		result, err := defaultDiscriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("Prefault preserves discriminated union type", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		prefaultValue := map[string]any{
+			"type": "test",
+			"data": "prefault",
+		}
+		prefaultDiscriminatedUnion := discriminatedUnion.Prefault(prefaultValue)
+
+		// Valid input should override prefault
+		result, err := prefaultDiscriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result)
 	})
 }
 
 // =============================================================================
-// 6. Refine
+// Chaining tests
 // =============================================================================
 
-func TestDiscriminatedUnionRefine(t *testing.T) {
-	t.Run("basic refine with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}).Refine(func(val any) bool {
-				return true
-			}, core.SchemaParams{Error: "Must be a valid discriminated union"})
+func TestDiscriminatedUnion_Chaining(t *testing.T) {
+	t.Run("discriminated union chaining", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		defaultValue := map[string]any{
+			"type": "test",
+			"data": "default",
+		}
+
+		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+			Default(defaultValue).
+			Optional()
+
+		// Test final behavior - should return pointer due to Optional
+		result, err := chainedSchema.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, *result)
 	})
 
-	t.Run("refine vs transform distinction with invalid options", func(t *testing.T) {
-		// Test concept: distinction between Refine and Transform
-		// But using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			}).Refine(func(val any) bool {
-				return true
-			})
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"flag": Bool(),
 		})
 
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-				return val, nil
+		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+			Nilable().
+			Default(map[string]any{
+				"type": "test",
+				"flag": true,
 			})
+
+		result, err := chainedSchema.Parse(map[string]any{
+			"type": "test",
+			"flag": false,
 		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		expected := map[string]any{
+			"type": "test",
+			"flag": false,
+		}
+		assert.Equal(t, expected, *result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+			Default(map[string]any{
+				"type": "test",
+				"data": "default",
+			}).
+			Prefault(map[string]any{
+				"type": "test",
+				"data": "prefault",
+			})
+
+		result, err := chainedSchema.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result)
 	})
 }
 
 // =============================================================================
-// 7. Error handling
+// Default and prefault tests
 // =============================================================================
 
-func TestDiscriminatedUnionErrorHandling(t *testing.T) {
-	t.Run("invalid - null with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			})
+func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value behavior", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		defaultValue := map[string]any{
+			"type": "test",
+			"data": "default",
+		}
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Default(defaultValue)
+
+		// Valid input should override default
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result)
+
+		// Test default function
+		discriminatedUnionFunc := DiscriminatedUnion("type", []any{schema}).DefaultFunc(func() any {
+			return map[string]any{
+				"type": "test",
+				"data": "func-default",
+			}
+		})
+		result2, err := discriminatedUnionFunc.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected = map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result2)
+	})
+
+	t.Run("prefault value behavior", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		prefaultValue := map[string]any{
+			"type": "test",
+			"data": "prefault",
+		}
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue)
+
+		// Valid input should work normally
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result)
+
+		// Test prefault function
+		discriminatedUnionFunc := DiscriminatedUnion("type", []any{schema}).PrefaultFunc(func() any {
+			return map[string]any{
+				"type": "test",
+				"data": "func-prefault",
+			}
+		})
+		result2, err := discriminatedUnionFunc.Parse(map[string]any{
+			"type": "test",
+			"data": "custom",
+		})
+		require.NoError(t, err)
+		expected = map[string]any{
+			"type": "test",
+			"data": "custom",
+		}
+		assert.Equal(t, expected, result2)
+	})
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+
+func TestDiscriminatedUnion_Refine(t *testing.T) {
+	t.Run("refine validation", func(t *testing.T) {
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"name": String(),
+		})
+		adminSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"admin"}),
+			"name": String(),
+			"role": String(),
+		})
+
+		// Only accept entries where name is not empty
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema}).Refine(func(v any) bool {
+			if obj, ok := v.(map[string]any); ok {
+				if name, exists := obj["name"]; exists {
+					if nameStr, ok := name.(string); ok {
+						return len(nameStr) > 0
+					}
+				}
+			}
+			return false
+		})
+
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"name": "John",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "user",
+			"name": "John",
+		}
+		assert.Equal(t, expected, result)
+
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"name": "",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		errorMessage := "Must be a valid discriminated union"
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Refine(func(v any) bool {
+			if obj, ok := v.(map[string]any); ok {
+				if data, exists := obj["data"]; exists {
+					if dataStr, ok := data.(string); ok {
+						return len(dataStr) > 3
+					}
+				}
+			}
+			return false
+		}, core.SchemaParams{Error: errorMessage})
+
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, result)
+
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hi",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with complex discriminated union", func(t *testing.T) {
+		userSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"user"}),
+			"name": String().Min(3),
+		})
+		adminSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"admin"}),
+			"name": String().Max(10),
+			"role": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema}).Refine(func(v any) bool {
+			if obj, ok := v.(map[string]any); ok {
+				if objType, exists := obj["type"]; exists {
+					return objType != "forbidden"
+				}
+			}
+			return false
+		})
+
+		// Should pass all validations
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"name": "John",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "user",
+			"name": "John",
+		}
+		assert.Equal(t, expected, result)
+
+		// Should fail refine validation
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "forbidden",
+			"name": "test",
+		})
+		assert.Error(t, err)
+
+		// Should fail schema validation (name too short for user)
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "user",
+			"name": "Jo",
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestDiscriminatedUnion_RefineAny(t *testing.T) {
+	t.Run("refineAny flexible validation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).RefineAny(func(v any) bool {
+			obj, ok := v.(map[string]any)
+			if !ok {
+				return false
+			}
+			data, exists := obj["data"]
+			if !exists {
+				return false
+			}
+			dataStr, ok := data.(string)
+			return ok && len(dataStr) >= 4
+		})
+
+		// String with >= 4 chars should pass
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, result)
+
+		// String with < 4 chars should fail
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hi",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny with type checking", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"num":  Int(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).RefineAny(func(v any) bool {
+			obj, ok := v.(map[string]any)
+			if !ok {
+				return false
+			}
+			num, exists := obj["num"]
+			if !exists {
+				return false
+			}
+			numInt, ok := num.(int)
+			return ok && numInt%2 == 0 // Only even numbers
+		})
+
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"num":  4,
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"num":  4,
+		}
+		assert.Equal(t, expected, result)
+
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"num":  3,
+		})
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Type-specific methods tests
+// =============================================================================
+
+func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
+	t.Run("Discriminator returns discriminator field name", func(t *testing.T) {
+		schema1 := Object(core.ObjectSchema{
+			"status": LiteralOf([]string{"success"}),
+			"data":   String(),
+		})
+		schema2 := Object(core.ObjectSchema{
+			"status": LiteralOf([]string{"error"}),
+			"error":  String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("status", []any{schema1, schema2})
+
+		assert.Equal(t, "status", discriminatedUnion.Discriminator())
+	})
+
+	t.Run("Options returns all schemas", func(t *testing.T) {
+		schema1 := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"a"}),
+			"val":  String(),
+		})
+		schema2 := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"b"}),
+			"val":  Int(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema1, schema2})
+
+		options := discriminatedUnion.Options()
+		assert.Len(t, options, 2)
+		assert.Equal(t, schema1, options[0])
+		assert.Equal(t, schema2, options[1])
+	})
+
+	t.Run("DiscriminatorMap returns value mapping", func(t *testing.T) {
+		schema1 := Object(core.ObjectSchema{
+			"kind": LiteralOf([]string{"first"}),
+			"data": String(),
+		})
+		schema2 := Object(core.ObjectSchema{
+			"kind": LiteralOf([]string{"second"}),
+			"data": Int(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("kind", []any{schema1, schema2})
+
+		discMap := discriminatedUnion.DiscriminatorMap()
+		assert.Len(t, discMap, 2)
+		assert.Contains(t, discMap, "first")
+		assert.Contains(t, discMap, "second")
+		assert.Equal(t, schema1, discMap["first"])
+		assert.Equal(t, schema2, discMap["second"])
+	})
+}
+
+// =============================================================================
+// Error handling tests
+// =============================================================================
+
+func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
+	t.Run("missing discriminator field", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"data": "hello",
+		})
+		assert.Error(t, err)
 	})
 
 	t.Run("invalid discriminator value", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "a": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "b": String()}),
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
 
-		_, err := schema.Parse(map[string]any{
-			"type": "x",
-			"a":    "abc",
-		})
-		assert.Error(t, err)
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
 
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.InvalidUnion, zodErr.Issues[0].Code)
-	})
-
-	t.Run("valid discriminator value, invalid data", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "a": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "b": String()}),
-		})
-
-		_, err := schema.Parse(map[string]any{
-			"type": "a",
-			"b":    "abc", // Wrong field for discriminator "a"
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"type": "invalid",
+			"data": "hello",
 		})
 		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
 	})
 
-	t.Run("union fallback behavior with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction, even with UnionFallback set
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}, core.SchemaParams{UnionFallback: true})
+	t.Run("schema validation error", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String().Min(10),
 		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "short",
+		})
+		assert.Error(t, err)
 	})
 
-	t.Run("custom error messages with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction, even with custom error set
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}, core.SchemaParams{
-				Error: "Must be a valid discriminated type",
-			})
+	t.Run("non-object input", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+
+		// This should fail for non-object input
+		_, err := discriminatedUnion.Parse("not an object")
+		assert.Error(t, err)
+
+		_, err = discriminatedUnion.Parse(123)
+		assert.Error(t, err)
+
+		_, err = discriminatedUnion.Parse([]string{"array"})
+		assert.Error(t, err)
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}, core.SchemaParams{Error: "Expected discriminated union match"})
+
+		_, err := discriminatedUnion.Parse(map[string]any{
+			"type": "invalid",
+			"data": "hello",
+		})
+		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 8. Edge and mutual exclusion cases
+// Edge case tests
 // =============================================================================
 
-func TestDiscriminatedUnionEdgeCases(t *testing.T) {
-	t.Run("single element union with invalid option", func(t *testing.T) {
-		assert.Panics(t, func() {
-			DiscriminatedUnion("a", []core.ZodType[any, any]{
-				String(),
-			})
+func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
+	t.Run("nil handling with discriminated union", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
 		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Nilable()
+
+		// Test nil input
+		result, err := discriminatedUnion.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value - should return pointer
+		result, err = discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, *result)
 	})
 
-	t.Run("empty union", func(t *testing.T) {
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{})
-		})
-	})
-
-	t.Run("missing discriminator field with invalid options", func(t *testing.T) {
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			})
-		})
-	})
-
-	t.Run("complex nested discriminated unions", func(t *testing.T) {
-		BaseError := Object(core.ObjectSchema{"status": Literal("failed"), "message": String()})
-		MyErrors := DiscriminatedUnion("code", []core.ZodType[any, any]{
-			BaseError.Extend(core.ObjectSchema{"code": Literal(400)}),
-			BaseError.Extend(core.ObjectSchema{"code": Literal(401)}),
-			BaseError.Extend(core.ObjectSchema{"code": Literal(500)}),
+	t.Run("single schema discriminated union", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"only"}),
+			"data": String(),
 		})
 
-		MyResult := DiscriminatedUnion("status", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"status": Literal("success"), "data": String()}),
-			MyErrors,
-		})
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
 
-		// Test success case
-		result, err := MyResult.Parse(map[string]any{
-			"status": "success",
-			"data":   "hello",
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "only",
+			"data": "test",
 		})
 		require.NoError(t, err)
 		expected := map[string]any{
-			"status": "success",
-			"data":   "hello",
+			"type": "only",
+			"data": "test",
 		}
 		assert.Equal(t, expected, result)
 
-		// Test error cases
-		result, err = MyResult.Parse(map[string]any{
-			"status":  "failed",
-			"code":    400,
-			"message": "bad request",
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"type": "other",
+			"data": "test",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("discriminated union strict validation", func(t *testing.T) {
+		schema1 := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"a"}),
+			"data": String(),
+		})
+		schema2 := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"b"}),
+			"data": Int(),
+		})
+
+		// Create discriminated union
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema1, schema2})
+
+		// Test normal discriminated union behavior
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "a",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "a",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, result)
+
+		// Test strict validation - missing discriminator should fail
+		_, err = discriminatedUnion.Parse(map[string]any{
+			"data": "hello",
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing discriminator field 'type'")
+	})
+
+	t.Run("empty context", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+
+		// Parse with empty context slice
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "test",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "test",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("complex discriminator values", func(t *testing.T) {
+		// Test with different types of discriminator values
+		stringSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"string"}),
+			"data": String(),
+		})
+		intSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]int{42}),
+			"data": Int(),
+		})
+		boolSchema := Object(core.ObjectSchema{
+			"type": LiteralOf([]bool{true}),
+			"data": Bool(),
+		})
+
+		discriminatedUnion := DiscriminatedUnion("type", []any{stringSchema, intSchema, boolSchema})
+
+		// Test string discriminator
+		result, err := discriminatedUnion.Parse(map[string]any{
+			"type": "string",
+			"data": "hello",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "string",
+			"data": "hello",
+		}
+		assert.Equal(t, expected, result)
+
+		// Test int discriminator
+		result, err = discriminatedUnion.Parse(map[string]any{
+			"type": 42,
+			"data": 123,
 		})
 		require.NoError(t, err)
 		expected = map[string]any{
-			"status":  "failed",
-			"code":    400,
-			"message": "bad request",
+			"type": 42,
+			"data": 123,
 		}
 		assert.Equal(t, expected, result)
-	})
-}
 
-// =============================================================================
-// 9. Default and Prefault tests
-// =============================================================================
-
-func TestDiscriminatedUnionDefaultAndPrefault(t *testing.T) {
-	t.Run("basic default value with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}).Default(map[string]any{
-				"type":  "string",
-				"value": "default",
-			})
+		// Test bool discriminator
+		result, err = discriminatedUnion.Parse(map[string]any{
+			"type": true,
+			"data": false,
 		})
-	})
-
-	t.Run("function-based default value with invalid options", func(t *testing.T) {
-		counter := 0
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			}).DefaultFunc(func() any {
-				counter++
-				return map[string]any{
-					"type":  "counter",
-					"value": counter,
-				}
-			})
-		})
-	})
-
-	t.Run("prefault value with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-				Int(),
-			}).Prefault(map[string]any{
-				"type":  "string",
-				"value": "fallback_value",
-			})
-		})
-	})
-
-	t.Run("default with transform compatibility with invalid options", func(t *testing.T) {
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			}).Default(map[string]any{
-				"type":  "string",
-				"value": "hello",
-			})
-		})
-
-		// Test that using invalid options will panic during construction
-		assert.Panics(t, func() {
-			DiscriminatedUnion("type", []core.ZodType[any, any]{
-				String(),
-			}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-				return map[string]any{
-					"original":    val,
-					"transformed": true,
-				}, nil
-			})
-		})
-	})
-
-	// Valid tests with proper Object + Literal structure
-	t.Run("valid default value", func(t *testing.T) {
-		defaultValue := map[string]any{
-			"type":  "a",
-			"value": "default_value",
-		}
-
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "value": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "value": Int()}),
-		}).Default(defaultValue)
-
-		// nil input should use default
-		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
-
-		// Valid input should override default
-		validInput := map[string]any{
-			"type":  "b",
-			"value": 42,
+		expected = map[string]any{
+			"type": true,
+			"data": false,
 		}
-		result, err = schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-	})
-
-	t.Run("valid defaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := DiscriminatedUnion("status", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"status": Literal("success"), "data": String()}),
-			Object(core.ObjectSchema{"status": Literal("failed"), "error": String()}),
-		}).DefaultFunc(func() any {
-			counter++
-			return map[string]any{
-				"status": "success",
-				"data":   fmt.Sprintf("generated-%d", counter),
-			}
-		})
-
-		// nil input should call function and use default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		result1Map := result1.(map[string]any)
-		assert.Equal(t, "success", result1Map["status"])
-		assert.Equal(t, "generated-1", result1Map["data"])
-		assert.Equal(t, 1, counter)
-
-		// Another nil input should call function again
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		result2Map := result2.(map[string]any)
-		assert.Equal(t, "success", result2Map["status"])
-		assert.Equal(t, "generated-2", result2Map["data"])
-		assert.Equal(t, 2, counter)
-
-		// Valid input should not call function
-		validInput := map[string]any{
-			"status": "failed",
-			"error":  "something went wrong",
-		}
-		result3, err3 := schema.Parse(validInput)
-		require.NoError(t, err3)
-		assert.Equal(t, validInput, result3)
-		assert.Equal(t, 2, counter) // Counter should not increment
-	})
-
-	t.Run("valid prefault value", func(t *testing.T) {
-		prefaultValue := map[string]any{
-			"type":  "a",
-			"value": "fallback_value",
-		}
-
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "value": String().Min(5)}),
-			Object(core.ObjectSchema{"type": Literal("b"), "value": Int().Min(10)}),
-		}).Prefault(prefaultValue)
-
-		// Valid input should pass through
-		validInput := map[string]any{
-			"type":  "a",
-			"value": "valid_string",
-		}
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-
-		// Invalid input should use prefault
-		invalidInput := map[string]any{
-			"type":  "a",
-			"value": "hi", // Too short
-		}
-		result, err = schema.Parse(invalidInput)
-		require.NoError(t, err)
-		assert.Equal(t, prefaultValue, result)
-	})
-
-	t.Run("valid prefaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := DiscriminatedUnion("status", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"status": Literal("success"), "data": String().Min(5)}),
-			Object(core.ObjectSchema{"status": Literal("failed"), "error": String().Min(5)}),
-		}).PrefaultFunc(func() any {
-			counter++
-			return map[string]any{
-				"status": "success",
-				"data":   fmt.Sprintf("fallback-%d", counter),
-			}
-		})
-
-		// Valid input should not call function
-		validInput := map[string]any{
-			"status": "success",
-			"data":   "valid_data",
-		}
-		result1, err1 := schema.Parse(validInput)
-		require.NoError(t, err1)
-		assert.Equal(t, validInput, result1)
-		assert.Equal(t, 0, counter)
-
-		// Invalid input should call prefault function
-		invalidInput := map[string]any{
-			"status": "success",
-			"data":   "hi", // Too short
-		}
-		result2, err2 := schema.Parse(invalidInput)
-		require.NoError(t, err2)
-		result2Map := result2.(map[string]any)
-		assert.Equal(t, "success", result2Map["status"])
-		assert.Equal(t, "fallback-1", result2Map["data"])
-		assert.Equal(t, 1, counter)
-
-		// Another invalid input should call function again
-		result3, err3 := schema.Parse(invalidInput)
-		require.NoError(t, err3)
-		result3Map := result3.(map[string]any)
-		assert.Equal(t, "success", result3Map["status"])
-		assert.Equal(t, "fallback-2", result3Map["data"])
-		assert.Equal(t, 2, counter)
-	})
-
-	t.Run("valid default vs prefault distinction", func(t *testing.T) {
-		defaultValue := map[string]any{
-			"type":  "a",
-			"value": "default_value",
-		}
-		prefaultValue := map[string]any{
-			"type":  "a",
-			"value": "prefault_value",
-		}
-
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "value": String().Min(5)}),
-			Object(core.ObjectSchema{"type": Literal("b"), "value": Int().Min(10)}),
-		}).Default(defaultValue).Prefault(prefaultValue)
-
-		// nil input uses default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, defaultValue, result1)
-
-		// Valid input succeeds
-		validInput := map[string]any{
-			"type":  "a",
-			"value": "valid_string",
-		}
-		result2, err2 := schema.Parse(validInput)
-		require.NoError(t, err2)
-		assert.Equal(t, validInput, result2)
-
-		// Invalid input uses prefault
-		invalidInput := map[string]any{
-			"type":  "a",
-			"value": "hi", // Too short
-		}
-		result3, err3 := schema.Parse(invalidInput)
-		require.NoError(t, err3)
-		assert.Equal(t, prefaultValue, result3)
-	})
-}
-
-// ------------------------------------------------------------------
-// Optional discriminator key – discriminator may be omitted
-// ------------------------------------------------------------------
-func TestDiscriminatedUnionOptionalDiscriminator(t *testing.T) {
-	schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-		Object(core.ObjectSchema{
-			"type": Literal("a").Optional(), // discriminator may be absent
-			"a":    String(),
-		}),
-		Object(core.ObjectSchema{
-			"type": Literal("b"),
-			"b":    String(),
-		}),
-	}, core.SchemaParams{UnionFallback: true})
-
-	// Discriminator present
-	_, err := schema.Parse(map[string]any{"type": "a", "a": "hello"})
-	require.NoError(t, err)
-
-	// Discriminator omitted – still matches first option via fallback
-	_, err = schema.Parse(map[string]any{"a": "hello"})
-	require.NoError(t, err)
-}
-
-// ------------------------------------------------------------------
-// Nil discriminator literal value
-// ------------------------------------------------------------------
-func TestDiscriminatedUnionNilDiscriminator(t *testing.T) {
-	schema := DiscriminatedUnion("kind", []core.ZodType[any, any]{
-		Object(core.ObjectSchema{"kind": Literal("foo"), "v": String()}),
-		Object(core.ObjectSchema{"kind": Nil(), "v": String()}),
-	})
-
-	// Match nil discriminator value
-	_, err := schema.Parse(map[string]any{"kind": nil, "v": "bar"})
-	require.NoError(t, err)
-}
-
-// =============================================================================
-// 10. Additional discriminated union behavior tests (safe subset)
-// =============================================================================
-
-func TestDiscriminatedUnionAdditionalBehavior(t *testing.T) {
-	// ------------------------------------------------------------------
-	// invalid discriminator value with unionFallback enabled
-	// ------------------------------------------------------------------
-	t.Run("invalid discriminator unionFallback", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []core.ZodType[any, any]{
-			Object(core.ObjectSchema{"type": Literal("a"), "a": String()}),
-			Object(core.ObjectSchema{"type": Literal("b"), "b": String()}),
-		}, core.SchemaParams{UnionFallback: true})
-
-		// Expect an error because discriminator value "x" is unknown
-		_, err := schema.Parse(map[string]any{"type": "x", "a": "abc"})
-		assert.Error(t, err)
-
-		var zErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zErr))
-		// Should report invalid_union
-		assert.Equal(t, core.InvalidUnion, zErr.Issues[0].Code)
-	})
-
-	// ------------------------------------------------------------------
-	// single-element discriminated union still validates inner schema
-	// ------------------------------------------------------------------
-	t.Run("single element union still validates", func(t *testing.T) {
-		singleOption := Object(core.ObjectSchema{
-			"a": Literal("discKey"),
-			"b": Enum("apple", "banana"),
-			"c": Object(core.ObjectSchema{"id": String()}),
-		})
-
-		schema := DiscriminatedUnion("a", []core.ZodType[any, any]{singleOption})
-
-		// Provide invalid nested data (missing c.id) -> should error
-		input := map[string]any{
-			"a": "discKey",
-			"b": "apple",
-			"c": map[string]any{},
-		}
-		_, err := schema.Parse(input)
-		assert.Error(t, err)
+		assert.Equal(t, expected, result)
 	})
 }

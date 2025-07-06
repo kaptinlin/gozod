@@ -2,8 +2,11 @@
 package checks
 
 import (
+	"regexp"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/pkg/regexes"
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -14,9 +17,9 @@ import (
 // Email creates an email format validation check with JSON Schema support
 // Supports: Email("invalid email") or Email(CheckParams{Error: "invalid email format"})
 func Email(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "email"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -28,19 +31,67 @@ func Email(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set email format for JSON Schema
-				setBagProperty(schema, "format", "email")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "email")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
 }
 
+// EmailWithPattern creates an email validation check with custom regex pattern
+func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "email"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			str, ok := payload.GetValue().(string)
+			if !ok {
+				payload.AddIssue(issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue()))
+				return
+			}
+			if !pattern.MatchString(str) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("email", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set email format for JSON Schema
+				SetBagProperty(schema, "format", "email")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// Html5Email creates an HTML5 email validation check
+func Html5Email(params ...any) core.ZodCheck {
+	return EmailWithPattern(regexes.Html5Email, params...)
+}
+
+// Rfc5322Email creates an RFC5322 email validation check
+func Rfc5322Email(params ...any) core.ZodCheck {
+	return EmailWithPattern(regexes.Rfc5322Email, params...)
+}
+
+// UnicodeEmail creates a Unicode email validation check
+func UnicodeEmail(params ...any) core.ZodCheck {
+	return EmailWithPattern(regexes.UnicodeEmail, params...)
+}
+
+// BrowserEmail creates a browser-compatible email validation check
+func BrowserEmail(params ...any) core.ZodCheck {
+	return EmailWithPattern(regexes.BrowserEmail, params...)
+}
+
 // URL creates a URL format validation check with JSON Schema support
 // Supports: URL("invalid URL") or URL(CheckParams{Error: "invalid URL format"})
 func URL(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "url"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -52,8 +103,40 @@ func URL(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set uri format for JSON Schema
-				setBagProperty(schema, "format", "uri")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "uri")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// URLWithOptions creates a URL validation check with optional constraints
+// Supports: URLWithOptions(validate.URLOptions{Hostname: hostnameRegex}, "invalid URL")
+func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "url"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.URLWithOptions(payload.GetValue(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("url", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set uri format for JSON Schema
+				SetBagProperty(schema, "format", "uri")
+				SetBagProperty(schema, "type", "string")
+
+				// Add constraint information to schema
+				if options.Hostname != nil {
+					SetBagProperty(schema, "hostnamePattern", options.Hostname.String())
+				}
+				if options.Protocol != nil {
+					SetBagProperty(schema, "protocolPattern", options.Protocol.String())
+				}
 			},
 		},
 	}
@@ -66,9 +149,9 @@ func URL(params ...any) core.ZodCheck {
 // UUID creates a UUID format validation check with JSON Schema support
 // Supports: UUID("invalid UUID") or UUID(CheckParams{Error: "invalid UUID format"})
 func UUID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "uuid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -80,8 +163,8 @@ func UUID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set uuid format for JSON Schema
-				setBagProperty(schema, "format", "uuid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "uuid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -90,9 +173,9 @@ func UUID(params ...any) core.ZodCheck {
 // GUID creates a GUID format validation check with JSON Schema support
 // Supports: GUID("invalid GUID") or GUID(CheckParams{Error: "invalid GUID format"})
 func GUID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "guid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -104,8 +187,8 @@ func GUID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set uuid format for JSON Schema (GUID is UUID variant)
-				setBagProperty(schema, "format", "uuid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "uuid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -118,9 +201,9 @@ func GUID(params ...any) core.ZodCheck {
 // IPv4 creates an IPv4 address format validation check with JSON Schema support
 // Supports: IPv4("invalid IPv4") or IPv4(CheckParams{Error: "invalid IPv4 address"})
 func IPv4(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "ipv4"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -132,8 +215,8 @@ func IPv4(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set ipv4 format for JSON Schema
-				setBagProperty(schema, "format", "ipv4")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "ipv4")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -142,9 +225,9 @@ func IPv4(params ...any) core.ZodCheck {
 // IPv6 creates an IPv6 address format validation check with JSON Schema support
 // Supports: IPv6("invalid IPv6") or IPv6(CheckParams{Error: "invalid IPv6 address"})
 func IPv6(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "ipv6"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -156,8 +239,8 @@ func IPv6(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set ipv6 format for JSON Schema
-				setBagProperty(schema, "format", "ipv6")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "ipv6")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -170,9 +253,9 @@ func IPv6(params ...any) core.ZodCheck {
 // CIDRv4 creates an IPv4 CIDR notation validation check with JSON Schema support
 // Supports: CIDRv4("invalid CIDR") or CIDRv4(CheckParams{Error: "invalid IPv4 CIDR"})
 func CIDRv4(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "cidrv4"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -184,8 +267,8 @@ func CIDRv4(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "cidrv4")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "cidrv4")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -194,9 +277,9 @@ func CIDRv4(params ...any) core.ZodCheck {
 // CIDRv6 creates an IPv6 CIDR notation validation check with JSON Schema support
 // Supports: CIDRv6("invalid CIDR") or CIDRv6(CheckParams{Error: "invalid IPv6 CIDR"})
 func CIDRv6(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "cidrv6"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -208,8 +291,8 @@ func CIDRv6(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "cidrv6")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "cidrv6")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -222,9 +305,9 @@ func CIDRv6(params ...any) core.ZodCheck {
 // Base64 creates a Base64 encoding validation check with JSON Schema support
 // Supports: Base64("invalid base64") or Base64(CheckParams{Error: "invalid base64 encoding"})
 func Base64(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "base64"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -236,8 +319,8 @@ func Base64(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "base64")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "base64")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -246,9 +329,9 @@ func Base64(params ...any) core.ZodCheck {
 // Base64URL creates a Base64URL encoding validation check with JSON Schema support
 // Supports: Base64URL("invalid base64url") or Base64URL(CheckParams{Error: "invalid base64url encoding"})
 func Base64URL(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "base64url"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -260,8 +343,8 @@ func Base64URL(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "base64url")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "base64url")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -274,9 +357,9 @@ func Base64URL(params ...any) core.ZodCheck {
 // JWT creates a JWT token validation check with JSON Schema support
 // Supports: JWT("invalid JWT") or JWT(CheckParams{Error: "invalid JWT token"})
 func JWT(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "jwt"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -288,8 +371,33 @@ func JWT(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "jwt")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "jwt")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// JWTWithAlgorithm creates a JWT token validation check with algorithm constraint
+// Supports: JWTWithAlgorithm("HS256", "invalid JWT") or JWTWithAlgorithm("RS256", CheckParams{Error: "invalid JWT token"})
+func JWTWithAlgorithm(algorithm string, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "jwt_with_algorithm"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			options := validate.JWTOptions{Algorithm: &algorithm}
+			if !validate.JWTWithOptions(payload.GetValue(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set custom format for JSON Schema
+				SetBagProperty(schema, "format", "jwt")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -302,9 +410,9 @@ func JWT(params ...any) core.ZodCheck {
 // E164 creates an E.164 phone number validation check with JSON Schema support
 // Supports: E164("invalid phone") or E164(CheckParams{Error: "invalid E.164 format"})
 func E164(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "e164"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -316,8 +424,8 @@ func E164(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set custom format for JSON Schema
-				setBagProperty(schema, "format", "e164")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "e164")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -327,56 +435,183 @@ func E164(params ...any) core.ZodCheck {
 // DATE AND TIME VALIDATION
 // =============================================================================
 
-// ISODateTime creates an ISO 8601 datetime validation check with JSON Schema support
-// Supports: ISODateTime("invalid datetime") or ISODateTime(CheckParams{Error: "invalid ISO datetime"})
-func ISODateTime(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "iso_datetime"}
-	applyCheckParams(def, checkParams)
+// ISODateTimeOptions defines configuration for ISO DateTime validation
+type ISODateTimeOptions struct {
+	// Precision specifies number of decimal places for seconds
+	// If nil, matches any number of decimal places
+	// If 0 or negative, no decimal places allowed
+	Precision *int
 
-	var check *core.ZodCheckInternals
-	check = &core.ZodCheckInternals{
+	// Offset if true, allows timezone offsets like +01:00
+	Offset bool
+
+	// Local if true, makes the 'Z' timezone marker optional
+	Local bool
+}
+
+// ISODateTimeWithOptions creates an ISO 8601 datetime validation check with options
+// Supports: ISODateTimeWithOptions(options, "invalid datetime") or ISODateTimeWithOptions(options, CheckParams{Error: "invalid datetime"})
+func ISODateTimeWithOptions(options ISODateTimeOptions, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "iso_datetime"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODateTime(payload.GetValue()) {
-				iss := issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil)
-				iss.Inst = check
-				payload.AddIssue(iss)
+			if !validate.ISODateTimeWithOptions(payload.GetValue(), validate.ISODateTimeOptions{
+				Precision: options.Precision,
+				Offset:    options.Offset,
+				Local:     options.Local,
+			}) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set datetime format for JSON Schema
-				setBagProperty(schema, "format", "date-time")
-				setBagProperty(schema, "type", "string")
+				// Set date-time format for JSON Schema
+				SetBagProperty(schema, "format", "date-time")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
-	return check
 }
 
-// ISODate creates an ISO 8601 date validation check with JSON Schema support
-// Supports: ISODate("invalid date") or ISODate(CheckParams{Error: "invalid ISO date"})
-func ISODate(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "iso_date"}
-	applyCheckParams(def, checkParams)
+// ISODateTime creates an ISO 8601 datetime format validation check with JSON Schema support
+// Supports: ISODateTime("invalid datetime") or ISODateTime(CheckParams{Error: "invalid datetime format"})
+func ISODateTime(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "iso_datetime"}
+	ApplyCheckParams(def, checkParams)
 
-	var check *core.ZodCheckInternals
-	check = &core.ZodCheckInternals{
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.ISODateTime(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set date-time format for JSON Schema
+				SetBagProperty(schema, "format", "date-time")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// ISODate creates an ISO 8601 date format validation check with JSON Schema support
+// Supports: ISODate("invalid date") or ISODate(CheckParams{Error: "invalid date format"})
+func ISODate(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "iso_date"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.ISODate(payload.GetValue()) {
-				iss := issues.CreateInvalidFormatIssue("iso_date", payload.GetValue(), nil)
-				iss.Inst = check
-				payload.AddIssue(iss)
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_date", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set date format for JSON Schema
-				setBagProperty(schema, "format", "date")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "date")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// ISODateMin creates a minimum date validation check
+// Validates that the ISO date is on or after the specified minimum date
+func ISODateMin(minDate string, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "min_date"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			value := payload.GetValue()
+			if dateStr, ok := value.(string); ok {
+				if dateStr < minDate {
+					issue := issues.CreateTooSmallIssue(minDate, true, "date", payload.GetValue())
+					issue.Message = "Date must be on or after " + minDate
+					payload.AddIssue(issue)
+				}
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "minimum", minDate)
+			},
+		},
+	}
+}
+
+// ISODateMax creates a maximum date validation check
+// Validates that the ISO date is on or before the specified maximum date
+func ISODateMax(maxDate string, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "max_date"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			value := payload.GetValue()
+			if dateStr, ok := value.(string); ok {
+				if dateStr > maxDate {
+					issue := issues.CreateTooBigIssue(maxDate, true, "date", payload.GetValue())
+					issue.Message = "Date must be on or before " + maxDate
+					payload.AddIssue(issue)
+				}
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "maximum", maxDate)
+			},
+		},
+	}
+}
+
+// ISOTimeOptions contains configuration for ISO Time validation
+type ISOTimeOptions struct {
+	// Precision specifies number of decimal places for seconds
+	// If nil, matches any number of decimal places
+	// If 0 or negative, no decimal places allowed
+	// Special case: -1 means minute precision only (no seconds)
+	Precision *int
+}
+
+// ISOTimeWithOptions creates an ISO 8601 time validation check with configuration options
+// Supports: ISOTimeWithOptions(options, "invalid time") or ISOTimeWithOptions(options, CheckParams{Error: "invalid ISO time"})
+func ISOTimeWithOptions(options ISOTimeOptions, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "iso_time"}
+	ApplyCheckParams(def, checkParams)
+
+	var check *core.ZodCheckInternals
+	check = &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.ISOTimeWithOptions(payload.GetValue(), validate.ISOTimeOptions{
+				Precision: options.Precision,
+			}) {
+				iss := issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil)
+				iss.Inst = check
+				payload.AddIssue(iss)
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set time format for JSON Schema
+				SetBagProperty(schema, "format", "time")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -386,9 +621,9 @@ func ISODate(params ...any) core.ZodCheck {
 // ISOTime creates an ISO 8601 time validation check with JSON Schema support
 // Supports: ISOTime("invalid time") or ISOTime(CheckParams{Error: "invalid ISO time"})
 func ISOTime(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_time"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	var check *core.ZodCheckInternals
 	check = &core.ZodCheckInternals{
@@ -403,8 +638,8 @@ func ISOTime(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set time format for JSON Schema
-				setBagProperty(schema, "format", "time")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "time")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -414,9 +649,9 @@ func ISOTime(params ...any) core.ZodCheck {
 // ISODuration creates an ISO 8601 duration validation check with JSON Schema support
 // Supports: ISODuration("invalid duration") or ISODuration(CheckParams{Error: "invalid ISO duration"})
 func ISODuration(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_duration"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	var check *core.ZodCheckInternals
 	check = &core.ZodCheckInternals{
@@ -431,8 +666,8 @@ func ISODuration(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set duration format for JSON Schema
-				setBagProperty(schema, "format", "duration")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "duration")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -446,9 +681,9 @@ func ISODuration(params ...any) core.ZodCheck {
 // CUID creates a CUID format validation check with JSON Schema support
 // Supports: CUID("invalid CUID") or CUID(CheckParams{Error: "invalid CUID format"})
 func CUID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "cuid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -460,8 +695,8 @@ func CUID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set cuid format for JSON Schema
-				setBagProperty(schema, "format", "cuid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "cuid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -470,9 +705,9 @@ func CUID(params ...any) core.ZodCheck {
 // CUID2 creates a CUID2 format validation check with JSON Schema support
 // Supports: CUID2("invalid CUID2") or CUID2(CheckParams{Error: "invalid CUID2 format"})
 func CUID2(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "cuid2"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -484,8 +719,8 @@ func CUID2(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set cuid2 format for JSON Schema
-				setBagProperty(schema, "format", "cuid2")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "cuid2")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -494,9 +729,9 @@ func CUID2(params ...any) core.ZodCheck {
 // ULID creates a ULID format validation check with JSON Schema support
 // Supports: ULID("invalid ULID") or ULID(CheckParams{Error: "invalid ULID format"})
 func ULID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "ulid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -508,8 +743,8 @@ func ULID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set ulid format for JSON Schema
-				setBagProperty(schema, "format", "ulid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "ulid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -518,9 +753,9 @@ func ULID(params ...any) core.ZodCheck {
 // XID creates an XID format validation check with JSON Schema support
 // Supports: XID("invalid XID") or XID(CheckParams{Error: "invalid XID format"})
 func XID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "xid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -532,8 +767,8 @@ func XID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set xid format for JSON Schema
-				setBagProperty(schema, "format", "xid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "xid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -542,9 +777,9 @@ func XID(params ...any) core.ZodCheck {
 // KSUID creates a KSUID format validation check with JSON Schema support
 // Supports: KSUID("invalid KSUID") or KSUID(CheckParams{Error: "invalid KSUID format"})
 func KSUID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "ksuid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -556,8 +791,8 @@ func KSUID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set ksuid format for JSON Schema
-				setBagProperty(schema, "format", "ksuid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "ksuid")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -566,9 +801,9 @@ func KSUID(params ...any) core.ZodCheck {
 // NanoID creates a NanoID format validation check with JSON Schema support
 // Supports: NanoID("invalid NanoID") or NanoID(CheckParams{Error: "invalid NanoID format"})
 func NanoID(params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "nanoid"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -580,8 +815,36 @@ func NanoID(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set nanoid format for JSON Schema
-				setBagProperty(schema, "format", "nanoid")
-				setBagProperty(schema, "type", "string")
+				SetBagProperty(schema, "format", "nanoid")
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
+// JSON VALIDATION
+// =============================================================================
+
+// JSON creates a JSON format validation check with JSON Schema support
+// Supports: JSON("invalid JSON") or JSON(CheckParams{Error: "invalid JSON"})
+func JSON(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "json"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.JSON(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("json", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set json format for JSON Schema
+				SetBagProperty(schema, "format", "json")
+				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}

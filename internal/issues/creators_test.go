@@ -34,7 +34,7 @@ func TestNewRawIssueFromMessage(t *testing.T) {
 
 func TestErrorCreationHelpers(t *testing.T) {
 	t.Run("CreateInvalidTypeIssue", func(t *testing.T) {
-		issue := CreateInvalidTypeIssue("string", "test_input")
+		issue := CreateInvalidTypeIssue(core.ZodTypeString, "test_input")
 
 		require.Equal(t, core.InvalidType, issue.Code)
 		// Check properties using mapx accessors
@@ -128,7 +128,7 @@ func TestCreationHelpersWithOptions(t *testing.T) {
 	})
 
 	t.Run("CreateInvalidTypeIssue with additional properties", func(t *testing.T) {
-		issue := CreateInvalidTypeIssue("string", "input")
+		issue := CreateInvalidTypeIssue(core.ZodTypeString, "input")
 
 		// Add additional properties using mapx
 		issue.Properties["custom"] = "value"
@@ -234,7 +234,7 @@ func TestComplexCreationScenarios(t *testing.T) {
 
 	t.Run("create multiple issues with different types", func(t *testing.T) {
 		issues := []core.ZodRawIssue{
-			CreateInvalidTypeIssue("string", "123"),
+			CreateInvalidTypeIssue(core.ZodTypeString, "123"),
 			CreateTooBigIssue(100, true, "number", 150),
 			CreateTooSmallIssue(5, false, "string", "hi"),
 			CreateInvalidFormatIssue("email", "invalid@", nil),

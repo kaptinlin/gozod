@@ -9,7 +9,7 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | TypeScript Zod v4 | GoZod Constructor | Return Type | Smart Inference Features | Status |
 |-------------------|------------------|-------------|--------------------------|--------|
 | `z.string()` | `gozod.String()` | `*ZodString` | ✅ Supports string/\*string inference | ✅ Fully implemented |
-| `z.number()` | `gozod.Float64()`, `gozod.Number()` | `*ZodFloat64` | ✅ Supports numeric type inference | ✅ Fully implemented |
+| `z.number()` | `gozod.Float64()`, `gozod.Number()` | `*ZodFloatTyped[float64]` | ✅ Supports numeric type inference | ✅ Fully implemented |
 | `z.boolean()` | `gozod.Bool()` | `*ZodBool` | ✅ Supports bool/\*bool inference | ✅ Fully implemented |
 | `z.bigint()` | `gozod.BigInt()` | `*ZodBigInt` | ✅ Supports big integer inference | ✅ Fully implemented |
 | `z.array(T)` | `gozod.Slice(T)` | `*ZodSlice` | ✅ Supports slice inference | ✅ Fully implemented |
@@ -28,25 +28,26 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.unknown()` | `gozod.Unknown()` | `*ZodUnknown` | ✅ Supports unknown type inference | ✅ Fully implemented |
 | `z.never()` | `gozod.Never()` | `*ZodNever` | ✅ Never matches | ✅ Fully implemented |
 | `z.null()` | `gozod.Nil()` | `ZodType[any, any]` | ✅ Supports nil inference | ✅ Fully implemented |
+| `z.instanceof(Class)` | `gozod.Struct()` | `*ZodStruct` | ✅ Supports struct instance validation | ✅ Fully implemented |
 
 ### Go-Specific Numeric Types
 
 | Go Type | GoZod Constructor | Return Type | Smart Inference Features | Status |
 |---------|------------------|-------------|--------------------------|--------|
-| `int` | `gozod.Int()` | `*ZodInt` | ✅ Supports integer inference | ✅ Fully implemented |
-| `int8` | `gozod.Int8()` | `*ZodInt8` | ✅ Supports 8-bit integer inference | ✅ Fully implemented |
-| `int16` | `gozod.Int16()` | `*ZodInt16` | ✅ Supports 16-bit integer inference | ✅ Fully implemented |
-| `int32` | `gozod.Int32()`, `gozod.Rune()` | `*ZodInt32` | ✅ Supports 32-bit integer inference | ✅ Fully implemented |
-| `int64` | `gozod.Int64()` | `*ZodInt64` | ✅ Supports 64-bit integer inference | ✅ Fully implemented |
-| `uint` | `gozod.Uint()` | `*ZodUint` | ✅ Supports unsigned integer inference | ✅ Fully implemented |
-| `uint8` | `gozod.Uint8()`, `gozod.Byte()` | `*ZodUint8` | ✅ Supports 8-bit unsigned integer inference | ✅ Fully implemented |
-| `uint16` | `gozod.Uint16()` | `*ZodUint16` | ✅ Supports 16-bit unsigned integer inference | ✅ Fully implemented |
-| `uint32` | `gozod.Uint32()` | `*ZodUint32` | ✅ Supports 32-bit unsigned integer inference | ✅ Fully implemented |
-| `uint64` | `gozod.Uint64()` | `*ZodUint64` | ✅ Supports 64-bit unsigned integer inference | ✅ Fully implemented |
-| `float32` | `gozod.Float32()` | `*ZodFloat32` | ✅ Supports single precision float inference | ✅ Fully implemented |
-| `float64` | `gozod.Float64()`, `gozod.Number()` | `*ZodFloat64` | ✅ Supports double precision float inference | ✅ Fully implemented |
-| `complex64` | `gozod.Complex64()` | `*ZodComplex64` | ✅ Supports single precision complex inference | ✅ Fully implemented |
-| `complex128` | `gozod.Complex128()` | `*ZodComplex128` | ✅ Supports double precision complex inference | ✅ Fully implemented |
+| `int` | `gozod.Int()` | `*ZodIntegerTyped[int]` | ✅ Supports integer inference | ✅ Fully implemented |
+| `int8` | `gozod.Int8()` | `*ZodIntegerTyped[int8]` | ✅ Supports 8-bit integer inference | ✅ Fully implemented |
+| `int16` | `gozod.Int16()` | `*ZodIntegerTyped[int16]` | ✅ Supports 16-bit integer inference | ✅ Fully implemented |
+| `int32` | `gozod.Int32()`, `gozod.Rune()` | `*ZodIntegerTyped[int32]` | ✅ Supports 32-bit integer inference | ✅ Fully implemented |
+| `int64` | `gozod.Int64()` | `*ZodIntegerTyped[int64]` | ✅ Supports 64-bit integer inference | ✅ Fully implemented |
+| `uint` | `gozod.Uint()` | `*ZodIntegerTyped[uint]` | ✅ Supports unsigned integer inference | ✅ Fully implemented |
+| `uint8` | `gozod.Uint8()`, `gozod.Byte()` | `*ZodIntegerTyped[uint8]` | ✅ Supports 8-bit unsigned integer inference | ✅ Fully implemented |
+| `uint16` | `gozod.Uint16()` | `*ZodIntegerTyped[uint16]` | ✅ Supports 16-bit unsigned integer inference | ✅ Fully implemented |
+| `uint32` | `gozod.Uint32()` | `*ZodIntegerTyped[uint32]` | ✅ Supports 32-bit unsigned integer inference | ✅ Fully implemented |
+| `uint64` | `gozod.Uint64()` | `*ZodIntegerTyped[uint64]` | ✅ Supports 64-bit unsigned integer inference | ✅ Fully implemented |
+| `float32` | `gozod.Float32()` | `*ZodFloatTyped[float32]` | ✅ Supports single precision float inference | ✅ Fully implemented |
+| `float64` | `gozod.Float64()`, `gozod.Number()` | `*ZodFloatTyped[float64]` | ✅ Supports double precision float inference | ✅ Fully implemented |
+| `complex64` | `gozod.Complex64()` | `*ZodComplex[complex64]` | ✅ Supports single precision complex inference | ✅ Fully implemented |
+| `complex128` | `gozod.Complex128()` | `*ZodComplex[complex128]` | ✅ Supports double precision complex inference | ✅ Fully implemented |
 
 ### Go-Specific Special Types
 
@@ -108,11 +109,6 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.includes(str)` | `.Includes(str)` | ✅ | Contains substring validation |
 | `.startsWith(str)` | `.StartsWith(str)` | ✅ | Starts with validation |
 | `.endsWith(str)` | `.EndsWith(str)` | ✅ | Ends with validation |
-| `.datetime()` | `.DateTime()` | ✅ | Datetime format validation |
-| `.date()` | `.Date()` | ✅ | Date format validation |
-| `.time()` | `.Time()` | ✅ | Time format validation |
-| `.duration()` | `.Duration()` | ✅ | Duration format validation |
-| `.ip()` | `.IP()` | ✅ | IP address validation |
 | `.json()` | `.JSON()` | ✅ | JSON format validation |
 | `.trim()` | `.Trim()` | ✅ | Trim whitespace transformation |
 | `.toLowerCase()` | `.ToLowerCase()` | ✅ | Convert to lowercase transformation |

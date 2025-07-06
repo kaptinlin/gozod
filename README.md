@@ -124,8 +124,8 @@ gozod.Slice(gozod.String()).Min(1).Max(10).NonEmpty()
 // Optional (allows nil/missing)
 gozod.String().Email().Optional()
 
-// Nilable (returns typed nil pointer)
-gozod.String().Nilable()  // Returns (*string)(nil) for nil input
+// Nilable (handles explicit null values)
+gozod.String().Nilable()  // Returns a typed nil (*string)(nil) for nil input
 
 // Default values
 gozod.String().Default("anonymous")
@@ -136,6 +136,21 @@ gozod.String().Min(5).Prefault("fallback")
 
 ### Advanced Types
 ```go
+// Enum types
+colorEnum := gozod.Enum("red", "green", "blue")
+statusMap := gozod.EnumMap(map[string]string{
+	"ACTIVE": "active", 
+	"INACTIVE": "inactive"
+})
+
+// Go native enum support
+type Status int
+const (
+    Active Status = iota
+    Inactive
+)
+statusEnum := gozod.Enum(Active, Inactive)
+
 // Union types (OR logic)
 gozod.Union([]gozod.ZodType[any, any]{gozod.String(), gozod.Int()})
 
@@ -170,12 +185,12 @@ GoZod provides comprehensive compatibility with TypeScript Zod v4 while adding G
 - **Basic Types**: `string`, `number`, `boolean`, `bigint` with Go-native type variants
 - **Collections**: `array`, `object`, `record`, `map` with smart type inference
 - **Advanced Types**: `union`, `intersection`, `discriminated union`, `literal`, `enum`
-- **Modifiers**: `optional`, `nullable`, `default`, `catch` with Go semantics
+- **Modifiers**: `optional`, `nilable`, `default` with Go semantics
 
 ### Key Enhancements
 - **Pointer Identity Preservation**: Input pointer addresses maintained in output
 - **Go-Specific Types**: Support for all Go numeric types (`int8`-`int64`, `uint8`-`uint64`, `float32/64`, `complex64/128`)
-- **Smart Nil Handling**: Distinction between "missing field" (Optional) and "null value" (Nilable) semantics
+- **Smart Nil Handling**: Distinction between "missing field" (Optional) and "null value" (Nilable) semantics with simplified zero-value returns
 - **Enhanced Error System**: Structured error handling with custom formatting and internationalization
 
 ### Compatibility Status

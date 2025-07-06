@@ -248,10 +248,24 @@ func main() {
 
 ## Global Error Configuration
 
-Configure error handling globally:
+GoZod ships with built-in locales for internationalization (i18n). To set a global error language, simply pass a locale-specific config to `gozod.Config()`.
 
 ```go
-// Set global custom error handler
+import "github.com/kaptinlin/gozod/locales"
+
+// Set the global error language to Chinese.
+gozod.Config(locales.ZhCN())
+
+// All subsequent validation errors will be in Chinese.
+_, err := gozod.String().Email().Parse("invalid-email")
+// err.Error() will now be in Chinese: "格式无效：请输入有效的电子邮件地址"
+```
+
+This is the recommended way to handle internationalization. It has lower precedence than `CustomError` but higher than the default built-in messages.
+
+You can also define your own `CustomError` map for more specific global overrides. This takes highest priority.
+
+```go
 gozod.Config(&gozod.ZodConfig{
     CustomError: func(issue gozod.ZodRawIssue) string {
         switch issue.Code {
@@ -269,7 +283,7 @@ gozod.Config(&gozod.ZodConfig{
 })
 ```
 
-## Error Priority Chain
+## Error Message Precedence
 
 GoZod resolves error messages using this priority order:
 
@@ -294,52 +308,6 @@ ctx := &gozod.ParseContext{
 
 _, err := schema.Parse(42, ctx)
 // Uses "Schema-level error" (highest priority)
-```
-
-## Internationalization
-
-Create localized error messages:
-
-```go
-// Error message mapping
-var errorMessages = map[string]map[string]string{
-    "en": {
-        "username_required": "Username is required",
-        "email_invalid":     "Invalid email address",
-        "password_short":    "Password too short",
-    },
-    "zh": {
-        "username_required": "用户名为必填项",
-        "email_invalid":     "邮箱地址无效",
-        "password_short":    "密码过短",
-    },
-}
-
-func localizedError(locale string) func(gozod.ZodRawIssue) string {
-    messages := errorMessages[locale]
-    if messages == nil {
-        messages = errorMessages["en"] // fallback
-    }
-    
-    return func(issue gozod.ZodRawIssue) string {
-        switch issue.Code {
-        case "invalid_type":
-            if issue.Input == nil {
-                return messages["username_required"]
-            }
-            return messages["email_invalid"]
-        case "too_small":
-            return messages["password_short"]
-        default:
-            return "Validation error"
-        }
-    }
-}
-
-// Use with schema
-schema := gozod.String(gozod.SchemaParams{
-    Error: localizedError("zh"),
-})
 ```
 
 ## Best Practices

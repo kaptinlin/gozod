@@ -36,12 +36,11 @@ import "github.com/kaptinlin/gozod/pkg/coerce"
 
 // Generic conversion
 coerce.To[T](val)              // convert to type T
-coerce.ToLiteral(val)           // keep literal type
-coerce.ToValueSet(slice)        // build enum set (map[T]struct{})
+coerce.ToLiteral(val)           // literal value conversion
 
 // String & time
 coerce.ToString(val)            // string conversion
-coerce.ToISODate(timeVal)       // ISO-8601 date string
+coerce.ToTime(val)              // time.Time conversion
 
 // Boolean
 coerce.ToBool(val)              // bool conversion

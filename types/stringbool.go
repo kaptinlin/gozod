@@ -1,53 +1,28 @@
 package types
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
 
-// Error definitions for stringbool transformations
-var (
-	ErrExpectedStringBool = errors.New("expected stringbool type")
-)
+// =============================================================================
+// TYPE CONSTRAINTS
+// =============================================================================
 
-//////////////////////////////////////////
-//////////////////////////////////////////
-//////////                      //////////
-//////////   ZodStringBool      //////////
-//////////                      //////////
-//////////////////////////////////////////
-//////////////////////////////////////////
-
-// ZodStringBoolDef defines the configuration for string boolean validation
-type ZodStringBoolDef struct {
-	core.ZodTypeDef
-	Type   core.ZodTypeCode // "stringbool"
-	Truthy []string         // Truthy string values
-	Falsy  []string         // Falsy string values
-	Case   string           // "sensitive" or "insensitive"
-	Checks []core.ZodCheck  // StringBool-specific validation checks
+// StringBoolConstraint restricts values to bool or *bool for StringBool output.
+type StringBoolConstraint interface {
+	bool | *bool
 }
 
-// ZodStringBoolInternals contains stringbool validator internal state
-type ZodStringBoolInternals struct {
-	core.ZodTypeInternals
-	Def    *ZodStringBoolDef          // Schema definition
-	Isst   issues.ZodIssueInvalidType // Invalid type issue template
-	Truthy map[string]struct{}        // Truthy values set for fast lookup
-	Falsy  map[string]struct{}        // Falsy values set for fast lookup
-	Bag    map[string]any             // Runtime configuration
-}
-
-// ZodStringBool represents a string-to-boolean validation schema
-type ZodStringBool struct {
-	internals *ZodStringBoolInternals
-}
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
 // StringBoolOptions provides configuration for stringbool schema creation
 type StringBoolOptions struct {
@@ -56,116 +31,301 @@ type StringBoolOptions struct {
 	Case   string   // "sensitive" or "insensitive"
 }
 
-//////////////////////////////////////////
-// Core Interface Implementation
-//////////////////////////////////////////
+// ZodStringBoolDef defines the configuration for string boolean validation
+type ZodStringBoolDef struct {
+	core.ZodTypeDef
+	Truthy []string // Truthy string values
+	Falsy  []string // Falsy string values
+	Case   string   // "sensitive" or "insensitive"
+}
 
-// GetInternals returns the internal state for framework use
-func (z *ZodStringBool) GetInternals() *core.ZodTypeInternals {
+// ZodStringBoolInternals contains stringbool validator internal state
+type ZodStringBoolInternals struct {
+	core.ZodTypeInternals
+	Def    *ZodStringBoolDef   // Schema definition
+	Truthy map[string]struct{} // Truthy values set for fast lookup
+	Falsy  map[string]struct{} // Falsy values set for fast lookup
+}
+
+// ZodStringBool represents a string-to-boolean validation schema with type safety
+type ZodStringBool[T StringBoolConstraint] struct {
+	internals *ZodStringBoolInternals
+}
+
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
+// GetInternals returns the internal state of the schema
+func (z *ZodStringBool[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Coerce attempts to coerce input to string for stringbool validation
-func (z *ZodStringBool) Coerce(input any) (any, bool) {
-	if str, err := coerce.ToString(input); err == nil {
-		return str, true
-	}
-	return nil, false
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodStringBool[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse validates and converts string input to boolean output using smart type inference
-func (z *ZodStringBool) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodStringBool[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Coerce implements Coercible interface for string-to-bool type conversion
+func (z *ZodStringBool[T]) Coerce(input any) (any, bool) {
+	// First try to coerce to string
+	if str, err := coerce.ToString(input); err == nil {
+		// Then try to convert string to bool using our custom logic
+		if _, ok := z.tryStringToBool(str); ok {
+			return str, true // Return the string, not the bool
+		}
+	}
+	return input, false
+}
+
+// Parse returns a value that matches the generic type T with full type safety.
+func (z *ZodStringBool[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	parseCtx := core.NewParseContext()
+	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
 	}
 
-	// Use engine.ParseType with custom checkers that adhere to zod behaviour
-	result, err := engine.ParseType[bool](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeStringBool,
-		// =========================
-		// Type Checker
-		// =========================
-		func(v any) (bool, bool) {
-			// Accept raw string
-			if str, ok := v.(string); ok {
-				if res, ok2 := z.tryStringToBool(str); ok2 {
-					return res, true
-				}
-				// Un-recognised string – signal failure and let validator phase turn into value error.
-				return false, false
-			}
-			// Accept *string (smart inference – return bool, not pointer)
-			if ptr, ok := v.(*string); ok && ptr != nil {
-				if res, ok2 := z.tryStringToBool(*ptr); ok2 {
-					return res, true
-				}
-				return false, false
-			}
-			return false, false
-		},
-		// =========================
-		// Pointer Checker
-		// (keep pointer to bool only; do NOT match *string to avoid pointer return)
-		// =========================
-		func(v any) (*bool, bool) {
-			if ptr, ok := v.(*bool); ok {
-				return ptr, true
-			}
-			return nil, false
-		},
-		// =========================
-		// Validator – run attached checks (e.g., Refine)
-		// =========================
-		func(value bool, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			if len(checks) == 0 {
-				return nil
-			}
-			// Use constructor instead of direct struct literal to respect private fields
-			payload := core.NewParsePayload(value)
-			engine.RunChecksOnValue(value, checks, payload, ctx)
-			if len(payload.GetIssues()) > 0 {
-				finalized := make([]core.ZodIssue, len(payload.GetIssues()))
-				for i, raw := range payload.GetIssues() {
-					finalized[i] = issues.FinalizeIssue(raw, ctx, core.GetConfig())
-				}
-				return issues.NewZodError(finalized)
-			}
-			return nil
-		},
-		parseCtx,
-	)
+	// Use engine's modifier processing for consistent behavior
+	if result, handled, err := z.processStringBoolModifiers(input, parseCtx); handled {
+		if err != nil {
+			var zero T
+			return zero, err
+		}
+		// Apply transform if present
+		transformed, transformErr := z.applyTransform(result, parseCtx)
+		if transformErr != nil {
+			var zero T
+			return zero, transformErr
+		}
+		return engine.ConvertToConstraintType[bool, T](transformed, parseCtx, core.ZodTypeStringBool)
+	}
 
-	// Post-processing error mapping (convert invalid_type to invalid_value when input was string/*string)
-	if err != nil {
-		var zErr *issues.ZodError
-		if errors.As(err, &zErr) {
-			for i, iss := range zErr.Issues {
-				if iss.Code == core.InvalidType {
-					switch input.(type) {
-					case string, *string:
-						zErr.Issues[i].Code = core.InvalidValue
-						// Re-evaluate message with schema error map if available
-						if z.internals.Error != nil {
-							msg := (*z.internals.Error)(core.ZodRawIssue{Code: core.InvalidValue})
-							if msg != "" {
-								zErr.Issues[i].Message = msg
-							}
-						}
+	// Regular parsing path
+	boolResult, err := z.parseStringToBool(input, parseCtx)
+	if err == nil {
+		// Apply transform if present
+		transformed, transformErr := z.applyTransform(boolResult, parseCtx)
+		if transformErr != nil {
+			var zero T
+			return zero, transformErr
+		}
+		return engine.ConvertToConstraintType[bool, T](transformed, parseCtx, core.ZodTypeStringBool)
+	}
+
+	// Try prefault if available
+	if z.internals.ZodTypeInternals.PrefaultValue != nil {
+		prefaultResult, prefaultErr := z.parseStringToBoolInternal(z.internals.ZodTypeInternals.PrefaultValue, parseCtx, true)
+		if prefaultErr == nil {
+			transformed, transformErr := z.applyTransform(prefaultResult, parseCtx)
+			if transformErr != nil {
+				var zero T
+				return zero, transformErr
+			}
+			return engine.ConvertToConstraintType[bool, T](transformed, parseCtx, core.ZodTypeStringBool)
+		}
+	}
+	if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+		prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+		prefaultResult, prefaultErr := z.parseStringToBoolInternal(prefaultValue, parseCtx, true)
+		if prefaultErr == nil {
+			transformed, transformErr := z.applyTransform(prefaultResult, parseCtx)
+			if transformErr != nil {
+				var zero T
+				return zero, transformErr
+			}
+			return engine.ConvertToConstraintType[bool, T](transformed, parseCtx, core.ZodTypeStringBool)
+		}
+	}
+
+	// No prefault available, return original error
+	var zero T
+	return zero, err
+}
+
+// processStringBoolModifiers handles modifier processing similar to engine.processModifiers
+func (z *ZodStringBool[T]) processStringBoolModifiers(input any, ctx *core.ParseContext) (result any, handled bool, err error) {
+	// Check if input is effectively nil (nil or nil pointer)
+	isNil := input == nil
+	if !isNil {
+		// Check for nil pointer types
+		if ptr, ok := input.(*string); ok && ptr == nil {
+			isNil = true
+		}
+	}
+
+	// Fast path: non-nil input doesn't need modifier processing
+	if !isNil {
+		return nil, false, nil
+	}
+
+	// Handle nil input with modifier logic
+	if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
+		// For Optional/Nilable, we still need to apply Overwrite transformations on nil values
+		// The transformation might convert nil to a non-nil value
+		var zero T
+		nilValue := any(nil)
+
+		// Apply checks (including Overwrite transformations) on nil value
+		transformedResult, err := engine.ApplyChecks[any](nilValue, z.internals.ZodTypeInternals.Checks, ctx)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// If transformation changed nil to something else, use that result
+		if transformedResult != nil {
+			// Convert transformed result to the appropriate type
+			switch any(zero).(type) {
+			case bool:
+				if boolVal, ok := transformedResult.(bool); ok {
+					return boolVal, true, nil
+				}
+			case *bool:
+				if boolPtr, ok := transformedResult.(*bool); ok {
+					if boolPtr != nil {
+						return *boolPtr, true, nil
 					}
 				}
 			}
 		}
-		return nil, err
+
+		return nil, true, nil
 	}
 
+	// Try default values
+	if z.internals.ZodTypeInternals.DefaultValue != nil {
+		result, err := z.parseStringToBoolInternal(z.internals.ZodTypeInternals.DefaultValue, ctx, true)
+		if err == nil {
+			return result, true, nil
+		}
+		// Default failed, try prefault
+		if z.internals.ZodTypeInternals.PrefaultValue != nil {
+			prefaultResult, prefaultErr := z.parseStringToBoolInternal(z.internals.ZodTypeInternals.PrefaultValue, ctx, true)
+			if prefaultErr == nil {
+				return prefaultResult, true, nil
+			}
+		}
+		if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+			prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+			prefaultResult, prefaultErr := z.parseStringToBoolInternal(prefaultValue, ctx, true)
+			if prefaultErr == nil {
+				return prefaultResult, true, nil
+			}
+		}
+		return nil, true, err
+	}
+
+	// Try default function
+	if z.internals.ZodTypeInternals.DefaultFunc != nil {
+		defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
+		result, err := z.parseStringToBoolInternal(defaultValue, ctx, true)
+		if err == nil {
+			return result, true, nil
+		}
+		// Default failed, try prefault
+		if z.internals.ZodTypeInternals.PrefaultValue != nil {
+			prefaultResult, prefaultErr := z.parseStringToBoolInternal(z.internals.ZodTypeInternals.PrefaultValue, ctx, true)
+			if prefaultErr == nil {
+				return prefaultResult, true, nil
+			}
+		}
+		if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+			prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+			prefaultResult, prefaultErr := z.parseStringToBoolInternal(prefaultValue, ctx, true)
+			if prefaultErr == nil {
+				return prefaultResult, true, nil
+			}
+		}
+		return nil, true, err
+	}
+
+	// No default values, return type error
+	rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeStringBool, input)
+	finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
+	return nil, true, issues.NewZodError([]core.ZodIssue{finalIssue})
+}
+
+// parseStringToBool handles the core string-to-bool conversion and validation
+func (z *ZodStringBool[T]) parseStringToBool(input any, ctx *core.ParseContext) (bool, error) {
+	return z.parseStringToBoolInternal(input, ctx, false)
+}
+
+// parseStringToBoolInternal handles parsing with a flag to allow bool inputs for internal use
+func (z *ZodStringBool[T]) parseStringToBoolInternal(input any, ctx *core.ParseContext, allowBoolInput bool) (bool, error) {
+	var boolResult bool
+	var success bool
+
+	// Handle string input (primary use case)
+	if str, ok := input.(string); ok {
+		boolResult, success = z.tryStringToBool(str)
+	} else if ptr, ok := input.(*string); ok {
+		// Handle *string input
+		if ptr == nil {
+			return false, engine.CreateInvalidTypeError(core.ZodTypeStringBool, input, ctx)
+		}
+		boolResult, success = z.tryStringToBool(*ptr)
+	} else if allowBoolInput {
+		// Handle bool input (only for default/prefault values)
+		if boolVal, ok := input.(bool); ok {
+			boolResult, success = boolVal, true
+		} else if ptr, ok := input.(*bool); ok {
+			if ptr == nil {
+				return false, engine.CreateInvalidTypeError(core.ZodTypeStringBool, input, ctx)
+			}
+			boolResult, success = *ptr, true
+		}
+	}
+
+	// Try coercion if enabled and no success yet
+	if !success && z.internals.ZodTypeInternals.IsCoerce() {
+		if coerced, ok := z.Coerce(input); ok {
+			return z.parseStringToBoolInternal(coerced, ctx, allowBoolInput)
+		}
+	}
+
+	if !success {
+		return false, engine.CreateInvalidTypeError(core.ZodTypeStringBool, input, ctx)
+	}
+
+	// Validate using checks and capture transformed result
+	transformedResult, err := engine.ApplyChecks[any](boolResult, z.internals.ZodTypeInternals.Checks, ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// Handle potential pointer type from Overwrite transformations
+	switch v := transformedResult.(type) {
+	case bool:
+		return v, nil
+	case *bool:
+		if v != nil {
+			return *v, nil
+		}
+		return false, nil
+	default:
+		// If transformation returned unexpected type, return original result
+		return boolResult, nil
+	}
+}
+
+// applyTransform applies transformation if present
+func (z *ZodStringBool[T]) applyTransform(result any, ctx *core.ParseContext) (any, error) {
+	if z.internals.ZodTypeInternals.Transform != nil {
+		refinementCtx := &core.RefinementContext{
+			ParseContext: ctx,
+			Value:        result,
+		}
+		return z.internals.ZodTypeInternals.Transform(result, refinementCtx)
+	}
 	return result, nil
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodStringBool) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the type-safe variant that panics on error.
+func (z *ZodStringBool[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -173,28 +333,259 @@ func (z *ZodStringBool) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////////////////////
-// String to Bool Conversion
-//////////////////////////////////////////
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodStringBool[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
 
-// stringToBool performs the core string-to-bool conversion
-func (z *ZodStringBool) stringToBool(value string) bool {
-	normalizedValue := value
-	if z.internals.Def.Case == "insensitive" {
-		normalizedValue = strings.ToLower(value)
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+// Optional always returns *bool for nullable semantics
+func (z *ZodStringBool[T]) Optional() *ZodStringBool[*bool] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable allows nil values, returns pointer type
+func (z *ZodStringBool[T]) Nilable() *ZodStringBool[*bool] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodStringBool[T]) Nullish() *ZodStringBool[*bool] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodStringBool[T]) Default(v bool) *ZodStringBool[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodStringBool[T]) DefaultFunc(fn func() bool) *ZodStringBool[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodStringBool[T]) Prefault(v bool) *ZodStringBool[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodStringBool[T]) PrefaultFunc(fn func() bool) *ZodStringBool[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic to the stringbool schema
+func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case bool:
+			// Schema output is bool
+			if v == nil {
+				return false // nil should never reach here for bool schema
+			}
+			if boolVal, ok := v.(bool); ok {
+				return fn(any(boolVal).(T))
+			}
+			return false
+		case *bool:
+			// Schema output is *bool – convert incoming value to *bool
+			if v == nil {
+				return fn(any((*bool)(nil)).(T))
+			}
+			if boolVal, ok := v.(bool); ok {
+				bCopy := boolVal
+				ptr := &bCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false // Unsupported type
+		}
 	}
 
-	// Check truthy values
-	if _, exists := z.internals.Truthy[normalizedValue]; exists {
-		return true
+	// MUST use checks package for custom validation
+	check := checks.NewCustom[any](wrapper, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny provides flexible validation without type conversion
+func (z *ZodStringBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodStringBool[T] {
+	// MUST use checks package for custom validation
+	check := checks.NewCustom[any](fn, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates a type-safe transformation using WrapFn pattern
+func (z *ZodStringBool[T]) Transform(fn func(bool, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		boolValue := extractStringBool(input)
+		return fn(boolValue, ctx)
+	}
+	return core.NewZodTransform[T, any](z, wrapperFn)
+}
+
+// Overwrite transforms the input value while preserving the original type.
+// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
+// The transformation function is stored as a check, so it doesn't modify the inferred type.
+func (z *ZodStringBool[T]) Overwrite(transform func(T) T, params ...any) *ZodStringBool[T] {
+	// Create a transformation function that works with the exact type T
+	transformAny := func(input any) any {
+		// Try to convert input to type T
+		converted, ok := convertToStringBoolType[T](input)
+		if !ok {
+			// If conversion fails, return original value
+			return input
+		}
+
+		// Apply transformation directly on type T
+		return transform(converted)
 	}
 
-	// Check falsy values (default to false for unrecognized values)
-	return false
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodStringBool[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		boolValue := extractStringBool(input)
+		return target.Parse(boolValue, ctx)
+	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
+}
+
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer type
+func (z *ZodStringBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodStringBool[*bool] {
+	return &ZodStringBool[*bool]{internals: &ZodStringBoolInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Truthy:           z.internals.Truthy,
+		Falsy:            z.internals.Falsy,
+	}}
+}
+
+// withInternals creates new instance preserving generic type T
+func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBool[T] {
+	return &ZodStringBool[T]{internals: &ZodStringBoolInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Truthy:           z.internals.Truthy,
+		Falsy:            z.internals.Falsy,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodStringBool[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodStringBool[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// extractStringBool extracts the boolean value from the constraint type T
+func extractStringBool[T StringBoolConstraint](value T) bool {
+	switch v := any(value).(type) {
+	case bool:
+		return v
+	case *bool:
+		if v != nil {
+			return *v
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// convertToStringBoolType converts any value to the stringbool constraint type T with strict type checking
+func convertToStringBoolType[T StringBoolConstraint](v any) (T, bool) {
+	var zero T
+
+	if v == nil {
+		// Handle nil values for pointer types
+		switch any(zero).(type) {
+		case *bool:
+			return zero, true // zero value for pointer types is nil
+		default:
+			return zero, false // nil not allowed for value types
+		}
+	}
+
+	// Extract boolean value from input
+	var boolValue bool
+	var isValid bool
+
+	switch val := v.(type) {
+	case bool:
+		boolValue, isValid = val, true
+	case *bool:
+		if val != nil {
+			boolValue, isValid = *val, true
+		}
+	default:
+		return zero, false // Reject all non-bool types
+	}
+
+	if !isValid {
+		return zero, false
+	}
+
+	// Convert to target type T
+	switch any(zero).(type) {
+	case bool:
+		return any(boolValue).(T), true
+	case *bool:
+		return any(&boolValue).(T), true
+	default:
+		return zero, false
+	}
 }
 
 // tryStringToBool tries to convert string to bool, returns (result, success)
-func (z *ZodStringBool) tryStringToBool(value string) (bool, bool) {
+func (z *ZodStringBool[T]) tryStringToBool(value string) (bool, bool) {
 	normalizedValue := value
 	if z.internals.Def.Case == "insensitive" {
 		normalizedValue = strings.ToLower(value)
@@ -214,115 +605,18 @@ func (z *ZodStringBool) tryStringToBool(value string) (bool, bool) {
 	return false, false
 }
 
-//////////////////////////////////////////
-// Validation Methods
-//////////////////////////////////////////
-
-// Refine adds type-safe custom validation logic to the stringbool schema
-func (z *ZodStringBool) Refine(fn func(bool) bool, params ...any) *ZodStringBool {
-	check := checks.NewCustom[bool](fn, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodStringBool)
-}
-
-// RefineAny adds flexible custom validation logic to the stringbool schema
-func (z *ZodStringBool) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(z, check)
-}
-
-//////////////////////////////////////////
-// Transform Methods
-//////////////////////////////////////////
-
-// Transform creates a type-safe transformation of stringbool values
-func (z *ZodStringBool) Transform(fn func(bool, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(func(v any, ctx *core.RefinementContext) (any, error) {
-		if b, ok := v.(bool); ok {
-			return fn(b, ctx)
-		}
-		// For non-bool values, convert to bool first using stringToBool
-		if str, ok := v.(string); ok {
-			boolVal := z.stringToBool(str)
-			return fn(boolVal, ctx)
-		}
-		return nil, errors.New("cannot transform non-bool value")
-	})
-}
-
-// TransformAny adds data transformation with any input type
-func (z *ZodStringBool) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-	}
-}
-
-// Pipe connects this schema to another schema
-func (z *ZodStringBool) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-	}
-}
-
-//////////////////////////////////////////
-// Modifier Methods
-//////////////////////////////////////////
-
-// Optional makes the stringbool optional
-func (z *ZodStringBool) Optional() core.ZodType[any, any] {
-	return Optional(z)
-}
-
-// Nilable creates a nilable stringbool schema
-func (z *ZodStringBool) Nilable() core.ZodType[any, any] {
-	return Nilable(z)
-}
-
-// Nullish creates a nullish (optional + nilable) stringbool schema
-func (z *ZodStringBool) Nullish() core.ZodType[any, any] {
-	return Nullish(z)
-}
-
-//////////////////////////////////////////
-// Wrapper Types (Simplified)
-//////////////////////////////////////////
-
-// Default adds a default value to the stringbool schema
-func (z *ZodStringBool) Default(value bool) core.ZodType[any, any] {
-	return Default(z, value)
-}
-
-// DefaultFunc adds a default function to the stringbool schema
-func (z *ZodStringBool) DefaultFunc(fn func() bool) core.ZodType[any, any] {
-	return DefaultFunc(z, func() any { return fn() })
-}
-
-// Prefault adds a prefault value to the stringbool schema
-func (z *ZodStringBool) Prefault(value bool) core.ZodType[any, any] {
-	return Prefault(any(z).(core.ZodType[any, any]), value)
-}
-
-// PrefaultFunc adds a prefault function to the stringbool schema
-func (z *ZodStringBool) PrefaultFunc(fn func() bool) core.ZodType[any, any] {
-	return PrefaultFunc(any(z).(core.ZodType[any, any]), func() any { return fn() })
-}
-
-//////////////////////////////////////////
-// Constructor Functions
-//////////////////////////////////////////
-
-// createZodStringBoolFromDef creates a ZodStringBool from definition with unified patterns
-func createZodStringBoolFromDef(def *ZodStringBoolDef) *ZodStringBool {
+// newZodStringBoolFromDef constructs new ZodStringBool from definition
+func newZodStringBoolFromDef[T StringBoolConstraint](def *ZodStringBoolDef) *ZodStringBool[T] {
 	internals := &ZodStringBoolInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeStringBool},
-		Truthy:           make(map[string]struct{}),
-		Falsy:            make(map[string]struct{}),
-		Bag:              make(map[string]any),
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def:    def,
+		Truthy: make(map[string]struct{}),
+		Falsy:  make(map[string]struct{}),
 	}
 
 	// Build lookup maps for efficient validation
@@ -342,53 +636,62 @@ func createZodStringBoolFromDef(def *ZodStringBoolDef) *ZodStringBool {
 		internals.Falsy[normalizedValue] = struct{}{}
 	}
 
-	// Set up constructor for AddCheck functionality
-	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		stringBoolDef := &ZodStringBoolDef{
-			ZodTypeDef: *def,
-			Type:       "stringbool",
-			Truthy:     internals.Def.Truthy,
-			Falsy:      internals.Def.Falsy,
-			Case:       internals.Def.Case,
+			ZodTypeDef: *newDef,
+			Truthy:     def.Truthy,
+			Falsy:      def.Falsy,
+			Case:       def.Case,
 		}
-		return createZodStringBoolFromDef(stringBoolDef)
+		return any(newZodStringBoolFromDef[T](stringBoolDef)).(core.ZodType[any])
 	}
 
-	zodSchema := &ZodStringBool{internals: internals}
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
 
-	// Initialize the schema using unified initZodType from engine
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-
-	return zodSchema
+	return &ZodStringBool[T]{internals: internals}
 }
 
-// StringBool creates a new stringbool schema. It can be called in three forms:
-//
-//	StringBool()                       -> use default options
-//	StringBool(opts)                   -> custom truthy/falsy options
-//	StringBool(opts, params) / StringBool(params...) for additional SchemaParams.
-//
-// The implementation inspects the first argument: if it is a *StringBoolOptions
-// it is treated as the options struct; otherwise the first argument is assumed
-// to be schema parameters.
-func StringBool(args ...any) *ZodStringBool {
-	var options *StringBoolOptions
-	var params []any
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
 
-	if len(args) > 0 {
-		// Special-case nil placeholder for options (to align with StringBool(nil, core.SchemaParams{...}))
-		if args[0] == nil {
+// StringBool creates bool schema with type-inference support
+func StringBool(params ...any) *ZodStringBool[bool] {
+	return StringBoolTyped[bool](params...)
+}
+
+// StringBoolPtr creates schema for *bool
+func StringBoolPtr(params ...any) *ZodStringBool[*bool] {
+	return StringBoolTyped[*bool](params...)
+}
+
+// StringBoolTyped is the generic constructor for stringbool schemas
+func StringBoolTyped[T StringBoolConstraint](params ...any) *ZodStringBool[T] {
+	var options *StringBoolOptions
+	var schemaParams []any
+
+	if len(params) > 0 {
+		// Special-case nil placeholder for options
+		if params[0] == nil {
 			// No options provided, remaining args are treated as params
-			if len(args) > 1 {
-				params = args[1:]
+			if len(params) > 1 {
+				schemaParams = params[1:]
 			}
-		} else if opt, ok := args[0].(*StringBoolOptions); ok {
+		} else if opt, ok := params[0].(*StringBoolOptions); ok {
 			options = opt
-			if len(args) > 1 {
-				params = args[1:]
+			if len(params) > 1 {
+				schemaParams = params[1:]
+			}
+		} else if opt, ok := params[0].(StringBoolOptions); ok {
+			options = &opt
+			if len(params) > 1 {
+				schemaParams = params[1:]
 			}
 		} else {
-			params = args
+			schemaParams = params
 		}
 	}
 
@@ -410,69 +713,36 @@ func StringBool(args ...any) *ZodStringBool {
 		}
 	}
 
+	normalizedParams := utils.NormalizeParams(schemaParams...)
+
 	def := &ZodStringBoolDef{
 		ZodTypeDef: core.ZodTypeDef{
-			Type:   "stringbool",
-			Checks: make([]core.ZodCheck, 0),
+			Type:   core.ZodTypeStringBool,
+			Checks: []core.ZodCheck{},
 		},
-		Type:   "stringbool",
 		Truthy: truthy,
 		Falsy:  falsy,
 		Case:   caseMode,
 	}
 
-	schema := createZodStringBoolFromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		param := params[0]
-
-		// Handle different parameter types
-		switch p := param.(type) {
-		case string:
-			// String parameter becomes Error field
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return p
-			})
-			def.Error = &errorMap
-			schema.internals.Error = &errorMap
-		case core.SchemaParams:
-			// Handle core.SchemaParams
-
-			if p.Error != nil {
-				// Handle string error messages by converting to ZodErrorMap
-				if errStr, ok := p.Error.(string); ok {
-					errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-						return errStr
-					})
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				} else if errorMap, ok := p.Error.(core.ZodErrorMap); ok {
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				}
-			}
-
-			if p.Description != "" {
-				schema.internals.Bag["description"] = p.Description
-			}
-			if p.Abort {
-				schema.internals.Bag["abort"] = true
-			}
-			if len(p.Path) > 0 {
-				schema.internals.Bag["path"] = p.Path
-			}
-		}
+	// Apply normalized parameters to schema definition
+	if normalizedParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
+	return newZodStringBoolFromDef[T](def)
+}
+
+// CoercedStringBool creates a coerced stringbool schema
+func CoercedStringBool(params ...any) *ZodStringBool[bool] {
+	schema := StringBool(params...)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
-//////////////////////////////////////////
-// Utility Functions
-//////////////////////////////////////////
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodStringBool) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
+// CoercedStringBoolPtr creates a coerced stringbool schema for *bool
+func CoercedStringBoolPtr(params ...any) *ZodStringBool[*bool] {
+	schema := StringBoolPtr(params...)
+	schema.internals.SetCoerce(true)
+	return schema
 }

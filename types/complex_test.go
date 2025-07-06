@@ -1,778 +1,964 @@
 package types
 
 import (
-	"fmt"
 	"math"
 	"math/cmplx"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestComplexBasicFunctionality(t *testing.T) {
-	t.Run("basic validation complex128", func(t *testing.T) {
+func TestComplex_BasicFunctionality(t *testing.T) {
+	t.Run("valid complex inputs", func(t *testing.T) {
 		schema := Complex128()
-		// Valid complex128
+
+		// Test positive real and imaginary values
 		result, err := schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)
 		assert.Equal(t, complex(3.0, 4.0), result)
-		// Invalid type
-		_, err = schema.Parse("not a complex")
-		assert.Error(t, err)
-	})
 
-	t.Run("basic validation complex64", func(t *testing.T) {
-		schema := Complex64()
-		// Valid complex64
-		result, err := schema.Parse(complex64(complex(3.0, 4.0)))
+		// Test negative values
+		result, err = schema.Parse(complex(-2.0, -1.0))
 		require.NoError(t, err)
-		assert.Equal(t, complex64(complex(3.0, 4.0)), result)
-		// Invalid type
-		_, err = schema.Parse("not a complex")
-		assert.Error(t, err)
+		assert.Equal(t, complex(-2.0, -1.0), result)
+
+		// Test zero
+		result, err = schema.Parse(complex(0.0, 0.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(0.0, 0.0), result)
+
+		// Test purely real
+		result, err = schema.Parse(complex(5.0, 0.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(5.0, 0.0), result)
+
+		// Test purely imaginary
+		result, err = schema.Parse(complex(0.0, 3.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(0.0, 3.0), result)
 	})
 
-	t.Run("smart type inference complex128", func(t *testing.T) {
+	t.Run("different complex types", func(t *testing.T) {
+		// Test complex64
+		schema64 := Complex64()
+		result64, err := schema64.Parse(complex64(complex(1.5, 2.5)))
+		require.NoError(t, err)
+		assert.Equal(t, complex64(complex(1.5, 2.5)), result64)
+
+		// Test complex128
+		schema128 := Complex128()
+		result128, err := schema128.Parse(complex128(complex(3.5, 4.5)))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(complex(3.5, 4.5)), result128)
+	})
+
+	t.Run("invalid type inputs", func(t *testing.T) {
 		schema := Complex128()
-		// complex128 input returns complex128
-		result1, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.IsType(t, complex128(0), result1)
-		assert.Equal(t, complex(3.0, 4.0), result1)
-		// Pointer input returns same pointer
-		val := complex(2.0, 3.0)
-		result2, err := schema.Parse(&val)
-		require.NoError(t, err)
-		assert.IsType(t, (*complex128)(nil), result2)
-		assert.Equal(t, &val, result2)
-	})
 
-	t.Run("pointer identity preservation", func(t *testing.T) {
-		schema := Complex128()
-		input := complex(3.0, 4.0)
-		inputPtr := &input
-
-		result, err := schema.Parse(inputPtr)
-		require.NoError(t, err)
-
-		// Verify exact pointer identity is preserved
-		resultPtr, ok := result.(*complex128)
-		require.True(t, ok, "Result should be *complex128")
-		assert.True(t, resultPtr == inputPtr, "Should return the exact same pointer")
-		assert.Equal(t, complex(3.0, 4.0), *resultPtr)
-	})
-
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := Complex128().Nilable()
-		// nil input should succeed, return nil pointer
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-		assert.IsType(t, (*complex128)(nil), result)
-		// Valid input keeps type inference
-		result2, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result2)
-		assert.IsType(t, complex128(0), result2)
-	})
-
-	t.Run("nilable does not affect original schema", func(t *testing.T) {
-		baseSchema := Complex128()
-		nilableSchema := baseSchema.Nilable()
-
-		// Test nilable schema allows nil
-		result1, err1 := nilableSchema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Nil(t, result1)
-
-		// Test nilable schema validates non-nil values
-		result2, err2 := nilableSchema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err2)
-		assert.Equal(t, complex(3.0, 4.0), result2)
-
-		// 🔥 Critical: Original schema should remain unchanged
-		_, err4 := baseSchema.Parse(nil)
-		assert.Error(t, err4, "Original schema should still reject nil")
-
-		result5, err5 := baseSchema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err5)
-		assert.Equal(t, complex(3.0, 4.0), result5)
-	})
-}
-
-// =============================================================================
-// 2. Coerce (type coercion)
-// =============================================================================
-
-func TestComplexCoercion(t *testing.T) {
-	t.Run("basic coercion", func(t *testing.T) {
-		schema := CoercedComplex128()
-		tests := []struct {
-			input    any
-			expected complex128
-		}{
-			{int(42), complex(42.0, 0.0)},
-			{float64(3.14), complex(3.14, 0.0)},
-			{complex64(complex(1.0, 2.0)), complex(1.0, 2.0)},
-			{"3+4i", complex(3.0, 4.0)},
-			{"5", complex(5.0, 0.0)},
-		}
-		for _, tt := range tests {
-			result, err := schema.Parse(tt.input)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		}
-	})
-
-	t.Run("failed coercion", func(t *testing.T) {
-		schema := CoercedComplex128()
 		invalidInputs := []any{
-			"not a number",
-			true,                            // boolean
-			[]complex128{complex(1.0, 2.0)}, // slice
-			map[string]complex128{"key": complex(1.0, 2.0)}, // map
+			"not a complex", true, 42, 3.14, []complex128{1 + 2i}, map[string]complex128{"key": 1 + 2i}, nil,
 		}
+
 		for _, input := range invalidInputs {
 			_, err := schema.Parse(input)
-			assert.Error(t, err, "Should fail to coerce %v", input)
+			assert.Error(t, err, "Expected error for input: %v", input)
 		}
 	})
 
-	t.Run("cross-type coercion", func(t *testing.T) {
-		// Test complex64 to complex128 coercion
-		schema := CoercedComplex128()
-		result, err := schema.Parse(complex64(complex(3.0, 4.0)))
-		require.NoError(t, err)
-		assert.IsType(t, complex128(0), result)
-		assert.Equal(t, complex(3.0, 4.0), result)
-	})
-}
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		schema := Complex128()
 
-// =============================================================================
-// 3. Validation methods (complex-specific)
-// =============================================================================
-
-func TestComplexValidations(t *testing.T) {
-	t.Run("magnitude validations", func(t *testing.T) {
-		schema := Complex128().Min(1.0)
-		// Valid magnitude
-		result, err := schema.Parse(complex(3.0, 4.0)) // |3+4i| = 5
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
-		// Invalid magnitude (too small)
-		_, err = schema.Parse(complex(0.1, 0.1)) // |0.1+0.1i| ≈ 0.14
-		assert.Error(t, err)
-	})
-
-	t.Run("positive magnitude validation", func(t *testing.T) {
-		schema := Complex128().Positive()
-		// Valid positive magnitude
-		result, err := schema.Parse(complex(3.0, 4.0)) // |3+4i| = 5 > 0
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
-		// Zero magnitude should fail
-		_, err = schema.Parse(complex(0.0, 0.0))
-		assert.Error(t, err)
-	})
-
-	t.Run("non-negative magnitude validation", func(t *testing.T) {
-		schema := Complex128().NonNegative()
-		// Valid non-negative magnitude
+		// Test Parse method
 		result, err := schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)
 		assert.Equal(t, complex(3.0, 4.0), result)
-		// Zero magnitude should pass
-		result2, err := schema.Parse(complex(0.0, 0.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(0.0, 0.0), result2)
-	})
-}
 
-// =============================================================================
-// 4. Modifiers and wrappers
-// =============================================================================
+		// Test MustParse method
+		mustResult := schema.MustParse(complex(5.0, 6.0))
+		assert.Equal(t, complex(5.0, 6.0), mustResult)
 
-func TestComplexModifiers(t *testing.T) {
-	t.Run("optional modifier", func(t *testing.T) {
-		schema := Complex128().Optional()
-		// nil input should succeed
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-		// Valid input normal validation
-		result2, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result2)
-	})
-
-	t.Run("must parse", func(t *testing.T) {
-		schema := Complex128()
-		// Valid input should not panic
-		result := schema.MustParse(complex(3.0, 4.0))
-		assert.Equal(t, complex(3.0, 4.0), result)
-		// Invalid input should panic
+		// Test panic on invalid input
 		assert.Panics(t, func() {
 			schema.MustParse("invalid")
 		})
 	})
-}
 
-// =============================================================================
-// 5. Chaining and method composition
-// =============================================================================
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected a complex value"
+		schema := Complex128(core.SchemaParams{Error: customError})
 
-func TestComplexChaining(t *testing.T) {
-	t.Run("multiple validations", func(t *testing.T) {
-		schema := Complex128().Min(1.0).Max(10.0).Positive()
-		// Valid input
-		result, err := schema.Parse(complex(5.0, 3.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(5.0, 3.0), result)
-		// Validation failures
-		testCases := []complex128{
-			complex(0.1, 0.1),  // magnitude too small
-			complex(15.0, 3.0), // magnitude too large
-		}
-		for _, input := range testCases {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-		}
-	})
+		require.NotNil(t, schema)
+		assert.Equal(t, core.ZodTypeComplex128, schema.internals.Def.Type)
 
-	t.Run("magnitude constraints", func(t *testing.T) {
-		schema := Complex128().Min(1.0).Max(5.0)
-		// Valid input (proper magnitude)
-		result, err := schema.Parse(complex(3.0, 4.0)) // |3+4i| = 5
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
-		// Invalid magnitude
-		_, err = schema.Parse(complex(0.1, 0.1)) // magnitude too small
-		assert.Error(t, err)
-		// Invalid magnitude
-		_, err = schema.Parse(complex(10.0, 10.0)) // magnitude too large
+		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 6. Transform/Pipe
+// Type safety tests
 // =============================================================================
 
-func TestComplexTransform(t *testing.T) {
-	t.Run("basic transform", func(t *testing.T) {
-		schema := Complex128().Transform(func(val complex128, ctx *core.RefinementContext) (any, error) {
-			// Complex conjugate
-			return cmplx.Conj(val), nil
-		})
-		result, err := schema.Parse(complex(3.0, 4.0))
+func TestComplex_TypeSafety(t *testing.T) {
+	t.Run("Complex64 returns complex64 type", func(t *testing.T) {
+		schema := Complex64()
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse(complex64(complex(1.5, 2.5)))
 		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, -4.0), result)
+		assert.Equal(t, complex64(complex(1.5, 2.5)), result)
+		assert.IsType(t, complex64(0), result)
 	})
 
-	t.Run("mathematical transforms", func(t *testing.T) {
-		schema := Complex128().Transform(func(val complex128, ctx *core.RefinementContext) (any, error) {
-			return map[string]any{
-				"original":  val,
-				"conjugate": cmplx.Conj(val),
-				"magnitude": cmplx.Abs(val),
-				"phase":     cmplx.Phase(val),
-				"real":      real(val),
-				"imaginary": imag(val),
-			}, nil
-		})
-
-		result, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, complex(3.0, 4.0), resultMap["original"])
-		assert.Equal(t, complex(3.0, -4.0), resultMap["conjugate"])
-		assert.Equal(t, 5.0, resultMap["magnitude"])
-		assert.InDelta(t, math.Atan2(4.0, 3.0), resultMap["phase"], 0.001)
-		assert.Equal(t, 3.0, resultMap["real"])
-		assert.Equal(t, 4.0, resultMap["imaginary"])
-	})
-}
-
-// =============================================================================
-// 7. Refine
-// =============================================================================
-
-func TestComplexRefine(t *testing.T) {
-	t.Run("basic refine", func(t *testing.T) {
-		schema := Complex128().Refine(func(val complex128) bool {
-			// Only allow pure real numbers
-			return imag(val) == 0
-		}, core.SchemaParams{
-			Error: "Number must be real",
-		})
-		result, err := schema.Parse(complex(42.0, 0.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(42.0, 0.0), result)
-		_, err = schema.Parse(complex(3.0, 4.0))
-		assert.Error(t, err)
-	})
-
-	t.Run("refine vs transform distinction", func(t *testing.T) {
-		input := complex(3.0, 4.0)
-
-		// Refine: only validates, never modifies
-		refineSchema := Complex128().Refine(func(val complex128) bool {
-			return cmplx.Abs(val) > 1.0
-		})
-		refineResult, refineErr := refineSchema.Parse(input)
-
-		// Transform: validates and converts
-		transformSchema := Complex128().Transform(func(val complex128, ctx *core.RefinementContext) (any, error) {
-			return cmplx.Conj(val), nil
-		})
-		transformResult, transformErr := transformSchema.Parse(input)
-
-		// Refine returns original value unchanged
-		require.NoError(t, refineErr)
-		assert.Equal(t, complex(3.0, 4.0), refineResult)
-
-		// Transform returns modified value
-		require.NoError(t, transformErr)
-		assert.Equal(t, complex(3.0, -4.0), transformResult)
-
-		// Key distinction: Refine preserves, Transform modifies
-		assert.Equal(t, input, refineResult, "Refine should return exact original value")
-		assert.NotEqual(t, input, transformResult, "Transform should return modified value")
-	})
-
-	t.Run("unit circle validation", func(t *testing.T) {
-		schema := Complex128().Refine(func(val complex128) bool {
-			// Check if complex number is on or near unit circle
-			magnitude := cmplx.Abs(val)
-			return math.Abs(magnitude-1.0) < 0.01
-		}, core.SchemaParams{
-			Error: func(issue core.ZodRawIssue) string {
-				if input, ok := issue.Input.(complex128); ok {
-					magnitude := cmplx.Abs(input)
-					return fmt.Sprintf("Complex number %.3f+%.3fi has magnitude %.3f, not on unit circle", real(input), imag(input), magnitude)
-				}
-				return "Invalid input for unit circle validation"
-			},
-		})
-
-		// On unit circle
-		result, err := schema.Parse(complex(math.Cos(math.Pi/4), math.Sin(math.Pi/4)))
-		require.NoError(t, err)
-		assert.InDelta(t, math.Sqrt(2)/2, real(result.(complex128)), 0.001)
-
-		// Not on unit circle
-		_, err = schema.Parse(complex(2.0, 0.0))
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 8. Error handling
-// =============================================================================
-
-func TestComplexErrorHandling(t *testing.T) {
-	t.Run("error structure", func(t *testing.T) {
-		schema := Complex128().Min(5.1) // Use 5.1 so that |3+4i| = 5.0 fails
-		_, err := schema.Parse(complex(3.0, 4.0))
-		assert.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-	})
-
-	t.Run("type mismatch error", func(t *testing.T) {
+	t.Run("Complex128 returns complex128 type", func(t *testing.T) {
 		schema := Complex128()
-		_, err := schema.Parse("not a complex")
-		assert.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse(complex128(complex(3.5, 4.5)))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(complex(3.5, 4.5)), result)
+		assert.IsType(t, complex128(0), result)
 	})
 
-	t.Run("special values error handling", func(t *testing.T) {
-		schema := Complex128().Positive()
-		specialValues := []complex128{
-			complex(math.Inf(1), 0.0),  // +Inf real
-			complex(0.0, math.Inf(-1)), // -Inf imag
-			complex(math.NaN(), 0.0),   // NaN real
-			complex(0.0, math.NaN()),   // NaN imag
-		}
-		for _, val := range specialValues {
-			_, err := schema.Parse(val)
-			// Note: These special values may or may not error depending on implementation
-			// Just check that parsing doesn't panic
-			_ = err
-		}
+	t.Run("Complex64Ptr returns *complex64 type", func(t *testing.T) {
+		schema := Complex64Ptr()
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse(complex64(complex(1.5, 2.5)))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex64(complex(1.5, 2.5)), *result)
+		assert.IsType(t, (*complex64)(nil), result)
+	})
+
+	t.Run("Complex128Ptr returns *complex128 type", func(t *testing.T) {
+		schema := Complex128Ptr()
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse(complex128(complex(3.5, 4.5)))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(complex(3.5, 4.5)), *result)
+		assert.IsType(t, (*complex128)(nil), result)
+	})
+
+	t.Run("MustParse type safety", func(t *testing.T) {
+		// Test complex64 type
+		complex64Schema := Complex64()
+		resultComplex64 := complex64Schema.MustParse(complex64(complex(1.5, 2.5)))
+		assert.IsType(t, complex64(0), resultComplex64)
+		assert.Equal(t, complex64(complex(1.5, 2.5)), resultComplex64)
+
+		// Test complex128 type
+		complex128Schema := Complex128()
+		resultComplex128 := complex128Schema.MustParse(complex128(complex(3.5, 4.5)))
+		assert.IsType(t, complex128(0), resultComplex128)
+		assert.Equal(t, complex128(complex(3.5, 4.5)), resultComplex128)
+
+		// Test *complex128 type
+		ptrSchema := Complex128Ptr()
+		ptrResult := ptrSchema.MustParse(complex128(complex(5.5, 6.5)))
+		assert.IsType(t, (*complex128)(nil), ptrResult)
+		require.NotNil(t, ptrResult)
+		assert.Equal(t, complex128(complex(5.5, 6.5)), *ptrResult)
 	})
 }
 
 // =============================================================================
-// 9. Edge and mutual exclusion cases
+// Modifier methods tests
 // =============================================================================
 
-func TestComplexEdgeCases(t *testing.T) {
-	t.Run("zero value", func(t *testing.T) {
-		schema := Complex128()
-		result, err := schema.Parse(complex(0.0, 0.0))
+func TestComplex_Modifiers(t *testing.T) {
+	t.Run("Optional always returns *complex128", func(t *testing.T) {
+		// From complex64 to *complex128 via Optional
+		complex64Schema := Complex64()
+		optionalSchema := complex64Schema.Optional()
+
+		// Type check: ensure it returns *ZodComplex[*complex128]
+		var _ *ZodComplex[*complex128] = optionalSchema
+
+		// Functionality test
+		result, err := optionalSchema.Parse(complex128(complex(1.5, 2.5)))
 		require.NoError(t, err)
-		assert.Equal(t, complex(0.0, 0.0), result)
+		assert.IsType(t, (*complex128)(nil), result)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(complex(1.5, 2.5)), *result)
+
+		// From *complex64 to *complex128 via Optional (type conversion)
+		ptrSchema := Complex64Ptr()
+		optionalPtrSchema := ptrSchema.Optional()
+		var _ *ZodComplex[*complex128] = optionalPtrSchema
 	})
 
-	t.Run("pure real and imaginary numbers", func(t *testing.T) {
-		schema := Complex128()
-		// Pure real
-		result1, err := schema.Parse(complex(5.0, 0.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(5.0, 0.0), result1)
-		// Pure imaginary
-		result2, err := schema.Parse(complex(0.0, 5.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(0.0, 5.0), result2)
-	})
+	t.Run("Nilable always returns *complex128", func(t *testing.T) {
+		complex64Schema := Complex64()
+		nilableSchema := complex64Schema.Nilable()
 
-	t.Run("nil input handling", func(t *testing.T) {
-		schema := Complex128()
-		// By default nil is not allowed
-		_, err := schema.Parse(nil)
-		assert.Error(t, err)
-		// Nilable allows nil
-		nilableSchema := schema.Nilable()
+		var _ *ZodComplex[*complex128] = nilableSchema
+
+		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
-	t.Run("type mismatch", func(t *testing.T) {
-		schema := Complex128()
-		invalidTypes := []any{
-			"3+4i",
-			3.14,
-			42,
-			true,
-			[]complex128{complex(1.0, 2.0)},
-			map[string]complex128{"key": complex(1.0, 2.0)},
-		}
-		for _, invalidType := range invalidTypes {
-			_, err := schema.Parse(invalidType)
-			assert.Error(t, err, "Expected error for type %T", invalidType)
-		}
+	t.Run("Default preserves current type", func(t *testing.T) {
+		// complex64 maintains complex64
+		complex64Schema := Complex64()
+		defaultComplex64Schema := complex64Schema.Default(complex(1.0, 2.0))
+		var _ *ZodComplex[complex64] = defaultComplex64Schema
+
+		// *complex128 maintains *complex128
+		ptrSchema := Complex128Ptr()
+		defaultPtrSchema := ptrSchema.Default(complex(3.0, 4.0))
+		var _ *ZodComplex[*complex128] = defaultPtrSchema
 	})
 
-	t.Run("cross-precision compatibility", func(t *testing.T) {
-		// Test that different complex types don't accidentally validate
-		schemaComplex128 := Complex128()
-		_, err := schemaComplex128.Parse(complex64(complex(3.0, 4.0)))
-		assert.Error(t, err, "complex128 schema should reject complex64 without coercion")
+	t.Run("Prefault preserves current type", func(t *testing.T) {
+		// complex64 maintains complex64
+		complex64Schema := Complex64()
+		prefaultComplex64Schema := complex64Schema.Prefault(complex(1.0, 2.0))
+		var _ *ZodComplex[complex64] = prefaultComplex64Schema
 
-		schemaComplex64 := Complex64()
-		_, err = schemaComplex64.Parse(complex(3.0, 4.0)) // complex128
-		assert.Error(t, err, "complex64 schema should reject complex128 without coercion")
+		// *complex128 maintains *complex128
+		ptrSchema := Complex128Ptr()
+		prefaultPtrSchema := ptrSchema.Prefault(complex(3.0, 4.0))
+		var _ *ZodComplex[*complex128] = prefaultPtrSchema
 	})
+}
 
-	t.Run("precision edge cases", func(t *testing.T) {
-		schema := Complex128()
-		// Test very small differences
-		val1 := complex(1.0, 1.0)
-		val2 := complex(1.0+1e-15, 1.0+1e-15)
+// =============================================================================
+// Chaining tests
+// =============================================================================
 
-		result1, err := schema.Parse(val1)
+func TestComplex_Chaining(t *testing.T) {
+	t.Run("type evolution through chaining", func(t *testing.T) {
+		// Chain with type evolution
+		schema := Complex64(). // *ZodComplex[complex64]
+					Default(complex(1.0, 2.0)). // *ZodComplex[complex64] (maintains type)
+					Optional()                  // *ZodComplex[*complex128] (type conversion)
+
+		var _ *ZodComplex[*complex128] = schema
+
+		// Test final behavior
+		result, err := schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)
-		assert.Equal(t, val1, result1)
-
-		result2, err := schema.Parse(val2)
-		require.NoError(t, err)
-		assert.Equal(t, val2, result2)
-		assert.NotEqual(t, result1, result2)
+		assert.IsType(t, (*complex128)(nil), result)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(complex(3.0, 4.0)), *result)
 	})
 
-	t.Run("boundary magnitude calculations", func(t *testing.T) {
-		schema := Complex128().Min(5.0).Max(5.0)
-		// Exactly magnitude 5.0
-		result, err := schema.Parse(complex(3.0, 4.0)) // |3+4i| = 5
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := Complex64Ptr(). // *ZodComplex[*complex64]
+						Nilable().                 // *ZodComplex[*complex128] (type conversion)
+						Default(complex(1.0, 2.0)) // *ZodComplex[*complex128] (maintains type)
+
+		var _ *ZodComplex[*complex128] = schema
+
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(complex(3.0, 4.0)), *result)
+	})
+
+	t.Run("validation chaining", func(t *testing.T) {
+		schema := Complex128().
+			Min(2.0).
+			Max(10.0).
+			Positive()
+
+		result, err := schema.Parse(complex(3.0, 4.0)) // magnitude = 5.0
 		require.NoError(t, err)
 		assert.Equal(t, complex(3.0, 4.0), result)
 
-		// Also magnitude 5.0 but different components
-		result2, err := schema.Parse(complex(0.0, 5.0)) // |0+5i| = 5
-		require.NoError(t, err)
-		assert.Equal(t, complex(0.0, 5.0), result2)
+		// Should fail validation (magnitude too small)
+		_, err = schema.Parse(complex(0.5, 0.5)) // magnitude ≈ 0.71
+		assert.Error(t, err)
 
-		// Slightly off
-		_, err = schema.Parse(complex(3.1, 4.0)) // |3.1+4i| ≈ 5.015
+		// Should fail validation (magnitude too large)
+		_, err = schema.Parse(complex(8.0, 8.0)) // magnitude ≈ 11.31
+		assert.Error(t, err)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		schema := Complex128().
+			Default(complex(1.0, 2.0)).
+			Prefault(complex(3.0, 4.0))
+
+		result, err := schema.Parse(complex(5.0, 6.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(5.0, 6.0), result)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestComplex_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value with Complex128", func(t *testing.T) {
+		schema := Complex128().Default(complex(1.0, 2.0))
+
+		// Valid input should override default
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+	})
+
+	t.Run("default value with Complex128Ptr", func(t *testing.T) {
+		schema := Complex128Ptr().Default(complex(1.0, 2.0))
+
+		// Valid input should override default
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
+	})
+
+	t.Run("default function", func(t *testing.T) {
+		callCount := 0
+		schema := Complex128().DefaultFunc(func() complex128 {
+			callCount++
+			return complex(1.0, 2.0)
+		})
+
+		// Valid input should not call default function
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+		assert.Equal(t, 0, callCount)
+	})
+
+	t.Run("prefault value", func(t *testing.T) {
+		schema := Complex128().Prefault(complex(1.0, 2.0))
+
+		// Valid input should override prefault
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+	})
+
+	t.Run("prefault function", func(t *testing.T) {
+		schema := Complex128().PrefaultFunc(func() complex128 {
+			return complex(1.0, 2.0)
+		})
+
+		// Valid input should override prefault
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+	})
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+
+func TestComplex_Refine(t *testing.T) {
+	t.Run("refine validate", func(t *testing.T) {
+		// Only accept complex numbers with positive real part
+		schema := Complex128().Refine(func(c complex128) bool {
+			return real(c) > 0
+		})
+
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+
+		_, err = schema.Parse(complex(-1.0, 2.0))
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Real part must be positive"
+		schema := Complex128Ptr().Refine(func(c *complex128) bool {
+			return c != nil && real(*c) > 0
+		}, core.SchemaParams{Error: errorMessage})
+
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
+
+		_, err = schema.Parse(complex(-1.0, 2.0))
+		assert.Error(t, err)
+	})
+
+	t.Run("refine pointer allows nil", func(t *testing.T) {
+		schema := Complex128Ptr().Nilable().Refine(func(c *complex128) bool {
+			// Accept nil or complex numbers with positive real part
+			return c == nil || (c != nil && real(*c) > 0)
+		})
+
+		// Expect nil to be accepted
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid complex should pass
+		result, err = schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
+
+		// Invalid complex should fail
+		_, err = schema.Parse(complex(-1.0, 2.0))
+		assert.Error(t, err)
+	})
+
+	t.Run("refine complex64 type", func(t *testing.T) {
+		schema := Complex64().Refine(func(c complex64) bool {
+			return real(c) > 0
+		})
+
+		result, err := schema.Parse(complex64(complex(3.0, 4.0)))
+		require.NoError(t, err)
+		assert.Equal(t, complex64(complex(3.0, 4.0)), result)
+
+		_, err = schema.Parse(complex64(complex(-1.0, 2.0)))
+		assert.Error(t, err)
+	})
+}
+
+func TestComplex_RefineAny(t *testing.T) {
+	t.Run("refineAny complex128 schema", func(t *testing.T) {
+		// Only accept complex numbers with positive real part via RefineAny
+		schema := Complex128().RefineAny(func(v any) bool {
+			c, ok := v.(complex128)
+			return ok && real(c) > 0
+		})
+
+		// Valid value passes
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+
+		// Invalid value fails
+		_, err = schema.Parse(complex(-1.0, 2.0))
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny pointer schema", func(t *testing.T) {
+		// Complex128Ptr().RefineAny sees underlying complex128 value
+		schema := Complex128Ptr().RefineAny(func(v any) bool {
+			c, ok := v.(complex128)
+			return ok && real(c) > 0
+		})
+
+		result, err := schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
+
+		_, err = schema.Parse(complex(-1.0, 2.0))
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny nilable schema", func(t *testing.T) {
+		// Nil input should bypass checks and be accepted because schema is Nilable()
+		schema := Complex128Ptr().Nilable().RefineAny(func(v any) bool {
+			// Never called for nil input, but return true for completeness
+			return true
+		})
+
+		// nil passes
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid value still passes
+		result, err = schema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
+	})
+}
+
+// =============================================================================
+// Coercion tests
+// =============================================================================
+
+func TestComplex_Coercion(t *testing.T) {
+	t.Run("string coercion", func(t *testing.T) {
+		schema := CoercedComplex128()
+
+		// Test string "3+4i" -> complex128(3+4i)
+		result, err := schema.Parse("3+4i")
+		require.NoError(t, err, "Should coerce string '3+4i' to complex128")
+		assert.Equal(t, complex(3.0, 4.0), result)
+
+		// Test string "-1-2i" -> complex128(-1-2i)
+		result, err = schema.Parse("-1-2i")
+		require.NoError(t, err, "Should coerce string '-1-2i' to complex128")
+		assert.Equal(t, complex(-1.0, -2.0), result)
+	})
+
+	t.Run("numeric coercion", func(t *testing.T) {
+		schema := CoercedComplex128()
+
+		testCases := []struct {
+			input    any
+			expected complex128
+			name     string
+		}{
+			{42, complex(42.0, 0.0), "int 42 to complex(42, 0)"},
+			{3.14, complex(3.14, 0.0), "float64 3.14 to complex(3.14, 0)"},
+			{float32(2.5), complex(2.5, 0.0), "float32 2.5 to complex(2.5, 0)"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result, err := schema.Parse(tc.input)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			})
+		}
+	})
+
+	t.Run("complex type coercion", func(t *testing.T) {
+		schema := CoercedComplex128()
+
+		testCases := []struct {
+			input    any
+			expected complex128
+			name     string
+		}{
+			{complex64(complex(1.5, 2.5)), complex(1.5, 2.5), "complex64 to complex128"},
+			{complex128(complex(3.5, 4.5)), complex(3.5, 4.5), "complex128 to complex128"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				result, err := schema.Parse(tc.input)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			})
+		}
+	})
+
+	t.Run("coerced complex64 schema", func(t *testing.T) {
+		schema := CoercedComplex64()
+
+		// Test string coercion to complex64
+		result, err := schema.Parse("3+4i")
+		require.NoError(t, err)
+		assert.IsType(t, complex64(0), result)
+		assert.Equal(t, complex64(complex(3.0, 4.0)), result)
+
+		// Test int coercion to complex64
+		result, err = schema.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, complex64(complex(42.0, 0.0)), result)
+	})
+
+	t.Run("invalid coercion inputs", func(t *testing.T) {
+		schema := CoercedComplex128()
+
+		// Inputs that cannot be coerced
+		invalidInputs := []any{
+			"not a complex", "invalid", []complex128{1 + 2i}, map[string]complex128{"key": 1 + 2i}, nil,
+		}
+
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
+		}
+	})
+
+	t.Run("coercion with validation", func(t *testing.T) {
+		schema := CoercedComplex128().Min(5.0).Max(10.0)
+
+		// Coercion then validation passes
+		result, err := schema.Parse("3+4i") // magnitude = 5.0
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+
+		// Coercion then validation fails
+		_, err = schema.Parse("1+1i") // magnitude ≈ 1.41
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 10. Default and Prefault tests
+// Error handling and edge case tests
 // =============================================================================
 
-func TestComplexDefaultAndPrefault(t *testing.T) {
-	t.Run("default value", func(t *testing.T) {
-		schema := Complex128().Default(complex(1.0, 1.0))
-		// nil input uses default value
+func TestComplex_ErrorHandling(t *testing.T) {
+	t.Run("invalid type error", func(t *testing.T) {
+		schema := Complex128()
+
+		_, err := schema.Parse("not a complex")
+		assert.Error(t, err)
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected a complex value"
+		schema := Complex128Ptr(core.SchemaParams{Error: customError})
+
+		_, err := schema.Parse("not a complex")
+		assert.Error(t, err)
+	})
+
+	t.Run("validation error messages", func(t *testing.T) {
+		schema := Complex128().Min(10.0)
+
+		_, err := schema.Parse(complex(3.0, 4.0)) // magnitude = 5.0 < 10.0
+		assert.Error(t, err)
+	})
+
+	t.Run("nil handling with *complex128", func(t *testing.T) {
+		schema := Complex128Ptr().Nilable()
+
+		// Test nil input
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, complex(1.0, 1.0), result)
-		// Valid input normal validation
-		result2, err := schema.Parse(complex(3.0, 4.0))
+		assert.Nil(t, result)
+
+		// Test valid complex
+		result, err = schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result2)
+		require.NotNil(t, result)
+		assert.Equal(t, complex(3.0, 4.0), *result)
 	})
 
-	t.Run("function-based default value", func(t *testing.T) {
-		counter := 0
-		schema := Complex128().DefaultFunc(func() complex128 {
-			counter++
-			return complex(float64(counter), float64(counter))
-		})
+	t.Run("special complex values", func(t *testing.T) {
+		schema := Complex128()
 
-		// Each nil input generates a new default value
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, complex(1.0, 1.0), result1)
+		// Test complex with infinite real part
+		result, err := schema.Parse(complex(math.Inf(1), 4.0))
+		require.NoError(t, err)
+		assert.True(t, math.IsInf(real(result), 1))
+		assert.Equal(t, 4.0, imag(result))
 
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, complex(2.0, 2.0), result2)
+		// Test complex with infinite imaginary part
+		result, err = schema.Parse(complex(3.0, math.Inf(-1)))
+		require.NoError(t, err)
+		assert.Equal(t, 3.0, real(result))
+		assert.True(t, math.IsInf(imag(result), -1))
 
-		// Valid input bypasses default generation
-		result3, err3 := schema.Parse(complex(10.0, 10.0))
-		require.NoError(t, err3)
-		assert.Equal(t, complex(10.0, 10.0), result3)
+		// Test complex with NaN real part
+		result, err = schema.Parse(complex(math.NaN(), 4.0))
+		require.NoError(t, err)
+		assert.True(t, math.IsNaN(real(result)))
+		assert.Equal(t, 4.0, imag(result))
 
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
+		// Test complex with NaN imaginary part
+		result, err = schema.Parse(complex(3.0, math.NaN()))
+		require.NoError(t, err)
+		assert.Equal(t, 3.0, real(result))
+		assert.True(t, math.IsNaN(imag(result)))
 	})
 
-	t.Run("mathematical constants as defaults", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			schema   ZodComplexDefault[complex128]
-			expected complex128
+	t.Run("very large and small values", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test very large magnitude
+		result, err := schema.Parse(complex(1e100, 1e100))
+		require.NoError(t, err)
+		assert.Equal(t, complex(1e100, 1e100), result)
+
+		// Test very small magnitude
+		result, err = schema.Parse(complex(1e-100, 1e-100))
+		require.NoError(t, err)
+		assert.Equal(t, complex(1e-100, 1e-100), result)
+	})
+
+	t.Run("precision handling", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test precision preservation
+		value := complex(0.1+0.2, 0.3+0.4)
+		result, err := schema.Parse(value)
+		require.NoError(t, err)
+		assert.Equal(t, value, result)
+	})
+
+	t.Run("magnitude calculations", func(t *testing.T) {
+		testCases := []struct {
+			input     complex128
+			magnitude float64
+			name      string
 		}{
-			{"unit imaginary", Complex128().Default(complex(0.0, 1.0)), complex(0.0, 1.0)},
-			{"golden ratio", Complex128().Default(complex((1.0+math.Sqrt(5.0))/2.0, 0.0)), complex((1.0+math.Sqrt(5.0))/2.0, 0.0)},
-			{"euler's identity", Complex128().Default(cmplx.Exp(complex(0.0, math.Pi))), cmplx.Exp(complex(0.0, math.Pi))},
+			{complex(3.0, 4.0), 5.0, "3+4i has magnitude 5"},
+			{complex(0.0, 1.0), 1.0, "pure imaginary i has magnitude 1"},
+			{complex(1.0, 0.0), 1.0, "pure real 1 has magnitude 1"},
+			{complex(0.0, 0.0), 0.0, "zero has magnitude 0"},
+			{complex(-3.0, -4.0), 5.0, "-3-4i has magnitude 5"},
 		}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := tt.schema.Parse(nil)
-				require.NoError(t, err)
-				if tt.name == "euler's identity" {
-					assert.InDelta(t, real(tt.expected), real(result.(complex128)), 0.001)
-					assert.InDelta(t, imag(tt.expected), imag(result.(complex128)), 0.001)
-				} else {
-					assert.Equal(t, tt.expected, result)
-				}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				calculated := cmplx.Abs(tc.input)
+				assert.InDelta(t, tc.magnitude, calculated, 1e-10)
 			})
 		}
 	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		fallbackValue := complex(10.0, 0.0)
-		schema := Complex128().Refine(func(val complex128) bool {
-			return real(val) > 2.0 // Only allow real part > 2
-		}).Prefault(fallbackValue)
+	t.Run("Complex64 vs Complex128 distinction", func(t *testing.T) {
+		complex64Schema := Complex64()
+		complex128Schema := Complex128()
 
-		// Valid input succeeds
-		result1, err1 := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err1)
-		assert.Equal(t, complex(3.0, 4.0), result1)
+		// Both should handle their respective types
+		resultComplex64, err := complex64Schema.Parse(complex64(complex(1.5, 2.5)))
+		require.NoError(t, err)
+		assert.IsType(t, complex64(0), resultComplex64)
 
-		// Invalid input uses prefault (real part too small)
-		result2, err2 := schema.Parse(complex(1.0, 1.0))
-		require.NoError(t, err2)
-		assert.Equal(t, fallbackValue, result2)
+		resultComplex128, err := complex128Schema.Parse(complex128(complex(3.5, 4.5)))
+		require.NoError(t, err)
+		assert.IsType(t, complex128(0), resultComplex128)
 	})
 
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := Complex128().Refine(func(val complex128) bool {
-			return real(val) > 2.0 // Only allow real part > 2
-		}).PrefaultFunc(func() complex128 {
-			counter++
-			return complex(float64(counter*10), 0.0) // Generate different fallback values
-		})
+	t.Run("Complex alias", func(t *testing.T) {
+		complexSchema := Complex()
 
-		// Valid input succeeds and doesn't call function
-		result1, err1 := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err1)
-		assert.Equal(t, complex(3.0, 4.0), result1)
-		assert.Equal(t, 0, counter, "Function should not be called for valid input")
-
-		// Invalid input calls prefault function (real part too small)
-		result2, err2 := schema.Parse(complex(1.0, 1.0))
-		require.NoError(t, err2)
-		assert.Equal(t, complex(10.0, 0.0), result2)
-		assert.Equal(t, 1, counter, "Function should be called once for invalid input")
-
-		// Another invalid input calls function again
-		result3, err3 := schema.Parse(complex(0.5, 0.5))
-		require.NoError(t, err3)
-		assert.Equal(t, complex(20.0, 0.0), result3)
-		assert.Equal(t, 2, counter, "Function should increment counter for each invalid input")
-
-		// Valid input still doesn't call function
-		result4, err4 := schema.Parse(complex(4.0, 3.0))
-		require.NoError(t, err4)
-		assert.Equal(t, complex(4.0, 3.0), result4)
-		assert.Equal(t, 2, counter, "Counter should remain unchanged for valid input")
+		// Complex should behave like Complex128
+		result, err := complexSchema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.IsType(t, complex128(0), result)
+		assert.Equal(t, complex(3.0, 4.0), result)
 	})
 
-	t.Run("default vs prefault distinction", func(t *testing.T) {
-		defaultValue := complex(0.0, 0.0)
-		prefaultValue := complex(100.0, 0.0)
+	t.Run("finite vs infinite validation", func(t *testing.T) {
+		finiteSchema := Complex128().Finite()
+		regularSchema := Complex128()
 
-		schema := Complex128().
-			Refine(func(val complex128) bool {
-				return real(val) > 2.0 // Only allow real part > 2
-			}).
-			Default(defaultValue).
-			Prefault(prefaultValue)
+		// Regular schema should accept infinity
+		result, err := regularSchema.Parse(complex(math.Inf(1), 4.0))
+		require.NoError(t, err)
+		assert.True(t, math.IsInf(real(result), 1))
 
-		// nil input uses default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, defaultValue, result1)
+		// Finite schema should reject infinity
+		_, err = finiteSchema.Parse(complex(math.Inf(1), 4.0))
+		assert.Error(t, err)
 
-		// Valid input succeeds
-		result2, err2 := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err2)
-		assert.Equal(t, complex(3.0, 4.0), result2)
+		// Both should accept finite values
+		result, err = finiteSchema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
 
-		// Invalid input uses prefault
-		result3, err3 := schema.Parse(complex(1.0, 1.0))
-		require.NoError(t, err3)
-		assert.Equal(t, prefaultValue, result3)
+		result, err = regularSchema.Parse(complex(3.0, 4.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
 	})
 }
 
 // =============================================================================
-// Additional type-specific tests
+// OVERWRITE TESTS
 // =============================================================================
 
-func TestComplexTypeSpecific(t *testing.T) {
-	t.Run("all complex types basic validation", func(t *testing.T) {
-		tests := []struct {
-			name   string
-			schema core.ZodType[any, any]
-			input  any
-			want   any
-		}{
-			{"complex64", Complex64(), complex64(complex(3.0, 4.0)), complex64(complex(3.0, 4.0))},
-			{"complex128", Complex128(), complex(3.0, 4.0), complex(3.0, 4.0)},
-		}
+func TestComplex_Overwrite(t *testing.T) {
+	t.Run("basic complex transformation", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			// Transform complex number by adding 1+1i
+			return c + (1 + 1i)
+		})
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := tt.schema.Parse(tt.input)
-				require.NoError(t, err)
-				assert.Equal(t, tt.want, result)
-			})
-		}
+		input := 2 + 3i
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex128(3 + 4i)
+		assert.Equal(t, expected, result)
 	})
 
-	t.Run("coerced constructors", func(t *testing.T) {
-		tests := []struct {
-			name   string
-			schema core.ZodType[any, any]
-			input  any
-			want   any
-		}{
-			{"coerced complex64", CoercedComplex64(), "3+4i", complex64(complex(3.0, 4.0))},
-			{"coerced complex128", CoercedComplex128(), "3+4i", complex(3.0, 4.0)},
-		}
+	t.Run("complex conjugate transformation", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			// Return complex conjugate
+			return complex(real(c), -imag(c))
+		})
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result, err := tt.schema.Parse(tt.input)
-				require.NoError(t, err)
-				if c64, ok := tt.want.(complex64); ok {
-					resultC64, ok := result.(complex64)
-					require.True(t, ok)
-					assert.InDelta(t, real(c64), real(resultC64), 0.001)
-					assert.InDelta(t, imag(c64), imag(resultC64), 0.001)
-				} else {
-					assert.Equal(t, tt.want, result)
+		input := 3 + 4i
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex128(3 - 4i)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("magnitude normalization", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			// Normalize to unit magnitude
+			magnitude := real(c)*real(c) + imag(c)*imag(c)
+			if magnitude == 0 {
+				return c
+			}
+			sqrtMag := math.Sqrt(magnitude)
+			return complex(real(c)/sqrtMag, imag(c)/sqrtMag)
+		})
+
+		input := 3 + 4i // magnitude = 5
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex128(0.6 + 0.8i) // 3/5 + 4i/5
+		assert.InDelta(t, real(expected), real(result), 1e-10)
+		assert.InDelta(t, imag(expected), imag(result), 1e-10)
+	})
+
+	t.Run("complex64 type handling", func(t *testing.T) {
+		schema := Complex64().Overwrite(func(c complex64) complex64 {
+			// Double both real and imaginary parts
+			return complex64(2 * c)
+		})
+
+		input := complex64(1 + 2i)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex64(2 + 4i)
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("pointer type handling", func(t *testing.T) {
+		schema := ComplexPtr().Overwrite(func(c *complex128) *complex128 {
+			if c == nil {
+				// Return default complex number
+				defaultVal := complex128(1 + 0i)
+				return &defaultVal
+			}
+			// Add π to the real part
+			transformed := complex(real(*c)+math.Pi, imag(*c))
+			return &transformed
+		})
+
+		input := complex128(1 + 2i)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		expected := complex128(1+math.Pi) + 2i
+		assert.InDelta(t, real(expected), real(*result), 1e-10)
+		assert.InDelta(t, imag(expected), imag(*result), 1e-10)
+	})
+
+	t.Run("chaining with validations", func(t *testing.T) {
+		schema := Complex().
+			Overwrite(func(c complex128) complex128 {
+				// Ensure imaginary part is positive
+				if imag(c) < 0 {
+					return complex(real(c), -imag(c))
 				}
+				return c
+			}).
+			Refine(func(c complex128) bool {
+				// Validate that imaginary part is indeed positive after transformation
+				return imag(c) >= 0
+			}, "Imaginary part must be non-negative")
+
+		// Test with negative imaginary part
+		input := 3 - 4i
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex128(3 + 4i) // Imaginary part should be flipped to positive
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("polar to rectangular conversion", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			// Treat input as polar coordinates (r, θ) and convert to rectangular
+			r := real(c)
+			theta := imag(c)
+
+			// Convert polar to rectangular
+			return complex(r*math.Cos(theta), r*math.Sin(theta))
+		})
+
+		// Input: r=2, θ=π/4 (45 degrees)
+		input := complex(2, math.Pi/4)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		// Expected: (2*cos(π/4), 2*sin(π/4)) = (√2, √2)
+		expectedReal := 2 * math.Cos(math.Pi/4)
+		expectedImag := 2 * math.Sin(math.Pi/4)
+		assert.InDelta(t, expectedReal, real(result), 1e-10)
+		assert.InDelta(t, expectedImag, imag(result), 1e-10)
+	})
+
+	t.Run("type preservation", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			return c // Identity transformation
+		})
+
+		input := complex128(5 + 6i)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.IsType(t, complex128(0), result)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("multiple transformations", func(t *testing.T) {
+		schema := Complex().
+			Overwrite(func(c complex128) complex128 {
+				// First transformation: add 1 to real part
+				return complex(real(c)+1, imag(c))
+			}).
+			Overwrite(func(c complex128) complex128 {
+				// Second transformation: multiply imaginary part by 2
+				return complex(real(c), imag(c)*2)
 			})
-		}
+
+		input := complex128(2 + 3i)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := complex128(3 + 6i) // real: 2+1=3, imag: 3*2=6
+		assert.Equal(t, expected, result)
 	})
 
-	t.Run("polar coordinate conversions", func(t *testing.T) {
-		schema := Complex128().Transform(func(val complex128, ctx *core.RefinementContext) (any, error) {
-			magnitude := cmplx.Abs(val)
-			phase := cmplx.Phase(val)
-			return map[string]float64{
-				"magnitude": magnitude,
-				"phase":     phase,
-				"degrees":   phase * 180.0 / math.Pi,
-			}, nil
+	t.Run("error handling preservation", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			return c
 		})
 
-		result, err := schema.Parse(complex(1.0, 1.0))
-		require.NoError(t, err)
-		resultMap, ok := result.(map[string]float64)
-		require.True(t, ok)
-		assert.InDelta(t, math.Sqrt(2), resultMap["magnitude"], 0.001)
-		assert.InDelta(t, math.Pi/4, resultMap["phase"], 0.001)
-		assert.InDelta(t, 45.0, resultMap["degrees"], 0.001)
+		// Invalid input should still fail validation
+		_, err := schema.Parse("not a complex number")
+		assert.Error(t, err)
+
+		_, err = schema.Parse("invalid")
+		assert.Error(t, err)
 	})
 
-	t.Run("quadrant validation", func(t *testing.T) {
-		schema := Complex128().Refine(func(val complex128) bool {
-			// Only allow first quadrant (both real and imaginary positive)
-			return real(val) >= 0 && imag(val) >= 0
-		}, core.SchemaParams{
-			Error: "Complex number must be in first quadrant",
+	t.Run("phase shift transformation", func(t *testing.T) {
+		schema := Complex().Overwrite(func(c complex128) complex128 {
+			// Apply 90-degree phase shift (multiply by i)
+			return c * 1i
 		})
 
-		// First quadrant
-		result, err := schema.Parse(complex(3.0, 4.0))
+		input := complex128(3 + 4i)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
 
-		// Other quadrants
-		invalidInputs := []complex128{
-			complex(-3.0, 4.0),  // second quadrant
-			complex(-3.0, -4.0), // third quadrant
-			complex(3.0, -4.0),  // fourth quadrant
-		}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-		}
+		// (3 + 4i) * i = 3i + 4i² = 3i - 4 = -4 + 3i
+		expected := complex128(-4 + 3i)
+		assert.Equal(t, expected, result)
 	})
 
-	t.Run("complex arithmetic operations", func(t *testing.T) {
-		schema := Complex128().Transform(func(val complex128, ctx *core.RefinementContext) (any, error) {
-			return map[string]complex128{
-				"original": val,
-				"squared":  val * val,
-				"sqrt":     cmplx.Sqrt(val),
-				"exp":      cmplx.Exp(val),
-				"log":      cmplx.Log(val),
-			}, nil
-		})
+	t.Run("default value interaction", func(t *testing.T) {
+		schema := Complex().
+			Default(complex128(1 + 1i)).
+			Overwrite(func(c complex128) complex128 {
+				// Square the complex number
+				return c * c
+			})
 
-		result, err := schema.Parse(complex(1.0, 0.0)) // Real number 1
+		// Test with actual input
+		result1, err := schema.Parse(complex128(2 + 0i))
 		require.NoError(t, err)
-		resultMap, ok := result.(map[string]complex128)
-		require.True(t, ok)
-		assert.Equal(t, complex(1.0, 0.0), resultMap["original"])
-		assert.InDelta(t, 1.0, real(resultMap["squared"]), 0.001)
-		assert.InDelta(t, 1.0, real(resultMap["sqrt"]), 0.001)
-		assert.InDelta(t, math.E, real(resultMap["exp"]), 0.001)
-		assert.InDelta(t, 0.0, real(resultMap["log"]), 0.001)
+		expected1 := complex128(4 + 0i) // (2+0i)² = 4
+		assert.Equal(t, expected1, result1)
+
+		// Test nil input uses default -> transformed
+		result2, err := schema.Parse(nil)
+		require.NoError(t, err)
+		expected2 := complex128(0 + 2i) // (1+1i)² = 1 + 2i - 1 = 2i
+		assert.Equal(t, expected2, result2)
 	})
 }

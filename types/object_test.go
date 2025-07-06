@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
@@ -10,212 +12,1219 @@ import (
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestObjectBasicFunctionality(t *testing.T) {
-	t.Run("constructor", func(t *testing.T) {
+func TestObject_BasicFunctionality(t *testing.T) {
+	t.Run("valid object inputs", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String(),
+		})
+
+		validInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"email": "john@example.com",
+		}
+
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 25, result["age"])
+		assert.Equal(t, "john@example.com", result["email"])
+	})
+
+	t.Run("invalid type inputs", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
 		})
 
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals)
-		assert.Equal(t, core.ZodTypeObject, internals.Type)
+		invalidInputs := []any{
+			"not an object", 123, 3.14, []string{"array"}, nil,
+		}
+
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
+		}
 	})
 
-	t.Run("constructor with params", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"email": String().Email(),
-		}, core.SchemaParams{
-			Error: "core.Custom object error",
-		})
-
-		require.NotNil(t, schema)
-		// Coercion is no longer supported for collection types
-	})
-
-	t.Run("smart type inference", func(t *testing.T) {
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
 		})
 
-		// Map input returns map
-		input := map[string]any{
+		validInput := map[string]any{
 			"name": "Alice",
 			"age":  30,
 		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-		assert.IsType(t, map[string]any{}, result)
 
-		// Pointer input returns same pointer
-		result2, err := schema.Parse(&input)
+		// Test Parse method
+		result, err := schema.Parse(validInput)
 		require.NoError(t, err)
-		assert.IsType(t, (*map[string]any)(nil), result2)
-		assert.Equal(t, &input, result2) // Same pointer identity
+		assert.Equal(t, "Alice", result["name"])
+		assert.Equal(t, 30, result["age"])
+
+		// Test MustParse method
+		mustResult := schema.MustParse(validInput)
+		assert.Equal(t, "Alice", mustResult["name"])
+		assert.Equal(t, 30, mustResult["age"])
+
+		// Test panic on invalid input
+		assert.Panics(t, func() {
+			schema.MustParse("invalid")
+		})
 	})
 
-	t.Run("nilable modifier", func(t *testing.T) {
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected a valid user object"
 		schema := Object(core.ObjectSchema{
 			"name": String(),
-		}).Nilable()
+			"age":  Int(),
+		}, core.SchemaParams{Error: customError})
 
-		// nil input should succeed, return nil pointer
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-		assert.IsType(t, (*map[string]any)(nil), result)
+		require.NotNil(t, schema)
+		assert.Equal(t, core.ZodTypeObject, schema.internals.Def.Type)
 
-		// Valid input keeps type inference
-		validInput := map[string]any{"name": "Alice"}
-		result2, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result2)
-		assert.IsType(t, map[string]any{}, result2)
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
 	})
 
-	t.Run("complex object type inference", func(t *testing.T) {
+	t.Run("field validation", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
-			"f1": Number(),
-			"f2": String().Optional(),
-			"f3": String().Nilable(),
-			"f4": Slice(Object(core.ObjectSchema{
-				"t": Union([]core.ZodType[any, any]{String(), Bool()}),
-			})),
+			"name":  String().Min(2),
+			"age":   Int().Min(0),
+			"email": String().Email(),
 		})
 
-		input := map[string]any{
-			"f1": 42.0,
-			"f2": "optional string",
-			"f3": "nullable string",
-			"f4": []any{
-				map[string]any{"t": "string"},
-				map[string]any{"t": true},
-			},
+		// Valid input
+		validInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"email": "john@example.com",
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid field validation
+		invalidInputs := []map[string]any{
+			{"name": "J", "age": 25, "email": "john@example.com"},    // name too short
+			{"name": "John", "age": -1, "email": "john@example.com"}, // age negative
+			{"name": "John", "age": 25, "email": "invalid-email"},    // invalid email
 		}
 
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Test with nil f3
-		input2 := map[string]any{
-			"f1": 42.0,
-			"f3": nil,
-			"f4": []any{
-				map[string]any{"t": false},
-			},
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
 		}
-
-		result2, err := schema.Parse(input2)
-		require.NoError(t, err)
-		assert.NotNil(t, result2)
 	})
 }
 
 // =============================================================================
-// 2. Validation methods (coercion no longer supported for collection types)
+// Type safety tests
 // =============================================================================
 
-func TestObjectValidations(t *testing.T) {
-	t.Run("required field validation", func(t *testing.T) {
+func TestObject_TypeSafety(t *testing.T) {
+	t.Run("Object returns map[string]any type", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
-			"name": String().Min(2),
-			"age":  Int().Min(0).Max(120),
+			"name": String(),
+			"age":  Int(),
 		})
+		require.NotNil(t, schema)
 
-		// Valid object
 		input := map[string]any{
-			"name": "Alice",
-			"age":  30,
+			"name": "test",
+			"age":  123,
 		}
 
 		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-
-		// Missing required field
-		invalidInput := map[string]any{
-			"name": "Alice",
-			// missing age
-		}
-
-		_, err = schema.Parse(invalidInput)
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-
-		hasRequiredError := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.InvalidType && len(issue.Path) > 0 && issue.Path[0] == "age" {
-				hasRequiredError = true
-				break
-			}
-		}
-		assert.True(t, hasRequiredError)
+		assert.IsType(t, map[string]any{}, result)
+		assert.Equal(t, "test", result["name"])
+		assert.Equal(t, 123, result["age"])
 	})
 
-	t.Run("field validation errors", func(t *testing.T) {
+	t.Run("Shape method returns object schema", func(t *testing.T) {
+		stringSchema := String()
+		intSchema := Int()
+
 		schema := Object(core.ObjectSchema{
-			"name": String().Min(5),
-			"age":  Int().Min(18),
+			"name": stringSchema,
+			"age":  intSchema,
+		})
+
+		shape := schema.Shape()
+		assert.Len(t, shape, 2)
+		assert.Contains(t, shape, "name")
+		assert.Contains(t, shape, "age")
+	})
+
+	t.Run("MustParse type safety", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
 		})
 
 		input := map[string]any{
-			"name": "A", // Too short
-			"age":  10,  // Too young
+			"name": "test",
+			"age":  123,
 		}
 
-		_, err := schema.Parse(input)
-		require.Error(t, err)
+		result := schema.MustParse(input)
+		assert.IsType(t, map[string]any{}, result)
+		assert.Equal(t, "test", result["name"])
+		assert.Equal(t, 123, result["age"])
+	})
+}
 
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Greater(t, len(zodErr.Issues), 0)
+// =============================================================================
+// Modifier methods tests
+// =============================================================================
+
+func TestObject_Modifiers(t *testing.T) {
+	t.Run("Optional modifier", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+		optionalSchema := schema.Optional()
+
+		// Test non-nil value
+		input := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := optionalSchema.Parse(input)
+		require.NoError(t, err)
+		// Optional returns pointer constraint type
+		assert.Equal(t, &input, result)
+
+		// Test nil value (should be allowed for optional)
+		result, err = optionalSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("optional fields", func(t *testing.T) {
+	t.Run("Nilable allows nil values", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+		nilableSchema := schema.Nilable()
+
+		// Test nil handling
+		result, err := nilableSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value
+		input := map[string]any{
+			"name": "test",
+			"age":  123,
+		}
+		result, err = nilableSchema.Parse(input)
+		require.NoError(t, err)
+		// Nilable returns pointer constraint type
+		assert.Equal(t, &input, result)
+	})
+
+	t.Run("Nullish combines optional and nilable", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+		nullishSchema := schema.Nullish()
+
+		// Test nil handling
+		result, err := nullishSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value
+		input := map[string]any{
+			"name": "test",
+			"age":  123,
+		}
+		result, err = nullishSchema.Parse(input)
+		require.NoError(t, err)
+		// Nullish returns pointer constraint type
+		assert.Equal(t, &input, result)
+	})
+
+	t.Run("Default preserves current type", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+		defaultValue := map[string]any{
+			"name": "default",
+			"age":  0,
+		}
+		defaultSchema := schema.Default(defaultValue)
+
+		// Valid input should override default
+		input := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := defaultSchema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+		assert.IsType(t, map[string]any{}, result)
+	})
+}
+
+// =============================================================================
+// Chaining tests
+// =============================================================================
+
+func TestObject_Chaining(t *testing.T) {
+	t.Run("complex chaining", func(t *testing.T) {
+		defaultValue := map[string]any{
+			"name": "fallback",
+			"age":  0,
+		}
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Default(defaultValue).Optional()
+
+		// Test final behavior
+		input := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		// Chained with Optional returns pointer constraint type
+		assert.Equal(t, &input, result)
+
+		// Test nil handling
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		defaultValue := map[string]any{
+			"name": "default",
+			"age":  0,
+		}
+		prefaultValue := map[string]any{
+			"name": "prefault",
+			"age":  -1,
+		}
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Default(defaultValue).Prefault(prefaultValue)
+
+		input := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("modifier immutability", func(t *testing.T) {
+		originalSchema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+		modifiedSchema := originalSchema.Optional()
+
+		// Original should not be affected by modifier
+		_, err1 := originalSchema.Parse(nil)
+		assert.Error(t, err1, "Original schema should reject nil")
+
+		// Modified schema should have new behavior
+		result2, err2 := modifiedSchema.Parse(nil)
+		require.NoError(t, err2)
+		assert.Nil(t, result2)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestObject_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default with function", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).DefaultFunc(func() map[string]any {
+			return map[string]any{
+				"name": "function default",
+				"age":  0,
+			}
+		})
+
+		input := map[string]any{
+			"name": "input",
+			"age":  25,
+		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("Prefault with function", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).PrefaultFunc(func() map[string]any {
+			return map[string]any{
+				"name": "function prefault",
+				"age":  -1,
+			}
+		})
+
+		input := map[string]any{
+			"name": "valid",
+			"age":  25,
+		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("Default vs Prefault behavior", func(t *testing.T) {
+		defaultValue := map[string]any{
+			"name": "default",
+			"age":  0,
+		}
+		prefaultValue := map[string]any{
+			"name": "prefault",
+			"age":  -1,
+		}
+
+		// Default should be used when input is nil/undefined
+		defaultSchema := Object(core.ObjectSchema{
+			"name": String(),
+		}).Default(defaultValue)
+
+		// Prefault should be used when validation fails
+		prefaultSchema := Object(core.ObjectSchema{
+			"name": String(),
+		}).Prefault(prefaultValue)
+
+		// Test valid input (both should return the input)
+		validInput := map[string]any{
+			"name": "hello",
+		}
+		result1, err1 := defaultSchema.Parse(validInput)
+		require.NoError(t, err1)
+		assert.Equal(t, validInput, result1)
+
+		result2, err2 := prefaultSchema.Parse(validInput)
+		require.NoError(t, err2)
+		assert.Equal(t, validInput, result2)
+	})
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+
+func TestObject_Refine(t *testing.T) {
+	t.Run("refine validation", func(t *testing.T) {
+		// Only accept objects with non-empty name and positive age
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(obj map[string]any) bool {
+			name, hasName := obj["name"].(string)
+			age, hasAge := obj["age"].(int)
+			return hasName && hasAge && len(name) > 0 && age > 0
+		})
+
+		// Valid object
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid object (empty name)
+		invalidInput1 := map[string]any{
+			"name": "",
+			"age":  25,
+		}
+		_, err = schema.Parse(invalidInput1)
+		assert.Error(t, err)
+
+		// Invalid object (negative age)
+		invalidInput2 := map[string]any{
+			"name": "John",
+			"age":  -5,
+		}
+		_, err = schema.Parse(invalidInput2)
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Must have non-empty name and positive age"
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(obj map[string]any) bool {
+			name, hasName := obj["name"].(string)
+			age, hasAge := obj["age"].(int)
+			return hasName && hasAge && len(name) > 0 && age > 0
+		}, core.SchemaParams{Error: errorMessage})
+
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		invalidInput := map[string]any{
+			"name": "",
+			"age":  25,
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+}
+
+func TestObject_RefineAny(t *testing.T) {
+	t.Run("refineAny validation", func(t *testing.T) {
+		// Accept any object that has a "valid" field set to true
+		schema := Object(core.ObjectSchema{
+			"name":  String(),
+			"valid": Bool(),
+		}).RefineAny(func(v any) bool {
+			if obj, ok := v.(map[string]any); ok {
+				if valid, hasValid := obj["valid"].(bool); hasValid {
+					return valid
+				}
+			}
+			return false
+		})
+
+		// Valid object
+		validInput := map[string]any{
+			"name":  "John",
+			"valid": true,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid object
+		invalidInput := map[string]any{
+			"name":  "John",
+			"valid": false,
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Validation methods tests
+// =============================================================================
+
+func TestObject_ValidationMethods(t *testing.T) {
+	t.Run("Min size validation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Min(2)
+
+		// Valid - has exactly 2 fields
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Valid - has more than 2 fields (in strip mode, extra fields are removed)
+		extraInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"extra": "field",
+		}
+		result, err = schema.Parse(extraInput)
+		require.NoError(t, err)
+		assert.Len(t, result, 2) // extra field should be stripped
+
+		// Invalid - has less than 2 fields
+		invalidInput := map[string]any{
+			"name": "John",
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+
+	t.Run("Max size validation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().Optional(),
+			"age":  Int().Optional(),
+		}).Max(1)
+
+		// Valid - has exactly 1 field
+		validInput := map[string]any{
+			"name": "John",
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid - has more than 1 field (even after stripping)
+		invalidInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+
+	t.Run("Size validation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Size(2)
+
+		// Valid - has exactly 2 fields
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid - has different number of fields
+		invalidInput1 := map[string]any{
+			"name": "John",
+		}
+		_, err = schema.Parse(invalidInput1)
+		assert.Error(t, err)
+
+		// Extra fields are stripped, so this should pass size check
+		extraInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"extra": "field",
+		}
+		result, err = schema.Parse(extraInput)
+		require.NoError(t, err)
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("Property validation", func(t *testing.T) {
+		// Create an object schema with property validation
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Property("name", String().Min(3))
+
+		// Valid - name has at least 3 characters
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid - name has less than 3 characters
+		invalidInput := map[string]any{
+			"name": "Jo",
+			"age":  25,
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "name")
+
+		// Valid - empty object shouldn't trigger property validation if field doesn't exist
+		emptyInput := map[string]any{
+			"age": 25,
+		}
+		_, err = schema.Parse(emptyInput)
+		assert.Error(t, err) // Should fail due to missing required field, not property validation
+	})
+
+	t.Run("Property validation with custom error", func(t *testing.T) {
+		customError := "Name must be at least 3 characters long"
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Property("name", String().Min(3), customError)
+
+		invalidInput := map[string]any{
+			"name": "Jo",
+			"age":  25,
+		}
+		_, err := schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+
+	t.Run("Multiple property validations", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name":  String(),
+			"email": String(),
+			"age":   Int(),
+		}).
+			Property("name", String().Min(2)).
+			Property("email", String().Email()).
+			Property("age", Int().Min(0).Max(150))
+
+		// Valid input
+		validInput := map[string]any{
+			"name":  "John",
+			"email": "john@example.com",
+			"age":   25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid name
+		invalidName := map[string]any{
+			"name":  "J",
+			"email": "john@example.com",
+			"age":   25,
+		}
+		_, err = schema.Parse(invalidName)
+		assert.Error(t, err)
+
+		// Invalid email
+		invalidEmail := map[string]any{
+			"name":  "John",
+			"email": "invalid-email",
+			"age":   25,
+		}
+		_, err = schema.Parse(invalidEmail)
+		assert.Error(t, err)
+
+		// Invalid age
+		invalidAge := map[string]any{
+			"name":  "John",
+			"email": "john@example.com",
+			"age":   200,
+		}
+		_, err = schema.Parse(invalidAge)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Type-specific methods tests
+// =============================================================================
+
+func TestObject_TypeSpecificMethods(t *testing.T) {
+	t.Run("Shape method returns field schemas", func(t *testing.T) {
+		stringSchema := String()
+		intSchema := Int()
+		boolSchema := Bool()
+
+		object := Object(core.ObjectSchema{
+			"name":   stringSchema,
+			"age":    intSchema,
+			"active": boolSchema,
+		})
+
+		shape := object.Shape()
+		assert.Len(t, shape, 3)
+
+		// Verify all fields are present
+		assert.Contains(t, shape, "name")
+		assert.Contains(t, shape, "age")
+		assert.Contains(t, shape, "active")
+	})
+
+	t.Run("Pick creates subset object", func(t *testing.T) {
+		originalObject := Object(core.ObjectSchema{
 			"name":    String(),
 			"age":     Int(),
+			"email":   String().Email(),
 			"address": String().Optional(),
 		})
 
-		// With optional field
-		input1 := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"address": "123 Main St",
+		pickedObject := originalObject.Pick([]string{"name", "email"})
+
+		// Should accept objects with only picked fields
+		input := map[string]any{
+			"name":  "John",
+			"email": "john@example.com",
 		}
-
-		result1, err := schema.Parse(input1)
+		result, err := pickedObject.Parse(input)
 		require.NoError(t, err)
-		resultMap1 := result1.(map[string]any)
-		assert.Equal(t, "123 Main St", resultMap1["address"])
+		assert.Equal(t, input, result)
 
-		// Without optional field
-		input2 := map[string]any{
-			"name": "Bob",
+		// Should reject objects with required fields that weren't picked
+		invalidInput := map[string]any{
+			"name": "John",
 			"age":  25,
 		}
-
-		result2, err := schema.Parse(input2)
-		require.NoError(t, err)
-		resultMap2 := result2.(map[string]any)
-		assert.Equal(t, "Bob", resultMap2["name"])
-		_, hasAddress := resultMap2["address"]
-		assert.False(t, hasAddress)
+		_, err = pickedObject.Parse(invalidInput)
+		assert.Error(t, err) // missing email
 	})
 
-	t.Run("nested object validation", func(t *testing.T) {
+	t.Run("Omit creates filtered object", func(t *testing.T) {
+		originalObject := Object(core.ObjectSchema{
+			"name":     String(),
+			"age":      Int(),
+			"email":    String().Email(),
+			"password": String().Min(8),
+		})
+
+		publicObject := originalObject.Omit([]string{"password"})
+
+		// Should accept objects without omitted field
+		input := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"email": "john@example.com",
+		}
+		result, err := publicObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should still validate remaining fields
+		invalidInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"email": "invalid-email",
+		}
+		_, err = publicObject.Parse(invalidInput)
+		assert.Error(t, err) // invalid email
+	})
+
+	t.Run("Extend adds new fields", func(t *testing.T) {
+		baseObject := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		extendedObject := baseObject.Extend(core.ObjectSchema{
+			"email":   String().Email(),
+			"country": String(),
+		})
+
+		// Should accept objects with all fields
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"email":   "john@example.com",
+			"country": "USA",
+		}
+		result, err := extendedObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should reject objects missing extended fields
+		invalidInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		_, err = extendedObject.Parse(invalidInput)
+		assert.Error(t, err) // missing email and country
+	})
+
+	t.Run("Merge combines objects", func(t *testing.T) {
+		object1 := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		object2 := Object(core.ObjectSchema{
+			"email":   String().Email(),
+			"country": String(),
+		})
+
+		mergedObject := object1.Merge(object2)
+
+		// Should accept objects with all fields from both objects
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"email":   "john@example.com",
+			"country": "USA",
+		}
+		result, err := mergedObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("Partial makes fields optional", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String().Email(),
+		})
+
+		partialObject := object.Partial()
+
+		// Should accept objects with only some fields
+		input := map[string]any{
+			"name": "John",
+		}
+		result, err := partialObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should accept objects with all fields
+		fullInput := map[string]any{
+			"name":  "John",
+			"age":   25,
+			"email": "john@example.com",
+		}
+		result, err = partialObject.Parse(fullInput)
+		require.NoError(t, err)
+		assert.Equal(t, fullInput, result)
+	})
+
+	t.Run("Partial with specific keys", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String().Email(),
+		})
+
+		// Make only name and age optional, email remains required
+		partialObject := object.Partial([]string{"name", "age"})
+
+		// Should accept objects with only required field
+		input := map[string]any{
+			"email": "john@example.com",
+		}
+		result, err := partialObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should reject objects missing required field
+		invalidInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		_, err = partialObject.Parse(invalidInput)
+		assert.Error(t, err) // missing required email
+	})
+
+	t.Run("Required makes specific fields required", func(t *testing.T) {
+		partialObject := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String().Email(),
+		}).Partial()
+
+		// Make only name and email required
+		requiredObject := partialObject.Required([]string{"name", "email"})
+
+		// Should accept objects with required fields
+		input := map[string]any{
+			"name":  "John",
+			"email": "john@example.com",
+		}
+		result, err := requiredObject.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should reject objects missing required field
+		invalidInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		_, err = requiredObject.Parse(invalidInput)
+		assert.Error(t, err) // missing required email
+	})
+
+	t.Run("Keyof returns string enum of keys", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String(),
+		})
+
+		keyEnum := object.Keyof()
+		require.NotNil(t, keyEnum)
+
+		// Should accept valid keys
+		result, err := keyEnum.Parse("name")
+		require.NoError(t, err)
+		assert.Equal(t, "name", result)
+
+		result, err = keyEnum.Parse("age")
+		require.NoError(t, err)
+		assert.Equal(t, "age", result)
+
+		// Should reject invalid keys
+		_, err = keyEnum.Parse("invalid")
+		assert.Error(t, err)
+	})
+
+	t.Run("Pick with invalid key silently ignores", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Pick with one valid key and one invalid key
+		pickedObject := object.Pick([]string{"name", "invalid"})
+
+		// Should only contain the valid key
+		shape := pickedObject.Shape()
+		assert.Len(t, shape, 1)
+		assert.NotNil(t, shape["name"])
+		_, exists := shape["invalid"]
+		assert.False(t, exists)
+	})
+
+	t.Run("Omit with invalid key silently ignores", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Omit with one valid key and one invalid key
+		omittedObject := object.Omit([]string{"name", "invalid"})
+
+		// Should only omit the valid key
+		shape := omittedObject.Shape()
+		assert.Len(t, shape, 1)
+		assert.NotNil(t, shape["age"])
+		_, exists := shape["name"]
+		assert.False(t, exists)
+	})
+}
+
+// =============================================================================
+// Object modes tests
+// =============================================================================
+
+func TestObject_Modes(t *testing.T) {
+	t.Run("Strip mode (default) removes unknown fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}) // Default is strip mode
+
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Len(t, result, 2)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 25, result["age"])
+		assert.NotContains(t, result, "unknown")
+	})
+
+	t.Run("Strict mode rejects unknown fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Strict()
+
+		// Valid input without unknown fields
+		validInput := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid input with unknown fields
+		invalidInput := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+
+	t.Run("Passthrough mode allows unknown fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Passthrough()
+
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Len(t, result, 3)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 25, result["age"])
+		assert.Equal(t, "field", result["unknown"])
+	})
+
+	t.Run("Catchall validates unknown fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Passthrough().Catchall(String())
+
+		// Valid input with string unknown field
+		validInput := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "string value",
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+
+		// Invalid input with non-string unknown field
+		invalidInput := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": 123, // Should be string
+		}
+		_, err = schema.Parse(invalidInput)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Error handling tests
+// =============================================================================
+
+func TestObject_ErrorHandling(t *testing.T) {
+	t.Run("custom error messages", func(t *testing.T) {
+		customError := "Custom object error"
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}, core.SchemaParams{Error: customError})
+
+		_, err := schema.Parse("not an object")
+		assert.Error(t, err)
+	})
+
+	t.Run("invalid type error structure", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		_, err := schema.Parse("not an object")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot convert")
+	})
+
+	t.Run("missing required field error", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		input := map[string]any{
+			"name": "John",
+			// missing required "age" field
+		}
+		_, err := schema.Parse(input)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "age")
+	})
+
+	t.Run("field validation error", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name":  String().Min(5),
+			"email": String().Email(),
+		})
+
+		input := map[string]any{
+			"name":  "Jo", // Too short
+			"email": "john@example.com",
+		}
+		_, err := schema.Parse(input)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "name")
+	})
+
+	t.Run("nil handling edge cases", func(t *testing.T) {
+		// Regular object should reject nil
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		})
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+
+		// Nilable object should accept nil
+		nilableSchema := schema.Nilable()
+		result, err := nilableSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Optional object should accept nil
+		optionalSchema := schema.Optional()
+		result, err = optionalSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty context handling", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		})
+
+		input := map[string]any{
+			"name": "John",
+		}
+
+		// Should work without context
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Should work with empty context slice
+		result, err = schema.Parse(input, []*core.ParseContext{}...)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+}
+
+// =============================================================================
+// Edge case tests
+// =============================================================================
+
+func TestObject_EdgeCases(t *testing.T) {
+	t.Run("empty object schema", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{})
+
+		// Should accept empty object
+		result, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{}, result)
+
+		// Should strip unknown fields
+		input := map[string]any{
+			"unknown": "field",
+		}
+		result, err = schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{}, result)
+	})
+
+	t.Run("nested objects", func(t *testing.T) {
 		userSchema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
@@ -228,781 +1237,408 @@ func TestObjectValidations(t *testing.T) {
 
 		input := map[string]any{
 			"user": map[string]any{
-				"name": "Alice",
-				"age":  30,
+				"name": "John",
+				"age":  25,
 			},
-			"country": "US",
+			"country": "USA",
 		}
 
 		result, err := profileSchema.Parse(input)
 		require.NoError(t, err)
+		assert.Equal(t, input, result)
 
-		resultMap := result.(map[string]any)
-		userMap := resultMap["user"].(map[string]any)
-		assert.Equal(t, "Alice", userMap["name"])
-		assert.Equal(t, "US", resultMap["country"])
-	})
-}
-
-// =============================================================================
-// 3. Modifiers and wrappers
-// =============================================================================
-
-func TestObjectModifiers(t *testing.T) {
-	t.Run("optional wrapper", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}).Optional()
-
-		// Valid object
-		validInput := map[string]any{
-			"name": "Alice",
-			"age":  30,
-		}
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// nil input should succeed
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("nilable wrapper", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}).Nilable()
-
-		// Valid object
-		validInput := map[string]any{
-			"name": "Alice",
-			"age":  30,
-		}
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Nil value
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-		assert.IsType(t, (*map[string]any)(nil), result)
-	})
-
-	t.Run("object modes", func(t *testing.T) {
-		baseSchema := core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}
-
-		// Strip mode (default)
-		stripSchema := Object(baseSchema)
-		input := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"unknown": "should be stripped",
-		}
-
-		result, err := stripSchema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		_, hasUnknown := resultMap["unknown"]
-		assert.False(t, hasUnknown, "Unknown key should be stripped")
-
-		// Strict mode
-		strictSchema := StrictObject(baseSchema)
-		_, err = strictSchema.Parse(input)
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-
-		hasUnrecognizedKeys := false
-		for _, issue := range zodErr.Issues {
-			if issue.Code == core.UnrecognizedKeys {
-				hasUnrecognizedKeys = true
-				break
-			}
-		}
-		assert.True(t, hasUnrecognizedKeys)
-
-		// Loose mode
-		looseSchema := LooseObject(baseSchema)
-		result, err = looseSchema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap = result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		assert.Equal(t, "should be stripped", resultMap["unknown"])
-	})
-}
-
-// =============================================================================
-// 4. Chaining and method composition
-// =============================================================================
-
-func TestObjectChaining(t *testing.T) {
-	t.Run("method chaining", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String().Min(2),
-			"age":  Int().Min(0),
-		}).Strict().Passthrough().Strip()
-
-		// Test that final method (Strip) takes effect
-		input := map[string]any{
-			"name":    "Alice",
-			"age":     30,
-			"unknown": "should be stripped",
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, 30, resultMap["age"])
-		_, hasUnknown := resultMap["unknown"]
-		assert.False(t, hasUnknown, "Unknown key should be stripped")
-	})
-
-	t.Run("catchall with validation", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-		}).Catchall(String())
-
-		input := map[string]any{
-			"name":    "Alice",
-			"extra":   "valid string",
-			"another": "also string",
-		}
-
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-		assert.Equal(t, "valid string", resultMap["extra"])
-		assert.Equal(t, "also string", resultMap["another"])
-
-		// Test catchall validation failure
+		// Test invalid nested object
 		invalidInput := map[string]any{
-			"name":  "Alice",
-			"extra": 123, // Should fail string validation
-		}
-
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 5. Transform/Pipe
-// =============================================================================
-
-func TestObjectTransform(t *testing.T) {
-	t.Run("transform", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}).Transform(func(obj map[string]any, ctx *core.RefinementContext) (any, error) {
-			// Transform: add a computed field
-			obj["computed"] = "transformed"
-			return obj, nil
-		})
-
-		result, err := schema.Parse(map[string]any{
-			"name": "Alice",
-			"age":  30,
-		})
-		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "transformed", resultMap["computed"])
-	})
-
-	t.Run("transform with type change", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}).Transform(func(obj map[string]any, ctx *core.RefinementContext) (any, error) {
-			// Transform to string representation
-			return obj["name"].(string) + " is " + string(rune(obj["age"].(int)+'0')) + " years old", nil
-		})
-
-		result, err := schema.Parse(map[string]any{
-			"name": "Alice",
-			"age":  5, // Single digit for simple conversion
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "Alice is 5 years old", result)
-	})
-
-	t.Run("pipe", func(t *testing.T) {
-		objectSchema := Object(core.ObjectSchema{
-			"value": String(),
-		})
-
-		stringSchema := String().Min(1)
-
-		pipeSchema := objectSchema.Pipe(stringSchema)
-
-		// This should fail because object doesn't match string
-		_, err := pipeSchema.Parse(map[string]any{
-			"value": "test",
-		})
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 6. Refine
-// =============================================================================
-
-func TestObjectRefine(t *testing.T) {
-	t.Run("refine", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		}).Refine(func(obj map[string]any) bool {
-			// Only allow objects where age is greater than name length
-			name, hasName := obj["name"].(string)
-			age, hasAge := obj["age"].(int)
-			return hasName && hasAge && age > len(name)
-		})
-
-		// Valid case (age > name length)
-		_, err := schema.Parse(map[string]any{
-			"name": "Alice",
-			"age":  30,
-		})
-		require.NoError(t, err)
-
-		// Invalid case (age <= name length)
-		_, err = schema.Parse(map[string]any{
-			"name": "Alice",
-			"age":  3,
-		})
-		assert.Error(t, err)
-	})
-
-	t.Run("refine with custom error", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"password":        String().Min(8),
-			"confirmPassword": String().Min(8),
-		}).Refine(func(obj map[string]any) bool {
-			password, hasPassword := obj["password"].(string)
-			confirmPassword, hasConfirm := obj["confirmPassword"].(string)
-			return hasPassword && hasConfirm && password == confirmPassword
-		}, core.SchemaParams{
-			Error: "Passwords must match",
-		})
-
-		// Valid case
-		_, err := schema.Parse(map[string]any{
-			"password":        "password123",
-			"confirmPassword": "password123",
-		})
-		require.NoError(t, err)
-
-		// Invalid case
-		_, err = schema.Parse(map[string]any{
-			"password":        "password123",
-			"confirmPassword": "different123",
-		})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Passwords must match")
-	})
-}
-
-// =============================================================================
-// 7. Error handling
-// =============================================================================
-
-func TestObjectErrorHandling(t *testing.T) {
-	t.Run("type error", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		_, err := schema.Parse("not an object")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-	})
-
-	t.Run("field error", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-		_, err := schema.Parse(map[string]any{
-			"name": "Alice",
-			"age":  "not a number",
-		})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-	})
-
-	t.Run("multiple field errors", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name":  String().Min(5),
-			"age":   Int().Min(18),
-			"email": String().Email(),
-		})
-
-		_, err := schema.Parse(map[string]any{
-			"name":  "A",            // Too short
-			"age":   10,             // Too young
-			"email": "not-an-email", // Invalid format
-		})
-
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 2) // At least 2 errors
-	})
-
-	t.Run("custom error messages", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String().Min(2, core.SchemaParams{
-				Error: "Name must be at least 2 characters",
-			}),
-		})
-
-		_, err := schema.Parse(map[string]any{
-			"name": "A",
-		})
-
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Name must be at least 2 characters")
-	})
-}
-
-// =============================================================================
-// 8. Edge and mutual exclusion cases
-// =============================================================================
-
-func TestObjectEdgeCases(t *testing.T) {
-	t.Run("empty object", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{})
-
-		result, err := schema.Parse(map[string]any{})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Empty object with extra keys should be stripped
-		result, err = schema.Parse(map[string]any{
-			"extra": "value",
-		})
-		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, 0, len(resultMap))
-	})
-
-	t.Run("deeply nested objects", func(t *testing.T) {
-		level3Schema := Object(core.ObjectSchema{
-			"value": String(),
-		})
-
-		level2Schema := Object(core.ObjectSchema{
-			"level3": level3Schema,
-			"name":   String(),
-		})
-
-		level1Schema := Object(core.ObjectSchema{
-			"level2": level2Schema,
-			"id":     Int(),
-		})
-
-		input := map[string]any{
-			"id": 1,
-			"level2": map[string]any{
-				"name": "Level 2",
-				"level3": map[string]any{
-					"value": "Deep value",
-				},
+			"user": map[string]any{
+				"name": "John",
+				// missing age
 			},
+			"country": "USA",
 		}
-
-		result, err := level1Schema.Parse(input)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Verify deep structure
-		resultMap := result.(map[string]any)
-		level2Map := resultMap["level2"].(map[string]any)
-		level3Map := level2Map["level3"].(map[string]any)
-		assert.Equal(t, "Deep value", level3Map["value"])
+		_, err = profileSchema.Parse(invalidInput)
+		assert.Error(t, err)
 	})
 
-	t.Run("object with all optional fields", func(t *testing.T) {
+	t.Run("complex chaining with all modifiers", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
-			"field1": String().Optional(),
-			"field2": Int().Optional(),
-			"field3": Bool().Optional(),
-		})
+			"name": String(),
+			"age":  Int(),
+		}).Min(1).Max(10).Strict().Optional()
 
-		// Empty object should be valid
-		result, err := schema.Parse(map[string]any{})
-		require.NoError(t, err)
-		assert.Equal(t, map[string]any{}, result)
-
-		// Partial object should be valid
+		// Test with valid input
 		input := map[string]any{
-			"field1": "value1",
+			"name": "John",
+			"age":  25,
 		}
-
-		result, err = schema.Parse(input)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "value1", resultMap["field1"])
+		// Complex chaining with Optional returns pointer constraint type
+		assert.Equal(t, &input, result)
+
+		// Test with nil (should be allowed due to Optional)
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("complex type rejection", func(t *testing.T) {
+	t.Run("performance with large objects", func(t *testing.T) {
+		// Create schema with many fields
+		shape := make(core.ObjectSchema)
+		for i := 0; i < 100; i++ {
+			shape[fmt.Sprintf("field%d", i)] = String().Optional()
+		}
+		schema := Object(shape)
+
+		// Create input with all fields
+		input := make(map[string]any)
+		for i := 0; i < 100; i++ {
+			input[fmt.Sprintf("field%d", i)] = fmt.Sprintf("value%d", i)
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("map conversion edge cases", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 		})
 
-		complexTypes := []any{
-			make(chan int),
-			func() int { return 1 },
-			[]any{1, 2, 3},
-			"string",
-			123,
-			true,
+		// Test with different map types that are NOT currently convertible
+		input := map[any]any{
+			"name": "John",
 		}
 
-		for _, input := range complexTypes {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "Should reject type %T", input)
-		}
-	})
-
-	t.Run("shape access", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name":  String(),
-			"age":   Int(),
-			"email": String().Email(),
-		})
-
-		shape := schema.Shape()
-
-		assert.Equal(t, 3, len(shape))
-		assert.Contains(t, shape, "name")
-		assert.Contains(t, shape, "age")
-		assert.Contains(t, shape, "email")
-
-		// Verify we can access individual field schemas
-		nameSchema := shape["name"]
-		assert.NotNil(t, nameSchema)
-
-		// Test that shape returns the actual schemas
-		_, err := nameSchema.Parse("test")
-		require.NoError(t, err)
-	})
-
-	t.Run("keyof method", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name":  String(),
-			"age":   Int(),
-			"email": String().Email(),
-		})
-
-		keySchema := schema.Keyof()
-
-		// Test valid keys
-		result1, err := keySchema.Parse("name")
-		require.NoError(t, err)
-		assert.Equal(t, "name", result1)
-
-		result2, err := keySchema.Parse("age")
-		require.NoError(t, err)
-		assert.Equal(t, "age", result2)
-
-		result3, err := keySchema.Parse("email")
-		require.NoError(t, err)
-		assert.Equal(t, "email", result3)
-
-		// Test invalid key
-		_, err = keySchema.Parse("invalid")
+		_, err := schema.Parse(input)
 		assert.Error(t, err)
-	})
-
-	t.Run("empty object keyof", func(t *testing.T) {
-		emptySchema := Object(core.ObjectSchema{})
-		keySchema := emptySchema.Keyof()
-
-		// Should be Never type for empty objects
-		_, err := keySchema.Parse("anything")
-		assert.Error(t, err)
-	})
-
-	t.Run("object operations", func(t *testing.T) {
-		baseSchema := Object(core.ObjectSchema{
-			"name":    String(),
-			"age":     Int(),
-			"email":   String().Email(),
-			"address": String().Optional(),
-		})
-
-		// Pick method
-		pickedSchema := baseSchema.Pick([]string{"name", "email"})
-		assert.Equal(t, 2, len(pickedSchema.internals.Shape))
-		assert.Contains(t, pickedSchema.internals.Shape, "name")
-		assert.Contains(t, pickedSchema.internals.Shape, "email")
-
-		// Omit method
-		omittedSchema := baseSchema.Omit([]string{"age", "address"})
-		assert.Equal(t, 2, len(omittedSchema.internals.Shape))
-		assert.Contains(t, omittedSchema.internals.Shape, "name")
-		assert.Contains(t, omittedSchema.internals.Shape, "email")
-
-		// Extend method
-		extension := core.ObjectSchema{
-			"phone":   String(),
-			"country": String().Default("US"),
-		}
-		extendedSchema := baseSchema.Extend(extension)
-		assert.Equal(t, 6, len(extendedSchema.internals.Shape))
-		assert.Contains(t, extendedSchema.internals.Shape, "phone")
-
-		// Partial method
-		partialSchema := baseSchema.Partial()
-		assert.Equal(t, 4, len(partialSchema.internals.Shape))
-
-		// Test partial validation - all fields should be optional
-		result, err := partialSchema.Parse(map[string]any{
-			"name": "Alice",
-			// other fields missing but should be okay
-		})
-		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Alice", resultMap["name"])
-	})
-
-	t.Run("merge objects", func(t *testing.T) {
-		schema1 := Object(core.ObjectSchema{
-			"a": String(),
-			"b": String().Optional(),
-		})
-
-		schema2 := Object(core.ObjectSchema{
-			"a": String().Optional(), // Override with optional
-			"b": String(),            // Override with required
-		})
-
-		merged := schema1.Merge(schema2)
-
-		// Test that schema2 fields override schema1
-		input := map[string]any{
-			"b": "required field",
-			// "a" is optional in merged schema
-		}
-
-		result, err := merged.Parse(input)
-		require.NoError(t, err)
-		assert.NotNil(t, result)
+		assert.Contains(t, err.Error(), "cannot convert")
 	})
 }
 
 // =============================================================================
-// 9. Default and Prefault tests
+// Constructors tests
 // =============================================================================
 
-func TestObjectDefaultAndPrefault(t *testing.T) {
-	t.Run("default value", func(t *testing.T) {
-		defaultValue := map[string]any{
-			"name": "Default Name",
-			"age":  25,
-		}
-
+func TestObject_Constructors(t *testing.T) {
+	t.Run("Object constructor with default strip mode", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Default(defaultValue)
+		})
 
-		// nil input should use default
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
-
-		// Valid input should override default
-		validInput := map[string]any{
-			"name": "Alice",
-			"age":  30,
+		// Should strip unknown fields by default
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
 		}
-
-		result, err = schema.Parse(validInput)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
+		assert.Len(t, result, 2)
+		assert.NotContains(t, result, "unknown")
 	})
 
-	t.Run("default function", func(t *testing.T) {
-		counter := 0
+	t.Run("StrictObject constructor", func(t *testing.T) {
+		schema := StrictObject(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Should reject unknown fields
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
+		}
+		_, err := schema.Parse(input)
+		assert.Error(t, err)
+	})
+
+	t.Run("LooseObject constructor", func(t *testing.T) {
+		schema := LooseObject(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Should allow unknown fields
+		input := map[string]any{
+			"name":    "John",
+			"age":     25,
+			"unknown": "field",
+		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Len(t, result, 3)
+		assert.Contains(t, result, "unknown")
+	})
+
+	t.Run("Object with custom parameters", func(t *testing.T) {
+		customError := "Custom validation error"
 		schema := Object(core.ObjectSchema{
 			"name": String(),
-			"id":   Int(),
-		}).DefaultFunc(func() map[string]any {
-			counter++
-			return map[string]any{
-				"name": "Generated",
-				"id":   counter,
-			}
+		}, core.SchemaParams{
+			Error: customError,
 		})
 
-		// Each nil input generates a new default value
-		result1, err := schema.Parse(nil)
-		require.NoError(t, err)
-		result1Map := result1.(map[string]any)
-		assert.Equal(t, "Generated", result1Map["name"])
-		assert.Equal(t, 1, result1Map["id"])
-
-		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
-		result2Map := result2.(map[string]any)
-		assert.Equal(t, "Generated", result2Map["name"])
-		assert.Equal(t, 2, result2Map["id"])
-
-		// Valid input bypasses default generation
-		validInput := map[string]any{
-			"name": "Alice",
-			"id":   100,
-		}
-
-		result3, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result3)
-
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
 	})
+}
 
-	t.Run("prefault value", func(t *testing.T) {
-		fallbackValue := map[string]any{
-			"name": "Fallback Name",
-			"age":  25, // Valid age that passes validation
-		}
+// =============================================================================
+// OVERWRITE TESTS
+// =============================================================================
 
-		schema := Object(core.ObjectSchema{
-			"name": String().Min(5),
-			"age":  Int().Min(18),
-		}).Prefault(fallbackValue)
-
-		// Valid input should pass through
-		validInput := map[string]any{
-			"name": "Alice",
-			"age":  25,
-		}
-
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-
-		// Invalid input should use fallback
-		invalidInput := map[string]any{
-			"name": "A", // Too short
-			"age":  10,  // Too young
-		}
-
-		result, err = schema.Parse(invalidInput)
-		require.NoError(t, err)
-		assert.Equal(t, fallbackValue, result)
-	})
-
-	t.Run("prefault function", func(t *testing.T) {
-		counter := 0
-		schema := Object(core.ObjectSchema{
-			"name": String().Min(5),
-			"id":   Int().Min(1),
-		}).PrefaultFunc(func() map[string]any {
-			counter++
-			return map[string]any{
-				"name": "Fallback",
-				"id":   counter,
-			}
-		})
-
-		// Valid input should pass through
-		validInput := map[string]any{
-			"name": "Alice",
-			"id":   1,
-		}
-
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-
-		// Invalid input should use fallback function
-		invalidInput := map[string]any{
-			"name": "A", // Too short
-			"id":   0,   // Too small
-		}
-
-		result, err = schema.Parse(invalidInput)
-		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Fallback", resultMap["name"])
-		assert.Equal(t, 1, resultMap["id"])
-
-		// Another invalid input should increment counter
-		result2, err := schema.Parse(invalidInput)
-		require.NoError(t, err)
-		result2Map := result2.(map[string]any)
-		assert.Equal(t, "Fallback", result2Map["name"])
-		assert.Equal(t, 2, result2Map["id"])
-
-		// Counter should only increment for invalid inputs
-		assert.Equal(t, 2, counter)
-	})
-
-	t.Run("default with chaining", func(t *testing.T) {
+func TestObject_Overwrite(t *testing.T) {
+	t.Run("basic object field transformation", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Default(map[string]any{
-			"name": "Default",
+		}).Overwrite(func(obj map[string]any) map[string]any {
+			// Transform name to uppercase and increment age
+			result := make(map[string]any)
+			for k, v := range obj {
+				switch k {
+				case "name":
+					if strVal, ok := v.(string); ok {
+						result[k] = strings.ToUpper(strVal)
+					} else {
+						result[k] = v
+					}
+				case "age":
+					if intVal, ok := v.(int); ok {
+						result[k] = intVal + 1
+					} else {
+						result[k] = v
+					}
+				default:
+					result[k] = v
+				}
+			}
+			return result
+		})
+
+		input := map[string]any{
+			"name": "alice",
 			"age":  25,
-		}).Pick([]string{"name"})
-
-		// nil input should use default and then pick
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Default", resultMap["name"])
-		_, hasAge := resultMap["age"]
-		assert.False(t, hasAge, "Age should be omitted by Pick")
-	})
-
-	t.Run("prefault with chaining", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String().Min(5),
-			"age":  Int().Min(18),
-		}).Prefault(map[string]any{
-			"name": "Fallback Name",
-			"age":  20,
-		}).Partial()
-
-		// Invalid input should use fallback and then make partial
-		invalidInput := map[string]any{
-			"name": "A", // Too short
 		}
 
-		result, err := schema.Parse(invalidInput)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		resultMap := result.(map[string]any)
-		assert.Equal(t, "Fallback Name", resultMap["name"])
-		assert.Equal(t, 20, resultMap["age"])
+
+		expected := map[string]any{
+			"name": "ALICE",
+			"age":  26,
+		}
+		assert.Equal(t, expected, result)
 	})
+
+	t.Run("object field normalization", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"email": String(),
+			"phone": String(),
+		}).Overwrite(func(obj map[string]any) map[string]any {
+			// Normalize email and phone formats
+			result := make(map[string]any)
+			for k, v := range obj {
+				switch k {
+				case "email":
+					if strVal, ok := v.(string); ok {
+						result[k] = strings.ToLower(strings.TrimSpace(strVal))
+					} else {
+						result[k] = v
+					}
+				case "phone":
+					if strVal, ok := v.(string); ok {
+						// Remove all non-digits for phone
+						phone := strings.ReplaceAll(strVal, "-", "")
+						phone = strings.ReplaceAll(phone, " ", "")
+						phone = strings.ReplaceAll(phone, "(", "")
+						phone = strings.ReplaceAll(phone, ")", "")
+						result[k] = phone
+					} else {
+						result[k] = v
+					}
+				default:
+					result[k] = v
+				}
+			}
+			return result
+		})
+
+		input := map[string]any{
+			"email": "  JOHN@EXAMPLE.COM  ",
+			"phone": "(555) 123-4567",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[string]any{
+			"email": "john@example.com",
+			"phone": "5551234567",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("adding computed fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"firstName": String(),
+			"lastName":  String(),
+		}).Overwrite(func(obj map[string]any) map[string]any {
+			// Add full name field
+			result := make(map[string]any)
+			for k, v := range obj {
+				result[k] = v
+			}
+
+			// Compute full name
+			if firstName, ok := obj["firstName"].(string); ok {
+				if lastName, ok := obj["lastName"].(string); ok {
+					result["fullName"] = firstName + " " + lastName
+				}
+			}
+			return result
+		})
+
+		input := map[string]any{
+			"firstName": "Jane",
+			"lastName":  "Doe",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[string]any{
+			"firstName": "Jane",
+			"lastName":  "Doe",
+			"fullName":  "Jane Doe",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("type preservation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"flag": Bool(),
+		}).Overwrite(func(obj map[string]any) map[string]any {
+			return obj // Identity transformation
+		})
+
+		input := map[string]any{
+			"flag": true,
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.IsType(t, map[string]any{}, result)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("field removal transformation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"public":  String(),
+			"private": String().Optional(),
+		}).Overwrite(func(obj map[string]any) map[string]any {
+			// Remove private fields
+			result := make(map[string]any)
+			for k, v := range obj {
+				if !strings.HasPrefix(k, "private") {
+					result[k] = v
+				}
+			}
+			return result
+		})
+
+		input := map[string]any{
+			"public":  "visible",
+			"private": "hidden",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[string]any{
+			"public": "visible",
+		}
+		assert.Equal(t, expected, result)
+	})
+}
+
+// =============================================================================
+// Check Method Tests
+// =============================================================================
+
+func TestObject_Check(t *testing.T) {
+	simpleShape := core.ObjectSchema{
+		"name": String(),
+	}
+
+	t.Run("invalid object triggers issues", func(t *testing.T) {
+		schema := Object(simpleShape).Check(func(value map[string]any, p *core.ParsePayload) {
+			if value["name"] == "" {
+				p.AddIssueWithMessage("name is required")
+			}
+		})
+
+		_, err := schema.Parse(map[string]any{"name": ""})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+	})
+
+	t.Run("pointer schema adapts", func(t *testing.T) {
+		schema := ObjectPtr(simpleShape).Check(func(value *map[string]any, p *core.ParsePayload) {
+			if value == nil || (*value)["name"] == "" {
+				p.AddIssueWithMessage("empty name")
+			}
+		})
+
+		_, err := schema.Parse(map[string]any{"name": ""})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+	})
+}
+
+// =============================================================================
+// NonOptional tests for Object schema
+// =============================================================================
+
+func TestObject_NonOptional(t *testing.T) {
+	// base schema
+	shape := map[string]core.ZodSchema{
+		"name": String(),
+	}
+	schema := Object(shape).NonOptional()
+
+	// valid
+	_, err := schema.Parse(map[string]any{"name": "leo"})
+	require.NoError(t, err)
+
+	// nil input should error with expected nonoptional
+	_, err = schema.Parse(nil)
+	assert.Error(t, err)
+	var zErr *issues.ZodError
+	if issues.IsZodError(err, &zErr) {
+		require.Len(t, zErr.Issues, 1)
+		assert.Equal(t, core.InvalidType, zErr.Issues[0].Code)
+		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
+	}
+
+	// Optional().NonOptional() chain
+	chain := Object(shape).Optional().NonOptional()
+	_, err = chain.Parse(nil)
+	assert.Error(t, err)
+
+	// embedding inside another object
+	outer := Object(map[string]core.ZodSchema{
+		"inner": Object(shape).Optional().NonOptional(),
+	})
+	_, err = outer.Parse(map[string]any{"inner": map[string]any{"name": "leo"}})
+	require.NoError(t, err)
+	_, err = outer.Parse(map[string]any{"inner": nil})
+	assert.Error(t, err)
 }

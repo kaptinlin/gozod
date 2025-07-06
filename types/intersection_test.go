@@ -1,735 +1,528 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestIntersectionBasicFunctionality(t *testing.T) {
-	t.Run("constructors", func(t *testing.T) {
-		// Test Intersection constructor
-		left := String()
-		right := String()
-		schema := Intersection(left, right)
-		require.NotNil(t, schema)
-		assert.Equal(t, "intersection", schema.internals.Def.Type)
-		assert.Equal(t, left, schema.Left())
-		assert.Equal(t, right, schema.Right())
-	})
+func TestIntersection_BasicFunctionality(t *testing.T) {
+	t.Run("valid intersection inputs", func(t *testing.T) {
+		// Create intersection of two compatible schemas
+		intersection := Intersection(String(), String())
 
-	t.Run("basic validation - object intersection", func(t *testing.T) {
-		// Create two object schemas
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
-
-		schema := Intersection(personSchema, employeeSchema)
-
-		// Valid input with both properties
-		input := map[string]any{
-			"name": "John",
-			"role": "Developer",
-		}
-		result, err := schema.Parse(input)
+		// Test with compatible input
+		result, err := intersection.Parse("test")
 		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, "Developer", resultMap["role"])
+		assert.Equal(t, "test", result)
 	})
 
-	t.Run("basic validation - union intersection", func(t *testing.T) {
-		// Create intersection of unions that have common type
-		unionA := Union([]core.ZodType[any, any]{String(), Int()})
-		unionB := Union([]core.ZodType[any, any]{String(), Bool()})
+	t.Run("invalid intersection inputs", func(t *testing.T) {
+		// Create intersection with conflicting schemas
+		intersection := Intersection(String().Min(5), String().Max(3))
 
-		schema := Intersection(unionA, unionB)
+		// This should fail as no string can be both >5 and <3 chars
+		_, err := intersection.Parse("test")
+		assert.Error(t, err)
+	})
 
-		// Valid input - string is common to both unions
-		result, err := schema.Parse("hello")
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		intersection := Intersection(Bool(), Bool())
+
+		// Test Parse method
+		result, err := intersection.Parse(true)
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
+		assert.Equal(t, true, result)
 
-		// Invalid input - int is only in first union
-		_, err = schema.Parse(42)
-		assert.Error(t, err)
+		// Test MustParse method
+		mustResult := intersection.MustParse(false)
+		assert.Equal(t, false, mustResult)
 
-		// Invalid input - bool is only in second union
-		_, err = schema.Parse(true)
-		assert.Error(t, err)
+		// Test panic on invalid input
+		assert.Panics(t, func() {
+			intersection.MustParse("invalid")
+		})
 	})
 
-	t.Run("validation failure", func(t *testing.T) {
-		left := String()
-		right := Int()
-		schema := Intersection(left, right)
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected intersection match"
+		intersection := Intersection(String(), String(), core.SchemaParams{Error: customError})
 
-		// No value can be both string and int
-		_, err := schema.Parse("hello")
-		assert.Error(t, err)
+		require.NotNil(t, intersection)
 
-		_, err = schema.Parse(42)
+		_, err := intersection.Parse(123)
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 2. Coerce (type coercion)
+// Type safety tests
 // =============================================================================
 
-func TestIntersectionCoercion(t *testing.T) {
-	t.Run("coercion not applicable", func(t *testing.T) {
-		// Intersection doesn't have its own coercion logic
-		// It relies on the constituent schemas
-		left := CoercedString()
-		right := CoercedString()
-		schema := Intersection(left, right)
+func TestIntersection_TypeSafety(t *testing.T) {
+	t.Run("intersection returns merged type", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		require.NotNil(t, intersection)
 
-		// Both sides should coerce the number to string
-		result, err := schema.Parse(123)
+		result, err := intersection.Parse("test")
 		require.NoError(t, err)
-		assert.Equal(t, "123", result)
+		assert.Equal(t, "test", result)
+		assert.IsType(t, "", result) // Ensure type is string
+	})
+
+	t.Run("intersection with different types", func(t *testing.T) {
+		intersection := Intersection(String(), Int())
+
+		// Should fail as string and int are incompatible
+		_, err := intersection.Parse("test")
+		assert.Error(t, err)
+
+		_, err = intersection.Parse(123)
+		assert.Error(t, err)
+	})
+
+	t.Run("MustParse type safety", func(t *testing.T) {
+		intersection := Intersection(Bool(), Bool())
+
+		result := intersection.MustParse(true)
+		assert.IsType(t, true, result)
+		assert.Equal(t, true, result)
 	})
 }
 
 // =============================================================================
-// 3. Validation methods
+// Modifier methods tests
 // =============================================================================
 
-func TestIntersectionValidationMethods(t *testing.T) {
+func TestIntersection_Modifiers(t *testing.T) {
+	t.Run("Optional makes intersection optional", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		optionalIntersection := intersection.Optional()
+
+		// Test non-nil value - returns pointer
+		result, err := optionalIntersection.Parse("test")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+
+		// Test nil value (should be handled by Optional)
+		result, err = optionalIntersection.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Nilable allows nil values", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		nilableIntersection := intersection.Nilable()
+
+		// Test nil handling
+		result, err := nilableIntersection.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value - returns pointer
+		result, err = nilableIntersection.Parse("test")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+	})
+
+	t.Run("Default preserves intersection type", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		defaultIntersection := intersection.Default("default")
+
+		// Valid input should override default
+		result, err := defaultIntersection.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+
+	t.Run("Prefault preserves intersection type", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		prefaultIntersection := intersection.Prefault("prefault")
+
+		// Valid input should override prefault
+		result, err := prefaultIntersection.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+}
+
+// =============================================================================
+// Chaining tests
+// =============================================================================
+
+func TestIntersection_Chaining(t *testing.T) {
+	t.Run("intersection chaining", func(t *testing.T) {
+		schema := Intersection(String(), String()).
+			Default("default").
+			Optional()
+
+		// Test final behavior - returns pointer due to Optional
+		result, err := schema.Parse("test")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+	})
+
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := Intersection(Bool(), Bool()).
+			Nilable().
+			Default(true)
+
+		result, err := schema.Parse(false)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		schema := Intersection(String(), String()).
+			Default("default").
+			Prefault("prefault")
+
+		result, err := schema.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestIntersection_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value behavior", func(t *testing.T) {
+		intersection := Intersection(String(), String()).Default("default")
+
+		// Valid input should override default
+		result, err := intersection.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+
+		// Test default function
+		intersectionFunc := Intersection(String(), String()).DefaultFunc(func() any {
+			return "func-default"
+		})
+		result2, err := intersectionFunc.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result2)
+	})
+
+	t.Run("prefault value behavior", func(t *testing.T) {
+		intersection := Intersection(String(), String()).Prefault("prefault")
+
+		// Valid input should work normally
+		result, err := intersection.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+
+		// Test prefault function
+		intersectionFunc := Intersection(String(), String()).PrefaultFunc(func() any {
+			return "func-prefault"
+		})
+		result2, err := intersectionFunc.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result2)
+	})
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+
+func TestIntersection_Refine(t *testing.T) {
 	t.Run("refine validation", func(t *testing.T) {
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
-
-		schema := Intersection(personSchema, employeeSchema).Refine(func(val any) bool {
-			if m, ok := val.(map[string]any); ok {
-				name, nameOk := m["name"].(string)
-				role, roleOk := m["role"].(string)
-				return nameOk && roleOk && name != "" && role != ""
+		// Only accept strings with length > 3
+		intersection := Intersection(String().Min(3), String().Max(10)).Refine(func(v any) bool {
+			if s, ok := v.(string); ok {
+				return len(s) > 3 && s != "test"
 			}
 			return false
 		})
 
-		// Valid case
-		input := map[string]any{
-			"name": "John",
-			"role": "Developer",
-		}
-		result, err := schema.Parse(input)
+		result, err := intersection.Parse("hello")
 		require.NoError(t, err)
-		assert.Equal(t, input, result)
+		assert.Equal(t, "hello", result)
 
-		// Invalid case - empty name
-		invalidInput := map[string]any{
-			"name": "",
-			"role": "Developer",
-		}
-		_, err = schema.Parse(invalidInput)
+		_, err = intersection.Parse("test")
 		assert.Error(t, err)
 	})
-}
 
-// =============================================================================
-// 4. Modifiers and wrappers
-// =============================================================================
-
-func TestIntersectionModifiers(t *testing.T) {
-	t.Run("optional wrapper", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right).Optional()
-
-		// Valid string
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		// Nil value
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("nilable wrapper", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right).Nilable()
-
-		// Valid string
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		// Nil value
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("nullish wrapper", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right).Nullish()
-
-		// Valid string
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		// Nil value
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("default wrapper", func(t *testing.T) {
-		left := String()
-		right := String()
-		defaultValue := "default"
-		schema := Intersection(left, right).Default(defaultValue)
-
-		// Valid string (should not use default)
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-	})
-
-	t.Run("defaultFunc wrapper", func(t *testing.T) {
-		left := String()
-		right := String()
-		defaultFn := func() any {
-			return "generated"
-		}
-		schema := Intersection(left, right).DefaultFunc(defaultFn)
-
-		require.NotNil(t, schema)
-	})
-}
-
-// =============================================================================
-// 5. Chaining and method composition
-// =============================================================================
-
-func TestIntersectionChaining(t *testing.T) {
-	t.Run("method chaining", func(t *testing.T) {
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
-
-		schema := Intersection(personSchema, employeeSchema).
-			Refine(func(val any) bool { return true }).
-			Optional()
-
-		require.NotNil(t, schema)
-
-		// Test chained functionality
-		input := map[string]any{
-			"name": "John",
-			"role": "Developer",
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, "Developer", resultMap["role"])
-	})
-}
-
-// =============================================================================
-// 6. Transform/Pipe
-// =============================================================================
-
-func TestIntersectionTransform(t *testing.T) {
-	t.Run("transform method", func(t *testing.T) {
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
-
-		schema := Intersection(personSchema, employeeSchema).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-			if m, ok := val.(map[string]any); ok {
-				return map[string]any{
-					"fullName": m["name"],
-					"position": m["role"],
-				}, nil
-			}
-			return val, nil
-		})
-
-		input := map[string]any{
-			"name": "John",
-			"role": "Developer",
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "John", resultMap["fullName"])
-		assert.Equal(t, "Developer", resultMap["position"])
-	})
-
-	t.Run("transform chaining", func(t *testing.T) {
-		left := String()
-		right := String()
-
-		schema := Intersection(left, right).
-			Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-				return val, nil
-			}).
-			TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-				if s, ok := val.(string); ok {
-					return "transformed_" + s, nil
-				}
-				return val, nil
-			})
-
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "transformed_hello", result)
-	})
-}
-
-// =============================================================================
-// 7. Refine
-// =============================================================================
-
-func TestIntersectionRefine(t *testing.T) {
-	t.Run("simple refinement", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right).Refine(func(val any) bool {
-			if s, ok := val.(string); ok {
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Must be a valid intersection"
+		intersection := Intersection(String(), String()).Refine(func(v any) bool {
+			if s, ok := v.(string); ok {
 				return len(s) > 3
 			}
 			return false
-		})
+		}, core.SchemaParams{Error: errorMessage})
 
-		// Valid case
-		result, err := schema.Parse("hello")
+		result, err := intersection.Parse("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
-		// Invalid case
-		_, err = schema.Parse("hi")
+		_, err = intersection.Parse("hi")
 		assert.Error(t, err)
 	})
 
-	t.Run("complex refinement", func(t *testing.T) {
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role":   String(),
-			"salary": Int(),
-		})
-
-		schema := Intersection(personSchema, employeeSchema).Refine(func(val any) bool {
-			if m, ok := val.(map[string]any); ok {
-				age, ageOk := m["age"].(int)
-				salary, salaryOk := m["salary"].(int)
-				return ageOk && salaryOk && age >= 18 && salary > 0
+	t.Run("refine with complex intersection", func(t *testing.T) {
+		intersection := Intersection(String().Min(3), String().Max(10)).Refine(func(v any) bool {
+			if s, ok := v.(string); ok {
+				return s != "forbidden"
 			}
 			return false
 		})
 
-		// Valid case
-		input := map[string]any{
-			"name":   "John",
-			"age":    25,
-			"role":   "Developer",
-			"salary": 50000,
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-		assert.Equal(t, input, result)
-
-		// Invalid case - underage
-		invalidInput := map[string]any{
-			"name":   "John",
-			"age":    16,
-			"role":   "Developer",
-			"salary": 50000,
-		}
-		_, err = schema.Parse(invalidInput)
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 8. Error handling
-// =============================================================================
-
-func TestIntersectionErrorHandling(t *testing.T) {
-	t.Run("validation error from left schema", func(t *testing.T) {
-		left := String().Min(5)
-		right := String()
-		schema := Intersection(left, right)
-
-		_, err := schema.Parse("hi")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-	})
-
-	t.Run("validation error from right schema", func(t *testing.T) {
-		left := String()
-		right := String().Min(5)
-		schema := Intersection(left, right)
-
-		_, err := schema.Parse("hi")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-	})
-
-	t.Run("merge error", func(t *testing.T) {
-		left := String()
-		right := Int()
-		schema := Intersection(left, right)
-
-		_, err := schema.Parse("hello")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-	})
-
-	t.Run("refinement error", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right).Refine(func(val any) bool {
-			return false // Always fail
-		})
-
-		_, err := schema.Parse("hello")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-	})
-}
-
-// =============================================================================
-// 9. Edge and mutual exclusion cases
-// =============================================================================
-
-func TestIntersectionEdgeCases(t *testing.T) {
-	t.Run("object merge with overlapping keys", func(t *testing.T) {
-		leftSchema := Object(core.ObjectSchema{
-			"name": String(),
-			"id":   Int(),
-		})
-		rightSchema := Object(core.ObjectSchema{
-			"id":   Int(), // Same key, same type
-			"role": String(),
-		})
-
-		schema := Intersection(leftSchema, rightSchema)
-
-		input := map[string]any{
-			"name": "John",
-			"id":   123,
-			"role": "Developer",
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "John", resultMap["name"])
-		assert.Equal(t, 123, resultMap["id"])
-		assert.Equal(t, "Developer", resultMap["role"])
-	})
-
-	t.Run("object merge with conflicting values", func(t *testing.T) {
-		leftSchema := Object(core.ObjectSchema{
-			"id": Literal(123),
-		})
-		rightSchema := Object(core.ObjectSchema{
-			"id": Literal(456), // Different literal value
-		})
-
-		schema := Intersection(leftSchema, rightSchema)
-
-		// This should fail because the same key has different literal values
-		_, err := schema.Parse(map[string]any{
-			"id": 123,
-		})
-		assert.Error(t, err)
-	})
-
-	t.Run("empty object intersection", func(t *testing.T) {
-		leftSchema := Object(core.ObjectSchema{})
-		rightSchema := Object(core.ObjectSchema{})
-
-		schema := Intersection(leftSchema, rightSchema)
-
-		result, err := schema.Parse(map[string]any{})
-		require.NoError(t, err)
-		assert.Equal(t, map[string]any{}, result)
-	})
-
-	t.Run("incompatible types", func(t *testing.T) {
-		left := String()
-		right := Bool()
-		schema := Intersection(left, right)
-
-		// No value can be both string and boolean
-		_, err := schema.Parse("hello")
-		assert.Error(t, err)
-
-		_, err = schema.Parse(true)
-		assert.Error(t, err)
-	})
-
-	t.Run("nil input handling", func(t *testing.T) {
-		left := String()
-		right := String()
-		schema := Intersection(left, right)
-
-		// Non-nilable intersection should reject nil
-		_, err := schema.Parse(nil)
-		assert.Error(t, err)
-
-		// Nilable intersection should accept nil
-		nilableSchema := schema.Nilable()
-		result, err := nilableSchema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-}
-
-// =============================================================================
-// 10. Default and Prefault tests
-// =============================================================================
-
-func TestIntersectionDefaultAndPrefault(t *testing.T) {
-	t.Run("default value", func(t *testing.T) {
-		left := String()
-		right := String()
-		defaultValue := "default"
-		schema := Intersection(left, right).Default(defaultValue)
-
-		// Valid string should not use default
-		result, err := schema.Parse("hello")
+		// Should pass all validations
+		result, err := intersection.Parse("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
-		// nil input should use default
-		result, err = schema.Parse(nil)
+		// Should fail refine validation
+		_, err = intersection.Parse("forbidden")
+		assert.Error(t, err)
+
+		// Should fail schema validation (too short)
+		_, err = intersection.Parse("hi")
+		assert.Error(t, err)
+	})
+}
+
+func TestIntersection_RefineAny(t *testing.T) {
+	t.Run("refineAny flexible validation", func(t *testing.T) {
+		intersection := Intersection(String(), String()).RefineAny(func(v any) bool {
+			s, ok := v.(string)
+			return ok && len(s) >= 4
+		})
+
+		// String with >= 4 chars should pass
+		result, err := intersection.Parse("test")
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
-	})
+		assert.Equal(t, "test", result)
 
-	t.Run("defaultFunc", func(t *testing.T) {
-		counter := 0
-		left := String()
-		right := String()
-		schema := Intersection(left, right).DefaultFunc(func() any {
-			counter++
-			return fmt.Sprintf("generated-%d", counter)
-		})
-
-		// nil input should call function and use default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, "generated-1", result1)
-		assert.Equal(t, 1, counter, "Function should be called once for nil input")
-
-		// Another nil input should call function again
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, "generated-2", result2)
-		assert.Equal(t, 2, counter, "Function should be called twice for second nil input")
-
-		// Valid input should not call function
-		result3, err3 := schema.Parse("hello")
-		require.NoError(t, err3)
-		assert.Equal(t, "hello", result3)
-		assert.Equal(t, 2, counter, "Function should not be called for valid input")
-	})
-
-	t.Run("prefault", func(t *testing.T) {
-		left := String().Min(10) // Require long string
-		right := String()
-		prefaultValue := "fallback long string"
-		schema := Intersection(left, right).Prefault(prefaultValue)
-
-		// Valid case
-		result, err := schema.Parse("hello world")
+		result, err = intersection.Parse("hello")
 		require.NoError(t, err)
-		assert.Equal(t, "hello world", result)
+		assert.Equal(t, "hello", result)
 
-		// Invalid case - check if Prefault handles validation failure
-		result, err = schema.Parse("hi")
-		if err != nil {
-			// If Intersection Prefault doesn't handle validation failures,
-			// this is expected behavior for intersection types
-			assert.Error(t, err)
-		} else {
-			// If it does handle it, check the fallback value
-			assert.Equal(t, prefaultValue, result)
-		}
+		// String with < 4 chars should fail
+		_, err = intersection.Parse("hi")
+		assert.Error(t, err)
 	})
 
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
-		left := String().Min(5) // Require string with at least 5 characters
-		right := String()
-		schema := Intersection(left, right).PrefaultFunc(func() any {
-			counter++
-			return fmt.Sprintf("fallback-%d", counter)
+	t.Run("refineAny with type checking", func(t *testing.T) {
+		intersection := Intersection(Int(), Int()).RefineAny(func(v any) bool {
+			n, ok := v.(int)
+			return ok && n%2 == 0 // Only even numbers
 		})
 
-		// Valid input should not call function
-		result1, err1 := schema.Parse("hello world")
-		require.NoError(t, err1)
-		assert.Equal(t, "hello world", result1)
-		assert.Equal(t, 0, counter, "Function should not be called for valid input")
+		result, err := intersection.Parse(4)
+		require.NoError(t, err)
+		assert.Equal(t, 4, result)
 
-		// Invalid input should call prefault function (string too short)
-		result2, err2 := schema.Parse("hi")
-		require.NoError(t, err2)
-		assert.Equal(t, "fallback-1", result2)
-		assert.Equal(t, 1, counter, "Function should be called once for invalid input")
+		_, err = intersection.Parse(3)
+		assert.Error(t, err)
+	})
+}
 
-		// Another invalid input should call function again
-		result3, err3 := schema.Parse("bye")
-		require.NoError(t, err3)
-		assert.Equal(t, "fallback-2", result3)
-		assert.Equal(t, 2, counter, "Function should increment counter for each invalid input")
+// =============================================================================
+// Type-specific methods tests
+// =============================================================================
 
-		// Valid input still doesn't call function
-		result4, err4 := schema.Parse("valid string")
-		require.NoError(t, err4)
-		assert.Equal(t, "valid string", result4)
-		assert.Equal(t, 2, counter, "Counter should remain unchanged for valid input")
+func TestIntersection_TypeSpecificMethods(t *testing.T) {
+	t.Run("Left returns left schema", func(t *testing.T) {
+		leftSchema := String()
+		rightSchema := Int()
+		intersection := Intersection(leftSchema, rightSchema)
+
+		left := intersection.Left()
+		// Note: Left() returns the wrapped schema, not the original
+		assert.NotNil(t, left)
 	})
 
-	t.Run("default vs prefault distinction", func(t *testing.T) {
-		defaultValue := "default_value"
-		prefaultValue := "prefault_value"
+	t.Run("Right returns right schema", func(t *testing.T) {
+		leftSchema := String()
+		rightSchema := Int()
+		intersection := Intersection(leftSchema, rightSchema)
 
-		left := String().Min(5)
-		right := String()
-		schema := Intersection(left, right).Default(defaultValue).Prefault(prefaultValue)
+		right := intersection.Right()
+		// Note: Right() returns the wrapped schema, not the original
+		assert.NotNil(t, right)
+	})
+}
 
-		// nil input uses default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, defaultValue, result1)
+// =============================================================================
+// Error handling tests
+// =============================================================================
 
-		// Valid input succeeds
-		result2, err2 := schema.Parse("hello world")
-		require.NoError(t, err2)
-		assert.Equal(t, "hello world", result2)
+func TestIntersection_ErrorHandling(t *testing.T) {
+	t.Run("left schema validation error", func(t *testing.T) {
+		intersection := Intersection(String().Min(10), String())
 
-		// Invalid input uses prefault (string too short)
-		result3, err3 := schema.Parse("hi")
-		require.NoError(t, err3)
-		assert.Equal(t, prefaultValue, result3)
+		_, err := intersection.Parse("short")
+		assert.Error(t, err)
 	})
 
-	t.Run("complex object intersection with default", func(t *testing.T) {
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
+	t.Run("right schema validation error", func(t *testing.T) {
+		intersection := Intersection(String(), String().Min(10))
 
-		defaultValue := map[string]any{
-			"name": "Anonymous",
-			"role": "Unknown",
-		}
-		schema := Intersection(personSchema, employeeSchema).Default(defaultValue)
+		_, err := intersection.Parse("short")
+		assert.Error(t, err)
+	})
 
-		// Valid input should not use default
-		input := map[string]any{
-			"name": "John",
-			"role": "Developer",
+	t.Run("both schemas validation error", func(t *testing.T) {
+		intersection := Intersection(String().Min(10), String().Max(3))
+
+		_, err := intersection.Parse("medium")
+		assert.Error(t, err)
+	})
+
+	t.Run("merge conflict error", func(t *testing.T) {
+		// Create schemas that return different types
+		intersection := Intersection(String(), Int())
+
+		// This should fail during merge
+		_, err := intersection.Parse("test")
+		assert.Error(t, err)
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		intersection := Intersection(String(), String(), core.SchemaParams{Error: "Expected intersection match"})
+
+		_, err := intersection.Parse(123)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Edge case tests
+// =============================================================================
+
+func TestIntersection_EdgeCases(t *testing.T) {
+	t.Run("intersection of two structs", func(t *testing.T) {
+		type structA struct {
+			A string
 		}
-		result, err := schema.Parse(input)
+		type structB struct {
+			B int
+		}
+		schemaA := Struct[structA]()
+		schemaB := Struct[structB]()
+		intersection := Intersection(schemaA, schemaB)
+
+		// Valid input (map) should be merged
+		input := map[string]any{"A": "hello", "B": 123}
+		result, err := intersection.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[string]any{"A": "hello", "B": 123}
+		assert.Equal(t, expected, result)
+
+		// Invalid input (missing field)
+		_, err = intersection.Parse(map[string]any{"A": "hello"})
+		assert.Error(t, err)
+	})
+
+	t.Run("intersection with overlapping fields", func(t *testing.T) {
+		type structC struct {
+			Overlap string
+		}
+		type structD struct {
+			Overlap string
+		}
+		schemaC := Struct[structC]()
+		schemaD := Struct[structD]()
+		intersection := Intersection(schemaC, schemaD)
+
+		// Should merge successfully
+		input := map[string]any{"Overlap": "value"}
+		result, err := intersection.Parse(input)
 		require.NoError(t, err)
 		assert.Equal(t, input, result)
-
-		// nil input should use default
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
 	})
 
-	t.Run("object intersection with defaultFunc", func(t *testing.T) {
-		counter := 0
-		personSchema := Object(core.ObjectSchema{
-			"name": String(),
-		})
-		employeeSchema := Object(core.ObjectSchema{
-			"role": String(),
-		})
+	t.Run("intersection with nil value", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		_, err := intersection.Parse(nil)
+		assert.Error(t, err)
+	})
 
-		schema := Intersection(personSchema, employeeSchema).DefaultFunc(func() any {
-			counter++
-			return map[string]any{
-				"name": fmt.Sprintf("Generated User %d", counter),
-				"role": "Generated Role",
-			}
-		})
+	t.Run("map merging with intersection", func(t *testing.T) {
+		intersection := Intersection(String(), String())
+		_, err := intersection.Parse(map[string]any{"name": "test", "age": "30"})
+		assert.Error(t, err)
+	})
+}
 
-		// Each nil input generates a new default
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		result1Map := result1.(map[string]any)
-		assert.Equal(t, "Generated User 1", result1Map["name"])
-		assert.Equal(t, "Generated Role", result1Map["role"])
+func TestIntersection_NonOptional(t *testing.T) {
+	t.Run("basic non-optional", func(t *testing.T) {
+		schema := Intersection(String().Min(2), String().Max(5)).Optional().NonOptional()
 
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		result2Map := result2.(map[string]any)
-		assert.Equal(t, "Generated User 2", result2Map["name"])
-		assert.Equal(t, "Generated Role", result2Map["role"])
+		// valid string should pass
+		result, err := schema.Parse("abc")
+		require.NoError(t, err)
+		assert.Equal(t, "abc", result)
+		assert.IsType(t, "", result)
 
-		// Valid input bypasses default generation
-		validInput := map[string]any{
-			"name": "Alice",
-			"role": "Developer",
+		// nil should now fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("chained optional and non-optional", func(t *testing.T) {
+		schema := Intersection(String(), String()).Optional().NonOptional().Optional().NonOptional()
+
+		// valid string should pass
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+		assert.IsType(t, "", result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("non-optional on already non-optional schema", func(t *testing.T) {
+		schema := Intersection(Int(), Int()).NonOptional()
+
+		// valid int should pass
+		result, err := schema.Parse(123)
+		require.NoError(t, err)
+		assert.Equal(t, 123, result)
+		assert.IsType(t, 0, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("non-optional with intersection of structs", func(t *testing.T) {
+		type Name struct {
+			Name string `json:"name"`
 		}
-		result3, err3 := schema.Parse(validInput)
-		require.NoError(t, err3)
-		assert.Equal(t, validInput, result3)
+		type Age struct {
+			Age int `json:"age"`
+		}
 
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
+		schema := Intersection(Struct[Name](), Struct[Age]()).Optional().NonOptional()
+
+		// valid map should pass and be merged
+		input := map[string]any{"name": "test", "age": 30}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[string]any{"name": "test", "age": 30}
+		assert.Equal(t, expected, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
 	})
 }

@@ -1,105 +1,140 @@
 package types
 
 import (
-	"errors"
 	"mime/multipart"
 	"os"
+	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
+	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Error definitions for file transformations
-var (
-	ErrExpectedFile     = errors.New("expected file type")
-	ErrTransformNilFile = errors.New("cannot transform nil file")
-)
-
-//////////////////////////////
-////   FILE DEFINITION    ////
-//////////////////////////////
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
 // ZodFileDef defines the configuration for file validation
 type ZodFileDef struct {
 	core.ZodTypeDef
-	Type   core.ZodTypeCode // Type identifier using type-safe constants
-	Checks []core.ZodCheck  // File-specific validation checks
 }
 
 // ZodFileInternals contains file validator internal state
 type ZodFileInternals struct {
 	core.ZodTypeInternals
-	Def  *ZodFileDef                // Schema definition
-	Isst issues.ZodIssueInvalidType // Invalid type issue template
-	Bag  map[string]any             // Additional metadata (minimum, maximum, mime)
+	Def *ZodFileDef // Schema definition
 }
 
-// ZodFile represents a file validation schema with type safety
-type ZodFile struct {
+// ZodFile represents a file validation schema with dual generic parameters
+// T = base type (any), R = constraint type (any or *any)
+type ZodFile[T any, R any] struct {
 	internals *ZodFileInternals
 }
 
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodFile) GetInternals() *core.ZodTypeInternals {
+func (z *ZodFile[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Parse implements intelligent type inference and validation using engine.ParseType
-func (z *ZodFile) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	}
-
-	// Use engine.ParseType unified template with improved file handling
-	return engine.ParseType[any](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeFile,
-		// Type checker function - handles all file value types
-		func(v any) (any, bool) {
-			switch file := v.(type) {
-			case *multipart.FileHeader:
-				return file, true
-			case multipart.FileHeader:
-				return file, true
-			case *os.File:
-				return file, true
-			case os.File:
-				return file, true
-			default:
-				return nil, false
-			}
-		},
-		// Pointer checker function - handles pointer dereferencing for file types
-		func(v any) (*any, bool) {
-			switch ptr := v.(type) {
-			case **multipart.FileHeader:
-				if ptr != nil {
-					anyPtr := any(*ptr)
-					return &anyPtr, true
-				}
-			case **os.File:
-				if ptr != nil {
-					anyPtr := any(*ptr)
-					return &anyPtr, true
-				}
-			}
-			return nil, false
-		},
-		// Validator function
-		func(value any, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			return validateFile(value, checks, ctx)
-		},
-		parseCtx,
-	)
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodFile[T, R]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodFile) MustParse(input any, ctx ...*core.ParseContext) any {
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodFile[T, R]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Parse returns a validated file using direct validation for better performance
+func (z *ZodFile[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 && ctx[0] != nil {
+		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
+	}
+
+	// Handle nil input
+	if input == nil {
+		// Check if nil is allowed (optional/nilable)
+		if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
+			var zero R
+			return zero, nil
+		}
+
+		// Try default values
+		if z.internals.ZodTypeInternals.DefaultValue != nil {
+			return z.Parse(z.internals.ZodTypeInternals.DefaultValue, parseCtx)
+		}
+		if z.internals.ZodTypeInternals.DefaultFunc != nil {
+			defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
+			return z.Parse(defaultValue, parseCtx)
+		}
+
+		// File type expects a file, nil is invalid
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeFile, input)
+		finalIssue := issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
+		return *new(R), issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// Validate that the value is a valid file type
+	if _, ok := extractFile(input); !ok {
+		// Try prefault on type error
+		if z.internals.ZodTypeInternals.PrefaultValue != nil {
+			return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
+		}
+		if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+			prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+			return z.Parse(prefaultValue, parseCtx)
+		}
+
+		// Invalid file type - create appropriate error
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeFile, input)
+		finalIssue := issues.FinalizeIssue(rawIssue, parseCtx, core.GetConfig())
+		return *new(R), issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// Run validation checks if any exist and capture transformed result
+	if len(z.internals.ZodTypeInternals.Checks) > 0 {
+		transformedInput, err := engine.ApplyChecks[any](input, z.internals.ZodTypeInternals.Checks, parseCtx)
+		if err != nil {
+			// Try prefault on validation failure
+			if z.internals.ZodTypeInternals.PrefaultValue != nil {
+				return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
+			}
+			if z.internals.ZodTypeInternals.PrefaultFunc != nil {
+				prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
+				return z.Parse(prefaultValue, parseCtx)
+			}
+
+			return *new(R), err
+		}
+		input = transformedInput
+	}
+
+	// Apply transform if present
+	if z.internals.ZodTypeInternals.Transform != nil {
+		refCtx := &core.RefinementContext{ParseContext: parseCtx}
+		result, err := z.internals.ZodTypeInternals.Transform(input, refCtx)
+		if err != nil {
+			return *new(R), err
+		}
+		return convertToFileConstraintType[T, R](result), nil
+	}
+
+	// Convert result to constraint type R and return
+	return convertToFileConstraintType[T, R](input), nil
+}
+
+// MustParse is the variant that panics on error
+func (z *ZodFile[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -107,716 +142,401 @@ func (z *ZodFile) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-//////////////////////////////
-////   INTERNAL METHODS   ////
-//////////////////////////////
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodFile[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
 
-// createZodFileFromDef creates a ZodFile from definition using pkg utilities
-func createZodFileFromDef(def *ZodFileDef) *ZodFile {
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+// Optional makes the file type optional and returns pointer constraint
+func (z *ZodFile[T, R]) Optional() *ZodFile[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable makes the file type nilable and returns pointer constraint
+func (z *ZodFile[T, R]) Nilable() *ZodFile[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodFile[T, R]) Nullish() *ZodFile[T, *T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current constraint type R
+func (z *ZodFile[T, R]) Default(v T) *ZodFile[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current constraint type R
+func (z *ZodFile[T, R]) DefaultFunc(fn func() T) *ZodFile[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodFile[T, R]) Prefault(v T) *ZodFile[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodFile[T, R]) PrefaultFunc(fn func() T) *ZodFile[T, R] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// Min validates minimum file size in bytes
+func (z *ZodFile[T, R]) Min(minimum int64, params ...any) *ZodFile[T, R] {
+	check := checks.MinFileSize(minimum, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Max validates maximum file size in bytes
+func (z *ZodFile[T, R]) Max(maximum int64, params ...any) *ZodFile[T, R] {
+	check := checks.MaxFileSize(maximum, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Size validates exact file size in bytes
+func (z *ZodFile[T, R]) Size(expected int64, params ...any) *ZodFile[T, R] {
+	check := checks.FileSize(expected, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Mime validates allowed MIME types
+func (z *ZodFile[T, R]) Mime(mimeTypes []string, params ...any) *ZodFile[T, R] {
+	check := checks.Mime(mimeTypes, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Refine applies type-safe validation with constraint type R
+func (z *ZodFile[T, R]) Refine(fn func(R) bool, args ...any) *ZodFile[T, R] {
+	// Wrapper converts the raw value to R before calling fn
+	wrapper := func(v any) bool {
+		// Convert value to constraint type R and call the refinement function
+		if constraintValue, ok := convertToFileConstraintValue[T, R](v); ok {
+			return fn(constraintValue)
+		}
+		return false
+	}
+
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	var checkParams any
+	if normalizedParams.Error != nil {
+		checkParams = normalizedParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny provides flexible validation without type conversion
+func (z *ZodFile[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodFile[T, R] {
+	// Use unified parameter handling
+	param := utils.GetFirstParam(args...)
+	normalizedParams := utils.NormalizeParams(param)
+
+	var checkParams any
+	if normalizedParams.Error != nil {
+		checkParams = normalizedParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates a type-safe transformation using WrapFn pattern
+func (z *ZodFile[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		baseValue := extractFileValue[T, R](input)
+		return fn(baseValue, ctx)
+	}
+	return core.NewZodTransform[R, any](z, wrapperFn)
+}
+
+// Overwrite transforms the input value while preserving the original type.
+// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
+// The transformation function is stored as a check, so it doesn't modify the inferred type.
+func (z *ZodFile[T, R]) Overwrite(transform func(R) R, params ...any) *ZodFile[T, R] {
+	// Create a transformation function that works with the constraint type R
+	transformAny := func(input any) any {
+		// Try to convert input to constraint type R
+		converted, ok := convertToFileType[T, R](input)
+		if !ok {
+			// If conversion fails, return original value
+			return input
+		}
+
+		// Apply transformation directly on constraint type R
+		return transform(converted)
+	}
+
+	check := checks.NewZodCheckOverwrite(transformAny, params...)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodFile[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
+		baseValue := extractFileValue[T, R](input)
+		return target.Parse(baseValue, ctx)
+	}
+	return core.NewZodPipe[R, any](z, wrapperFn)
+}
+
+// =============================================================================
+// HELPER METHODS
+// =============================================================================
+
+func (z *ZodFile[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFile[T, *T] {
+	return &ZodFile[T, *T]{internals: &ZodFileInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+func (z *ZodFile[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFile[T, R] {
+	return &ZodFile[T, R]{internals: &ZodFileInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodFile[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodFile[T, R]); ok {
+		z.internals = src.internals
+	}
+}
+
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
+
+// convertToFileConstraintType converts a base type T to constraint type R
+func convertToFileConstraintType[T any, R any](value any) R {
+	var zero R
+	switch any(zero).(type) {
+	case *any:
+		// Need to return *any from any
+		if value != nil {
+			valueCopy := value
+			return any(&valueCopy).(R)
+		}
+		return any((*any)(nil)).(R)
+	default:
+		// Return value directly as R
+		return any(value).(R)
+	}
+}
+
+// extractFileValue extracts the base type T from constraint type R
+func extractFileValue[T any, R any](value R) T {
+	// Handle direct assignment (when T == R)
+	if directValue, ok := any(value).(T); ok {
+		return directValue
+	}
+
+	// Handle pointer dereferencing
+	if ptrValue := reflect.ValueOf(value); ptrValue.Kind() == reflect.Ptr && !ptrValue.IsNil() {
+		if derefValue, ok := ptrValue.Elem().Interface().(T); ok {
+			return derefValue
+		}
+	}
+
+	// Fallback to zero value
+	var zero T
+	return zero
+}
+
+// convertToFileType converts any value to the file constraint type R with strict type checking
+func convertToFileType[T any, R any](v any) (R, bool) {
+	var zero R
+
+	if v == nil {
+		// Handle nil values for pointer types
+		zeroType := reflect.TypeOf((*R)(nil)).Elem()
+		if zeroType.Kind() == reflect.Ptr {
+			return zero, true // zero value for pointer types is nil
+		}
+		return zero, false // nil not allowed for value types
+	}
+
+	// Check if input is a valid file type
+	if _, isValidFile := extractFile(v); !isValidFile {
+		return zero, false // Reject all non-file types
+	}
+
+	// Convert to target constraint type R
+	zeroType := reflect.TypeOf((*R)(nil)).Elem()
+	if zeroType.Kind() == reflect.Ptr {
+		// R is *any - return pointer to the file
+		if converted, ok := any(&v).(R); ok { //nolint:unconvert
+			return converted, true
+		}
+	} else {
+		// R is any - return the file directly
+		if converted, ok := any(v).(R); ok { //nolint:unconvert
+			return converted, true
+		}
+	}
+
+	return zero, false
+}
+
+// convertToFileConstraintValue converts any value to constraint type R if possible
+func convertToFileConstraintValue[T any, R any](value any) (R, bool) {
+	var zero R
+
+	// Direct type match
+	if r, ok := any(value).(R); ok {
+		return r, true
+	}
+
+	// Handle pointer conversion for file types
+	if _, ok := any(zero).(*any); ok {
+		// Need to convert any to *any
+		if value != nil {
+			valueCopy := value
+			return any(&valueCopy).(R), true
+		}
+		return any((*any)(nil)).(R), true
+	}
+
+	return zero, false
+}
+
+// =============================================================================
+// FILE TYPE DETECTION AND VALIDATION
+// =============================================================================
+
+// extractFile attempts to extract a file from various types
+func extractFile(v any) (any, bool) {
+	switch f := v.(type) {
+	case *os.File:
+		return f, true
+	case os.File:
+		return f, true
+	case *multipart.FileHeader:
+		return f, true
+	case multipart.FileHeader:
+		return f, true
+	default:
+		return nil, false
+	}
+}
+
+// =============================================================================
+// CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// newZodFileFromDef constructs new ZodFile from definition
+func newZodFileFromDef[T any, R any](def *ZodFileDef) *ZodFile[T, R] {
 	internals := &ZodFileInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeFile},
-		Bag:              make(map[string]any),
 	}
 
-	// Copy checks from definition
-	if len(def.Checks) > 0 {
-		internals.Checks = append(internals.Checks, def.Checks...)
-	}
-
-	// Set up constructor for cloning
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any, any] {
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		fileDef := &ZodFileDef{
 			ZodTypeDef: *newDef,
-			Type:       core.ZodTypeFile,
-			Checks:     newDef.Checks,
 		}
-		return any(createZodFileFromDef(fileDef)).(core.ZodType[any, any])
+		return any(newZodFileFromDef[T, R](fileDef)).(core.ZodType[any])
 	}
 
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		result, err := engine.ParseType[any](
-			payload.GetValue(),
-			&internals.ZodTypeInternals,
-			core.ZodTypeFile,
-			// Type checker function - handles all file value types
-			func(v any) (any, bool) {
-				switch file := v.(type) {
-				case *multipart.FileHeader:
-					return file, true
-				case multipart.FileHeader:
-					return file, true
-				case *os.File:
-					return file, true
-				case os.File:
-					return file, true
-				default:
-					return nil, false
-				}
-			},
-			// Pointer checker function - handles pointer dereferencing for file types
-			func(v any) (*any, bool) {
-				switch ptr := v.(type) {
-				case **multipart.FileHeader:
-					if ptr != nil {
-						anyPtr := any(*ptr)
-						return &anyPtr, true
-					}
-				case **os.File:
-					if ptr != nil {
-						anyPtr := any(*ptr)
-						return &anyPtr, true
-					}
-				}
-				return nil, false
-			},
-			// Validator function
-			func(value any, checks []core.ZodCheck, ctx *core.ParseContext) error {
-				return validateFile(value, checks, ctx)
-			},
-			ctx,
-		)
+	schema := &ZodFile[T, R]{internals: internals}
 
-		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
-				for _, issue := range zodErr.Issues {
-					// Convert ZodError to RawIssue using standardized converter
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
-
-		payload.SetValue(result)
-		return payload
+	// Set error if provided
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
-	zodSchema := &ZodFile{internals: internals}
-	engine.InitZodType(zodSchema, &def.ZodTypeDef)
-	return zodSchema
-}
-
-//////////////////////////////
-////   CONSTRUCTORS       ////
-//////////////////////////////
-
-// File creates a new file schema with unified parameter handling
-func File(params ...any) *ZodFile {
-	def := &ZodFileDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeFile,
-			Checks: make([]core.ZodCheck, 0),
-		},
-		Type:   core.ZodTypeFile,
-		Checks: make([]core.ZodCheck, 0),
-	}
-
-	schema := createZodFileFromDef(def)
-
-	if len(params) > 0 {
-		param := params[0]
-
-		// Handle different parameter types
-		switch p := param.(type) {
-		case string:
-			// String parameter becomes Error field
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-				return p
-			})
-			def.Error = &errorMap
-			schema.internals.Error = &errorMap
-		case core.SchemaParams:
-			// Handle core.SchemaParams
-			if p.Error != nil {
-				// Handle string error messages by converting to ZodErrorMap
-				if errStr, ok := p.Error.(string); ok {
-					errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-						return errStr
-					})
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				} else if errorMap, ok := p.Error.(core.ZodErrorMap); ok {
-					def.Error = &errorMap
-					schema.internals.Error = &errorMap
-				}
-			}
-
-			if p.Description != "" {
-				schema.internals.Bag["description"] = p.Description
-			}
-			if p.Abort {
-				schema.internals.Bag["abort"] = true
-			}
-			if len(p.Path) > 0 {
-				schema.internals.Bag["path"] = p.Path
-			}
+	// Set checks if provided
+	if len(def.Checks) > 0 {
+		for _, check := range def.Checks {
+			internals.AddCheck(check)
 		}
 	}
 
 	return schema
 }
 
-//////////////////////////////
-////   VALIDATION METHODS  ////
-//////////////////////////////
+// =============================================================================
+// FACTORY FUNCTIONS
+// =============================================================================
 
-// Min adds minimum file size validation
-func (z *ZodFile) Min(minimum int64, params ...any) *ZodFile {
-	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.GetValue())
-		if size < minimum {
-			raw := issues.CreateTooSmallIssue(minimum, true, "file", payload.GetValue())
-			payload.AddIssue(raw)
-		}
-	}
-
-	check := checks.NewCustom[any](checkFn, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodFile)
+// File creates file schema that accepts file values - returns value constraint
+func File(params ...any) *ZodFile[any, any] {
+	return FileTyped[any, any](params...)
 }
 
-// Max adds maximum file size validation
-func (z *ZodFile) Max(maximum int64, params ...any) *ZodFile {
-	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.GetValue())
-		if size > maximum {
-			raw := issues.CreateTooBigIssue(maximum, true, "file", payload.GetValue())
-			payload.AddIssue(raw)
-		}
-	}
-
-	check := checks.NewCustom[any](checkFn, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodFile)
+// FilePtr creates file schema that accepts file values - returns pointer constraint
+func FilePtr(params ...any) *ZodFile[any, *any] {
+	return FileTyped[any, *any](params...)
 }
 
-// Size enforces exact file size validation
-func (z *ZodFile) Size(expect int64, params ...any) *ZodFile {
-	checkFn := func(payload *core.ParsePayload) {
-		size := getFileSize(payload.GetValue())
-		if size != expect {
-			var raw core.ZodRawIssue
-			if size > expect {
-				raw = issues.CreateTooBigIssue(expect, true, "file", payload.GetValue())
-			} else {
-				raw = issues.CreateTooSmallIssue(expect, true, "file", payload.GetValue())
-			}
-			payload.AddIssue(raw)
-		}
-	}
+// FileTyped creates typed file schema with generic constraints
+func FileTyped[T any, R any](params ...any) *ZodFile[T, R] {
+	param := utils.GetFirstParam(params...)
+	normalizedParams := utils.NormalizeParams(param)
 
-	check := checks.NewCustom[any](checkFn, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodFile)
-}
-
-// Mime validates allowed MIME types
-func (z *ZodFile) Mime(mimeTypes []string, params ...any) *ZodFile {
-	check := checks.Mime(mimeTypes, params...)
-	result := engine.AddCheck(z, check)
-	return result.(*ZodFile)
-}
-
-//////////////////////////////
-////   TRANSFORM METHODS   ////
-//////////////////////////////
-
-// Transform provides type-safe file transformation with smart dereferencing
-func (z *ZodFile) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-		file, ok := extractFileValue(input)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(input); ptrOk {
-				if file, ok = extractFileValue(ptr); !ok {
-					return nil, ErrExpectedFile
-				}
-			} else {
-				return nil, ErrExpectedFile
-			}
-		}
-
-		return fn(file, ctx)
-	})
-}
-
-// TransformAny flexible version of transformation
-func (z *ZodFile) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-// Pipe operation for pipeline chaining
-func (z *ZodFile) Pipe(out core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  z,
-		out: out,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-//////////////////////////////
-////   MODIFIER METHODS    ////
-//////////////////////////////
-
-// Optional makes the file optional
-func (z *ZodFile) Optional() core.ZodType[any, any] {
-	return any(Optional(any(z).(core.ZodType[any, any]))).(core.ZodType[any, any])
-}
-
-// Nilable makes the file nilable while preserving type inference
-func (z *ZodFile) Nilable() core.ZodType[any, any] {
-	return Nilable(any(z).(core.ZodType[any, any]))
-}
-
-// Nullish makes the file both optional and nilable
-func (z *ZodFile) Nullish() core.ZodType[any, any] {
-	return any(Nullish(any(z).(core.ZodType[any, any]))).(core.ZodType[any, any])
-}
-
-//////////////////////////////
-////   REFINE METHODS      ////
-//////////////////////////////
-
-// Refine adds type-safe custom validation logic
-func (z *ZodFile) Refine(fn func(any) bool, params ...any) *ZodFile {
-	result := z.RefineAny(func(v any) bool {
-		file, ok := extractFileValue(v)
-		if !ok {
-			// Try pointer dereferencing
-			if ptr, ptrOk := reflectx.Deref(v); ptrOk {
-				file, ok = extractFileValue(ptr)
-			}
-		}
-		if !ok {
-			return false // Let type validation handle wrong types
-		}
-		return fn(file)
-	}, params...)
-	return result.(*ZodFile)
-}
-
-// RefineAny adds flexible custom validation logic
-func (z *ZodFile) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	check := checks.NewCustom[any](fn, params...)
-	return engine.AddCheck(z, check)
-}
-
-//////////////////////////////
-////   UNWRAP METHODS      ////
-//////////////////////////////
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodFile) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-//////////////////////////////
-////   WRAPPER TYPES       ////
-//////////////////////////////
-
-// ZodFileDefault is a default value wrapper for file type
-type ZodFileDefault struct {
-	*ZodDefault[*ZodFile]
-}
-
-//////////////////////////////
-////   DEFAULT METHODS     ////
-//////////////////////////////
-
-// Default creates a default wrapper with type safety
-func (z *ZodFile) Default(value any) ZodFileDefault {
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
+	def := &ZodFileDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeFile,
+			Checks: []core.ZodCheck{},
 		},
 	}
-}
 
-// DefaultFunc creates a default wrapper with function
-func (z *ZodFile) DefaultFunc(fn func() any) ZodFileDefault {
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:   z,
-			defaultFunc: fn,
-			isFunction:  true,
-		},
-	}
-}
-
-//////////////////////////////
-////   FILEDEFAULT chain methods ////
-//////////////////////////////
-
-// Min adds minimum file size validation, returns ZodFileDefault support chain call
-func (s ZodFileDefault) Min(minimum int64, params ...any) ZodFileDefault {
-	newInner := s.innerType.Min(minimum, params...)
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Max adds maximum file size validation, returns ZodFileDefault support chain call
-func (s ZodFileDefault) Max(maximum int64, params ...any) ZodFileDefault {
-	newInner := s.innerType.Max(maximum, params...)
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Mime adds MIME type validation, returns ZodFileDefault support chain call
-func (s ZodFileDefault) Mime(mimeTypes []string, params ...any) ZodFileDefault {
-	newInner := s.innerType.Mime(mimeTypes, params...)
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the file, returns ZodFileDefault support chain call
-func (s ZodFileDefault) Refine(fn func(any) bool, params ...any) ZodFileDefault {
-	newInner := s.innerType.Refine(fn, params...)
-	return ZodFileDefault{
-		&ZodDefault[*ZodFile]{
-			innerType:    newInner,
-			defaultValue: s.defaultValue,
-			defaultFunc:  s.defaultFunc,
-			isFunction:   s.isFunction,
-		},
-	}
-}
-
-// Transform adds data transformation, returns a generic ZodType support transform pipeline
-func (s ZodFileDefault) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// Use the TransformAny method of the embedded ZodDefault
-	return s.TransformAny(fn)
-}
-
-// Optional adds an optional check to the file, returns ZodType support chain call
-func (s ZodFileDefault) Optional() core.ZodType[any, any] {
-	// wrap the current ZodFileDefault instance, keeping Default logic
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the file, returns ZodType support chain call
-func (s ZodFileDefault) Nilable() core.ZodType[any, any] {
-	// wrap the current ZodFileDefault instance, keeping Default logic
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-//////////////////////////////
-////   FILEPREFAULT WRAPPER ////
-//////////////////////////////
-
-// ZodFilePrefault is a prefault value wrapper for file type
-type ZodFilePrefault struct {
-	*ZodPrefault[*ZodFile]
-}
-
-//////////////////////////////
-////   PREFAULT method     ////
-//////////////////////////////
-
-// Prefault creates a prefault wrapper with type safety
-func (z *ZodFile) Prefault(value any) ZodFilePrefault {
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
+	// Use utils.ApplySchemaParams for consistent parameter handling
+	if normalizedParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: value,
-			prefaultFunc:  nil,
-			isFunction:    false,
-		},
-	}
-}
-
-// PrefaultFunc creates a prefault wrapper with function
-func (z *ZodFile) PrefaultFunc(fn func() any) ZodFilePrefault {
-	baseInternals := z.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     z,
-			prefaultValue: nil,
-			prefaultFunc:  fn,
-			isFunction:    true,
-		},
-	}
-}
-
-//////////////////////////////
-////   FILEPREFAULT chain methods ////
-//////////////////////////////
-
-// Min adds minimum file size validation, returns ZodFilePrefault support chain call
-func (f ZodFilePrefault) Min(minimum int64, params ...any) ZodFilePrefault {
-	newInner := f.innerType.Min(minimum, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Max adds maximum file size validation, returns ZodFilePrefault support chain call
-func (f ZodFilePrefault) Max(maximum int64, params ...any) ZodFilePrefault {
-	newInner := f.innerType.Max(maximum, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Mime adds MIME type validation, returns ZodFilePrefault support chain call
-func (f ZodFilePrefault) Mime(mimeTypes []string, params ...any) ZodFilePrefault {
-	newInner := f.innerType.Mime(mimeTypes, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Refine adds a flexible validation function to the file, returns ZodFilePrefault support chain call
-func (f ZodFilePrefault) Refine(fn func(any) bool, params ...any) ZodFilePrefault {
-	newInner := f.innerType.Refine(fn, params...)
-
-	baseInternals := newInner.GetInternals()
-	internals := &core.ZodTypeInternals{
-		Version:     core.Version,
-		Type:        core.ZodTypePrefault,
-		Checks:      baseInternals.Checks,
-		Optional:    baseInternals.Optional,
-		Nilable:     baseInternals.Nilable,
-		Constructor: baseInternals.Constructor,
-		Values:      baseInternals.Values,
-		Pattern:     baseInternals.Pattern,
-		Error:       baseInternals.Error,
-		Bag:         baseInternals.Bag,
-	}
-
-	return ZodFilePrefault{
-		&ZodPrefault[*ZodFile]{
-			internals:     internals,
-			innerType:     newInner,
-			prefaultValue: f.prefaultValue,
-			prefaultFunc:  f.prefaultFunc,
-			isFunction:    f.isFunction,
-		},
-	}
-}
-
-// Transform adds data transformation, returns a generic ZodType support transform pipeline
-func (f ZodFilePrefault) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	// use the TransformAny method of the embedded ZodPrefault
-	return f.TransformAny(fn)
-}
-
-// Optional adds an optional check to the file, returns ZodType support chain call
-func (f ZodFilePrefault) Optional() core.ZodType[any, any] {
-	// wrap the current ZodFilePrefault instance, keeping Prefault logic
-	return Optional(any(f).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the file, returns ZodType support chain call
-func (f ZodFilePrefault) Nilable() core.ZodType[any, any] {
-	// wrap the current ZodFilePrefault instance, keeping Prefault logic
-	return Nilable(any(f).(core.ZodType[any, any]))
-}
-
-//////////////////////////////
-////   UTILITY METHODS     ////
-//////////////////////////////
-
-// GetZod returns the file-specific internals
-func (z *ZodFile) GetZod() *ZodFileInternals {
-	return z.internals
-}
-
-// CloneFrom implements Cloneable interface
-func (z *ZodFile) CloneFrom(source any) {
-	if src, ok := source.(interface{ GetZod() *ZodFileInternals }); ok {
-		srcState := src.GetZod()
-		tgtState := z.GetZod()
-
-		if len(srcState.Bag) > 0 {
-			if tgtState.Bag == nil {
-				tgtState.Bag = make(map[string]any)
-			}
-			for key, value := range srcState.Bag {
-				tgtState.Bag[key] = value
-			}
-		}
-
-		if len(srcState.ZodTypeInternals.Bag) > 0 {
-			if tgtState.ZodTypeInternals.Bag == nil {
-				tgtState.ZodTypeInternals.Bag = make(map[string]any)
-			}
-			for key, value := range srcState.ZodTypeInternals.Bag {
-				tgtState.ZodTypeInternals.Bag[key] = value
-			}
-		}
-	}
-}
-
-// extractFileValue extracts file value using smart type checking
-func extractFileValue(input any) (any, bool) {
-	switch v := input.(type) {
-	case *multipart.FileHeader:
-		return v, true
-	case multipart.FileHeader:
-		return v, true
-	case *os.File:
-		return v, true
-	case os.File:
-		return v, true
-	default:
-		return nil, false
-	}
-}
-
-// getFileSize returns file size in bytes (0 if unknown)
-func getFileSize(v any) int64 {
-	switch f := v.(type) {
-	case *multipart.FileHeader:
-		return f.Size
-	case multipart.FileHeader:
-		return f.Size
-	case *os.File:
-		if stat, err := f.Stat(); err == nil {
-			return stat.Size()
-		}
-	case os.File:
-		if stat, err := f.Stat(); err == nil {
-			return stat.Size()
-		}
-	}
-	return 0
-}
-
-//////////////////////////////
-////   VALIDATION FUNCTIONS ////
-//////////////////////////////
-
-// validateFile validates file values with checks
-func validateFile(value any, checks []core.ZodCheck, ctx *core.ParseContext) error {
-	if len(checks) > 0 {
-		// Use constructor instead of direct struct literal to respect private fields
-		payload := core.NewParsePayload(value)
-		engine.RunChecksOnValue(value, checks, payload, ctx)
-		if len(payload.GetIssues()) > 0 {
-			return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-		}
-	}
-	return nil
+	return newZodFileFromDef[T, R](def)
 }

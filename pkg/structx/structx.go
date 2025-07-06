@@ -4,27 +4,13 @@ import (
 	"errors"
 	"reflect"
 	"strings"
-
-	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// =============================================================================
-// STRUCT TYPE CHECKING
-// =============================================================================
-
-// Is checks if the value is a struct type
-func Is(v any) bool {
-	return reflectx.IsStruct(v)
-}
-
-// IsPointer checks if the value is a pointer to a struct
-func IsPointer(v any) bool {
-	if v == nil {
-		return false
-	}
-	rv := reflect.ValueOf(v)
-	return rv.Kind() == reflect.Ptr && rv.Elem().Kind() == reflect.Struct
-}
+// Sentinel errors for structx package.
+var (
+	ErrInvalidStructInput     = errors.New("input is not a struct or is nil")
+	ErrTargetTypeMustBeStruct = errors.New("target type must be struct")
+)
 
 // =============================================================================
 // STRUCT CONVERSION FUNCTIONS
@@ -34,7 +20,7 @@ func IsPointer(v any) bool {
 func ToMap(input any) (map[string]any, error) {
 	result := Marshal(input)
 	if result == nil {
-		return nil, errors.New("input is not a struct or is nil")
+		return nil, ErrInvalidStructInput
 	}
 	return result, nil
 }
@@ -92,7 +78,7 @@ func Unmarshal(data map[string]any, structType reflect.Type) (any, error) {
 	}
 
 	if structType.Kind() != reflect.Struct {
-		return nil, errors.New("target type must be struct")
+		return nil, ErrTargetTypeMustBeStruct
 	}
 
 	result := reflect.New(structType).Elem()
@@ -124,141 +110,6 @@ func Unmarshal(data map[string]any, structType reflect.Type) (any, error) {
 }
 
 // =============================================================================
-// STRUCT FIELD OPERATIONS
-// =============================================================================
-
-// Fields returns all field names of a struct
-func Fields(input any) []string {
-	if input == nil {
-		return nil
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil
-		}
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-
-	t := v.Type()
-	fields := make([]string, 0, t.NumField())
-
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		fieldName := getFieldName(field)
-		if fieldName != "-" {
-			fields = append(fields, fieldName)
-		}
-	}
-
-	return fields
-}
-
-// GetField gets a field value from a struct by field name
-func GetField(input any, fieldName string) (any, bool) {
-	if input == nil {
-		return nil, false
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil, false
-		}
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil, false
-	}
-
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		if getFieldName(field) == fieldName {
-			return v.Field(i).Interface(), true
-		}
-	}
-
-	return nil, false
-}
-
-// SetField sets a field value in a struct by field name (requires pointer)
-func SetField(input any, fieldName string, value any) error {
-	if input == nil {
-		return errors.New("input is nil")
-	}
-
-	v := reflect.ValueOf(input)
-	if v.Kind() != reflect.Ptr {
-		return errors.New("input must be a pointer to struct")
-	}
-
-	if v.IsNil() {
-		return errors.New("input pointer is nil")
-	}
-
-	v = v.Elem()
-	if v.Kind() != reflect.Struct {
-		return errors.New("input must be a pointer to struct")
-	}
-
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		if getFieldName(field) == fieldName {
-			fieldValue := reflect.ValueOf(value)
-			targetField := v.Field(i)
-
-			if fieldValue.Type().ConvertibleTo(field.Type) {
-				targetField.Set(fieldValue.Convert(field.Type))
-				return nil
-			} else if fieldValue.Type().AssignableTo(field.Type) {
-				targetField.Set(fieldValue)
-				return nil
-			}
-			return errors.New("value type not compatible with field type")
-		}
-	}
-
-	return errors.New("field not found")
-}
-
-// HasField checks if a struct has a specific field
-func HasField(input any, fieldName string) bool {
-	_, exists := GetField(input, fieldName)
-	return exists
-}
-
-// =============================================================================
-// STRUCT EXTRACTION FUNCTIONS
-// =============================================================================
-
-// Extract extracts a struct and converts it to map[string]any
-// Returns the extracted map and whether the extraction was successful
-func Extract(input any) (map[string]any, bool) {
-	result := Marshal(input)
-	return result, result != nil
-}
-
-// =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
 
@@ -272,35 +123,4 @@ func getFieldName(field reflect.StructField) string {
 		}
 	}
 	return field.Name
-}
-
-// Count returns the number of exported fields in a struct
-func Count(input any) int {
-	fields := Fields(input)
-	if fields == nil {
-		return 0
-	}
-	return len(fields)
-}
-
-// Clone creates a deep copy of a struct through map conversion
-func Clone(input any) (any, error) {
-	if !Is(input) {
-		return nil, errors.New("input is not a struct")
-	}
-
-	// Convert to map
-	m := Marshal(input)
-	if m == nil {
-		return nil, errors.New("failed to marshal struct")
-	}
-
-	// Get the type
-	t := reflect.TypeOf(input)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	// Convert back to struct
-	return Unmarshal(m, t)
 }

@@ -13,9 +13,8 @@ import (
 )
 
 func main() {
-    // Type check
+    // Sample slice
     vals := []int{1, 2, 3}
-    fmt.Println(slicex.Is(vals)) // true
 
     // Conversion
     anySlice, _ := slicex.ToAny(vals)         // []any{1,2,3}
@@ -45,11 +44,6 @@ func main() {
 
 ```go
 import "github.com/kaptinlin/gozod/pkg/slicex"
-
-// Type check
-slicex.Is(val)            // is slice
-slicex.IsArray(val)       // is array
-slicex.IsSliceOrArray(val)// is slice or array
 
 // Conversion
 slicex.ToAny(slice)           // []any

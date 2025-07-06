@@ -6,7 +6,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -17,9 +16,9 @@ import (
 // MaxLength creates a maximum length validation check with JSON Schema support
 // Supports: MaxLength(5, "too long") or MaxLength(5, CheckParams{Error: "too long"})
 func MaxLength(maximum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_length"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -41,9 +40,9 @@ func MaxLength(maximum int, params ...any) core.ZodCheck {
 // MinLength creates a minimum length validation check with JSON Schema support
 // Supports: MinLength(3, "too short") or MinLength(3, CheckParams{Error: "too short"})
 func MinLength(minimum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_length"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -65,9 +64,9 @@ func MinLength(minimum int, params ...any) core.ZodCheck {
 // Length creates an exact length validation check with JSON Schema support
 // Supports: Length(10, "must be exactly 10 chars") or Length(10, CheckParams{Error: "exact length required"})
 func Length(exact int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_equals"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -86,8 +85,8 @@ func Length(exact int, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Exact length sets both min and max
-				setBagProperty(schema, "minLength", exact)
-				setBagProperty(schema, "maxLength", exact)
+				SetBagProperty(schema, "minLength", exact)
+				SetBagProperty(schema, "maxLength", exact)
 			},
 		},
 	}
@@ -100,9 +99,9 @@ func Length(exact int, params ...any) core.ZodCheck {
 // MaxSize creates a maximum size validation check with JSON Schema support
 // Supports: MaxSize(100, "too many items") or MaxSize(100, CheckParams{Error: "size limit exceeded"})
 func MaxSize(maximum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_size"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -128,9 +127,9 @@ func MaxSize(maximum int, params ...any) core.ZodCheck {
 // MinSize creates a minimum size validation check with JSON Schema support
 // Supports: MinSize(1, "cannot be empty") or MinSize(1, CheckParams{Error: "minimum size required"})
 func MinSize(minimum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_size"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -156,21 +155,22 @@ func MinSize(minimum int, params ...any) core.ZodCheck {
 // Size creates an exact size validation check with JSON Schema support
 // Supports: Size(5, "must have exactly 5 items") or Size(5, CheckParams{Error: "exact size required"})
 func Size(exact int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_equals"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.Size(payload.GetValue(), exact) {
 				// Determine if too big or too small based on actual size
-				actualSize := reflectx.Size(payload.GetValue())
-				origin := utils.GetSizableOrigin(payload.GetValue())
-				if actualSize > exact {
-					payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
-				} else {
-					payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.GetValue()))
+				if actualSize, ok := reflectx.GetSize(payload.GetValue()); ok {
+					origin := utils.GetSizableOrigin(payload.GetValue())
+					if actualSize > exact {
+						payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
+					} else {
+						payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.GetValue()))
+					}
 				}
 			}
 		},
@@ -195,9 +195,9 @@ func Size(exact int, params ...any) core.ZodCheck {
 // LengthRange creates a length range validation check with JSON Schema support
 // Supports: LengthRange(3, 10, "length must be 3-10") or LengthRange(3, 10, CheckParams{Error: "invalid length range"})
 func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_range"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -224,20 +224,20 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 // SizeRange creates a size range validation check with JSON Schema support
 // Supports: SizeRange(1, 100, "size must be 1-100") or SizeRange(1, 100, CheckParams{Error: "invalid size range"})
 func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
-	checkParams := normalizeCheckParams(params...)
+	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_range"}
-	applyCheckParams(def, checkParams)
+	ApplyCheckParams(def, checkParams)
 
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			actualSize := reflectx.Size(payload.GetValue())
-			origin := utils.GetSizableOrigin(payload.GetValue())
-
-			if actualSize < minimum {
-				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
-			} else if actualSize > maximum {
-				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
+			if actualSize, ok := reflectx.GetSize(payload.GetValue()); ok {
+				origin := utils.GetSizableOrigin(payload.GetValue())
+				if actualSize > maximum {
+					payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
+				} else if actualSize < minimum {
+					payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
+				}
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
@@ -276,15 +276,10 @@ func Empty(params ...any) core.ZodCheck {
 
 // getActualLength returns the actual length using optimized utilities
 func getActualLength(value any) int {
-	// Use slicex for slice/array types
-	if slicex.IsSliceOrArray(value) {
-		if length, err := slicex.Length(value); err == nil {
-			return length
-		}
+	if l, ok := reflectx.GetLength(value); ok {
+		return l
 	}
-
-	// Use reflectx as fallback
-	return reflectx.Length(value)
+	return 0
 }
 
 // mergeMinimumLengthConstraint merges minLength constraint

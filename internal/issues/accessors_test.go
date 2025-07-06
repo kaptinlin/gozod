@@ -428,7 +428,7 @@ func TestAccessorIntegration(t *testing.T) {
 
 	t.Run("accessor methods work with creation helpers", func(t *testing.T) {
 		// Test that creation helpers produce issues with working accessors
-		invalidTypeIssue := CreateInvalidTypeIssue("string", "test")
+		invalidTypeIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
 		tooBigIssue := CreateTooBigIssue(100, true, "number", 150)
 		formatIssue := CreateInvalidFormatIssue("email", "invalid@", nil)
 

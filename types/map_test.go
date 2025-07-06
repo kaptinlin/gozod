@@ -12,912 +12,1003 @@ import (
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestMapBasicFunctionality(t *testing.T) {
-	t.Run("basic validation", func(t *testing.T) {
-		schema := Map(String(), Int())
+func TestMap_BasicFunctionality(t *testing.T) {
+	t.Run("valid map inputs", func(t *testing.T) {
+		// String key to int value map
+		keySchema := String()
+		valueSchema := Int()
+		mapSchema := Map(keySchema, valueSchema)
 
-		// Valid map
-		result, err := schema.Parse(map[string]int{"one": 1, "two": 2})
+		testMap := map[any]any{
+			"key1": 1,
+			"key2": 2,
+			"key3": 3,
+		}
+
+		result, err := mapSchema.Parse(testMap)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Invalid type
-		_, err = schema.Parse("not a map")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-	})
-
-	t.Run("smart type inference", func(t *testing.T) {
-		schema := Map(String(), Int())
-
-		// map[string]int input returns map[string]int
-		input1 := map[string]int{"key": 42}
-		result1, err := schema.Parse(input1)
-		require.NoError(t, err)
-		assert.IsType(t, map[string]int{}, result1)
-		assert.Equal(t, input1, result1)
-
-		// map[any]any input returns map[any]any
-		input2 := map[any]any{"key": 42}
-		result2, err := schema.Parse(input2)
-		require.NoError(t, err)
-		assert.IsType(t, map[any]any{}, result2)
-		assert.Equal(t, input2, result2)
-
-		// Pointer input returns same pointer
-		input3 := &map[string]int{"key": 42}
-		result3, err := schema.Parse(input3)
-		require.NoError(t, err)
-		assert.IsType(t, (*map[string]int)(nil), result3)
-		assert.Equal(t, input3, result3)
-	})
-
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := Map(String(), Int()).Nilable()
-
-		// nil input should succeed, return nil pointer
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Valid input keeps type inference
-		result2, err := schema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err)
-		assert.Equal(t, map[string]int{"key": 42}, result2)
-		assert.IsType(t, map[string]int{}, result2)
+		assert.Equal(t, testMap, result)
 	})
 
 	t.Run("empty map", func(t *testing.T) {
-		schema := Map(String(), Int())
-		result, err := schema.Parse(map[string]int{})
+		mapSchema := Map(String(), Int())
+
+		result, err := mapSchema.Parse(map[any]any{})
 		require.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, map[string]int{}, result)
+		assert.Equal(t, map[any]any{}, result)
 	})
 
-	t.Run("MustParse", func(t *testing.T) {
-		schema := Map(String(), Int())
-		result := schema.MustParse(map[string]int{"key": 42})
-		assert.NotNil(t, result)
+	t.Run("invalid type inputs", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
 
+		invalidInputs := []any{
+			"not a map", 123, []int{1, 2, 3}, true, nil,
+		}
+
+		for _, input := range invalidInputs {
+			_, err := mapSchema.Parse(input)
+			assert.Error(t, err, "Expected error for input: %v", input)
+		}
+	})
+
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		mapSchema := Map(String(), Bool())
+		testMap := map[any]any{"test": true}
+
+		// Test Parse method
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+
+		// Test MustParse method
+		mustResult := mapSchema.MustParse(testMap)
+		assert.Equal(t, testMap, mustResult)
+
+		// Test panic on invalid input
 		assert.Panics(t, func() {
-			schema.MustParse("invalid")
+			mapSchema.MustParse("invalid")
 		})
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected a valid map"
+		mapSchema := Map(String(), Int(), core.SchemaParams{Error: customError})
+
+		require.NotNil(t, mapSchema)
+
+		_, err := mapSchema.Parse("invalid")
+		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// 2. Validation methods
+// Type safety tests
 // =============================================================================
 
-func TestMapValidationMethods(t *testing.T) {
-	t.Run("size validation", func(t *testing.T) {
-		schema := Map(String(), Int()).Length(2)
+func TestMap_TypeSafety(t *testing.T) {
+	t.Run("map returns map[any]any type", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+		require.NotNil(t, mapSchema)
 
-		// Valid size
-		_, err := schema.Parse(map[string]int{"a": 1, "b": 2})
-		assert.NoError(t, err)
-
-		// Invalid size
-		_, err = schema.Parse(map[string]int{"a": 1})
-		assert.Error(t, err)
-	})
-
-	t.Run("min size validation", func(t *testing.T) {
-		schema := Map(String(), Int()).Min(2)
-
-		// Valid size
-		_, err := schema.Parse(map[string]int{"a": 1, "b": 2, "c": 3})
-		assert.NoError(t, err)
-
-		// Invalid size
-		_, err = schema.Parse(map[string]int{"a": 1})
-		assert.Error(t, err)
-	})
-
-	t.Run("max size validation", func(t *testing.T) {
-		schema := Map(String(), Int()).Max(2)
-
-		// Valid size
-		_, err := schema.Parse(map[string]int{"a": 1, "b": 2})
-		assert.NoError(t, err)
-
-		// Invalid size
-		_, err = schema.Parse(map[string]int{"a": 1, "b": 2, "c": 3})
-		assert.Error(t, err)
+		testMap := map[any]any{"test": 42}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+		assert.IsType(t, map[any]any{}, result)
 	})
 
 	t.Run("key validation", func(t *testing.T) {
-		schema := Map(String().Min(3), Int())
+		mapSchema := Map(String(), Int())
 
-		// Valid keys
-		_, err := schema.Parse(map[string]int{"abc": 1, "def": 2})
-		assert.NoError(t, err)
+		// Valid keys should pass
+		validMap := map[any]any{"valid_key": 42}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
 
-		// Invalid keys
-		_, err = schema.Parse(map[string]int{"ab": 1, "def": 2})
+		// Invalid key type should fail
+		invalidMap := map[any]any{123: 42} // int key instead of string
+		_, err = mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
 	})
 
 	t.Run("value validation", func(t *testing.T) {
-		schema := Map(String(), Int().Min(10))
+		mapSchema := Map(String(), Int())
 
-		// Valid values
-		_, err := schema.Parse(map[string]int{"a": 10, "b": 20})
-		assert.NoError(t, err)
+		// Valid values should pass
+		validMap := map[any]any{"key": 42}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
 
-		// Invalid values
-		_, err = schema.Parse(map[string]int{"a": 5, "b": 20})
+		// Invalid value type should fail
+		invalidMap := map[any]any{"key": "not_an_int"}
+		_, err = mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
 	})
 
-	t.Run("key and value validation with errors", func(t *testing.T) {
-		schema := Map(String(), Int())
+	t.Run("MustParse type safety", func(t *testing.T) {
+		mapSchema := Map(String(), Bool())
+		testMap := map[any]any{"test": true}
 
-		// Invalid key and value types
-		_, err := schema.Parse(map[any]any{42: "symbol"})
-		assert.Error(t, err)
+		result := mapSchema.MustParse(testMap)
+		assert.IsType(t, map[any]any{}, result)
+		assert.Equal(t, testMap, result)
+	})
+}
 
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		// Should have errors for both key and value
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
+// =============================================================================
+// Modifier methods tests
+// =============================================================================
+
+func TestMap_Modifiers(t *testing.T) {
+	t.Run("Optional allows nil values", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+		optionalSchema := mapSchema.Optional()
+
+		// Test non-nil value - should return pointer
+		testMap := map[any]any{"key": 42}
+		result, err := optionalSchema.Parse(testMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, testMap, *result)
+
+		// Test nil value (should be allowed for optional)
+		result, err = optionalSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("multiple invalid entries", func(t *testing.T) {
-		schema := Map(String(), Int())
+	t.Run("Nilable allows nil values", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+		nilableSchema := mapSchema.Nilable()
 
-		// Multiple invalid entries
-		_, err := schema.Parse(map[any]any{
-			1:     "foo", // invalid key
-			"bar": 2.5,   // invalid value (float instead of int)
+		// Test nil handling
+		result, err := nilableSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value - should return pointer
+		testMap := map[any]any{"key": 42}
+		result, err = nilableSchema.Parse(testMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, testMap, *result)
+	})
+
+	t.Run("Default preserves current type", func(t *testing.T) {
+		defaultMap := map[any]any{"default": 1}
+		mapSchema := Map(String(), Int())
+		defaultSchema := mapSchema.Default(defaultMap)
+
+		// Valid input should override default
+		testMap := map[any]any{"test": 2}
+		result, err := defaultSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+		assert.IsType(t, map[any]any{}, result)
+	})
+
+	t.Run("Prefault preserves current type", func(t *testing.T) {
+		prefaultMap := map[any]any{"prefault": 1}
+		mapSchema := Map(String(), Int())
+		prefaultSchema := mapSchema.Prefault(prefaultMap)
+
+		// Valid input should override prefault
+		testMap := map[any]any{"test": 2}
+		result, err := prefaultSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+		assert.IsType(t, map[any]any{}, result)
+	})
+}
+
+// =============================================================================
+// Chaining tests
+// =============================================================================
+
+func TestMap_Chaining(t *testing.T) {
+	t.Run("type evolution through chaining", func(t *testing.T) {
+		// Chain with type evolution
+		defaultMap := map[any]any{"default": 1}
+		mapSchema := Map(String(), Int()).
+			Default(defaultMap). // Preserves map type
+			Optional()           // Now returns pointer type
+
+		// Test final behavior - should return pointer
+		testMap := map[any]any{"test": 2}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, testMap, *result)
+
+		// Test nil handling
+		result, err = mapSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("complex chaining", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).
+			Nilable().
+			Min(1)
+
+		testMap := map[any]any{"key": 42}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, testMap, *result)
+
+		// Test nil handling
+		result, err = mapSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		defaultMap := map[any]any{"default": 1}
+		prefaultMap := map[any]any{"prefault": 2}
+		mapSchema := Map(String(), Int()).
+			Default(defaultMap).
+			Prefault(prefaultMap)
+
+		testMap := map[any]any{"test": 3}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+	})
+}
+
+// =============================================================================
+// Validation methods tests
+// =============================================================================
+
+func TestMap_ValidationMethods(t *testing.T) {
+	t.Run("Min validation", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).Min(2)
+
+		// Should pass with 2+ entries
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
+
+		// Should fail with < 2 entries
+		invalidMap := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(invalidMap)
+		assert.Error(t, err)
+	})
+
+	t.Run("Max validation", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).Max(2)
+
+		// Should pass with <= 2 entries
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
+
+		// Should fail with > 2 entries
+		invalidMap := map[any]any{"key1": 1, "key2": 2, "key3": 3}
+		_, err = mapSchema.Parse(invalidMap)
+		assert.Error(t, err)
+	})
+
+	t.Run("Size validation", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).Size(2)
+
+		// Should pass with exactly 2 entries
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
+
+		// Should fail with != 2 entries
+		invalidMap1 := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(invalidMap1)
+		assert.Error(t, err)
+
+		invalidMap2 := map[any]any{"key1": 1, "key2": 2, "key3": 3}
+		_, err = mapSchema.Parse(invalidMap2)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestMap_DefaultAndPrefault(t *testing.T) {
+	t.Run("default value behavior", func(t *testing.T) {
+		defaultMap := map[any]any{"default": 1}
+		mapSchema := Map(String(), Int()).Default(defaultMap)
+
+		// Valid input should override default
+		testMap := map[any]any{"test": 2}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+
+		// Test default function
+		mapFunc := Map(String(), Int()).DefaultFunc(func() map[any]any {
+			return map[any]any{"func": 1}
 		})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
+		result2, err := mapFunc.Parse(map[any]any{"test": 2})
+		require.NoError(t, err)
+		assert.Equal(t, map[any]any{"test": 2}, result2)
 	})
 
-	t.Run("refine validation on keys", func(t *testing.T) {
-		schema := Map(
-			String().Refine(func(s string) bool {
-				return s == strings.ToUpper(s)
-			}, core.SchemaParams{Error: "Keys must be uppercase"}),
-			String(),
-		)
+	t.Run("prefault value behavior", func(t *testing.T) {
+		prefaultMap := map[any]any{"prefault": 1}
+		mapSchema := Map(String(), Int()).Prefault(prefaultMap)
 
-		// Valid uppercase keys
-		_, err := schema.Parse(map[string]string{"FIRST": "foo", "SECOND": "bar"})
-		assert.NoError(t, err)
+		// Valid input should work normally
+		testMap := map[any]any{"test": 2}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
 
-		// Invalid lowercase keys
-		_, err = schema.Parse(map[string]string{"first": "foo", "second": "bar"})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
+		// Test prefault function
+		mapFunc := Map(String(), Int()).PrefaultFunc(func() map[any]any {
+			return map[any]any{"func": 1}
+		})
+		result2, err := mapFunc.Parse(map[any]any{"test": 2})
+		require.NoError(t, err)
+		assert.Equal(t, map[any]any{"test": 2}, result2)
 	})
 }
 
 // =============================================================================
-// 3. Modifiers and wrappers
+// Refine tests
 // =============================================================================
 
-func TestMapModifiers(t *testing.T) {
-	t.Run("optional wrapper", func(t *testing.T) {
-		schema := Map(String(), Int()).Optional()
+func TestMap_Refine(t *testing.T) {
+	t.Run("refine validation", func(t *testing.T) {
+		// Only accept maps with more than 1 entry
+		mapSchema := Map(String(), Int()).Refine(func(m map[any]any) bool {
+			return len(m) > 1
+		})
 
-		// Optional passes for nil
-		result, err := schema.Parse(nil)
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(validMap)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Equal(t, validMap, result)
 
-		// Valid map
-		result, err = schema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("nilable wrapper", func(t *testing.T) {
-		schema := Map(String(), Int()).Nilable()
-
-		// Nilable passes for nil
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Valid map
-		result, err = schema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("nullish wrapper", func(t *testing.T) {
-		schema := Map(String(), Int()).Nullish()
-
-		// Nullish passes for nil
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("nilable does not affect original schema", func(t *testing.T) {
-		baseSchema := Map(String(), Int()).Min(1)
-		nilableSchema := baseSchema.Nilable()
-
-		// Test nilable schema allows nil
-		result1, err1 := nilableSchema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Nil(t, result1)
-
-		// Test nilable schema validates non-nil values
-		result2, err2 := nilableSchema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err2)
-		assert.Equal(t, map[string]int{"key": 42}, result2)
-
-		// Test nilable schema rejects invalid values
-		_, err3 := nilableSchema.Parse(map[string]int{})
-		assert.Error(t, err3)
-
-		// Critical: Original schema should remain unchanged
-		_, err4 := baseSchema.Parse(nil)
-		assert.Error(t, err4, "Original schema should still reject nil")
-
-		result5, err5 := baseSchema.Parse(map[string]int{"key": 42})
-		require.NoError(t, err5)
-		assert.Equal(t, map[string]int{"key": 42}, result5)
-	})
-}
-
-// =============================================================================
-// 4. Chaining and method composition
-// =============================================================================
-
-func TestMapChaining(t *testing.T) {
-	t.Run("method chaining", func(t *testing.T) {
-		schema := Map(String(), Int()).Min(1).Max(3).Nilable()
-
-		// Valid chained validation
-		result, err := schema.Parse(map[string]int{"a": 1, "b": 2})
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Nil passes due to Nilable
-		result, err = schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Size validation still works
-		_, err = schema.Parse(map[string]int{"a": 1, "b": 2, "c": 3, "d": 4})
+		invalidMap := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
 	})
 
-	t.Run("complex key value chaining", func(t *testing.T) {
-		schema := Map(
-			String().Min(3).Max(10),
-			Int().Min(0).Max(100),
-		).Min(1).Max(5)
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Map must have at least 2 entries"
+		mapSchema := Map(String(), Int()).Refine(func(m map[any]any) bool {
+			return len(m) >= 2
+		}, core.SchemaParams{Error: errorMessage})
 
-		// Valid complex validation
-		result, err := schema.Parse(map[string]int{"abc": 50, "defg": 75})
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(validMap)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		assert.Equal(t, validMap, result)
 
-		// Invalid key length
-		_, err = schema.Parse(map[string]int{"ab": 50})
-		assert.Error(t, err)
-
-		// Invalid value range
-		_, err = schema.Parse(map[string]int{"abc": 150})
+		invalidMap := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
 	})
-}
 
-// =============================================================================
-// 5. Transform/Pipe
-// =============================================================================
-
-func TestMapTransformPipe(t *testing.T) {
-	t.Run("transform", func(t *testing.T) {
-		schema := Map(String(), Int()).TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			// Handle different map types that might be passed
-			switch m := val.(type) {
-			case map[any]any:
-				return len(m), nil
-			case map[string]int:
-				return len(m), nil
-			default:
-				return val, nil
+	t.Run("refine nilable map", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).Nilable().Refine(func(m *map[any]any) bool {
+			// Allow nil or maps with 0 or > 1 entries
+			if m == nil {
+				return true
 			}
+			return len(*m) == 0 || len(*m) > 1
 		})
 
-		result, err := schema.Parse(map[string]int{"a": 1, "b": 2})
+		// nil should pass
+		result, err := mapSchema.Parse(nil)
 		require.NoError(t, err)
-		// Transform should convert map to its length
-		if length, ok := result.(int); ok {
-			assert.Equal(t, 2, length)
-		} else {
-			t.Logf("Transform result type: %T, value: %v", result, result)
-			// If transform didn't execute, that's also valid behavior
-			assert.NotNil(t, result)
+		assert.Nil(t, result)
+
+		// empty map should pass and return pointer
+		result, err = mapSchema.Parse(map[any]any{})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[any]any{}, *result)
+
+		// map with > 1 entries should pass and return pointer
+		validMap := map[any]any{"key1": 1, "key2": 2}
+		result, err = mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validMap, *result)
+
+		// map with exactly 1 entry should fail
+		invalidMap := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(invalidMap)
+		assert.Error(t, err)
+	})
+}
+
+func TestMap_RefineAny(t *testing.T) {
+	t.Run("refineAny flexible validation", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).RefineAny(func(v any) bool {
+			m, ok := v.(map[any]any)
+			return ok && len(m) >= 1
+		})
+
+		// map with >= 1 entries should pass
+		validMap := map[any]any{"key1": 1}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
+
+		// empty map should fail
+		_, err = mapSchema.Parse(map[any]any{})
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny with type checking", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).RefineAny(func(v any) bool {
+			m, ok := v.(map[any]any)
+			if !ok {
+				return false
+			}
+			// Only allow maps with even number of entries
+			return len(m)%2 == 0
+		})
+
+		evenMap := map[any]any{"key1": 1, "key2": 2}
+		result, err := mapSchema.Parse(evenMap)
+		require.NoError(t, err)
+		assert.Equal(t, evenMap, result)
+
+		oddMap := map[any]any{"key1": 1}
+		_, err = mapSchema.Parse(oddMap)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Error handling tests
+// =============================================================================
+
+func TestMap_ErrorHandling(t *testing.T) {
+	t.Run("invalid map type error", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		_, err := mapSchema.Parse("not a map")
+		assert.Error(t, err)
+	})
+
+	t.Run("key validation error", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		invalidMap := map[any]any{123: 42} // int key instead of string
+		_, err := mapSchema.Parse(invalidMap)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "key validation failed")
+	})
+
+	t.Run("value validation error", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		invalidMap := map[any]any{"key": "not_an_int"}
+		_, err := mapSchema.Parse(invalidMap)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "value validation failed")
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		mapSchema := Map(String(), Int(), core.SchemaParams{Error: "Expected a valid map"})
+
+		_, err := mapSchema.Parse("invalid")
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// Edge case tests
+// =============================================================================
+
+func TestMap_EdgeCases(t *testing.T) {
+	t.Run("empty map", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		result, err := mapSchema.Parse(map[any]any{})
+		require.NoError(t, err)
+		assert.Equal(t, map[any]any{}, result)
+	})
+
+	t.Run("nil handling with nilable map", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).Nilable()
+
+		// Test nil input
+		result, err := mapSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid map - should return pointer
+		testMap := map[any]any{"key": 42}
+		result, err = mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, testMap, *result)
+	})
+
+	t.Run("empty context", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		// Parse with empty context slice
+		testMap := map[any]any{"key": 42}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+	})
+
+	t.Run("map with nil schemas", func(t *testing.T) {
+		// Test with nil key and value schemas
+		mapSchema := Map(nil, nil)
+
+		testMap := map[any]any{"any": "any"}
+		result, err := mapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+	})
+
+	t.Run("large map performance", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+
+		// Create a large map
+		largeMap := make(map[any]any)
+		for i := 0; i < 1000; i++ {
+			largeMap[fmt.Sprintf("key%d", i)] = i
+		}
+
+		result, err := mapSchema.Parse(largeMap)
+		require.NoError(t, err)
+		assert.Equal(t, largeMap, result)
+		assert.Equal(t, 1000, len(result))
+	})
+
+	t.Run("deeply nested map validation", func(t *testing.T) {
+		// Map of string to map of string to int
+		innerMapSchema := Map(String(), Int())
+		outerMapSchema := Map(String(), innerMapSchema)
+
+		testMap := map[any]any{
+			"outer1": map[any]any{
+				"inner1": 1,
+				"inner2": 2,
+			},
+			"outer2": map[any]any{
+				"inner3": 3,
+			},
+		}
+
+		result, err := outerMapSchema.Parse(testMap)
+		require.NoError(t, err)
+		assert.Equal(t, testMap, result)
+	})
+
+	t.Run("mixed type validation complexity", func(t *testing.T) {
+		// Test with different combinations of schemas
+		schemas := []struct {
+			name      string
+			keySchema any
+			valSchema any
+		}{
+			{"string-bool", String(), Bool()},
+			{"int-string", Int(), String()},
+			{"bool-float", Bool(), Float64()},
+			{"enum-int", Enum("a", "b", "c"), Int()},
+		}
+
+		for _, schema := range schemas {
+			t.Run(schema.name, func(t *testing.T) {
+				mapSchema := Map(schema.keySchema, schema.valSchema)
+				require.NotNil(t, mapSchema)
+
+				// Test with appropriate values based on key type
+				var testMap map[any]any
+				switch schema.name {
+				case "string-bool":
+					testMap = map[any]any{"key": true}
+				case "int-string":
+					testMap = map[any]any{42: "value"}
+				case "bool-float":
+					testMap = map[any]any{true: 3.14}
+				case "enum-int":
+					testMap = map[any]any{"a": 1}
+				}
+
+				result, err := mapSchema.Parse(testMap)
+				require.NoError(t, err)
+				assert.Equal(t, testMap, result)
+			})
 		}
 	})
 
-	t.Run("pipe composition", func(t *testing.T) {
-		schema := Map(String(), Int()).Pipe(Any())
+	t.Run("pointer value handling", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
 
-		result, err := schema.Parse(map[string]int{"key": 42})
+		// Test with pointer to map
+		testMap := map[any]any{"key": 42}
+		testMapPtr := &testMap
+
+		result, err := mapSchema.Parse(testMapPtr)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-}
-
-// =============================================================================
-// 6. Refine
-// =============================================================================
-
-func TestMapRefine(t *testing.T) {
-	t.Run("refine validation", func(t *testing.T) {
-		schema := Map(String(), Int()).Refine(func(m map[any]any) bool {
-			return len(m) > 0
-		}, core.SchemaParams{Error: "Map must not be empty"})
-
-		// Valid non-empty map
-		_, err := schema.Parse(map[string]int{"key": 42})
-		assert.NoError(t, err)
-
-		// Invalid empty map
-		_, err = schema.Parse(map[string]int{})
-		assert.Error(t, err)
+		assert.Equal(t, testMap, result)
 	})
 
-	t.Run("refine any", func(t *testing.T) {
-		schema := Map(String(), Int()).RefineAny(func(val any) bool {
-			if m, ok := val.(map[any]any); ok {
-				return len(m) <= 5
-			}
-			return false
-		})
+	t.Run("concurrent access safety", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
+		testMap := map[any]any{"key": 42}
 
-		// Valid small map
-		_, err := schema.Parse(map[string]int{"a": 1, "b": 2})
-		assert.NoError(t, err)
+		// Run multiple goroutines parsing the same schema
+		const numGoroutines = 10
+		results := make(chan error, numGoroutines)
+
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				_, err := mapSchema.Parse(testMap)
+				results <- err
+			}()
+		}
+
+		// Check all results
+		for i := 0; i < numGoroutines; i++ {
+			err := <-results
+			assert.NoError(t, err)
+		}
 	})
 
-	t.Run("refine vs transform distinction", func(t *testing.T) {
-		input := map[string]int{"key": 42}
+	t.Run("transform operations", func(t *testing.T) {
+		mapSchema := Map(String(), Int())
 
-		// Refine: only validates, never modifies
-		refineSchema := Map(String(), Int()).Refine(func(m map[any]any) bool {
-			return len(m) > 0
-		})
-		refineResult, refineErr := refineSchema.Parse(input)
-
-		// Transform: validates and converts
-		transformSchema := Map(String(), Int()).TransformAny(func(val any, ctx *core.RefinementContext) (any, error) {
-			if m, ok := val.(map[string]int); ok {
-				return len(m), nil
-			}
-			return val, nil
-		})
-		transformResult, transformErr := transformSchema.Parse(input)
-
-		// Refine returns original value unchanged
-		require.NoError(t, refineErr)
-		assert.Equal(t, input, refineResult)
-
-		// Transform returns modified value
-		require.NoError(t, transformErr)
-		assert.Equal(t, 1, transformResult)
-
-		// Key distinction: Refine preserves, Transform modifies
-		assert.Equal(t, input, refineResult, "Refine should return exact original value")
-		assert.NotEqual(t, input, transformResult, "Transform should return modified value")
-	})
-
-	t.Run("flexible refine with specific map types", func(t *testing.T) {
-		// Test refine with map[any]any (standardized signature)
-		stringSchema := Map(String(), String()).Refine(func(m map[any]any) bool {
-			for key, value := range m {
-				keyStr, keyOk := key.(string)
-				valueStr, valueOk := value.(string)
-				if !keyOk || !valueOk {
-					return false
-				}
-				if len(keyStr) < 2 || len(valueStr) < 2 {
-					return false
-				}
-			}
-			return true
-		}, core.SchemaParams{Error: "Keys and values must be at least 2 characters"})
-
-		// Valid map
-		_, err := stringSchema.Parse(map[string]string{"foo": "bar", "hello": "world"})
-		assert.NoError(t, err)
-
-		// Invalid map (short key)
-		_, err = stringSchema.Parse(map[string]string{"a": "bar"})
-		assert.Error(t, err)
-
-		// Test refine with map[any]any for integers
-		intSchema := Map(String(), Int()).Refine(func(m map[any]any) bool {
-			total := 0
-			for _, value := range m {
-				if intVal, ok := value.(int); ok {
-					total += intVal
-				}
-			}
-			return total > 10
-		}, core.SchemaParams{Error: "Sum of values must be greater than 10"})
-
-		// Valid map
-		_, err = intSchema.Parse(map[string]int{"a": 5, "b": 6})
-		assert.NoError(t, err)
-
-		// Invalid map
-		_, err = intSchema.Parse(map[string]int{"a": 2, "b": 3})
-		assert.Error(t, err)
-	})
-
-	t.Run("flexible transform with specific map types", func(t *testing.T) {
-		// Test transform with map[any]any (standardized signature)
-		stringTransform := Map(String(), String()).Transform(func(m map[any]any, ctx *core.RefinementContext) (any, error) {
-			result := make(map[string]string)
-			for key, value := range m {
-				keyStr, keyOk := key.(string)
-				valueStr, valueOk := value.(string)
-				if keyOk && valueOk {
-					result[strings.ToUpper(keyStr)] = strings.ToUpper(valueStr)
-				}
-			}
-			return result, nil
-		})
-
-		result, err := stringTransform.Parse(map[string]string{"foo": "bar", "hello": "world"})
-		require.NoError(t, err)
-		expected := map[string]string{"FOO": "BAR", "HELLO": "WORLD"}
-		assert.Equal(t, expected, result)
-
-		// Test transform with map[any]any for integers
-		intTransform := Map(String(), Int()).Transform(func(m map[any]any, ctx *core.RefinementContext) (any, error) {
-			total := 0
-			count := 0
-			for _, value := range m {
-				if intVal, ok := value.(int); ok {
-					total += intVal
-					count++
-				}
-			}
-			return map[string]any{
-				"count": count,
-				"sum":   total,
-				"avg":   float64(total) / float64(count),
-			}, nil
-		})
-
-		result, err = intTransform.Parse(map[string]int{"a": 10, "b": 20, "c": 30})
-		require.NoError(t, err)
-		resultMap, ok := result.(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, 3, resultMap["count"])
-		assert.Equal(t, 60, resultMap["sum"])
-		assert.Equal(t, 20.0, resultMap["avg"])
-	})
-
-	t.Run("backward compatibility", func(t *testing.T) {
-		// Original map[any]any functions should still work
-		refineSchema := Map(String(), Int()).Refine(func(m map[any]any) bool {
-			return len(m) > 0
-		})
-
-		_, err := refineSchema.Parse(map[string]int{"key": 42})
-		assert.NoError(t, err)
-
-		transformSchema := Map(String(), Int()).Transform(func(m map[any]any, ctx *core.RefinementContext) (any, error) {
+		// Test Transform
+		transform := mapSchema.Transform(func(m map[any]any, ctx *core.RefinementContext) (any, error) {
 			return len(m), nil
 		})
-
-		result, err := transformSchema.Parse(map[string]int{"a": 1, "b": 2})
-		require.NoError(t, err)
-		assert.Equal(t, 2, result)
+		require.NotNil(t, transform)
 	})
 }
 
 // =============================================================================
-// 7. Error handling
+// OVERWRITE TESTS
 // =============================================================================
 
-func TestMapErrorHandling(t *testing.T) {
-	t.Run("custom error message", func(t *testing.T) {
-		schema := Map(String(), Int(), core.SchemaParams{Error: "core.Custom map error"})
+func TestMap_Overwrite(t *testing.T) {
+	t.Run("basic map transformation", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), String()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Convert all string values to uppercase
+				result := make(map[any]any)
+				for k, v := range m {
+					if strVal, ok := v.(string); ok {
+						result[k] = strings.ToUpper(strVal)
+					} else {
+						result[k] = v
+					}
+				}
+				return result
+			})
 
-		_, err := schema.Parse("not a map")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues[0].Message)
-	})
-
-	t.Run("error function", func(t *testing.T) {
-		schema := Map(String(), Int(), core.SchemaParams{
-			Error: func(issue core.ZodRawIssue) string {
-				return "Function-based error"
-			},
-		})
-
-		_, err := schema.Parse("not a map")
-		assert.Error(t, err)
-	})
-
-	t.Run("validation error paths", func(t *testing.T) {
-		schema := Map(String().Min(5), Int())
-
-		_, err := schema.Parse(map[string]int{"ab": 1, "cdefg": 2})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Greater(t, len(zodErr.Issues), 0)
-	})
-
-	t.Run("error structure", func(t *testing.T) {
-		schema := Map(String(), Int())
-		_, err := schema.Parse("not a map")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
-	})
-
-	t.Run("multiple error collection", func(t *testing.T) {
-		schema := Map(String().Min(3), Int().Min(10))
-
-		// Multiple validation failures
-		_, err := schema.Parse(map[string]int{"ab": 5, "cd": 8})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		// Should collect multiple errors
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 1)
-	})
-}
-
-// =============================================================================
-// 8. Edge cases and internals
-// =============================================================================
-
-func TestMapEdgeCases(t *testing.T) {
-	t.Run("internals access", func(t *testing.T) {
-		keySchema := String()
-		valueSchema := Int()
-		schema := Map(keySchema, valueSchema)
-
-		internals := schema.GetInternals()
-		assert.Equal(t, core.ZodTypeMap, internals.Type)
-		assert.Equal(t, core.Version, internals.Version)
-
-		mapInternals := schema.GetZod()
-		assert.Equal(t, keySchema, mapInternals.KeyType)
-		assert.Equal(t, valueSchema, mapInternals.ValueType)
-	})
-
-	t.Run("constructor variants", func(t *testing.T) {
-		schema1 := Map(String(), Int())
-		schema2 := Map(String(), Int())
-
-		assert.NotNil(t, schema1)
-		assert.NotNil(t, schema2)
-		assert.Equal(t, schema1.GetInternals().Type, schema2.GetInternals().Type)
-	})
-
-	t.Run("complex key value schemas", func(t *testing.T) {
-		keySchema := String().Min(3).Max(10)
-		valueSchema := Struct(core.StructSchema{
-			"id":   Int(),
-			"name": String(),
-		})
-		schema := Map(keySchema, valueSchema)
-
-		assert.NotNil(t, schema)
-		assert.Equal(t, keySchema, schema.GetZod().KeyType)
-		assert.Equal(t, valueSchema, schema.GetZod().ValueType)
-	})
-
-	t.Run("object keys validation", func(t *testing.T) {
-		keySchema := String() // Use string keys instead of object keys
-		valueSchema := String()
-		schema := Map(keySchema, valueSchema)
-
-		// Valid string keys (representing serialized objects)
-		validData := map[any]any{
-			`{"name":"John","age":30}`: "foo",
-			`{"name":"Jane","age":25}`: "bar",
+		input := map[any]any{
+			"name":    "john",
+			"city":    "seattle",
+			"country": "usa",
 		}
-		result, err := schema.Parse(validData)
+
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
 
-		// Invalid key type
-		invalidData := map[any]any{
-			123: "foo", // number key when string expected
+		expected := map[any]any{
+			"name":    "JOHN",
+			"city":    "SEATTLE",
+			"country": "USA",
 		}
-		_, err = schema.Parse(invalidData)
-		assert.Error(t, err)
-
-		// Note: This test shows Go's limitation - we cannot use complex objects as map keys
-		// like in TypeScript. In Go, map keys must be comparable types.
-		t.Log("Go limitation: Maps cannot be used as keys in other maps (not hashable)")
+		assert.Equal(t, expected, result)
 	})
 
-	t.Run("parameters storage", func(t *testing.T) {
-		params := core.SchemaParams{
-			Params: map[string]any{
-				"custom": "value",
-			},
+	t.Run("map key transformation", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), Int()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Convert string keys to uppercase and increment values
+				result := make(map[any]any)
+				for k, v := range m {
+					var newKey any = k
+					if strKey, ok := k.(string); ok {
+						newKey = strings.ToUpper(strKey)
+					}
+
+					if intVal, ok := v.(int); ok {
+						result[newKey] = intVal + 10
+					} else {
+						result[newKey] = v
+					}
+				}
+				return result
+			})
+
+		input := map[any]any{
+			"a": 1,
+			"b": 2,
 		}
 
-		schema := Map(String(), Int(), params)
-		// Coercion is no longer supported for collection types
-		assert.NotNil(t, schema.GetZod().Bag)
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[any]any{
+			"A": 11,
+			"B": 12,
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("filtering transformation", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), Int()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Filter out negative values
+				result := make(map[any]any)
+				for k, v := range m {
+					if intVal, ok := v.(int); ok && intVal >= 0 {
+						result[k] = intVal
+					}
+				}
+				return result
+			})
+
+		input := map[any]any{
+			"positive": 5,
+			"negative": -3,
+			"zero":     0,
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[any]any{
+			"positive": 5,
+			"zero":     0,
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("complex key types", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), String()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Transform based on key type
+				result := make(map[any]any)
+				for k, v := range m {
+					switch key := k.(type) {
+					case string:
+						// String keys: uppercase value
+						if strVal, ok := v.(string); ok {
+							result[key] = strings.ToUpper(strVal)
+						} else {
+							result[key] = v
+						}
+					case int:
+						// Integer keys: prepend "num_" to value
+						if strVal, ok := v.(string); ok {
+							result[key] = "num_" + strVal
+						} else {
+							result[key] = v
+						}
+					default:
+						result[key] = v
+					}
+				}
+				return result
+			})
+
+		input := map[any]any{
+			"name": "alice",
+			123:    "value",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[any]any{
+			"name": "ALICE",
+			123:    "num_value",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("chaining with validations", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), String()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Trim whitespace from all string values
+				result := make(map[any]any)
+				for k, v := range m {
+					if strVal, ok := v.(string); ok {
+						result[k] = strings.TrimSpace(strVal)
+					} else {
+						result[k] = v
+					}
+				}
+				return result
+			}).
+			Min(1).
+			Max(5)
+
+		input := map[any]any{
+			"name": "  John  ",
+			"city": "  Seattle  ",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[any]any{
+			"name": "John",
+			"city": "Seattle",
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("pointer type handling", func(t *testing.T) {
+		schema := MapTyped[map[any]any, *map[any]any](Any(), String()).
+			Overwrite(func(m *map[any]any) *map[any]any {
+				if m == nil {
+					return nil
+				}
+				// Convert values to lowercase
+				result := make(map[any]any)
+				for k, v := range *m {
+					if strVal, ok := v.(string); ok {
+						result[k] = strings.ToLower(strVal)
+					} else {
+						result[k] = v
+					}
+				}
+				return &result
+			})
+
+		input := map[any]any{
+			"MESSAGE": "HELLO WORLD",
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		expected := map[any]any{
+			"MESSAGE": "hello world",
+		}
+		assert.Equal(t, expected, *result)
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
-		schema := Map(String(), Int())
+		schema := MapTyped[map[any]any, map[any]any](Any(), Bool()).
+			Overwrite(func(m map[any]any) map[any]any {
+				return m // Identity transformation
+			})
 
-		// Test different map types
-		testCases := []any{
-			map[string]int{"key": 42},
-			map[any]any{"key": 42},
+		input := map[any]any{
+			"flag": true,
 		}
 
-		for _, input := range testCases {
-			result, err := schema.Parse(input)
-			require.NoError(t, err)
-			assert.NotNil(t, result)
-		}
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.IsType(t, map[any]any{}, result)
+		assert.Equal(t, input, result)
 	})
 
-	t.Run("pointer identity preservation", func(t *testing.T) {
-		schema := Map(String(), Int()).Min(1)
-		input := map[string]int{"key": 42}
-		inputPtr := &input
+	t.Run("empty map handling", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), String()).
+			Overwrite(func(m map[any]any) map[any]any {
+				if len(m) == 0 {
+					// Add default entry for empty maps
+					return map[any]any{"default": "empty"}
+				}
+				return m
+			})
 
-		result, err := schema.Parse(inputPtr)
+		// Test with empty map
+		result, err := schema.Parse(map[any]any{})
 		require.NoError(t, err)
 
-		// Verify type and value correctness
-		// Note: Due to validation processing, exact pointer identity may not be preserved
-		// but the type and value should be correct
-		resultPtr, ok := result.(*map[string]int)
-		require.True(t, ok, "Result should be *map[string]int")
-		assert.Equal(t, map[string]int{"key": 42}, *resultPtr)
+		expected := map[any]any{"default": "empty"}
+		assert.Equal(t, expected, result)
+	})
 
-		// Log for debugging - in some implementations, pointer identity may not be preserved
-		// due to validation processing that creates new instances
-		if resultPtr == inputPtr {
-			t.Log("Pointer identity preserved")
-		} else {
-			t.Log("Pointer identity not preserved (acceptable due to validation processing)")
+	t.Run("mixed value types", func(t *testing.T) {
+		schema := MapTyped[map[any]any, map[any]any](Any(), Any()).
+			Overwrite(func(m map[any]any) map[any]any {
+				// Transform different value types
+				result := make(map[any]any)
+				for k, v := range m {
+					switch val := v.(type) {
+					case string:
+						result[k] = strings.ToUpper(val)
+					case int:
+						result[k] = val * 2
+					case bool:
+						result[k] = !val
+					default:
+						result[k] = val
+					}
+				}
+				return result
+			})
+
+		input := map[any]any{
+			"str":  "hello",
+			"num":  5,
+			"bool": false,
 		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+
+		expected := map[any]any{
+			"str":  "HELLO",
+			"num":  10,
+			"bool": true,
+		}
+		assert.Equal(t, expected, result)
 	})
 }
 
 // =============================================================================
-// 9. Default and Prefault tests
+// Check Method Tests
 // =============================================================================
 
-func TestMapDefaultAndPrefault(t *testing.T) {
-	t.Run("default function", func(t *testing.T) {
-		counter := 0
-		schema := Map(String(), String()).Min(1).DefaultFunc(func() any {
-			counter++
-			return map[string]string{"generated": fmt.Sprintf("%d", counter)}
-		})
-
-		// Each nil input generates a new default value
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		expected1 := map[string]string{"generated": "1"}
-		assert.Equal(t, expected1, result1)
-
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		expected2 := map[string]string{"generated": "2"}
-		assert.Equal(t, expected2, result2)
-
-		// Valid input bypasses default generation
-		validInput := map[string]string{"valid": "input"}
-		result3, err3 := schema.Parse(validInput)
-		require.NoError(t, err3)
-		assert.Equal(t, validInput, result3)
-		assert.Equal(t, 2, counter, "Counter should not increment for valid input")
-	})
-
-	t.Run("default value", func(t *testing.T) {
-		defaultValue := map[string]string{"default": "value"}
-		schema := Map(String(), String()).Min(1).Default(defaultValue)
-
-		// nil input uses default
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
-
-		// Valid input bypasses default
-		validInput := map[string]string{"key": "value"}
-		result, err = schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-	})
-
-	t.Run("default value with specific map types", func(t *testing.T) {
-		// Test the specific use case mentioned by the user
-		defaultValue := map[string]string{"default": "value"}
-		schema := Map(String(), String()).Min(1).Default(defaultValue)
-
-		// nil input uses default (converted to generic format)
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		expected := map[string]string{"default": "value"}
-		assert.Equal(t, expected, result)
-
-		// Valid input bypasses default
-		validInput := map[string]string{"key": "value"}
-		result, err = schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-	})
-
-	t.Run("default value with various map types", func(t *testing.T) {
-		// Test map[string]int
-		intMapDefault := map[string]int{"count": 0}
-		intSchema := Map(String(), Int()).Min(1).Default(intMapDefault)
-
-		result, err := intSchema.Parse(nil)
-		require.NoError(t, err)
-		expected := map[string]int{"count": 0}
-		assert.Equal(t, expected, result)
-
-		// Test map[int]string
-		keyIntDefault := map[int]string{1: "first"}
-		keyIntSchema := Map(Int(), String()).Min(1).Default(keyIntDefault)
-
-		result, err = keyIntSchema.Parse(nil)
-		require.NoError(t, err)
-		expectedIntKey := map[int]string{1: "first"}
-		assert.Equal(t, expectedIntKey, result)
-	})
-
-	t.Run("prefault fallback", func(t *testing.T) {
-		fallbackValue := map[any]any{"fallback": "value", "extra": "data"}
-		schema := Map(String(), String()).Min(2).Prefault(fallbackValue)
-
-		// Valid input passes validation
-		validInput := map[string]string{"key1": "value1", "key2": "value2"}
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-
-		// Invalid input uses fallback
-		result, err = schema.Parse(map[string]string{"key": "value"})
-		require.NoError(t, err)
-		assert.Equal(t, fallbackValue, result)
-	})
-
-	t.Run("prefault function typed", func(t *testing.T) {
-		counter := 0
-		schema := Map(String(), String()).Min(2).PrefaultFunc(func() any {
-			counter++
-			return map[any]any{"fallback": fmt.Sprintf("%d", counter), "extra": "data"}
-		})
-
-		// Valid input passes validation, no fallback generation
-		validInput := map[string]string{"key1": "value1", "key2": "value2"}
-		result, err := schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-		assert.Equal(t, 0, counter, "Counter should not increment for valid input")
-
-		// Invalid input uses fallback function
-		result1, err1 := schema.Parse(map[string]string{"key": "value"})
-		require.NoError(t, err1)
-		expected1 := map[any]any{"fallback": "1", "extra": "data"}
-		assert.Equal(t, expected1, result1)
-		assert.Equal(t, 1, counter)
-
-		// Another invalid input generates new fallback
-		result2, err2 := schema.Parse(map[string]string{"single": "item"})
-		require.NoError(t, err2)
-		expected2 := map[any]any{"fallback": "2", "extra": "data"}
-		assert.Equal(t, expected2, result2)
-		assert.Equal(t, 2, counter)
-	})
-
-	t.Run("prefault with transform", func(t *testing.T) {
-		fallbackValue := map[any]any{"fallback": "value", "extra": "data"}
-
-		// Create base schema with prefault first
-		baseSchema := Map(String(), String()).Min(2).Prefault(fallbackValue)
-
-		// Then apply transform
-		schema := baseSchema.TransformAny(func(input any, ctx *core.RefinementContext) (any, error) {
-			// Handle nil input
-			if input == nil {
-				return nil, fmt.Errorf("cannot transform nil map")
+func TestMap_Check(t *testing.T) {
+	t.Run("adds multiple issues for invalid input", func(t *testing.T) {
+		schema := Map(String(), Int()).Check(func(value map[any]any, p *core.ParsePayload) {
+			if len(value) == 0 {
+				p.AddIssueWithMessage("map cannot be empty")
 			}
-
-			// Convert to generic map format using type assertion
-			var genericMap map[any]any
-			switch m := input.(type) {
-			case map[any]any:
-				genericMap = m
-			case map[string]string:
-				genericMap = make(map[any]any)
-				for k, v := range m {
-					genericMap[k] = v
-				}
-			case map[string]int:
-				genericMap = make(map[any]any)
-				for k, v := range m {
-					genericMap[k] = v
-				}
-			default:
-				return nil, fmt.Errorf("expected map type, got %T", input)
+			if len(value) > 2 {
+				p.AddIssueWithCode(core.TooBig, "too many pairs")
 			}
-
-			return map[string]any{
-				"processed": true,
-				"data":      genericMap,
-				"count":     len(genericMap),
-			}, nil
 		})
 
-		// Valid input: validate then transform
-		validInput := map[string]string{"key1": "value1", "key2": "value2"}
-		result1, err1 := schema.Parse(validInput)
-		require.NoError(t, err1)
-		result1Map, ok1 := result1.(map[string]any)
-		require.True(t, ok1)
-		assert.True(t, result1Map["processed"].(bool))
-		assert.Equal(t, 2, result1Map["count"])
-
-		// Invalid input: use fallback then transform
-		result2, err2 := schema.Parse(map[string]string{"key": "value"})
-		require.NoError(t, err2)
-		result2Map, ok2 := result2.(map[string]any)
-		require.True(t, ok2)
-		assert.True(t, result2Map["processed"].(bool))
-		assert.Equal(t, 2, result2Map["count"]) // fallback has 2 items
-	})
-
-	t.Run("default with validation", func(t *testing.T) {
-		defaultValue := map[any]any{"default": "value", "extra": "data"}
-		schema := Map(String(), String()).Min(2).Default(defaultValue)
-
-		// nil input uses default (which passes Min(2))
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
-
-		// Valid input passes validation
-		validInput := map[string]string{"key1": "value1", "key2": "value2"}
-		result, err = schema.Parse(validInput)
-		require.NoError(t, err)
-		assert.Equal(t, validInput, result)
-
-		// Invalid input fails validation (no fallback like Prefault)
-		_, err = schema.Parse(map[string]string{"key": "value"})
+		_, err := schema.Parse(map[any]any{})
 		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+
+		_, err = schema.Parse(map[any]any{"a": 1, "b": 2, "c": 3})
+		require.Error(t, err)
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
 	})
+
+	t.Run("works with pointer schema and value map", func(t *testing.T) {
+		schema := MapPtr(String(), Int()).Check(func(value *map[any]any, p *core.ParsePayload) {
+			if value == nil || len(*value) == 0 {
+				p.AddIssueWithMessage("pointer map is empty")
+			}
+		})
+
+		_, err := schema.Parse(map[any]any{})
+		require.Error(t, err)
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+	})
+}
+
+func TestMap_NonOptional(t *testing.T) {
+	schema := Map(String(), Int64()).NonOptional()
+
+	m := map[any]any{"a": int64(1)}
+	_, err := schema.Parse(m)
+	require.NoError(t, err)
+
+	_, err = schema.Parse(nil)
+	assert.Error(t, err)
+	var zErr *issues.ZodError
+	if issues.IsZodError(err, &zErr) {
+		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
+	}
 }

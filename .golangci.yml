@@ -21,6 +21,7 @@ linters:
     - whitespace
   disable:
     - err113  # disable dynamic error string check
+    - unconvert  # disable generic conversion linter as code relies on intentional type assertions
   settings:
     gocritic:
       disabled-checks:

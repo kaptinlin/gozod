@@ -474,54 +474,36 @@ func customErrorFormatter(zodErr *gozod.ZodError) map[string]any {
 }
 ```
 
-## Localized Error Messages
+## Internationalization (i18n)
 
-Use mapper functions to provide localized error messages:
+All formatting functions (`FormatError`, `FlattenError`, `PrettifyError`) respect the global locale set via `gozod.Config()`.
+
+To get localized error messages, first set the global locale:
 
 ```go
-// Localized error mapper
-func createLocalizedMapper(locale string) func(gozod.ZodIssue) string {
-    messages := map[string]map[string]string{
-        "en": {
-            "invalid_type": "Invalid type: expected %s, received %s",
-            "too_small":    "Too small: minimum value is %v",
-            "invalid_email": "Invalid email address",
-        },
-        "zh": {
-            "invalid_type": "类型错误：期望 %s，收到 %s", 
-            "too_small":    "数值过小：最小值为 %v",
-            "invalid_email": "邮箱地址无效",
-        },
-    }
-    
-    localeMessages := messages[locale]
-    if localeMessages == nil {
-        localeMessages = messages["en"] // fallback
-    }
-    
-    return func(issue gozod.ZodIssue) string {
-        switch issue.Code {
-        case "invalid_type":
-            if expected, ok := issue.GetExpected(); ok {
-                if received, ok := issue.GetReceived(); ok {
-                    return fmt.Sprintf(localeMessages["invalid_type"], expected, received)
-                }
-            }
-        case "too_small":
-            if minimum, ok := issue.GetMinimum(); ok {
-                return fmt.Sprintf(localeMessages["too_small"], minimum)
-            }
-        case "invalid_format":
-            return localeMessages["invalid_email"]
-        }
-        return issue.Message
-    }
-}
+import "github.com/kaptinlin/gozod/locales"
 
-// Usage
-chineseFormatted := gozod.FormatErrorWithMapper(validationErr, createLocalizedMapper("zh"))
-chineseFlattened := gozod.FlattenErrorWithMapper(validationErr, createLocalizedMapper("zh"))
+// Switch to Chinese messages globally
+gozod.Config(locales.ZhCN())
 ```
+
+Now, when you format an error, the output will be in Chinese:
+
+```go
+// Assuming validationErr is a *gozod.ZodError from a failed validation
+
+// All formatters will now use the Chinese locale
+chineseFormatted := gozod.FormatError(validationErr)
+chineseFlattened := gozod.FlattenError(validationErr)
+chinesePrettified := gozod.PrettifyError(validationErr)
+
+fmt.Println(chinesePrettified)
+// Output will be in Chinese, for example:
+// ✖ 格式无效：请输入有效的电子邮件地址
+//   → at email
+```
+
+You can still use `...WithMapper` functions to apply further customizations on top of the localized messages.
 
 ## Path Utilities
 

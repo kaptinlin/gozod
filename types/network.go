@@ -1,97 +1,106 @@
 package types
 
 import (
-	"errors"
-	"net"
+	"regexp"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-//////////////////////////////////////////
-//////////////////////////////////////////
-//////////                      //////////
-//////////   Network Types      //////////
-//////////                      //////////
-//////////////////////////////////////////
-//////////////////////////////////////////
+// =============================================================================
+// TYPE CONSTRAINTS
+// =============================================================================
 
-//////////////////////////////////////////
-//////////   IPv4 Type           ////////
-//////////////////////////////////////////
+// NetworkConstraint defines the constraint for network address types (string-based)
+type NetworkConstraint interface {
+	string | *string
+}
+
+// =============================================================================
+// IPv4 TYPE DEFINITIONS
+// =============================================================================
 
 // ZodIPv4Def defines the configuration for IPv4 address validation
 type ZodIPv4Def struct {
 	core.ZodTypeDef
-	Type    core.ZodTypeCode // "ipv4"
-	Version string           // "v4"
 }
 
 // ZodIPv4Internals contains IPv4 validator internal state
 type ZodIPv4Internals struct {
 	core.ZodTypeInternals
-	Def  *ZodIPv4Def
-	Isst issues.ZodIssueInvalidType
+	Def *ZodIPv4Def // Schema definition
 }
 
 // ZodIPv4 represents an IPv4 address validation schema
-type ZodIPv4 struct {
+type ZodIPv4[T NetworkConstraint] struct {
 	internals *ZodIPv4Internals
 }
 
+// =============================================================================
+// IPv4 CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodIPv4) GetInternals() *core.ZodTypeInternals {
+func (z *ZodIPv4[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetZod returns the IPv4-specific internals for framework usage
-func (z *ZodIPv4) GetZod() *ZodIPv4Internals {
-	return z.internals
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodIPv4[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse validates the input value against the IPv4 schema
-func (z *ZodIPv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	var parseCtx *core.ParseContext
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodIPv4[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Coerce implements type conversion interface using coerce package
+func (z *ZodIPv4[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
+}
+
+// Parse returns type-safe IPv4 address using unified engine API
+func (z *ZodIPv4[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	// Special nil handling: IPv4 schemas should *not* apply default values on nil input
+	// unless explicitly marked Optional/Nilable.
+	parseCtx := (*core.ParseContext)(nil)
 	if len(ctx) > 0 {
 		parseCtx = ctx[0]
 	}
+	if parseCtx == nil {
+		parseCtx = core.NewParseContext()
+	}
 
-	// Use ParsePrimitive fast path with custom validator.
-	return engine.ParsePrimitive[string](
+	if input == nil {
+		if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
+			var zero T
+			return zero, nil
+		}
+		var zero T
+		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeIPv4, nil)
+		finalIssue := issues.FinalizeIssue(rawIssue, parseCtx, nil)
+		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	return engine.ParsePrimitive[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
-		core.ZodTypeString,
-		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// Execute any attached validation checks first (none by default)
-			if len(checks) > 0 {
-				payload := core.NewParsePayload(value)
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.GetIssues()) > 0 {
-					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-				}
-			}
-
-			// IPv4 format validation using regex + net.ParseIP
-			if !regexes.IPv4.MatchString(value) {
-				return issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(
-					issues.CreateInvalidFormatIssue("ipv4", value, nil), ctx, core.GetConfig())})
-			}
-
-			ip := net.ParseIP(value)
-			if ip == nil || ip.To4() == nil {
-				return issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(
-					issues.CreateInvalidFormatIssue("ipv4", value, nil), ctx, core.GetConfig())})
-			}
-			return nil
-		},
-		parseCtx,
+		core.ZodTypeIPv4,
+		engine.ApplyChecks[string], // Universal validator
+		engine.ConvertToConstraintType[string, T], // Universal converter
+		ctx...,
 	)
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodIPv4) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the variant that panics on error
+func (z *ZodIPv4[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -99,197 +108,318 @@ func (z *ZodIPv4) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// Refine adds custom validation to the IPv4 schema
-func (z *ZodIPv4) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return Custom(fn, params...)
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodIPv4[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-// Check adds modern validation using direct payload access
-func (z *ZodIPv4) Check(fn core.CheckFn) core.ZodType[any, any] {
-	custom := Custom(fn, core.SchemaParams{})
-	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		// first execute the original parse
-		result, err := z.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeIPv4, err.Error(), payload.GetValue()))
-			return payload
-		}
-		payload.SetValue(result)
+// =============================================================================
+// IPv4 MODIFIER METHODS
+// =============================================================================
 
-		// then execute the check function
-		fn(payload)
-		return payload
+// Optional allows nil values, returns pointer type for nullable semantics
+func (z *ZodIPv4[T]) Optional() *ZodIPv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable allows nil values, returns pointer type
+func (z *ZodIPv4[T]) Nilable() *ZodIPv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodIPv4[T]) Nullish() *ZodIPv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodIPv4[T]) Default(v string) *ZodIPv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodIPv4[T]) DefaultFunc(fn func() string) *ZodIPv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodIPv4[T]) Prefault(v string) *ZodIPv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodIPv4[T]) PrefaultFunc(fn func() string) *ZodIPv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// IPv4 TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates type-safe transformation using WrapFn pattern
+func (z *ZodIPv4[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		str := extractNetworkString(input)
+		return fn(str, ctx)
 	}
-	return any(custom).(core.ZodType[any, any])
+	return core.NewZodTransform[T, any](z, wrapperFn)
 }
 
-// Optional makes the IPv4 address optional
-func (z *ZodIPv4) Optional() core.ZodType[any, any] {
-	return any(Optional(z)).(core.ZodType[any, any])
-}
-
-// Nilable makes the IPv4 address nilable
-// - Only changes nil handling, not type inference
-// - Uses standard Clone + SetNilable pattern like type_string.go
-func (z *ZodIPv4) Nilable() core.ZodType[any, any] {
-	// use Clone method to create a new instance, avoid manual state copying
-	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
-		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodIPv4)
-	cloned.internals.SetNilable()
-	return cloned
-}
-
-// TransformAny creates a transform with given function
-func (z *ZodIPv4) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodIPv4[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		str := extractNetworkString(input)
+		return target.Parse(str, ctx)
 	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
 }
 
-// Pipe creates a pipe with another schema
-func (z *ZodIPv4) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
+// =============================================================================
+// IPv4 REFINEMENT METHODS
+// =============================================================================
 
-// Prefault adds a prefault value
-func (z *ZodIPv4) Prefault(value any) core.ZodType[any, any] {
-	return Prefault(any(z).(core.ZodType[any, any]), value)
-}
+// Refine adds type-safe custom validation logic
+func (z *ZodIPv4[T]) Refine(fn func(T) bool, params ...any) *ZodIPv4[T] {
+	wrapper := func(v any) bool {
+		var zero T
 
-// PrefaultFunc adds a prefault value using a function
-func (z *ZodIPv4) PrefaultFunc(fn func() any) core.ZodType[any, any] {
-	return PrefaultFunc(any(z).(core.ZodType[any, any]), fn)
-}
-
-// createZodIPv4FromDef creates a ZodIPv4 from definition
-func createZodIPv4FromDef(def *ZodIPv4Def) *ZodIPv4 {
-	internals := &ZodIPv4Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv4),
-		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeIPv4},
-	}
-
-	// Simplified parse: delegate to schema.Parse (which already includes IPv4 validation)
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodIPv4{internals: internals}).Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zErr *issues.ZodError
-			if errors.As(err, &zErr) {
-				for _, issue := range zErr.Issues {
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
 			}
-			return payload
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
 		}
-
-		payload.SetValue(res)
-		return payload
 	}
 
-	zodSchema := &ZodIPv4{internals: internals}
-
-	// Set constructor for Clone support
-	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
-		ipv4Def := &ZodIPv4Def{
-			ZodTypeDef: *def,
-			Type:       core.ZodTypeIPv4,
-			Version:    "v4",
-		}
-		return any(createZodIPv4FromDef(ipv4Def)).(core.ZodType[any, any])
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
 	}
 
-	// Initialize the schema
-	engine.InitZodType(any(zodSchema).(core.ZodType[any, any]), &def.ZodTypeDef)
-
-	return zodSchema
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-//////////////////////////////////////////
-//////////   IPv6 Type           ////////
-//////////////////////////////////////////
+// RefineAny adds flexible custom validation logic
+func (z *ZodIPv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv4[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// IPv4 HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer type
+func (z *ZodIPv4[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodIPv4[*string] {
+	return &ZodIPv4[*string]{internals: &ZodIPv4Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// withInternals creates new instance preserving generic type T
+func (z *ZodIPv4[T]) withInternals(in *core.ZodTypeInternals) *ZodIPv4[T] {
+	return &ZodIPv4[T]{internals: &ZodIPv4Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodIPv4[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodIPv4[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// extractNetworkString extracts string value from generic network type T
+func extractNetworkString[T NetworkConstraint](value T) string {
+	if ptr, ok := any(value).(*string); ok {
+		if ptr != nil {
+			return *ptr
+		}
+		return ""
+	}
+	return any(value).(string)
+}
+
+// newZodIPv4FromDef constructs new ZodIPv4 from definition
+func newZodIPv4FromDef[T NetworkConstraint](def *ZodIPv4Def) *ZodIPv4[T] {
+	internals := &ZodIPv4Internals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	// Add IPv4 validation check
+	ipv4Check := checks.IPv4()
+	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, ipv4Check)
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		ipv4Def := &ZodIPv4Def{
+			ZodTypeDef: *newDef,
+		}
+		return any(newZodIPv4FromDef[T](ipv4Def)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodIPv4[T]{internals: internals}
+}
+
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// IPv4 creates IPv4 address schema with type-inference support
+func IPv4(params ...any) *ZodIPv4[string] {
+	return IPv4Typed[string](params...)
+}
+
+// IPv4Ptr creates schema for *string IPv4
+func IPv4Ptr(params ...any) *ZodIPv4[*string] {
+	return IPv4Typed[*string](params...)
+}
+
+// IPv4Typed is the generic constructor for IPv4 address schemas
+func IPv4Typed[T NetworkConstraint](params ...any) *ZodIPv4[T] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodIPv4Def{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeIPv4,
+			Checks: []core.ZodCheck{},
+		},
+	}
+
+	// Apply normalized parameters to schema definition
+	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+
+	return newZodIPv4FromDef[T](def)
+}
+
+// CoercedIPv4 creates coerced IPv4 schema that attempts string conversion
+func CoercedIPv4(params ...any) *ZodIPv4[string] {
+	schema := IPv4Typed[string](params...)
+	schema.internals.ZodTypeInternals.Coerce = true
+	return schema
+}
+
+// =============================================================================
+// IPv6 TYPE DEFINITIONS
+// =============================================================================
 
 // ZodIPv6Def defines the configuration for IPv6 address validation
 type ZodIPv6Def struct {
 	core.ZodTypeDef
-	Type    core.ZodTypeCode // "ipv6"
-	Version string           // "v6"
 }
 
 // ZodIPv6Internals contains IPv6 validator internal state
 type ZodIPv6Internals struct {
 	core.ZodTypeInternals
-	Def  *ZodIPv6Def
-	Isst issues.ZodIssueInvalidType
+	Def *ZodIPv6Def // Schema definition
 }
 
 // ZodIPv6 represents an IPv6 address validation schema
-type ZodIPv6 struct {
+type ZodIPv6[T NetworkConstraint] struct {
 	internals *ZodIPv6Internals
 }
 
+// =============================================================================
+// IPv6 CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodIPv6) GetInternals() *core.ZodTypeInternals {
+func (z *ZodIPv6[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetZod returns the IPv6-specific internals for framework usage
-func (z *ZodIPv6) GetZod() *ZodIPv6Internals {
-	return z.internals
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodIPv6[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse validates the input value against the IPv6 schema
-func (z *ZodIPv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	}
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodIPv6[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
 
-	// Use ParsePrimitive fast path with custom validator.
-	return engine.ParsePrimitive[string](
+// Coerce implements type conversion interface using coerce package
+func (z *ZodIPv6[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
+}
+
+// Parse returns type-safe IPv6 address using unified engine API
+func (z *ZodIPv6[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
-		core.ZodTypeString,
-		func(value string, checks []core.ZodCheck, ctx *core.ParseContext) error {
-			// Execute any attached validation checks first
-			if len(checks) > 0 {
-				payload := core.NewParsePayload(value)
-				engine.RunChecksOnValue(value, checks, payload, ctx)
-				if len(payload.GetIssues()) > 0 {
-					return issues.NewZodError(issues.ConvertRawIssuesToIssues(payload.GetIssues(), ctx))
-				}
-			}
-
-			// IPv6 format validation with regex + net.ParseIP (must be IPv6, not IPv4)
-			if !regexes.IPv6.MatchString(value) {
-				return issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(
-					issues.CreateInvalidFormatIssue("ipv6", value, nil), ctx, core.GetConfig())})
-			}
-
-			ip := net.ParseIP(value)
-			if ip == nil || ip.To4() != nil { // To4 != nil indicates IPv4
-				return issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(
-					issues.CreateInvalidFormatIssue("ipv6", value, nil), ctx, core.GetConfig())})
-			}
-
-			return nil
-		},
-		parseCtx,
+		core.ZodTypeIPv6,
+		engine.ApplyChecks[string], // Universal validator
+		engine.ConvertToConstraintType[string, T], // Universal converter
+		ctx...,
 	)
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodIPv6) MustParse(input any, ctx ...*core.ParseContext) any {
+// MustParse is the variant that panics on error
+func (z *ZodIPv6[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -297,218 +427,307 @@ func (z *ZodIPv6) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// Refine adds custom validation to the IPv6 schema
-func (z *ZodIPv6) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return Custom(fn, params...)
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodIPv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
-// Check adds modern validation using direct payload access
-func (z *ZodIPv6) Check(fn core.CheckFn) core.ZodType[any, any] {
-	custom := Custom(fn, core.SchemaParams{})
-	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		// first execute the original parse
-		result, err := z.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeIPv6, err.Error(), payload.GetValue()))
-			return payload
-		}
-		payload.SetValue(result)
+// =============================================================================
+// IPv6 MODIFIER METHODS
+// =============================================================================
 
-		// then execute the check function
-		fn(payload)
-		return payload
+// Optional allows nil values, returns pointer type for nullable semantics
+func (z *ZodIPv6[T]) Optional() *ZodIPv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable allows nil values, returns pointer type
+func (z *ZodIPv6[T]) Nilable() *ZodIPv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodIPv6[T]) Nullish() *ZodIPv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodIPv6[T]) Default(v string) *ZodIPv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodIPv6[T]) DefaultFunc(fn func() string) *ZodIPv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodIPv6[T]) Prefault(v string) *ZodIPv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodIPv6[T]) PrefaultFunc(fn func() string) *ZodIPv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// IPv6 TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates type-safe transformation using WrapFn pattern
+func (z *ZodIPv6[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		str := extractNetworkString(input)
+		return fn(str, ctx)
 	}
-	return any(custom).(core.ZodType[any, any])
+	return core.NewZodTransform[T, any](z, wrapperFn)
 }
 
-// Optional makes the IPv6 address optional
-func (z *ZodIPv6) Optional() core.ZodType[any, any] {
-	return any(Optional(z)).(core.ZodType[any, any])
-}
-
-// Nilable makes the IPv6 address nilable
-// - Only changes nil handling, not type inference
-// - Uses standard Clone + SetNilable pattern like type_string.go
-func (z *ZodIPv6) Nilable() core.ZodType[any, any] {
-	// use Clone method to create a new instance, avoid manual state copying
-	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
-		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodIPv6)
-	cloned.internals.SetNilable()
-	return cloned
-}
-
-// Transform creates a transform with given function
-func (z *ZodIPv6) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(fn)
-}
-
-// TransformAny creates a transform with given function
-func (z *ZodIPv6) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodIPv6[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		str := extractNetworkString(input)
+		return target.Parse(str, ctx)
 	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
 }
 
-// Pipe creates a pipe with another schema
-func (z *ZodIPv6) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
+// =============================================================================
+// IPv6 TYPE CONVERSION
+// =============================================================================
 
-// Prefault adds a prefault value
-func (z *ZodIPv6) Prefault(value any) core.ZodType[any, any] {
-	return Prefault(any(z).(core.ZodType[any, any]), value)
-}
+// =============================================================================
+// IPv6 REFINEMENT METHODS
+// =============================================================================
 
-// PrefaultFunc adds a prefault value using a function
-func (z *ZodIPv6) PrefaultFunc(fn func() any) core.ZodType[any, any] {
-	return PrefaultFunc(any(z).(core.ZodType[any, any]), fn)
-}
+// Refine adds type-safe custom validation logic
+func (z *ZodIPv6[T]) Refine(fn func(T) bool, params ...any) *ZodIPv6[T] {
+	wrapper := func(v any) bool {
+		var zero T
 
-// createZodIPv6FromDef creates a ZodIPv6 from definition
-func createZodIPv6FromDef(def *ZodIPv6Def) *ZodIPv6 {
-	internals := &ZodIPv6Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeIPv6),
-		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeIPv6},
-	}
-
-	// Simplified parse: delegate to schema.Parse (which already includes IPv6 validation)
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodIPv6{internals: internals}).Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zErr *issues.ZodError
-			if errors.As(err, &zErr) {
-				for _, issue := range zErr.Issues {
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
 			}
-			return payload
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
 		}
-
-		payload.SetValue(res)
-		return payload
 	}
 
-	zodSchema := &ZodIPv6{internals: internals}
-
-	// Set constructor for Clone support
-	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
-		ipv6Def := &ZodIPv6Def{
-			ZodTypeDef: *def,
-			Type:       "ipv6",
-			Version:    "v6",
-		}
-		return any(createZodIPv6FromDef(ipv6Def)).(core.ZodType[any, any])
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
 	}
 
-	// Initialize the schema
-	engine.InitZodType(any(zodSchema).(core.ZodType[any, any]), &def.ZodTypeDef)
-
-	return zodSchema
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-//////////////////////////////////////////
-//////////   CIDRv4 Type         ////////
-//////////////////////////////////////////
+// RefineAny adds flexible custom validation logic
+func (z *ZodIPv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv6[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
 
-// ZodCIDRv4Def defines the configuration for IPv4 CIDR validation
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// IPv6 HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer type
+func (z *ZodIPv6[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodIPv6[*string] {
+	return &ZodIPv6[*string]{internals: &ZodIPv6Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// withInternals creates new instance preserving generic type T
+func (z *ZodIPv6[T]) withInternals(in *core.ZodTypeInternals) *ZodIPv6[T] {
+	return &ZodIPv6[T]{internals: &ZodIPv6Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodIPv6[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodIPv6[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// newZodIPv6FromDef constructs new ZodIPv6 from definition
+func newZodIPv6FromDef[T NetworkConstraint](def *ZodIPv6Def) *ZodIPv6[T] {
+	internals := &ZodIPv6Internals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	// Add IPv6 validation check
+	ipv6Check := checks.IPv6()
+	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, ipv6Check)
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		ipv6Def := &ZodIPv6Def{
+			ZodTypeDef: *newDef,
+		}
+		return any(newZodIPv6FromDef[T](ipv6Def)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodIPv6[T]{internals: internals}
+}
+
+// IPv6 creates IPv6 address schema with type-inference support
+func IPv6(params ...any) *ZodIPv6[string] {
+	return IPv6Typed[string](params...)
+}
+
+// IPv6Ptr creates schema for *string IPv6
+func IPv6Ptr(params ...any) *ZodIPv6[*string] {
+	return IPv6Typed[*string](params...)
+}
+
+// IPv6Typed is the generic constructor for IPv6 address schemas
+func IPv6Typed[T NetworkConstraint](params ...any) *ZodIPv6[T] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodIPv6Def{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeIPv6,
+			Checks: []core.ZodCheck{},
+		},
+	}
+
+	// Apply normalized parameters to schema definition
+	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+
+	return newZodIPv6FromDef[T](def)
+}
+
+// CoercedIPv6 creates coerced IPv6 schema that attempts string conversion
+func CoercedIPv6(params ...any) *ZodIPv6[string] {
+	schema := IPv6Typed[string](params...)
+	schema.internals.ZodTypeInternals.Coerce = true
+	return schema
+}
+
+// =============================================================================
+// CIDRv4 TYPE DEFINITIONS
+// =============================================================================
+
+// ZodCIDRv4Def defines the configuration for CIDRv4 notation validation
 type ZodCIDRv4Def struct {
 	core.ZodTypeDef
-	Type    core.ZodTypeCode // "cidrv4"
-	Version string           // "v4"
 }
 
-// ZodCIDRv4Internals contains IPv4 CIDR validator internal state
+// ZodCIDRv4Internals contains CIDRv4 validator internal state
 type ZodCIDRv4Internals struct {
 	core.ZodTypeInternals
-	Def  *ZodCIDRv4Def
-	Isst issues.ZodIssueInvalidType
+	Def *ZodCIDRv4Def // Schema definition
 }
 
-// ZodCIDRv4 represents an IPv4 CIDR validation schema
-type ZodCIDRv4 struct {
+// ZodCIDRv4 represents a CIDRv4 notation validation schema
+type ZodCIDRv4[T NetworkConstraint] struct {
 	internals *ZodCIDRv4Internals
 }
 
+// =============================================================================
+// CIDRv4 CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodCIDRv4) GetInternals() *core.ZodTypeInternals {
+func (z *ZodCIDRv4[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetZod returns the CIDRv4-specific internals for framework usage
-func (z *ZodCIDRv4) GetZod() *ZodCIDRv4Internals {
-	return z.internals
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodCIDRv4[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse smart type inference validation and parsing
-func (z *ZodCIDRv4) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	// use unified nil handling logic
-	if input == nil {
-		if !z.internals.Nilable {
-			rawIssue := issues.CreateInvalidTypeIssue("string", input)
-			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-		}
-		return (*string)(nil), nil // return string type nil pointer
-	}
-
-	// smart type inference: input type determines output type
-	switch v := input.(type) {
-	case string:
-		// validate CIDR format
-		if err := z.validateCIDRv4(v); err != nil {
-			return nil, err
-		}
-		return v, nil // string → string (keep original type)
-
-	case *string:
-		if v == nil {
-			if !z.internals.Nilable {
-				rawIssue := issues.CreateInvalidTypeIssue("string", input)
-				finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-				return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-			}
-			return (*string)(nil), nil
-		}
-		// validate CIDR format
-		if err := z.validateCIDRv4(*v); err != nil {
-			return nil, err
-		}
-		return v, nil // *string → *string (keep original type)
-
-	default:
-		// use unified error creation
-		rawIssue := issues.CreateInvalidTypeIssue("string", input)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodCIDRv4[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// validateCIDRv4 validates IPv4 CIDR format
-func (z *ZodCIDRv4) validateCIDRv4(value string) error {
-	// Use net.ParseCIDR for accurate CIDR validation
-	_, _, err := net.ParseCIDR(value)
-	if err != nil {
-		rawIssue := issues.CreateInvalidFormatIssue("cidrv4", value, nil)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-	return nil
+// Coerce implements type conversion interface using coerce package
+func (z *ZodCIDRv4[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodCIDRv4) MustParse(input any, ctx ...*core.ParseContext) any {
+// Parse returns type-safe CIDRv4 notation using unified engine API
+func (z *ZodCIDRv4[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeCIDRv4,
+		engine.ApplyChecks[string], // Universal validator
+		engine.ConvertToConstraintType[string, T], // Universal converter
+		ctx...,
+	)
+}
+
+// MustParse is the variant that panics on error
+func (z *ZodCIDRv4[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -516,225 +735,302 @@ func (z *ZodCIDRv4) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// Refine adds custom validation to the CIDRv4 schema
-func (z *ZodCIDRv4) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return Custom(fn, params...)
+// =============================================================================
+// CIDRv4 MODIFIER METHODS
+// =============================================================================
+
+// Optional allows nil values, returns pointer type for nullable semantics
+func (z *ZodCIDRv4[T]) Optional() *ZodCIDRv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
-// Check adds modern validation using direct payload access
-func (z *ZodCIDRv4) Check(fn core.CheckFn) core.ZodType[any, any] {
-	custom := Custom(fn, core.SchemaParams{})
-	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		// first execute the original parse
-		result, err := z.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeCIDRv4, err.Error(), payload.GetValue()))
-			return payload
-		}
-		payload.SetValue(result)
+// Nilable allows nil values, returns pointer type
+func (z *ZodCIDRv4[T]) Nilable() *ZodCIDRv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
 
-		// then execute the check function
-		fn(payload)
-		return payload
+// Nullish combines optional and nilable modifiers
+func (z *ZodCIDRv4[T]) Nullish() *ZodCIDRv4[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodCIDRv4[T]) Default(v string) *ZodCIDRv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodCIDRv4[T]) DefaultFunc(fn func() string) *ZodCIDRv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodCIDRv4[T]) Prefault(v string) *ZodCIDRv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodCIDRv4[T]) PrefaultFunc(fn func() string) *ZodCIDRv4[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// CIDRv4 TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates type-safe transformation using WrapFn pattern
+func (z *ZodCIDRv4[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		str := extractNetworkString(input)
+		return fn(str, ctx)
 	}
-	return any(custom).(core.ZodType[any, any])
+	return core.NewZodTransform[T, any](z, wrapperFn)
 }
 
-// Optional makes the CIDRv4 optional
-func (z *ZodCIDRv4) Optional() core.ZodType[any, any] {
-	return any(Optional(z)).(core.ZodType[any, any])
-}
-
-// Nilable makes the CIDRv4 nilable
-// Nilable makes the CIDRv4 address nilable
-// - Only changes nil handling, not type inference
-// - Uses standard Clone + SetNilable pattern like type_string.go
-func (z *ZodCIDRv4) Nilable() core.ZodType[any, any] {
-	// use Clone method to create a new instance, avoid manual state copying
-	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
-		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodCIDRv4)
-	cloned.internals.SetNilable()
-	return cloned
-}
-
-// Transform creates a transform with given function
-func (z *ZodCIDRv4) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(fn)
-}
-
-// TransformAny creates a transform with given function
-func (z *ZodCIDRv4) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodCIDRv4[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		str := extractNetworkString(input)
+		return target.Parse(str, ctx)
 	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
 }
 
-// Pipe creates a pipe with another schema
-func (z *ZodCIDRv4) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
+// =============================================================================
+// CIDRv4 TYPE CONVERSION
+// =============================================================================
 
-// Prefault adds a prefault value
-func (z *ZodCIDRv4) Prefault(value any) core.ZodType[any, any] {
-	return Prefault(any(z).(core.ZodType[any, any]), value)
-}
+// =============================================================================
+// CIDRv4 REFINEMENT METHODS
+// =============================================================================
 
-// PrefaultFunc adds a prefault value using a function
-func (z *ZodCIDRv4) PrefaultFunc(fn func() any) core.ZodType[any, any] {
-	return PrefaultFunc(any(z).(core.ZodType[any, any]), fn)
-}
+// Refine adds type-safe custom validation logic
+func (z *ZodCIDRv4[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv4[T] {
+	wrapper := func(v any) bool {
+		var zero T
 
-// createZodCIDRv4FromDef creates a ZodCIDRv4 from definition
-func createZodCIDRv4FromDef(def *ZodCIDRv4Def) *ZodCIDRv4 {
-	internals := &ZodCIDRv4Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv4),
-		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeCIDRv4},
-	}
-
-	// Simplified parse: delegate to schema.Parse (which already includes CIDRv4 validation)
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodCIDRv4{internals: internals}).Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zErr *issues.ZodError
-			if errors.As(err, &zErr) {
-				for _, issue := range zErr.Issues {
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
 			}
-			return payload
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
 		}
-
-		payload.SetValue(res)
-		return payload
 	}
 
-	zodSchema := &ZodCIDRv4{internals: internals}
-
-	// Set constructor for Clone support
-	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
-		cidrv4Def := &ZodCIDRv4Def{
-			ZodTypeDef: *def,
-			Type:       "cidrv4",
-			Version:    "v4",
-		}
-		return any(createZodCIDRv4FromDef(cidrv4Def)).(core.ZodType[any, any])
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
 	}
 
-	// Initialize the schema
-	engine.InitZodType(any(zodSchema).(core.ZodType[any, any]), &def.ZodTypeDef)
-
-	return zodSchema
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-//////////////////////////////////////////
-//////////   CIDRv6 Type         ////////
-//////////////////////////////////////////
+// RefineAny adds flexible custom validation logic
+func (z *ZodCIDRv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv4[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
 
-// ZodCIDRv6Def defines the configuration for IPv6 CIDR validation
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// CIDRv4 HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer type
+func (z *ZodCIDRv4[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodCIDRv4[*string] {
+	return &ZodCIDRv4[*string]{internals: &ZodCIDRv4Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// withInternals creates new instance preserving generic type T
+func (z *ZodCIDRv4[T]) withInternals(in *core.ZodTypeInternals) *ZodCIDRv4[T] {
+	return &ZodCIDRv4[T]{internals: &ZodCIDRv4Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// CloneFrom copies configuration from another schema
+func (z *ZodCIDRv4[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodCIDRv4[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
+	}
+}
+
+// newZodCIDRv4FromDef constructs new ZodCIDRv4 from definition
+func newZodCIDRv4FromDef[T NetworkConstraint](def *ZodCIDRv4Def) *ZodCIDRv4[T] {
+	internals := &ZodCIDRv4Internals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	// Add CIDRv4 validation check
+	cidrv4Check := checks.CIDRv4()
+	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, cidrv4Check)
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		cidrv4Def := &ZodCIDRv4Def{
+			ZodTypeDef: *newDef,
+		}
+		return any(newZodCIDRv4FromDef[T](cidrv4Def)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodCIDRv4[T]{internals: internals}
+}
+
+// CIDRv4 creates CIDRv4 notation schema with type-inference support
+func CIDRv4(params ...any) *ZodCIDRv4[string] {
+	return CIDRv4Typed[string](params...)
+}
+
+// CIDRv4Ptr creates schema for *string CIDRv4
+func CIDRv4Ptr(params ...any) *ZodCIDRv4[*string] {
+	return CIDRv4Typed[*string](params...)
+}
+
+// CIDRv4Typed is the generic constructor for CIDRv4 notation schemas
+func CIDRv4Typed[T NetworkConstraint](params ...any) *ZodCIDRv4[T] {
+	schemaParams := utils.NormalizeParams(params...)
+
+	def := &ZodCIDRv4Def{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeCIDRv4,
+			Checks: []core.ZodCheck{},
+		},
+	}
+
+	// Apply normalized parameters to schema definition
+	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+
+	return newZodCIDRv4FromDef[T](def)
+}
+
+// CoercedCIDRv4 creates coerced CIDRv4 schema that attempts string conversion
+func CoercedCIDRv4(params ...any) *ZodCIDRv4[string] {
+	schema := CIDRv4Typed[string](params...)
+	schema.internals.ZodTypeInternals.Coerce = true
+	return schema
+}
+
+// =============================================================================
+// CIDRv6 TYPE DEFINITIONS
+// =============================================================================
+
+// ZodCIDRv6Def defines the configuration for CIDRv6 notation validation
 type ZodCIDRv6Def struct {
 	core.ZodTypeDef
-	Type    core.ZodTypeCode // "cidrv6"
-	Version string           // "v6"
 }
 
-// ZodCIDRv6Internals contains IPv6 CIDR validator internal state
+// ZodCIDRv6Internals contains CIDRv6 validator internal state
 type ZodCIDRv6Internals struct {
 	core.ZodTypeInternals
-	Def  *ZodCIDRv6Def
-	Isst issues.ZodIssueInvalidType
+	Def *ZodCIDRv6Def // Schema definition
 }
 
-// ZodCIDRv6 represents an IPv6 CIDR validation schema
-type ZodCIDRv6 struct {
+// ZodCIDRv6 represents a CIDRv6 notation validation schema
+type ZodCIDRv6[T NetworkConstraint] struct {
 	internals *ZodCIDRv6Internals
 }
 
+// =============================================================================
+// CIDRv6 CORE METHODS
+// =============================================================================
+
 // GetInternals returns the internal state of the schema
-func (z *ZodCIDRv6) GetInternals() *core.ZodTypeInternals {
+func (z *ZodCIDRv6[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetZod returns the CIDRv6-specific internals for framework usage
-func (z *ZodCIDRv6) GetZod() *ZodCIDRv6Internals {
-	return z.internals
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodCIDRv6[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
 }
 
-// Parse smart type inference validation and parsing
-func (z *ZodCIDRv6) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	// use unified nil handling logic
-	if input == nil {
-		if !z.internals.Nilable {
-			rawIssue := issues.CreateInvalidTypeIssue("string", input)
-			finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-			return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-		}
-		return (*string)(nil), nil // return string type nil pointer
-	}
-
-	// smart type inference: input type determines output type
-	switch v := input.(type) {
-	case string:
-		// validate CIDR format
-		if err := z.validateCIDRv6(v); err != nil {
-			return nil, err
-		}
-		return v, nil // string → string (keep original type)
-
-	case *string:
-		if v == nil {
-			if !z.internals.Nilable {
-				rawIssue := issues.CreateInvalidTypeIssue("string", input)
-				finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-				return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-			}
-			return (*string)(nil), nil
-		}
-		// validate CIDR format
-		if err := z.validateCIDRv6(*v); err != nil {
-			return nil, err
-		}
-		return v, nil // *string → *string (keep original type)
-
-	default:
-		// use unified error creation
-		rawIssue := issues.CreateInvalidTypeIssue("string", input)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodCIDRv6[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// validateCIDRv6 validates IPv6 CIDR format
-func (z *ZodCIDRv6) validateCIDRv6(value string) error {
-	// Use net.ParseCIDR for accurate CIDR validation
-	ip, _, err := net.ParseCIDR(value)
-	if err != nil {
-		rawIssue := issues.CreateInvalidFormatIssue("cidrv6", value, nil)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-	// Ensure it's actually IPv6
-	if ip.To4() != nil {
-		rawIssue := issues.CreateInvalidFormatIssue("cidrv6", value, nil)
-		finalIssue := issues.FinalizeIssue(rawIssue, nil, core.GetConfig())
-		return issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-	return nil
+// Coerce implements type conversion interface using coerce package
+func (z *ZodCIDRv6[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
 }
 
-// MustParse validates the input value and panics on failure
-func (z *ZodCIDRv6) MustParse(input any, ctx ...*core.ParseContext) any {
+// Parse returns type-safe CIDRv6 notation using unified engine API
+func (z *ZodCIDRv6[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeCIDRv6,
+		engine.ApplyChecks[string], // Universal validator
+		engine.ConvertToConstraintType[string, T], // Universal converter
+		ctx...,
+	)
+}
+
+// MustParse is the variant that panics on error
+func (z *ZodCIDRv6[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -742,443 +1038,586 @@ func (z *ZodCIDRv6) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// Refine adds custom validation to the CIDRv6 schema
-func (z *ZodCIDRv6) RefineAny(fn func(any) bool, params ...any) core.ZodType[any, any] {
-	return Custom(core.RefineFn[any](fn), params...)
+// =============================================================================
+// CIDRv6 MODIFIER METHODS
+// =============================================================================
+
+// Optional allows nil values, returns pointer type for nullable semantics
+func (z *ZodCIDRv6[T]) Optional() *ZodCIDRv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
-// Check adds modern validation using direct payload access
-func (z *ZodCIDRv6) Check(fn core.CheckFn) core.ZodType[any, any] {
-	custom := Custom(fn, core.SchemaParams{})
-	custom.GetInternals().Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		// first execute the original parse
-		result, err := z.Parse(payload.GetValue(), ctx)
-		if err != nil {
-			payload.AddIssue(issues.CreateInvalidTypeWithMsg(core.ZodTypeCIDRv6, err.Error(), payload.GetValue()))
-			return payload
+// Nilable allows nil values, returns pointer type
+func (z *ZodCIDRv6[T]) Nilable() *ZodCIDRv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodCIDRv6[T]) Nullish() *ZodCIDRv6[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodCIDRv6[T]) Default(v string) *ZodCIDRv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodCIDRv6[T]) DefaultFunc(fn func() string) *ZodCIDRv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodCIDRv6[T]) Prefault(v string) *ZodCIDRv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodCIDRv6[T]) PrefaultFunc(fn func() string) *ZodCIDRv6[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// CIDRv6 TRANSFORMATION AND PIPELINE METHODS
+// =============================================================================
+
+// Transform creates type-safe transformation using WrapFn pattern
+func (z *ZodCIDRv6[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+		str := extractNetworkString(input)
+		return fn(str, ctx)
+	}
+	return core.NewZodTransform[T, any](z, wrapperFn)
+}
+
+// Pipe creates a pipeline using WrapFn pattern
+func (z *ZodCIDRv6[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
+	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
+		str := extractNetworkString(input)
+		return target.Parse(str, ctx)
+	}
+	return core.NewZodPipe[T, any](z, wrapperFn)
+}
+
+// =============================================================================
+// CIDRv6 REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic
+func (z *ZodCIDRv6[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv6[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
+			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
 		}
-		payload.SetValue(result)
-
-		// then execute the check function
-		fn(payload)
-		return payload
 	}
-	return any(custom).(core.ZodType[any, any])
+
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Optional makes the CIDRv6 optional
-func (z *ZodCIDRv6) Optional() core.ZodType[any, any] {
-	return any(Optional(z)).(core.ZodType[any, any])
+// RefineAny adds flexible custom validation logic
+func (z *ZodCIDRv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv6[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
-// Nilable makes the CIDRv6 address nilable
-// - Only changes nil handling, not type inference
-// - Uses standard Clone + SetNilable pattern like type_string.go
-func (z *ZodCIDRv6) Nilable() core.ZodType[any, any] {
-	// use Clone method to create a new instance, avoid manual state copying
-	cloned := engine.Clone(z, func(def *core.ZodTypeDef) {
-		// no need to modify def, because Nilable is a runtime flag
-	}).(*ZodCIDRv6)
-	cloned.internals.SetNilable()
-	return cloned
+// =============================================================================
+// CIDRv6 HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withPtrInternals creates new instance with pointer type
+func (z *ZodCIDRv6[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodCIDRv6[*string] {
+	return &ZodCIDRv6[*string]{internals: &ZodCIDRv6Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
 }
 
-// Transform creates a transform with given function
-func (z *ZodCIDRv6) Transform(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	return z.TransformAny(fn)
+// withInternals creates new instance preserving generic type T
+func (z *ZodCIDRv6[T]) withInternals(in *core.ZodTypeInternals) *ZodCIDRv6[T] {
+	return &ZodCIDRv6[T]{internals: &ZodCIDRv6Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
 }
 
-// TransformAny creates a transform with given function
-func (z *ZodCIDRv6) TransformAny(fn func(any, *core.RefinementContext) (any, error)) core.ZodType[any, any] {
-	transform := Transform[any, any](fn)
-
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: any(transform).(core.ZodType[any, any]),
-		def: core.ZodTypeDef{Type: "pipe"},
+// CloneFrom copies configuration from another schema
+func (z *ZodCIDRv6[T]) CloneFrom(source any) {
+	if src, ok := source.(*ZodCIDRv6[T]); ok {
+		originalChecks := z.internals.ZodTypeInternals.Checks
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals.Checks = originalChecks
 	}
 }
 
-// Pipe creates a pipe with another schema
-func (z *ZodCIDRv6) Pipe(schema core.ZodType[any, any]) core.ZodType[any, any] {
-	return &ZodPipe[any, any]{
-		in:  any(z).(core.ZodType[any, any]),
-		out: schema,
-		def: core.ZodTypeDef{Type: "pipe"},
-	}
-}
-
-// createZodCIDRv6FromDef creates a ZodCIDRv6 from definition
-func createZodCIDRv6FromDef(def *ZodCIDRv6Def) *ZodCIDRv6 {
+// newZodCIDRv6FromDef constructs new ZodCIDRv6 from definition
+func newZodCIDRv6FromDef[T NetworkConstraint](def *ZodCIDRv6Def) *ZodCIDRv6[T] {
 	internals := &ZodCIDRv6Internals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(core.ZodTypeCIDRv6),
-		Def:              def,
-		Isst:             issues.ZodIssueInvalidType{Expected: core.ZodTypeCIDRv6},
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
 	}
 
-	// Simplified parse: delegate to schema.Parse (which already includes CIDRv6 validation)
-	internals.Parse = func(payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
-		res, err := (&ZodCIDRv6{internals: internals}).Parse(payload.GetValue(), ctx)
-		if err != nil {
-			var zErr *issues.ZodError
-			if errors.As(err, &zErr) {
-				for _, issue := range zErr.Issues {
-					rawIssue := issues.ConvertZodIssueToRaw(issue)
-					rawIssue.Path = issue.Path
-					payload.AddIssue(rawIssue)
-				}
-			}
-			return payload
-		}
+	// Add CIDRv6 validation check
+	cidrv6Check := checks.CIDRv6()
+	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, cidrv6Check)
 
-		payload.SetValue(res)
-		return payload
-	}
-
-	zodSchema := &ZodCIDRv6{internals: internals}
-
-	// Set constructor for Clone support
-	internals.Constructor = func(def *core.ZodTypeDef) core.ZodType[any, any] {
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		cidrv6Def := &ZodCIDRv6Def{
-			ZodTypeDef: *def,
-			Type:       "cidrv6",
-			Version:    "v6",
+			ZodTypeDef: *newDef,
 		}
-		return any(createZodCIDRv6FromDef(cidrv6Def)).(core.ZodType[any, any])
+		return any(newZodCIDRv6FromDef[T](cidrv6Def)).(core.ZodType[any])
 	}
 
-	// Initialize the schema
-	engine.InitZodType(any(zodSchema).(core.ZodType[any, any]), &def.ZodTypeDef)
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
 
-	return zodSchema
+	return &ZodCIDRv6[T]{internals: internals}
 }
 
-//////////////////////////////////////////
-//////////   Public Constructors   //////
-//////////////////////////////////////////
-
-// IPv4 creates a new IPv4 address schema
-func IPv4(params ...any) *ZodIPv4 {
-	def := &ZodIPv4Def{
-		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeIPv4},
-		Type:       core.ZodTypeIPv4,
-		Version:    "v4",
-	}
-
-	schema := createZodIPv4FromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		if schemaParam, ok := params[0].(core.SchemaParams); ok {
-			if schemaParam.Error != nil {
-				errorMap := issues.CreateErrorMap(schemaParam.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
-			}
-		}
-	}
-
-	return schema
+// CIDRv6 creates CIDRv6 notation schema with type-inference support
+func CIDRv6(params ...any) *ZodCIDRv6[string] {
+	return CIDRv6Typed[string](params...)
 }
 
-// IPv6 creates a new IPv6 address schema
-func IPv6(params ...any) *ZodIPv6 {
-	def := &ZodIPv6Def{
-		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeIPv6},
-		Type:       core.ZodTypeIPv6,
-		Version:    "v6",
-	}
-
-	schema := createZodIPv6FromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		if schemaParam, ok := params[0].(core.SchemaParams); ok {
-			if schemaParam.Error != nil {
-				errorMap := issues.CreateErrorMap(schemaParam.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
-			}
-		}
-	}
-
-	return schema
+// CIDRv6Ptr creates schema for *string CIDRv6
+func CIDRv6Ptr(params ...any) *ZodCIDRv6[*string] {
+	return CIDRv6Typed[*string](params...)
 }
 
-// CIDRv4 creates a new IPv4 CIDR schema
-func CIDRv4(params ...any) *ZodCIDRv4 {
-	def := &ZodCIDRv4Def{
-		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeCIDRv4},
-		Type:       core.ZodTypeCIDRv4,
-		Version:    "v4",
-	}
+// CIDRv6Typed is the generic constructor for CIDRv6 notation schemas
+func CIDRv6Typed[T NetworkConstraint](params ...any) *ZodCIDRv6[T] {
+	schemaParams := utils.NormalizeParams(params...)
 
-	schema := createZodCIDRv4FromDef(def)
-
-	// Apply schema parameters
-	if len(params) > 0 {
-		if schemaParam, ok := params[0].(core.SchemaParams); ok {
-			if schemaParam.Error != nil {
-				errorMap := issues.CreateErrorMap(schemaParam.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
-			}
-		}
-	}
-
-	return schema
-}
-
-// CIDRv6 creates a new IPv6 CIDR schema
-func CIDRv6(params ...any) *ZodCIDRv6 {
 	def := &ZodCIDRv6Def{
-		ZodTypeDef: core.ZodTypeDef{Type: core.ZodTypeCIDRv6},
-		Type:       core.ZodTypeCIDRv6,
-		Version:    "v6",
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeCIDRv6,
+			Checks: []core.ZodCheck{},
+		},
 	}
 
-	schema := createZodCIDRv6FromDef(def)
+	// Apply normalized parameters to schema definition
+	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 
-	// Apply schema parameters
-	if len(params) > 0 {
-		if schemaParam, ok := params[0].(core.SchemaParams); ok {
-			if schemaParam.Error != nil {
-				errorMap := issues.CreateErrorMap(schemaParam.Error)
-				if errorMap != nil {
-					def.Error = errorMap
-					schema.internals.Error = errorMap
-				}
+	return newZodCIDRv6FromDef[T](def)
+}
+
+// CoercedCIDRv6 creates coerced CIDRv6 schema that attempts string conversion
+func CoercedCIDRv6(params ...any) *ZodCIDRv6[string] {
+	schema := CIDRv6Typed[string](params...)
+	schema.internals.ZodTypeInternals.Coerce = true
+	return schema
+}
+
+// =============================================================================
+// URL OPTIONS TYPES
+// =============================================================================
+
+// URLOptions defines options for URL validation (similar to IsoDatetimeOptions)
+type URLOptions struct {
+	// Hostname validation pattern
+	Hostname *regexp.Regexp
+	// Protocol validation pattern
+	Protocol *regexp.Regexp
+}
+
+// =============================================================================
+// URL TYPE DEFINITIONS
+// =============================================================================
+
+// ZodURLDef defines the configuration for URL validation
+type ZodURLDef struct {
+	core.ZodTypeDef
+}
+
+// ZodURLInternals contains URL validator internal state
+type ZodURLInternals struct {
+	core.ZodTypeInternals
+	Def *ZodURLDef // Schema definition
+}
+
+// ZodURL represents a URL validation schema
+type ZodURL[T NetworkConstraint] struct {
+	internals *ZodURLInternals
+}
+
+// =============================================================================
+// URL CORE METHODS
+// =============================================================================
+
+// GetInternals returns the internal state of the schema
+func (z *ZodURL[T]) GetInternals() *core.ZodTypeInternals {
+	return &z.internals.ZodTypeInternals
+}
+
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodURL[T]) IsOptional() bool {
+	return z.internals.ZodTypeInternals.IsOptional()
+}
+
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodURL[T]) IsNilable() bool {
+	return z.internals.ZodTypeInternals.IsNilable()
+}
+
+// Coerce implements type conversion interface using coerce package
+func (z *ZodURL[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
+}
+
+// Parse returns type-safe URL using unified engine API
+func (z *ZodURL[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeURL,
+		engine.ApplyChecks[string], // Universal validator
+		engine.ConvertToConstraintType[string, T], // Universal converter
+		ctx...,
+	)
+}
+
+// MustParse is the variant that panics on error
+func (z *ZodURL[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodURL[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
+// =============================================================================
+// URL MODIFIER METHODS
+// =============================================================================
+
+// Optional allows nil values, returns pointer type for nullable semantics
+func (z *ZodURL[T]) Optional() *ZodURL[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable allows nil values, returns pointer type
+func (z *ZodURL[T]) Nilable() *ZodURL[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Nullish combines optional and nilable modifiers
+func (z *ZodURL[T]) Nullish() *ZodURL[*string] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default preserves current generic type T
+func (z *ZodURL[T]) Default(v string) *ZodURL[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// DefaultFunc preserves current generic type T
+func (z *ZodURL[T]) DefaultFunc(fn func() string) *ZodURL[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetDefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// Prefault provides fallback values on validation failure
+func (z *ZodURL[T]) Prefault(v string) *ZodURL[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultValue(v)
+	return z.withInternals(in)
+}
+
+// PrefaultFunc provides dynamic fallback values
+func (z *ZodURL[T]) PrefaultFunc(fn func() string) *ZodURL[T] {
+	in := z.internals.ZodTypeInternals.Clone()
+	in.SetPrefaultFunc(func() any {
+		return fn()
+	})
+	return z.withInternals(in)
+}
+
+// =============================================================================
+// URL REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic
+func (z *ZodURL[T]) Refine(fn func(T) bool, params ...any) *ZodURL[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
 			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
+		}
+	}
+
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](wrapper, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny adds a custom refinement function for any type
+func (z *ZodURL[T]) RefineAny(fn func(any) bool, params ...any) *ZodURL[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var checkParams any
+	if schemaParams.Error != nil {
+		checkParams = schemaParams
+	}
+
+	check := checks.NewCustom[any](fn, checkParams)
+	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// URL INTERNAL HELPER METHODS
+// =============================================================================
+
+// withPtrInternals creates a new ZodURL instance with pointer internals
+func (z *ZodURL[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodURL[*string] {
+	return &ZodURL[*string]{
+		internals: &ZodURLInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
+}
+
+// withInternals creates a new ZodURL instance with the given internals
+func (z *ZodURL[T]) withInternals(in *core.ZodTypeInternals) *ZodURL[T] {
+	return &ZodURL[T]{
+		internals: &ZodURLInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
+}
+
+// CloneFrom clones internals from another ZodURL instance
+func (z *ZodURL[T]) CloneFrom(source any) {
+	if srcURL, ok := source.(*ZodURL[T]); ok {
+		z.internals = srcURL.internals
+	}
+}
+
+// newZodURLFromDef creates a new ZodURL instance from definition
+func newZodURLFromDef[T NetworkConstraint](def *ZodURLDef) *ZodURL[T] {
+	internals := &ZodURLInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   core.ZodTypeURL,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	// Add basic URL validation check
+	internals.AddCheck(checks.URL())
+
+	// Provide constructor for AddCheck functionality
+	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		urlDef := &ZodURLDef{
+			ZodTypeDef: *newDef,
+		}
+		return any(newZodURLFromDef[T](urlDef)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		internals.Error = def.Error
+	}
+
+	return &ZodURL[T]{
+		internals: internals,
+	}
+}
+
+// =============================================================================
+// =============================================================================
+// URL CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// URL creates a new URL schema with flexible parameter support
+// Supports various parameter combinations:
+//
+//	URL() - basic URL schema
+//	URL("error message") - with custom error message
+//	URL(URLOptions{Hostname: pattern}) - with URL options
+//	URL(URLOptions{...}, "error message") - options with error message
+//	URL(URLOptions{...}, core.SchemaParams{Description: "URL"}) - options with schema params
+//	URL(core.SchemaParams{Description: "URL"}) - with schema parameters only
+func URL(params ...any) *ZodURL[string] {
+	return URLTyped[string](params...)
+}
+
+// URLPtr creates a new URL schema with pointer type and flexible parameter support
+// Supports the same parameter combinations as URL() but returns *ZodURL[*string]
+func URLPtr(params ...any) *ZodURL[*string] {
+	return URLTyped[*string](params...)
+}
+
+// URLTyped creates a new URL schema with specific type and flexible parameter support
+func URLTyped[T NetworkConstraint](params ...any) *ZodURL[T] {
+	var options *URLOptions
+	var schemaParams *core.SchemaParams
+	var errorMessage string
+
+	// Parse parameters
+	for _, param := range params {
+		switch p := param.(type) {
+		case URLOptions:
+			options = &p
+		case core.SchemaParams:
+			schemaParams = &p
+		case string:
+			errorMessage = p
+		}
+	}
+
+	def := &ZodURLDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:     core.ZodTypeURL,
+			Required: true,
+			Checks:   []core.ZodCheck{},
+		},
+	}
+
+	// Apply schema parameters if provided
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	// Apply error message if provided
+	if errorMessage != "" {
+		// Create a simple error function for the error message
+		errorFunc := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
+			return errorMessage
+		})
+		def.Error = &errorFunc
+	}
+
+	schema := newZodURLFromDef[T](def)
+
+	// Apply URL options if provided
+	if options != nil {
+		if options.Hostname != nil || options.Protocol != nil {
+			validateOptions := validate.URLOptions{
+				Hostname: options.Hostname,
+				Protocol: options.Protocol,
+			}
+			check := checks.URLWithOptions(validateOptions)
+			schema.internals.AddCheck(check)
 		}
 	}
 
 	return schema
 }
 
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodIPv4) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodIPv6) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodCIDRv4) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-// Unwrap returns the inner type (for basic types, returns self)
-func (z *ZodCIDRv6) Unwrap() core.ZodType[any, any] {
-	return any(z).(core.ZodType[any, any])
-}
-
-// ==================== NETWORK TYPES DEFAULT WRAPPER SYSTEM ====================
-
-// ZodIPv4Default is the Default wrapper for IPv4 type
-type ZodIPv4Default struct {
-	*ZodDefault[*ZodIPv4] // embed specific pointer, allow method promotion
-}
-
-// GetInternals implements ZodType interface
-func (s ZodIPv4Default) GetInternals() *core.ZodTypeInternals {
-	return s.ZodDefault.GetInternals()
-}
-
-// Parse implements ZodType interface
-func (s ZodIPv4Default) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	return s.ZodDefault.Parse(input, ctx...)
-}
-
-// ZodIPv6Default is the Default wrapper for IPv6 type
-type ZodIPv6Default struct {
-	*ZodDefault[*ZodIPv6] // embed specific pointer, allow method promotion
-}
-
-// GetInternals implements ZodType interface
-func (s ZodIPv6Default) GetInternals() *core.ZodTypeInternals {
-	return s.ZodDefault.GetInternals()
-}
-
-// Parse implements ZodType interface
-func (s ZodIPv6Default) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	return s.ZodDefault.Parse(input, ctx...)
-}
-
-// ZodCIDRv4Default is the Default wrapper for CIDRv4 type
-type ZodCIDRv4Default struct {
-	*ZodDefault[*ZodCIDRv4] // embed specific pointer, allow method promotion
-}
-
-// GetInternals implements ZodType interface
-func (s ZodCIDRv4Default) GetInternals() *core.ZodTypeInternals {
-	return s.ZodDefault.GetInternals()
-}
-
-// Parse implements ZodType interface
-func (s ZodCIDRv4Default) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	return s.ZodDefault.Parse(input, ctx...)
-}
-
-// ZodCIDRv6Default is the Default wrapper for CIDRv6 type
-type ZodCIDRv6Default struct {
-	*ZodDefault[*ZodCIDRv6] // embed specific pointer, allow method promotion
-}
-
-// GetInternals implements ZodType interface
-func (s ZodCIDRv6Default) GetInternals() *core.ZodTypeInternals {
-	return s.ZodDefault.GetInternals()
-}
-
-// Parse implements ZodType interface
-func (s ZodCIDRv6Default) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	return s.ZodDefault.Parse(input, ctx...)
-}
-
-// ==================== IPv4 DEFAULT METHOD IMPLEMENTATION ====================
-
-// Default adds a default value to the IPv4 schema, returns ZodIPv4Default support chain call
-func (z *ZodIPv4) Default(value any) ZodIPv4Default {
-	return ZodIPv4Default{
-		&ZodDefault[*ZodIPv4]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
-	}
-}
-
-// DefaultFunc adds a default function to the IPv4 schema, returns ZodIPv4Default support chain call
-func (z *ZodIPv4) DefaultFunc(fn func() any) ZodIPv4Default {
-	genericFn := func() any { return fn() }
-	return ZodIPv4Default{
-		&ZodDefault[*ZodIPv4]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
-
-// Optional adds an optional check to the IPv4 schema, returns ZodType support chain call
-func (s ZodIPv4Default) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the IPv4 schema, returns ZodType support chain call
-func (s ZodIPv4Default) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-// ==================== IPv6 DEFAULT METHOD IMPLEMENTATION ====================
-
-// Default adds a default value to the IPv6 schema, returns ZodIPv6Default support chain call
-func (z *ZodIPv6) Default(value any) ZodIPv6Default {
-	return ZodIPv6Default{
-		&ZodDefault[*ZodIPv6]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
-	}
-}
-
-// DefaultFunc adds a default function to the IPv6 schema, returns ZodIPv6Default support chain call
-func (z *ZodIPv6) DefaultFunc(fn func() any) ZodIPv6Default {
-	genericFn := func() any { return fn() }
-	return ZodIPv6Default{
-		&ZodDefault[*ZodIPv6]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
-
-// Optional adds an optional check to the IPv6 schema, returns ZodType support chain call
-func (s ZodIPv6Default) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the IPv6 schema, returns ZodType support chain call
-func (s ZodIPv6Default) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-// ==================== CIDRv4 DEFAULT METHOD IMPLEMENTATION ====================
-
-// Default adds a default value to the CIDRv4 schema, returns ZodCIDRv4Default support chain call
-func (z *ZodCIDRv4) Default(value any) ZodCIDRv4Default {
-	return ZodCIDRv4Default{
-		&ZodDefault[*ZodCIDRv4]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
-	}
-}
-
-// DefaultFunc adda  fdufiulothe CIDRv4to the CIDRv4 schema,  schemsrZodeturnsDefault Zuppodt chaCI callRv4Default support chain call
-func (z *ZodCIDRv4) DefaultFunc(fn func() any) ZodCIDRv4Default {
-	genericFn := func() any { return fn() }
-	return ZodCIDRv4Default{
-		&ZodDefault[*ZodCIDRv4]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
-
-// Optional adds an optional check to the CIDRv4 schema, returns ZodType support chain call
-func (s ZodCIDRv4Default) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the CIDRv4 schema, returns ZodType support chain call
-func (s ZodCIDRv4Default) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
-}
-
-// ==================== CIDRv6 DEFAULT METHOD IMPLEMENTATION ====================
-
-// Default adds a default value to the CIDRv6 schema, returns ZodCIDRv6Default support chain call
-func (z *ZodCIDRv6) Default(value any) ZodCIDRv6Default {
-	return ZodCIDRv6Default{
-		&ZodDefault[*ZodCIDRv6]{
-			innerType:    z,
-			defaultValue: value,
-			isFunction:   false,
-		},
-	}
-}
-
-// DefaultFunc adds a default function to the CIDRv6 schema, returns ZodCIDRv6Default support chain call
-func (z *ZodCIDRv6) DefaultFunc(fn func() any) ZodCIDRv6Default {
-	genericFn := func() any { return fn() }
-	return ZodCIDRv6Default{
-		&ZodDefault[*ZodCIDRv6]{
-			innerType:   z,
-			defaultFunc: genericFn,
-			isFunction:  true,
-		},
-	}
-}
-
-// Optional adds an optional check to the CIDRv6 schema, returns ZodType support chain call
-func (s ZodCIDRv6Default) Optional() core.ZodType[any, any] {
-	return Optional(any(s).(core.ZodType[any, any]))
-}
-
-// Nilable adds a nilable check to the CIDRv6 schema, returns ZodType support chain call
-func (s ZodCIDRv6Default) Nilable() core.ZodType[any, any] {
-	return Nilable(any(s).(core.ZodType[any, any]))
+// CoercedURL creates coerced URL schema that attempts string conversion
+func CoercedURL(params ...any) *ZodURL[string] {
+	schema := URLTyped[string](params...)
+	schema.internals.ZodTypeInternals.Coerce = true
+	return schema
 }

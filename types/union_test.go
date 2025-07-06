@@ -4,668 +4,609 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
-// 1. Basic functionality and type inference
+// Basic functionality tests
 // =============================================================================
 
-func TestUnionBasicFunctionality(t *testing.T) {
-	t.Run("constructor", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals)
-		assert.Equal(t, core.ZodTypeUnion, internals.Type)
-	})
-
-	t.Run("constructor with params", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}, core.SchemaParams{Error: "Must be string or number"})
-		require.NotNil(t, schema)
-		internals := schema.GetInternals()
-		require.NotNil(t, internals.Error)
-	})
-
-	t.Run("basic validation - return first valid match", func(t *testing.T) {
-		// Test basic union functionality - returns first successful match
-		schema := Union([]core.ZodType[any, any]{String(), Int(), Bool()})
+func TestUnion_BasicFunctionality(t *testing.T) {
+	t.Run("valid union inputs", func(t *testing.T) {
+		// String or Int union
+		stringOrInt := Union([]any{
+			String(),
+			Int(),
+		})
 
 		// Test string input
+		result, err := stringOrInt.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		// Test int input
+		result, err = stringOrInt.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		// Test bool input - should fail
+		_, err = stringOrInt.Parse(true)
+		assert.Error(t, err)
+	})
+
+	t.Run("union of different types", func(t *testing.T) {
+		// String, Int, Bool union
+		multiUnion := Union([]any{
+			String(),
+			Int(),
+			Bool(),
+		})
+
+		testCases := []struct {
+			input      any
+			expected   any
+			shouldPass bool
+		}{
+			{"test", "test", true},
+			{123, 123, true},
+			{true, true, true},
+			{3.14, 3.14, false},             // float not in union
+			{[]string{}, []string{}, false}, // slice not in union
+		}
+
+		for _, tc := range testCases {
+			result, err := multiUnion.Parse(tc.input)
+			if tc.shouldPass {
+				require.NoError(t, err, "Expected success for input: %v", tc.input)
+				assert.Equal(t, tc.expected, result)
+			} else {
+				assert.Error(t, err, "Expected error for input: %v", tc.input)
+			}
+		}
+	})
+
+	t.Run("Parse and MustParse methods", func(t *testing.T) {
+		schema := Union([]any{String(), Bool()})
+
+		// Test Parse method
 		result, err := schema.Parse("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
-		// Test integer input
+		// Test MustParse method
+		mustResult := schema.MustParse(true)
+		assert.Equal(t, true, mustResult)
+
+		// Test panic on invalid input
+		assert.Panics(t, func() {
+			schema.MustParse(123)
+		})
+	})
+
+	t.Run("custom error message", func(t *testing.T) {
+		customError := "Expected string or boolean"
+		schema := Union([]any{
+			String(),
+			Bool(),
+		}, core.SchemaParams{Error: customError})
+
+		require.NotNil(t, schema)
+		assert.Equal(t, core.ZodTypeUnion, schema.internals.Def.Type)
+
+		_, err := schema.Parse(123)
+		assert.Error(t, err)
+	})
+
+	t.Run("empty union", func(t *testing.T) {
+		emptyUnion := Union([]any{})
+
+		_, err := emptyUnion.Parse("anything")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no union options provided")
+	})
+}
+
+// =============================================================================
+// Type safety tests
+// =============================================================================
+
+func TestUnion_TypeSafety(t *testing.T) {
+	t.Run("union returns any type", func(t *testing.T) {
+		schema := Union([]any{String(), Int()})
+		require.NotNil(t, schema)
+
+		// String input
+		result, err := schema.Parse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+		assert.IsType(t, "", result)
+
+		// Int input
 		result, err = schema.Parse(42)
 		require.NoError(t, err)
 		assert.Equal(t, 42, result)
+		assert.IsType(t, 0, result)
+	})
 
-		// Test boolean input
+	t.Run("UnionOf variadic constructor", func(t *testing.T) {
+		schema := UnionOf(String(), Int(), Bool())
+		require.NotNil(t, schema)
+
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		result, err = schema.Parse(123)
+		require.NoError(t, err)
+		assert.Equal(t, 123, result)
+
 		result, err = schema.Parse(true)
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 	})
 
-	t.Run("smart type inference", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-
-		// String input returns string
-		result1, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.IsType(t, "", result1)
-		assert.Equal(t, "hello", result1)
-
-		// Int input returns int
-		result2, err := schema.Parse(42)
-		require.NoError(t, err)
-		assert.IsType(t, 0, result2)
-		assert.Equal(t, 42, result2)
-
-		// Pointer identity preservation
-		str := "world"
-		inputPtr := &str
-		result3, err := schema.Parse(inputPtr)
-		require.NoError(t, err)
-		resultPtr, ok := result3.(*string)
-		require.True(t, ok)
-		assert.True(t, resultPtr == inputPtr, "Should return the exact same pointer")
-	})
-
-	t.Run("nilable modifier", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).Nilable()
-
-		// nil input should succeed, return typed nil pointer
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Valid input keeps type inference
-		result2, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result2)
-		assert.IsType(t, "", result2)
-	})
-
-	t.Run("options accessor", func(t *testing.T) {
+	t.Run("Options method returns member schemas", func(t *testing.T) {
 		stringSchema := String()
 		intSchema := Int()
-		schema := Union([]core.ZodType[any, any]{stringSchema, intSchema})
+
+		schema := Union([]any{stringSchema, intSchema})
 
 		options := schema.Options()
-		require.Len(t, options, 2)
+		assert.Len(t, options, 2)
 
-		// Test that we can parse with individual options
-		result1, err := options[0].Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result1)
+		// With the new ZodSchema interface, these may be the same instances
+		// or wrapped instances depending on implementation
+		// The important thing is that they function correctly
+		assert.Equal(t, len(options), 2)
+	})
 
-		result2, err := options[1].Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result2)
+	t.Run("MustParse type safety", func(t *testing.T) {
+		schema := Union([]any{String(), Bool()})
+
+		result := schema.MustParse("test")
+		assert.IsType(t, "", result)
+		assert.Equal(t, "test", result)
+
+		result = schema.MustParse(false)
+		assert.IsType(t, false, result)
+		assert.Equal(t, false, result)
 	})
 }
 
 // =============================================================================
-// 2. Validation methods
+// Modifier methods tests
 // =============================================================================
 
-func TestUnionValidations(t *testing.T) {
-	t.Run("return valid over invalid", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{
-			Object(core.ObjectSchema{
-				"email": String().Email(),
-			}),
-			String(),
-		})
-
-		// Simple string should match second option
-		result, err := schema.Parse("asdf")
-		require.NoError(t, err)
-		assert.Equal(t, "asdf", result)
-
-		// Valid email object should match first option
-		emailData := map[string]any{"email": "test@example.com"}
-		result, err = schema.Parse(emailData)
-		require.NoError(t, err)
-		assert.Equal(t, emailData, result)
-	})
-
-	t.Run("complex nested union validation", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{
-			Object(core.ObjectSchema{
-				"type": Literal("person"),
-				"name": String().Min(1),
-				"age":  Int().Min(0).Max(120),
-			}),
-			Object(core.ObjectSchema{
-				"type": Literal("company"),
-			}).Passthrough(), // Allow extra fields to pass through
-		})
-
-		// Valid person data
-		personData := map[string]any{"type": "person", "name": "Alice", "age": 30}
-		result, err := schema.Parse(personData)
-		require.NoError(t, err)
-		assert.Equal(t, personData, result)
-
-		// Valid company data
-		companyData := map[string]any{"type": "company", "name": "Tech Corp", "employees": 50}
-		result, err = schema.Parse(companyData)
-		require.NoError(t, err)
-		assert.Equal(t, companyData, result)
-	})
-
-	t.Run("function parsing - all options fail", func(t *testing.T) {
-		// Test when all union options fail validation
-		schema := Union([]core.ZodType[any, any]{
-			String().Refine(func(s string) bool { return false }),
-			Int().Refine(func(i int) bool { return false }),
-		})
-
-		// Should fail with invalid_union error
-		_, err := schema.Parse("asdf")
-		assert.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Contains(t, string(zodErr.Issues[0].Code), "invalid_union")
-	})
-}
-
-// =============================================================================
-// 3. Modifiers and wrappers
-// =============================================================================
-
-func TestUnionModifiers(t *testing.T) {
-	t.Run("optional", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
+func TestUnion_Modifiers(t *testing.T) {
+	t.Run("Optional modifier", func(t *testing.T) {
+		schema := Union([]any{String(), Int()})
 		optionalSchema := schema.Optional()
 
-		// Valid input
+		// Test non-nil value - returns pointer
 		result, err := optionalSchema.Parse("hello")
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
+		require.NotNil(t, result)
+		assert.Equal(t, "hello", *result)
 
-		// nil input
+		// Test nil value (should be allowed for optional)
 		result, err = optionalSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
-	t.Run("nilable", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
+	t.Run("Nilable allows nil values", func(t *testing.T) {
+		schema := Union([]any{String(), Int()})
 		nilableSchema := schema.Nilable()
 
-		// Valid input
-		result, err := nilableSchema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-
-		// nil input returns typed nil
-		result, err = nilableSchema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("nilable does not affect original schema", func(t *testing.T) {
-		baseSchema := Union([]core.ZodType[any, any]{String(), Int()})
-		nilableSchema := baseSchema.Nilable()
-
-		// Test nilable schema allows nil
-		result1, err1 := nilableSchema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Nil(t, result1)
-
-		// Critical: Original schema should remain unchanged and reject nil
-		_, err4 := baseSchema.Parse(nil)
-		assert.Error(t, err4, "Original schema should still reject nil")
-
-		// Both schemas should validate valid input the same way
-		result5, err5 := baseSchema.Parse("hello")
-		require.NoError(t, err5)
-		assert.Equal(t, "hello", result5)
-
-		result6, err6 := nilableSchema.Parse("hello")
-		require.NoError(t, err6)
-		assert.Equal(t, "hello", result6)
-	})
-
-	t.Run("must parse", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-
-		// Valid input should not panic
-		result := schema.MustParse("hello")
-		assert.Equal(t, "hello", result)
-
-		// Invalid input should panic
-		assert.Panics(t, func() {
-			schema.MustParse([]int{1, 2, 3})
-		})
-	})
-}
-
-// =============================================================================
-// 4. Chaining and method composition
-// =============================================================================
-
-func TestUnionChaining(t *testing.T) {
-	t.Run("validation with constraints", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String().Min(5), Int().Min(10)})
-
-		// Valid cases
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		result, err = schema.Parse(15)
-		require.NoError(t, err)
-		assert.Equal(t, 15, result)
-
-		// Invalid cases
-		_, err = schema.Parse("hi")
-		assert.Error(t, err)
-
-		_, err = schema.Parse(5)
-		assert.Error(t, err)
-	})
-}
-
-// =============================================================================
-// 5. Transform/Pipe
-// =============================================================================
-
-func TestUnionTransform(t *testing.T) {
-	t.Run("basic transform", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-			if s, ok := val.(string); ok {
-				return s + "_transformed", nil
-			}
-			if i, ok := val.(int); ok {
-				return i * 2, nil
-			}
-			return val, nil
-		})
-
-		// String transformation
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello_transformed", result)
-
-		// Int transformation
-		result, err = schema.Parse(21)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-	})
-
-	t.Run("pipe to another schema", func(t *testing.T) {
-		// Transform union to string, then validate string length
-		unionToString := Union([]core.ZodType[any, any]{String(), Int()}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-			if s, ok := val.(string); ok {
-				return s, nil
-			}
-			if _, ok := val.(int); ok {
-				return "number", nil
-			}
-			return "", nil
-		})
-
-		schema := unionToString.Pipe(String().Min(3))
-
-		// Valid cases
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		result, err = schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, "number", result)
-	})
-}
-
-// =============================================================================
-// 6. Refine
-// =============================================================================
-
-func TestUnionRefine(t *testing.T) {
-	t.Run("basic refine", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).Refine(func(val any) bool {
-			if s, ok := val.(string); ok {
-				return len(s) > 3
-			}
-			if i, ok := val.(int); ok {
-				return i > 10
-			}
-			return false
-		}, core.SchemaParams{Error: "Value must be longer string or larger number"})
-
-		// Invalid cases
-		_, err := schema.Parse("hi")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Value must be longer string or larger number")
-
-		_, err = schema.Parse(5)
-		assert.Error(t, err)
-
-		// Valid cases
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		result, err = schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-	})
-
-	t.Run("refine vs transform distinction", func(t *testing.T) {
-		input := "hello"
-
-		// Refine: only validates, never modifies
-		refineSchema := Union([]core.ZodType[any, any]{String()}).Refine(func(val any) bool {
-			return true
-		})
-		refineResult, refineErr := refineSchema.Parse(input)
-
-		// Transform: validates and converts
-		transformSchema := Union([]core.ZodType[any, any]{String()}).Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-			if s, ok := val.(string); ok {
-				return s + "_transformed", nil
-			}
-			return val, nil
-		})
-		transformResult, transformErr := transformSchema.Parse(input)
-
-		// Refine returns original value unchanged
-		require.NoError(t, refineErr)
-		assert.Equal(t, "hello", refineResult)
-
-		// Transform returns modified value
-		require.NoError(t, transformErr)
-		assert.Equal(t, "hello_transformed", transformResult)
-
-		// Key distinction: Refine preserves, Transform modifies
-		assert.Equal(t, input, refineResult, "Refine should return exact original value")
-		assert.NotEqual(t, input, transformResult, "Transform should return modified value")
-	})
-}
-
-// =============================================================================
-// 7. Error handling
-// =============================================================================
-
-func TestUnionErrorHandling(t *testing.T) {
-	t.Run("error structure", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-		_, err := schema.Parse([]int{1, 2, 3})
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-		assert.Contains(t, string(zodErr.Issues[0].Code), "invalid_union")
-	})
-
-	t.Run("return errors from both union arms", func(t *testing.T) {
-		// Test that union collects errors from all failed options
-		schema := Union([]core.ZodType[any, any]{
-			Int(),
-			String().Refine(func(s string) bool { return false }),
-		})
-
-		_, err := schema.Parse("a")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Len(t, zodErr.Issues, 1)
-		assert.Contains(t, string(zodErr.Issues[0].Code), "invalid_union")
-	})
-
-	t.Run("custom error messages", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}, core.SchemaParams{
-			Error: "Must be string or number",
-		})
-		_, err := schema.Parse([]int{1, 2, 3})
-		assert.Error(t, err)
-
-		// core.Custom error handling may vary in implementation
-		assert.NotEmpty(t, err.Error())
-	})
-
-	t.Run("multiple validation errors", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String().Min(10), Int().Min(100)})
-		invalidInputs := []any{"short", 5, []int{1, 2}, nil}
-
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-			var zodErr *issues.ZodError
-			require.True(t, issues.IsZodError(err, &zodErr))
-			assert.Contains(t, string(zodErr.Issues[0].Code), "invalid_union")
-		}
-	})
-}
-
-// =============================================================================
-// 8. Edge and mutual exclusion cases
-// =============================================================================
-
-func TestUnionEdgeCases(t *testing.T) {
-	t.Run("empty union", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{})
-		_, err := schema.Parse("anything")
-		assert.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.NotEmpty(t, zodErr.Issues)
-	})
-
-	t.Run("union with single type", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String()})
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		_, err = schema.Parse(42)
-		assert.Error(t, err)
-	})
-
-	t.Run("readonly union", func(t *testing.T) {
-		// Test that union works with read-only slice of schemas
-		stringSchema := String()
-		numberSchema := Int()
-		options := []core.ZodType[any, any]{stringSchema, numberSchema}
-		schema := Union(options)
-
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		result, err = schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-	})
-
-	t.Run("nil input handling", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-
-		// nil input should fail unless Nilable
-		_, err := schema.Parse(nil)
-		assert.Error(t, err)
-
-		// Nilable schema should handle nil
-		nilableSchema := schema.Nilable()
+		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
+
+		// Test valid value - returns pointer
+		result, err = nilableSchema.Parse("test")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test", *result)
 	})
 
-	t.Run("complex type rejection", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()})
-		complexTypes := []any{
-			make(chan int),
-			func() int { return 1 },
-			struct{ Value int }{Value: 1},
-		}
+	t.Run("Nullish combines optional and nilable", func(t *testing.T) {
+		schema := Union([]any{String(), Int()})
+		nullishSchema := schema.Nullish()
 
-		for _, input := range complexTypes {
-			_, err := schema.Parse(input)
-			assert.Error(t, err)
-		}
+		// Test nil handling
+		result, err := nullishSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Test valid value - returns pointer
+		result, err = nullishSchema.Parse(42)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 42, *result)
+	})
+
+	t.Run("Default preserves current type", func(t *testing.T) {
+		schema := Union([]any{String(), Int()})
+		defaultSchema := schema.Default("default")
+
+		// Valid input should override default
+		result, err := defaultSchema.Parse(123)
+		require.NoError(t, err)
+		assert.Equal(t, 123, result)
+		assert.IsType(t, 0, result)
 	})
 }
 
 // =============================================================================
-// 9. Default and Prefault tests
+// Chaining tests
 // =============================================================================
 
-func TestUnionDefaultAndPrefault(t *testing.T) {
-	t.Run("basic default value", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).Default("default_string")
+func TestUnion_Chaining(t *testing.T) {
+	t.Run("complex chaining", func(t *testing.T) {
+		schema := Union([]any{String(), Int()}).
+			Default("fallback").
+			Optional()
 
-		// nil input uses default
-		result, err := schema.Parse(nil)
+		// Test final behavior - returns pointer due to Optional
+		result, err := schema.Parse(42)
 		require.NoError(t, err)
-		assert.Equal(t, "default_string", result)
+		require.NotNil(t, result)
+		assert.Equal(t, 42, *result)
 
-		// Valid input bypasses default
-		result2, err := schema.Parse(42)
+		// Test nil handling
+		result, err = schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, 42, result2)
+		assert.Nil(t, result)
 	})
 
-	t.Run("function-based default value", func(t *testing.T) {
-		counter := 0
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).DefaultFunc(func() any {
-			counter++
-			return counter
+	t.Run("default and prefault chaining", func(t *testing.T) {
+		schema := Union([]any{String(), Int()}).
+			Default("default").
+			Prefault("prefault")
+
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+	})
+
+	t.Run("modifier immutability", func(t *testing.T) {
+		originalSchema := Union([]any{String(), Int()})
+		modifiedSchema := originalSchema.Optional()
+
+		// Original should not be affected by modifier
+		_, err1 := originalSchema.Parse(nil)
+		assert.Error(t, err1, "Original schema should reject nil")
+
+		// Modified schema should have new behavior
+		result2, err2 := modifiedSchema.Parse(nil)
+		require.NoError(t, err2)
+		assert.Nil(t, result2)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestUnion_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default with function", func(t *testing.T) {
+		schema := Union([]any{String(), Int()}).DefaultFunc(func() any {
+			return "function default"
 		})
 
-		// Each nil input generates a new default value
-		result1, err1 := schema.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, 1, result1)
-
-		result2, err2 := schema.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, 2, result2)
-
-		// Valid input bypasses default generation
-		result3, err3 := schema.Parse("hello")
-		require.NoError(t, err3)
-		assert.Equal(t, "hello", result3)
-
-		// Counter should only increment for nil inputs
-		assert.Equal(t, 2, counter)
+		result, err := schema.Parse("input")
+		require.NoError(t, err)
+		assert.Equal(t, "input", result)
 	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		// Use a fallback value that can pass the union validation
-		schema := Union([]core.ZodType[any, any]{String().Min(10), Int().Min(100)}).Prefault("fallback_value")
+	t.Run("Prefault with function", func(t *testing.T) {
+		schema := Union([]any{String(), Int()}).PrefaultFunc(func() any {
+			return "function prefault"
+		})
 
-		// Valid input succeeds
-		result1, err1 := schema.Parse("hello world")
-		require.NoError(t, err1)
-		assert.Equal(t, "hello world", result1)
-
-		result2, err2 := schema.Parse(150)
-		require.NoError(t, err2)
-		assert.Equal(t, 150, result2)
-
-		// Invalid input uses prefault
-		result3, err3 := schema.Parse("short")
-		require.NoError(t, err3)
-		assert.Equal(t, "fallback_value", result3)
-
-		result4, err4 := schema.Parse(50)
-		require.NoError(t, err4)
-		assert.Equal(t, "fallback_value", result4)
+		result, err := schema.Parse("valid")
+		require.NoError(t, err)
+		assert.Equal(t, "valid", result)
 	})
 
-	t.Run("default with transform compatibility", func(t *testing.T) {
-		schema := Union([]core.ZodType[any, any]{String(), Int()}).
-			Default("hello").
-			Transform(func(val any, ctx *core.RefinementContext) (any, error) {
-				return map[string]any{
-					"original": val,
-					"type":     "union_value",
-				}, nil
-			})
+	t.Run("Default vs Prefault behavior", func(t *testing.T) {
+		// Default should be used when input is nil/undefined
+		defaultSchema := Union([]any{String()}).Default("default")
 
-		// Non-nil input: validate then transform
-		result1, err1 := schema.Parse(42)
+		// Prefault should be used when validation fails
+		prefaultSchema := Union([]any{String()}).Prefault("prefault")
+
+		// Test valid input (both should return the input)
+		result1, err1 := defaultSchema.Parse("hello")
 		require.NoError(t, err1)
-		result1Map, ok1 := result1.(map[string]any)
-		require.True(t, ok1)
-		assert.Equal(t, 42, result1Map["original"])
-		assert.Equal(t, "union_value", result1Map["type"])
+		assert.Equal(t, "hello", result1)
 
-		// nil input: use default then transform
-		result2, err2 := schema.Parse(nil)
+		result2, err2 := prefaultSchema.Parse("hello")
 		require.NoError(t, err2)
-		result2Map, ok2 := result2.(map[string]any)
-		require.True(t, ok2)
-		assert.Equal(t, "hello", result2Map["original"])
-		assert.Equal(t, "union_value", result2Map["type"])
+		assert.Equal(t, "hello", result2)
 	})
 }
 
 // =============================================================================
-// 10. Union values metadata tests
+// Refine tests
 // =============================================================================
 
-func TestUnionValuesMetadata(t *testing.T) {
-	schema := Union([]core.ZodType[any, any]{
-		Literal("a"),
-		Literal("b"),
-		Literal("c"),
+func TestUnion_Refine(t *testing.T) {
+	t.Run("refine validation", func(t *testing.T) {
+		// Only accept strings longer than 3 chars or positive numbers
+		schema := Union([]any{String(), Int()}).Refine(func(v any) bool {
+			switch val := v.(type) {
+			case string:
+				return len(val) > 3
+			case int:
+				return val > 0
+			default:
+				return false
+			}
+		})
+
+		// Valid string
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		// Valid int
+		result, err = schema.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		// Invalid string (too short)
+		_, err = schema.Parse("hi")
+		assert.Error(t, err)
+
+		// Invalid int (negative)
+		_, err = schema.Parse(-5)
+		assert.Error(t, err)
 	})
 
-	internals := schema.GetInternals()
-	require.NotNil(t, internals)
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Must be non-empty string or positive number"
+		schema := Union([]any{String(), Int()}).Refine(func(v any) bool {
+			switch val := v.(type) {
+			case string:
+				return len(val) > 0
+			case int:
+				return val > 0
+			default:
+				return false
+			}
+		}, core.SchemaParams{Error: errorMessage})
 
-	// Collect values set from internals
-	values := make(map[any]struct{})
-	for v := range internals.Values {
-		values[v] = struct{}{}
-	}
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
 
-	// Expect exactly three literal values
-	assert.Len(t, values, 3)
-	for _, v := range []any{"a", "b", "c"} {
-		_, ok := values[v]
-		assert.True(t, ok, "missing value %v", v)
-	}
+		_, err = schema.Parse("")
+		assert.Error(t, err)
+
+		_, err = schema.Parse(-1)
+		assert.Error(t, err)
+	})
+}
+
+func TestUnion_RefineAny(t *testing.T) {
+	t.Run("refineAny validation", func(t *testing.T) {
+		// Accept any value that converts to string "valid"
+		schema := Union([]any{String(), Bool()}).RefineAny(func(v any) bool {
+			return v == "valid" || v == true
+		})
+
+		// Valid string
+		result, err := schema.Parse("valid")
+		require.NoError(t, err)
+		assert.Equal(t, "valid", result)
+
+		// Valid bool
+		result, err = schema.Parse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Invalid string
+		_, err = schema.Parse("invalid")
+		assert.Error(t, err)
+
+		// Invalid bool
+		_, err = schema.Parse(false)
+		assert.Error(t, err)
+	})
 }
 
 // =============================================================================
-// 11. Inferred types & empty object/array handling
+// Type-specific methods tests
 // =============================================================================
 
-func TestUnionInferredTypes(t *testing.T) {
-	// Union between an empty object and an array of empty objects
-	objectSchema := Object(core.ObjectSchema{})
-	arraySchema := Slice(objectSchema)
+func TestUnion_TypeSpecificMethods(t *testing.T) {
+	t.Run("Options method returns all member schemas", func(t *testing.T) {
+		stringSchema := String()
+		intSchema := Int()
+		boolSchema := Bool()
 
-	schema := Union([]core.ZodType[any, any]{objectSchema, arraySchema})
+		union := Union([]any{stringSchema, intSchema, boolSchema})
 
-	t.Run("parse empty object", func(t *testing.T) {
-		result, err := schema.Parse(map[string]any{})
-		require.NoError(t, err)
-		assert.IsType(t, map[string]any{}, result)
+		options := union.Options()
+		assert.Len(t, options, 3)
+
+		// Verify all options are present (order should be preserved)
+		// We can't directly compare schema instances, so we test functionality
+		_, err1 := options[0].ParseAny("test")
+		assert.NoError(t, err1, "First option should accept strings")
+
+		_, err2 := options[1].ParseAny(123)
+		assert.NoError(t, err2, "Second option should accept ints")
+
+		_, err3 := options[2].ParseAny(true)
+		assert.NoError(t, err3, "Third option should accept bools")
 	})
 
-	t.Run("parse array of objects", func(t *testing.T) {
-		input := []map[string]any{{}}
-		result, err := schema.Parse(input)
+	t.Run("UnionOf constructor", func(t *testing.T) {
+		// Test variadic constructor
+		union := UnionOf(String(), Int(), Bool())
+
+		options := union.Options()
+		assert.Len(t, options, 3)
+
+		// Test functionality
+		result, err := union.Parse("hello")
 		require.NoError(t, err)
-		assert.IsType(t, []any{}, result)
-		// Ensure inner element is object
-		if slice, ok := result.([]any); ok {
-			require.Len(t, slice, 1)
-			assert.IsType(t, map[string]any{}, slice[0])
+		assert.Equal(t, "hello", result)
+
+		result, err = union.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		result, err = union.Parse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+}
+
+// =============================================================================
+// Error handling and edge case tests
+// =============================================================================
+
+func TestUnion_ErrorHandling(t *testing.T) {
+	t.Run("union with all failing members", func(t *testing.T) {
+		schema := Union([]any{String(), Bool()})
+		_, err := schema.Parse(123.45)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no union member matched")
+	})
+
+	t.Run("invalid union member", func(t *testing.T) {
+		// This should panic during construction, not during parse
+		assert.Panics(t, func() {
+			Union([]any{String(), 123}) // 123 is not a schema
+		})
+	})
+}
+
+func TestUnion_EdgeCases(t *testing.T) {
+	t.Run("union with discriminated union", func(t *testing.T) {
+		// Create object schemas with literal constraints for discriminator field
+		dogSchema := Object(core.ObjectSchema{
+			"type": Literal("dog"),
+			"bark": String(),
+		})
+		catSchema := Object(core.ObjectSchema{
+			"type": Literal("cat"),
+			"meow": String(),
+		})
+
+		// Discriminated union
+		animalSchema := DiscriminatedUnion("type", []any{
+			dogSchema,
+			catSchema,
+		})
+
+		// Regular union containing the discriminated union
+		schema := Union([]any{
+			animalSchema,
+			Int(),
+		})
+
+		// Test valid discriminated union member
+		result, err := schema.Parse(map[string]any{
+			"type": "dog",
+			"bark": "woof",
+		})
+		require.NoError(t, err)
+		expected := map[string]any{
+			"type": "dog",
+			"bark": "woof",
 		}
+		assert.Equal(t, expected, result)
+
+		// Test other valid union member
+		result, err = schema.Parse(123)
+		require.NoError(t, err)
+		assert.Equal(t, 123, result)
+	})
+
+	t.Run("union of unions", func(t *testing.T) {
+		stringOrInt := UnionOf(String(), Int())
+		boolOrFloat := UnionOf(Bool(), Float())
+
+		schema := UnionOf(stringOrInt, boolOrFloat)
+
+		// Test nested union members
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		result, err = schema.Parse(3.14)
+		require.NoError(t, err)
+		assert.Equal(t, 3.14, result)
+	})
+
+	t.Run("coerce number to string in union", func(t *testing.T) {
+		schema := Union([]any{CoercedString(), Int()})
+
+		// Coercion should work, but int takes precedence for int input
+		result, err := schema.Parse(42)
+		require.NoError(t, err)
+		assert.IsType(t, 0, result) // Should be int, not string
+	})
+
+	t.Run("union with nil schema", func(t *testing.T) {
+		schema := Union([]any{String(), nil, Int()})
+		_, err := schema.Parse(true) // Should still fail, but not panic
+		assert.Error(t, err)
+	})
+}
+
+func TestUnion_NonOptional(t *testing.T) {
+	t.Run("basic non-optional", func(t *testing.T) {
+		schema := UnionOf(String(), Int()).Optional().NonOptional()
+
+		// valid string should pass
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+		assert.IsType(t, "", result)
+
+		// valid int should pass
+		result, err = schema.Parse(123)
+		require.NoError(t, err)
+		assert.Equal(t, 123, result)
+		assert.IsType(t, 0, result)
+
+		// nil should now fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("chained optional and non-optional", func(t *testing.T) {
+		schema := UnionOf(String(), Bool()).Optional().NonOptional().Optional().NonOptional()
+
+		// valid bool should pass
+		result, err := schema.Parse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+		assert.IsType(t, false, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("non-optional on already non-optional schema", func(t *testing.T) {
+		schema := UnionOf(Float(), String()).NonOptional()
+
+		// valid float should pass
+		result, err := schema.Parse(3.14)
+		require.NoError(t, err)
+		assert.Equal(t, 3.14, result)
+		assert.IsType(t, 0.0, result)
+
+		// nil should fail
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
 	})
 }

@@ -70,6 +70,9 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 	// Store payload path to avoid repeated calls
 	payloadPath := payload.GetPath()
 
+	// Track the current value as it may be modified by overwrite checks
+	currentValue := value
+
 	// Execute each check sequentially
 	for i := 0; i < checksLen; i++ {
 		check := checks[i]
@@ -82,11 +85,14 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 			continue
 		}
 
-		// Create independent payload for each check
-		checkPayload := core.NewParsePayloadWithPath(value, payloadPath)
+		// Create independent payload for each check with current value
+		checkPayload := core.NewParsePayloadWithPath(currentValue, payloadPath)
 
 		// Execute the check function
 		checkInternals.Check(checkPayload)
+
+		// Update current value in case it was modified by the check (e.g., overwrite)
+		currentValue = checkPayload.GetValue()
 
 		// Process check results
 		checkIssues := checkPayload.GetIssues()
@@ -103,32 +109,19 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 				checkIssues[j].Message = errorFn(checkIssues[j])
 				checkIssues[j].Inst = checkInternals
 			}
-			checkPayload.SetIssues(checkIssues)
 		}
 
 		// Merge issues into main payload
-		mainIssues := payload.GetIssues()
-		mainIssuesLen := len(mainIssues)
-
-		// Append issues to main payload
-		if cap(mainIssues) >= mainIssuesLen+checkIssuesLen {
-			// Sufficient capacity, extend existing slice
-			newIssues := mainIssues[:mainIssuesLen+checkIssuesLen]
-			copy(newIssues[mainIssuesLen:], checkIssues)
-			payload.SetIssues(newIssues)
-		} else {
-			// Need to allocate new slice
-			mergedIssues := make([]core.ZodRawIssue, mainIssuesLen+checkIssuesLen)
-			copy(mergedIssues, mainIssues)
-			copy(mergedIssues[mainIssuesLen:], checkIssues)
-			payload.SetIssues(mergedIssues)
-		}
+		payload.AddIssues(checkIssues...)
 
 		// Stop execution if abort flag is set
 		if checkInternals.Def.Abort {
 			break
 		}
 	}
+
+	// Update the main payload value with the potentially modified value
+	payload.SetValue(currentValue)
 
 	return payload
 }
