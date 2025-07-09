@@ -332,7 +332,7 @@ func parsePrimitiveValue[T any](
 	}
 
 	// Try coercion if enabled (slowest path)
-	if shouldTryCoercion(internals, expectedType) {
+	if shouldTryCoercion(internals) {
 		if coerced, err := coerce.To[T](input); err == nil {
 			return validateAndReturnWithPrefault(coerced, internals.Checks, validator, internals, expectedType, ctx)
 		}
@@ -412,7 +412,7 @@ func dereferencePointer(input any) (dereferenced any, isNilPtr bool) {
 }
 
 // shouldTryCoercion determines if coercion should be attempted for performance.
-func shouldTryCoercion(internals *core.ZodTypeInternals, expectedType core.ZodTypeCode) bool {
+func shouldTryCoercion(internals *core.ZodTypeInternals) bool {
 	// Coercion is opt-in at the type level (e.g., String, Int, etc.)
 	return internals.Coerce
 }

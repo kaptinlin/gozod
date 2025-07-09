@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/types"
 	lib "github.com/kaptinlin/jsonschema"
 )
 
@@ -152,23 +153,27 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts JSONSchemaOp
 
 // converter holds the state for a single conversion run.
 type converter struct {
-	opts   JSONSchemaOptions
-	seen   map[core.ZodSchema]*lib.Schema
-	counts map[core.ZodSchema]int
-	refs   map[core.ZodSchema]string
-	auto   int
-	path   []string
-	defs   map[string]*lib.Schema
-	depth  int
+	opts        JSONSchemaOptions
+	seen        map[core.ZodSchema]*lib.Schema
+	counts      map[core.ZodSchema]int
+	refs        map[core.ZodSchema]string
+	auto        int
+	path        []string
+	defs        map[string]*lib.Schema
+	depth       int
+	idCache     map[core.ZodSchema]string         // cache for getID results
+	unwrapCache map[core.ZodSchema]core.ZodSchema // cache for unwrapSchema results
 }
 
 func newConverter(opts JSONSchemaOptions) *converter {
 	return &converter{
-		opts:   opts,
-		seen:   make(map[core.ZodSchema]*lib.Schema),
-		counts: make(map[core.ZodSchema]int),
-		refs:   make(map[core.ZodSchema]string),
-		defs:   make(map[string]*lib.Schema),
+		opts:        opts,
+		seen:        make(map[core.ZodSchema]*lib.Schema),
+		counts:      make(map[core.ZodSchema]int),
+		refs:        make(map[core.ZodSchema]string),
+		defs:        make(map[string]*lib.Schema),
+		idCache:     make(map[core.ZodSchema]string),
+		unwrapCache: make(map[core.ZodSchema]core.ZodSchema),
 	}
 }
 
@@ -177,13 +182,18 @@ func newConverter(opts JSONSchemaOptions) *converter {
 // ID hoisting and reused-schema detection to operate on the underlying core
 // schema rather than wrapper instances.
 func (c *converter) unwrapSchema(s core.ZodSchema) core.ZodSchema {
+	if cached, ok := c.unwrapCache[s]; ok {
+		return cached
+	}
 	visited := map[core.ZodSchema]struct{}{}
 	for {
 		if s == nil {
+			c.unwrapCache[s] = nil
 			return nil
 		}
 		if _, ok := visited[s]; ok {
 			// cycle guard
+			c.unwrapCache[s] = s
 			return s
 		}
 		visited[s] = struct{}{}
@@ -196,6 +206,7 @@ func (c *converter) unwrapSchema(s core.ZodSchema) core.ZodSchema {
 		}
 		break
 	}
+	c.unwrapCache[s] = s
 	return s
 }
 
@@ -559,6 +570,22 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 	}
 }
 
+// catchaller is an interface for schemas that have a catch-all schema.
+type catchaller interface {
+	GetCatchall() core.ZodSchema
+}
+
+// unknownKeysHandler is an interface for schemas that handle unknown keys.
+// We use a generic method signature to avoid circular imports.
+type unknownKeysHandler interface {
+	GetUnknownKeys() any
+}
+
+// unwrapper is an interface for schemas that can unwrap to reveal inner schemas.
+type unwrapper interface {
+	Unwrap() core.ZodType[any]
+}
+
 func (c *converter) convertObject(schema core.ZodSchema) (*lib.Schema, error) {
 	// Try ObjectSchema first (for ZodObject)
 	if s, ok := schema.(interface{ Shape() core.ObjectSchema }); ok {
@@ -619,34 +646,46 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 
 	// Handle additionalProperties based on catchall and unknown keys mode
 	// Try to call GetUnknownKeys and GetCatchall methods
-	if objMethod := reflect.ValueOf(schema).MethodByName("GetCatchall"); objMethod.IsValid() {
-		if results := objMethod.Call(nil); len(results) == 1 {
-			if catchallSchema, ok := results[0].Interface().(core.ZodSchema); ok && catchallSchema != nil {
-				// If there's a catchall schema, convert it to additionalProperties
-				c.path = append(c.path, "additionalProperties")
-				catchallJsonSchema, err := c.convert(catchallSchema)
-				if err != nil {
-					return nil, err
-				}
-				jsonSchema.AdditionalProperties = catchallJsonSchema
-				c.path = c.path[:len(c.path)-1]
+	if s, ok := schema.(catchaller); ok {
+		if catchallSchema := s.GetCatchall(); catchallSchema != nil {
+			// If there's a catchall schema, convert it to additionalProperties
+			c.path = append(c.path, "additionalProperties")
+			catchallJsonSchema, err := c.convert(catchallSchema)
+			if err != nil {
+				return nil, err
 			}
+			jsonSchema.AdditionalProperties = catchallJsonSchema
+			c.path = c.path[:len(c.path)-1]
 		}
 	}
 
-	if unknownKeysMethod := reflect.ValueOf(schema).MethodByName("GetUnknownKeys"); unknownKeysMethod.IsValid() {
-		if results := unknownKeysMethod.Call(nil); len(results) == 1 {
-			modeStr := fmt.Sprint(results[0].Interface())
-			if jsonSchema.AdditionalProperties == nil {
+	if jsonSchema.AdditionalProperties == nil {
+		// Prefer the fast interface assertion path.
+		if uk, ok := schema.(unknownKeysHandler); ok {
+			modeStr := fmt.Sprint(uk.GetUnknownKeys())
+			if modeStr == string(types.ObjectModePassthrough) || modeStr == "passthrough" {
+				trueValue := true
+				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &trueValue}
+			} else {
+				// "strict" and "strip" (or unknown) => additionalProperties false
+				falseValue := false
+				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
+			}
+		} else if unknownKeysMethod := reflect.ValueOf(schema).MethodByName("GetUnknownKeys"); unknownKeysMethod.IsValid() {
+			if results := unknownKeysMethod.Call(nil); len(results) == 1 {
+				modeStr := fmt.Sprint(results[0].Interface())
 				if modeStr == "passthrough" {
 					trueValue := true
 					jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &trueValue}
 				} else {
-					// "strict", "strip" and other modes default to disallow
 					falseValue := false
 					jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
 				}
 			}
+		} else {
+			// Default for objects without unknown keys info
+			falseValue := false
+			jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
 		}
 	}
 
@@ -748,13 +787,16 @@ func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 		d := meta.Description
 		jsonSchema.Description = &d
 	}
-	if len(meta.Examples) > 0 && (jsonSchema.Examples == nil || len(jsonSchema.Examples) == 0) {
+	if len(meta.Examples) > 0 && len(jsonSchema.Examples) == 0 {
 		jsonSchema.Examples = meta.Examples
 	}
 }
 
 // getID retrieves meta.ID for schema via opts.Metadata or global registry.
 func (c *converter) getID(schema core.ZodSchema) string {
+	if id, ok := c.idCache[schema]; ok {
+		return id
+	}
 	reg := c.opts.Metadata
 	if reg == nil {
 		reg = core.GlobalRegistry
@@ -774,136 +816,121 @@ func (c *converter) getID(schema core.ZodSchema) string {
 			return ""
 		}
 	}
+	c.idCache[schema] = meta.ID
 	return meta.ID
 }
 
 // applyBag copies well-known constraint keys from Zod internals.Bag to JSON Schema.
 func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
-	if v, ok := bag["minLength"]; ok {
-		if f, ok := toFloat(v); ok {
-			js.MinLength = &f
-		}
-	}
-	if v, ok := bag["maxLength"]; ok {
-		if f, ok := toFloat(v); ok {
-			js.MaxLength = &f
-		}
-	}
-
-	// Handle single pattern for backward compatibility
+	// First handle pattern/patterns specially as they may need to merge
 	if v, ok := bag["pattern"]; ok {
 		if p, ok := v.(string); ok {
 			if js.Pattern == nil {
 				js.Pattern = &p
-			} else if js.AllOf == nil {
-				js.AllOf = []*lib.Schema{{Pattern: js.Pattern}, {Pattern: &p}}
-				js.Pattern = nil
 			} else {
-				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: js.Pattern})
+				if js.AllOf == nil {
+					js.AllOf = []*lib.Schema{{Pattern: js.Pattern}}
+				}
+				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &p})
+				js.Pattern = nil
 			}
 		}
 	}
 
-	// Handle multiple patterns
 	if v, ok := bag["patterns"]; ok {
-		if patterns, ok := v.([]string); ok {
-			if len(patterns) > 0 {
-				// If a single pattern already exists, move it to allOf
-				if js.Pattern != nil {
-					if js.AllOf == nil {
-						js.AllOf = []*lib.Schema{}
-					}
-					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: js.Pattern})
-					js.Pattern = nil
+		if patterns, ok := v.([]string); ok && len(patterns) > 0 {
+			// Move existing single pattern to allOf
+			if js.Pattern != nil {
+				if js.AllOf == nil {
+					js.AllOf = []*lib.Schema{}
 				}
+				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: js.Pattern})
+				js.Pattern = nil
+			}
 
-				if len(patterns) == 1 && js.AllOf == nil {
-					// If only one new pattern and no existing allOf, set it as the main pattern
-					js.Pattern = &patterns[0]
-				} else {
-					// Otherwise, add all new patterns to allOf
-					if js.AllOf == nil {
-						js.AllOf = []*lib.Schema{}
-					}
-					for _, p := range patterns {
-						pCopy := p
-						js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &pCopy})
-					}
+			if len(patterns) == 1 && js.AllOf == nil {
+				js.Pattern = &patterns[0]
+			} else {
+				if js.AllOf == nil {
+					js.AllOf = []*lib.Schema{}
+				}
+				for _, p := range patterns {
+					pCopy := p
+					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &pCopy})
 				}
 			}
 		}
 	}
 
-	if v, ok := bag["format"]; ok {
-		if f, ok := v.(string); ok {
-			js.Format = &f
-		}
-	}
-	if v, ok := bag["contentEncoding"]; ok {
-		if ce, ok := v.(string); ok {
-			js.ContentEncoding = &ce
-		}
-	}
-	if v, ok := bag["contentMediaType"]; ok {
-		if cmt, ok := v.(string); ok {
-			js.ContentMediaType = &cmt
-		}
-	}
-	if v, ok := bag["minimum"]; ok {
-		if n, ok := toRat(v); ok {
-			js.Minimum = &n
-		}
-	}
-	if v, ok := bag["maximum"]; ok {
-		if n, ok := toRat(v); ok {
-			js.Maximum = &n
-		}
-	}
-	if v, ok := bag["multipleOf"]; ok {
-		if n, ok := toRat(v); ok {
-			js.MultipleOf = &n
-		}
-	}
-	if v, ok := bag["exclusiveMinimum"]; ok {
-		if n, ok := toRat(v); ok {
-			js.ExclusiveMinimum = &n
-		}
-	}
-	if v, ok := bag["exclusiveMaximum"]; ok {
-		if n, ok := toRat(v); ok {
-			js.ExclusiveMaximum = &n
-		}
-	}
-	if v, ok := bag["minItems"]; ok {
-		if n, ok := toFloat(v); ok {
-			js.MinItems = &n
-		}
-	}
-	if v, ok := bag["maxItems"]; ok {
-		if n, ok := toFloat(v); ok {
-			js.MaxItems = &n
-		}
-	}
-	if v, ok := bag["minSize"]; ok {
-		if n, ok := toFloat(v); ok {
-			js.MinLength = &n
-		}
-	}
-	if v, ok := bag["maxSize"]; ok {
-		if n, ok := toFloat(v); ok {
-			js.MaxLength = &n
-		}
-	}
-	if v, ok := bag["size"]; ok {
-		if n, ok := toFloat(v); ok {
-			js.MinLength = &n
-			js.MaxLength = &n
-		}
-	}
-	if v, ok := bag["mime"]; ok {
-		if mimes, ok := v.([]string); ok && len(mimes) == 1 {
-			cm := mimes[0]
-			js.ContentMediaType = &cm
+	// Table-driven simple setters to minimize reflection and branching.
+	for k, v := range bag {
+		switch k {
+		case "minLength":
+			if f, ok := toFloat(v); ok {
+				js.MinLength = &f
+			}
+		case "maxLength":
+			if f, ok := toFloat(v); ok {
+				js.MaxLength = &f
+			}
+		case "format":
+			if s, ok := v.(string); ok {
+				js.Format = &s
+			}
+		case "contentEncoding":
+			if s, ok := v.(string); ok {
+				js.ContentEncoding = &s
+			}
+		case "contentMediaType":
+			if s, ok := v.(string); ok {
+				js.ContentMediaType = &s
+			}
+		case "minimum":
+			if r, ok := toRat(v); ok {
+				js.Minimum = &r
+			}
+		case "maximum":
+			if r, ok := toRat(v); ok {
+				js.Maximum = &r
+			}
+		case "multipleOf":
+			if r, ok := toRat(v); ok {
+				js.MultipleOf = &r
+			}
+		case "exclusiveMinimum":
+			if r, ok := toRat(v); ok {
+				js.ExclusiveMinimum = &r
+			}
+		case "exclusiveMaximum":
+			if r, ok := toRat(v); ok {
+				js.ExclusiveMaximum = &r
+			}
+		case "minItems":
+			if f, ok := toFloat(v); ok {
+				js.MinItems = &f
+			}
+		case "maxItems":
+			if f, ok := toFloat(v); ok {
+				js.MaxItems = &f
+			}
+		case "minSize":
+			if f, ok := toFloat(v); ok {
+				js.MinLength = &f
+			}
+		case "maxSize":
+			if f, ok := toFloat(v); ok {
+				js.MaxLength = &f
+			}
+		case "size":
+			if f, ok := toFloat(v); ok {
+				js.MinLength = &f
+				js.MaxLength = &f
+			}
+		case "mime":
+			if mimes, ok := v.([]string); ok && len(mimes) == 1 {
+				cm := mimes[0]
+				js.ContentMediaType = &cm
+			}
 		}
 	}
 }
@@ -1083,19 +1110,15 @@ func (c *converter) convertRecord(schema core.ZodSchema) (*lib.Schema, error) {
 
 // convertEnum handles ZodEnum -> JSON Schema enum
 func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
-	// Attempt to call Options() via reflection to get enum values
+	// Use reflection to call Options() method to get enum values
 	var enumValues []any
-	sv := reflect.ValueOf(schema)
-	if !sv.IsValid() {
-		return nil, ErrInvalidEnumSchema
-	}
-	method := sv.MethodByName("Options")
-	if method.IsValid() {
-		results := method.Call(nil)
-		if len(results) == 1 {
+	if optionsMethod := reflect.ValueOf(schema).MethodByName("Options"); optionsMethod.IsValid() {
+		if results := optionsMethod.Call(nil); len(results) == 1 {
 			slice := results[0]
-			for i := 0; i < slice.Len(); i++ {
-				enumValues = append(enumValues, slice.Index(i).Interface())
+			if slice.IsValid() && slice.Kind() == reflect.Slice {
+				for i := 0; i < slice.Len(); i++ {
+					enumValues = append(enumValues, slice.Index(i).Interface())
+				}
 			}
 		}
 	}
@@ -1130,21 +1153,21 @@ func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
 
 // convertLiteral handles ZodLiteral -> JSON Schema const/enum
 func (c *converter) convertLiteral(schema core.ZodSchema) (*lib.Schema, error) {
-	schemaValue := reflect.ValueOf(schema)
-	method := schemaValue.MethodByName("Values")
-	if !method.IsValid() {
+	// Use reflection to call Values() method to get literal values
+	var values []any
+	if valuesMethod := reflect.ValueOf(schema).MethodByName("Values"); valuesMethod.IsValid() {
+		if results := valuesMethod.Call(nil); len(results) == 1 {
+			sliceValue := results[0]
+			if sliceValue.IsValid() && sliceValue.Kind() == reflect.Slice {
+				values = make([]any, sliceValue.Len())
+				for i := 0; i < sliceValue.Len(); i++ {
+					values[i] = sliceValue.Index(i).Interface()
+				}
+			}
+		}
+	}
+	if len(values) == 0 {
 		return nil, ErrLiteralNoValuesMethod
-	}
-
-	result := method.Call(nil)
-	if len(result) != 1 {
-		return nil, ErrLiteralUnexpectedReturnValues
-	}
-
-	sliceValue := result[0]
-	values := make([]any, sliceValue.Len())
-	for i := 0; i < sliceValue.Len(); i++ {
-		values[i] = sliceValue.Index(i).Interface()
 	}
 
 	jsonSchema := &lib.Schema{}
@@ -1247,49 +1270,42 @@ func ptrToString(s string) *string { return &s }
 
 // convertLazy resolves inner schema and delegates conversion.
 func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
-	// Attempt to call Unwrap() to get inner schema.
-	if unwrapMethod := reflect.ValueOf(schema).MethodByName("Unwrap"); unwrapMethod.IsValid() {
-		res := unwrapMethod.Call(nil)
-		if len(res) == 1 {
-			inner := res[0].Interface()
+	// Use interface assertion to get inner schema
+	if s, ok := schema.(unwrapper); ok {
+		inner := s.Unwrap()
 
-			// Try core.ZodSchema first
-			if zodSchema, ok := inner.(core.ZodSchema); ok {
-				// Check if this creates a cycle by looking for the inner schema in our path
-				if _, found := c.seen[zodSchema]; found {
-					// This is a cycle, return a reference to the root or $defs if available
-					if id := c.getID(zodSchema); id != "" {
-						return &lib.Schema{Ref: "#/$defs/" + id}, nil
-					}
-					if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
-						return &lib.Schema{Ref: "#/$defs/" + name}, nil
-					}
-					return &lib.Schema{Ref: "#"}, nil
+		// Try core.ZodSchema first
+		if zodSchema, ok := inner.(core.ZodSchema); ok {
+			// Check if this creates a cycle by looking for the inner schema in our path
+			if _, found := c.seen[zodSchema]; found {
+				// This is a cycle, return a reference to the root or $defs if available
+				if id := c.getID(zodSchema); id != "" {
+					return &lib.Schema{Ref: "#/$defs/" + id}, nil
 				}
-				return c.convert(zodSchema)
+				if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
+					return &lib.Schema{Ref: "#/$defs/" + name}, nil
+				}
+				return &lib.Schema{Ref: "#"}, nil
 			}
+			return c.convert(zodSchema)
+		}
 
-			// Try core.ZodType[any] and extract the wrapped schema
-			if zodType, ok := inner.(core.ZodType[any]); ok {
-				// Try to call GetInner method on schemaWrapper
-				if method := reflect.ValueOf(zodType).MethodByName("GetInner"); method.IsValid() {
-					if results := method.Call(nil); len(results) == 1 {
-						actualInner := results[0].Interface()
-						if zodSchema, ok := actualInner.(core.ZodSchema); ok {
-							// Check if this creates a cycle by looking for the inner schema in our path
-							if _, found := c.seen[zodSchema]; found {
-								// This is a cycle, return a reference as above
-								if id := c.getID(zodSchema); id != "" {
-									return &lib.Schema{Ref: "#/$defs/" + id}, nil
-								}
-								if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
-									return &lib.Schema{Ref: "#/$defs/" + name}, nil
-								}
-								return &lib.Schema{Ref: "#"}, nil
-							}
-							return c.convert(zodSchema)
+		// `inner` is already a core.ZodType[any]; attempt to call GetInner via reflection to unwrap further
+		if method := reflect.ValueOf(inner).MethodByName("GetInner"); method.IsValid() {
+			if results := method.Call(nil); len(results) == 1 {
+				actualInner := results[0].Interface()
+				if zodSchema, ok := actualInner.(core.ZodSchema); ok {
+					// Detect potential cycles
+					if _, found := c.seen[zodSchema]; found {
+						if id := c.getID(zodSchema); id != "" {
+							return &lib.Schema{Ref: "#/$defs/" + id}, nil
 						}
+						if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
+							return &lib.Schema{Ref: "#/$defs/" + name}, nil
+						}
+						return &lib.Schema{Ref: "#"}, nil
 					}
+					return c.convert(zodSchema)
 				}
 			}
 		}
