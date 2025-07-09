@@ -212,13 +212,19 @@ func (z *ZodNever[T, R]) Prefault(value T) *ZodNever[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a prefault function - preserves current constraint type
+// PrefaultFunc keeps the current generic type R.
 func (z *ZodNever[T, R]) PrefaultFunc(fn func() T) *ZodNever[T, R] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this never schema.
+func (z *ZodNever[T, R]) Meta(meta core.GlobalMeta) *ZodNever[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 //////////////////////////
@@ -240,7 +246,7 @@ func (z *ZodNever[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		baseValue := extractNeverValue[T, R](input)
 		return target.Parse(baseValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 //////////////////////////

@@ -205,6 +205,12 @@ func (z *ZodFile[T, R]) PrefaultFunc(fn func() T) *ZodFile[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this file schema.
+func (z *ZodFile[T, R]) Meta(meta core.GlobalMeta) *ZodFile[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -326,7 +332,7 @@ func (z *ZodFile[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		baseValue := extractFileValue[T, R](input)
 		return target.Parse(baseValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================

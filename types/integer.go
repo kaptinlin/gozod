@@ -420,13 +420,19 @@ func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc keeps the current generic type T.
-func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() int64) *ZodIntegerTyped[T, R] {
+// PrefaultFunc keeps the current generic type R.
+func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this integer schema in the global registry.
+func (z *ZodIntegerTyped[T, R]) Meta(meta core.GlobalMeta) *ZodIntegerTyped[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -573,7 +579,7 @@ func (z *ZodIntegerTyped[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, 
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -822,7 +828,7 @@ func convertToIntegerType[T IntegerConstraint](v any) (T, bool) {
 
 // RefineAny adds flexible custom validation logic
 func (z *ZodIntegerTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -1370,7 +1376,7 @@ func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayloa
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	in := z.internals.ZodTypeInternals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)

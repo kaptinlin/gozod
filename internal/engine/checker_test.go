@@ -140,7 +140,7 @@ func TestRunChecksOnValue(t *testing.T) {
 				return len(s) > 5 // This should fail for "test"
 			}
 			return false
-		}, core.SchemaParams{})
+		}, core.CustomParams{})
 
 		checkList := []core.ZodCheck{check}
 
@@ -156,7 +156,7 @@ func TestRunChecksOnValue(t *testing.T) {
 	})
 
 	t.Run("nil payload", func(t *testing.T) {
-		check := checks.NewCustom[string](func(v any) bool { return true }, core.SchemaParams{})
+		check := checks.NewCustom[string](func(v any) bool { return true }, core.CustomParams{})
 
 		result := RunChecksOnValue("test", []core.ZodCheck{check}, nil)
 
@@ -187,7 +187,7 @@ func TestExecuteChecks(t *testing.T) {
 
 		check := checks.NewCustom[string](func(v any) bool {
 			return false // Always fail
-		}, core.SchemaParams{
+		}, core.CustomParams{
 			Error: "Custom error message",
 		})
 
@@ -214,13 +214,13 @@ func TestExecuteChecks(t *testing.T) {
 
 		check1 := checks.NewCustom[string](func(v any) bool {
 			return false // Always fail
-		}, core.SchemaParams{
+		}, core.CustomParams{
 			Abort: true,
 		})
 
 		check2 := checks.NewCustom[string](func(v any) bool {
 			return false // Always fail
-		}, core.SchemaParams{})
+		}, core.CustomParams{})
 
 		checkList := []core.ZodCheck{check1, check2}
 
@@ -248,7 +248,7 @@ func TestExecuteChecks(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			check := checks.NewCustom[string](func(v any) bool {
 				return false // Always fail to generate issues
-			}, core.SchemaParams{})
+			}, core.CustomParams{})
 			checkList = append(checkList, check)
 		}
 
@@ -272,7 +272,7 @@ func TestExecuteChecks(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			check := checks.NewCustom[string](func(v any) bool {
 				return true // Always pass
-			}, core.SchemaParams{})
+			}, core.CustomParams{})
 			checkList = append(checkList, check)
 		}
 

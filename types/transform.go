@@ -5,7 +5,12 @@ import "github.com/kaptinlin/gozod/core"
 // ZodTransformDef represents the definition of a transformation schema.
 type ZodTransformDef struct {
 	core.ZodTypeDef
-	transform func(arg any, ctx *core.RefinementContext) (any, error)
+	transform   func(arg any, ctx *core.RefinementContext) (any, error)
+	innerSchema core.ZodSchema
+}
+
+func (d *ZodTransformDef) Transform() func(any, *core.RefinementContext) (any, error) {
+	return d.transform
 }
 
 // ZodTransform represents a schema with a custom transformation.
@@ -30,6 +35,11 @@ func (z *ZodTransform[In, Out]) Parse(input any) (any, error) {
 	// which will call the transform function from internals.
 	// This Parse method is here to satisfy the ZodType interface.
 	return z.internals.Def.transform(input, nil)
+}
+
+// GetInner returns the input schema for the transformation.
+func (z *ZodTransform[In, Out]) GetInner() core.ZodSchema {
+	return z.internals.Def.innerSchema
 }
 
 // Type returns the type of the schema

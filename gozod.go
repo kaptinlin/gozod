@@ -35,6 +35,7 @@ type (
 	ZodCheckFn         = core.ZodCheckFn
 	ZodWhenFn          = core.ZodWhenFn
 	CheckParams        = core.CheckParams
+	CustomParams       = core.CustomParams
 	ZodRefineFn[T any] = core.ZodRefineFn[T]
 )
 
@@ -317,15 +318,15 @@ var (
 	MapPtr   = types.MapPtr
 )
 
-// Record creates a record schema whose value type is inferred from the provided valueSchema.
-// Example: Record(Int()) returns a schema that parses map[string]int.
-func Record[V any](valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, map[string]V] {
-	return types.RecordTyped[map[string]V, map[string]V](valueSchema, paramArgs...)
+// Record creates a record schema with the specified key schema and value schema.
+// Example: Record(String(), Int()) parses map[string]int.
+func Record[K any, V any](keySchema any, valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, map[string]V] {
+	return types.RecordTyped[map[string]V, map[string]V](keySchema, valueSchema, paramArgs...)
 }
 
 // RecordPtr is the pointer-returning counterpart of Record.
-func RecordPtr[V any](valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, *map[string]V] {
-	return types.RecordTyped[map[string]V, *map[string]V](valueSchema, paramArgs...)
+func RecordPtr[K any, V any](keySchema any, valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, *map[string]V] {
+	return types.RecordTyped[map[string]V, *map[string]V](keySchema, valueSchema, paramArgs...)
 }
 
 func Slice[T any](elementSchema any, paramArgs ...any) *ZodSlice[T, []T] {
@@ -394,11 +395,11 @@ func LiteralPtr[T comparable](value T, params ...any) *ZodLiteral[T, *T] {
 }
 
 func LiteralOf[T comparable](values []T, params ...any) *ZodLiteral[T, T] {
-	return types.LiteralTyped[T](values, params...)
+	return types.LiteralOf[T](values, params...)
 }
 
 func LiteralPtrOf[T comparable](values []T, params ...any) *ZodLiteral[T, *T] {
-	return types.LiteralTyped[T](values, params...).Nilable()
+	return types.LiteralPtrOf[T](values, params...)
 }
 
 func Enum[T comparable](values ...T) *ZodEnum[T, T] {
@@ -476,3 +477,35 @@ var (
 	FormatError                = issues.FormatError
 	TreeifyError               = issues.TreeifyError
 )
+
+// -----------------------------------------------------------------------------
+// REGISTRY API RE-EXPORTS
+// -----------------------------------------------------------------------------
+
+// Registry provides a lightweight, type-safe store for attaching metadata to
+// any Schema. This is an alias to core.Registry to make the API available via
+// the primary gozod package.
+//
+// Example:
+//
+//	fieldReg := gozod.NewRegistry[FieldMeta]()
+//	fieldReg.Add(nameSchema, FieldMeta{Title: "User Name"})
+//
+// See docs/metadata.md for usage patterns and best practices.
+type Registry[M any] = core.Registry[M]
+
+// GlobalMeta mirrors common JSON-Schema keys and serves as a convenient default
+// metadata structure. Alias to core.GlobalMeta so callers don't need to import
+// the core package.
+type GlobalMeta = core.GlobalMeta
+
+// NewRegistry creates an empty Registry. It's a thin wrapper around
+// core.NewRegistry to expose the constructor at the root package level.
+func NewRegistry[M any]() *Registry[M] {
+	return core.NewRegistry[M]()
+}
+
+// GlobalRegistry is the framework-provided, process-wide registry instance. Use
+// it to store shared metadata that should be accessible throughout your
+// application.
+var GlobalRegistry = core.GlobalRegistry

@@ -221,6 +221,12 @@ func (z *ZodAny[T, R]) PrefaultFunc(fn func() T) *ZodAny[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this any schema.
+func (z *ZodAny[T, R]) Meta(meta core.GlobalMeta) *ZodAny[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -303,7 +309,7 @@ func (z *ZodAny[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		anyValue := extractAnyValue[T, R](input)
 		return target.Parse(anyValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================

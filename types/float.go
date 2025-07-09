@@ -300,6 +300,13 @@ func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, 
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this float schema in the global registry.
+func (z *ZodFloatTyped[T, R]) Meta(meta core.GlobalMeta) *ZodFloatTyped[T, R] {
+	clone := z.withInternals(&z.internals.ZodTypeInternals)
+	core.GlobalRegistry.Add(clone, meta)
+	return clone
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -514,7 +521,7 @@ func (z *ZodFloatTyped[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, an
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -621,7 +628,7 @@ func convertToFloatType[T FloatConstraint](v any) (T, bool) {
 
 // RefineAny adds flexible custom validation logic
 func (z *ZodFloatTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFloatTyped[T, R] {
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -886,7 +893,7 @@ func (z *ZodFloatTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload)
 			}
 		}
 	}
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

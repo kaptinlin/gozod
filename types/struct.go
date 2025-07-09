@@ -53,6 +53,22 @@ func (z *ZodStruct[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
+// Shape returns the struct field schemas for JSON Schema conversion
+func (z *ZodStruct[T, R]) Shape() core.StructSchema {
+	return z.internals.Shape
+}
+
+// GetUnknownKeys returns the unknown keys handling mode for JSON Schema conversion
+// Structs are strict by default (don't allow additional properties)
+func (z *ZodStruct[T, R]) GetUnknownKeys() string {
+	return "strict"
+}
+
+// GetCatchall returns nil since structs don't support catchall by default
+func (z *ZodStruct[T, R]) GetCatchall() core.ZodSchema {
+	return nil
+}
+
 // Parse validates input using struct-specific parsing logic
 func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var parseCtx *core.ParseContext
@@ -165,6 +181,12 @@ func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this struct schema.
+func (z *ZodStruct[T, R]) Meta(meta core.GlobalMeta) *ZodStruct[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
@@ -207,7 +229,7 @@ func (z *ZodStruct[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		structValue := extractStructValue[T, R](input)
 		return target.Parse(structValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -817,7 +839,7 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

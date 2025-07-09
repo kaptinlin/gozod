@@ -19,8 +19,8 @@ schema := gozod.Struct(gozod.ObjectSchema{
     "age":  gozod.Int(),
 })
 
-jsonSchema := gozod.ToJSONSchema(schema)
-// Returns a *jsonschema.Schema instance ready for validation
+jsonSchema, _ := gozod.ToJSONSchema(schema)
+// Returns a *jsonschema.Schema instance ready for validation.
 ```
 
 All GoZod schemas and validation methods are converted to their closest JSON Schema equivalent. Some Go types have no analog and cannot be reasonably represented. See the [`unrepresentable`](#unrepresentable-types) section below for more information on handling these cases.
@@ -33,9 +33,9 @@ GoZod's `ToJSONSchema()` function returns a `*jsonschema.Schema` instance from t
 import (
     "encoding/json"
     "fmt"
-    "log"
     
     "github.com/kaptinlin/gozod"
+    "github.com/kaptinlin/jsonschema"
 )
 
 func main() {
@@ -47,7 +47,10 @@ func main() {
     })
     
     // Convert to JSON Schema - returns *jsonschema.Schema directly
-    validator := gozod.ToJSONSchema(userSchema)
+    validator, err := gozod.ToJSONSchema(userSchema)
+    if err != nil {
+        panic(err)
+    }
     
     // Validate data directly
     userData := map[string]any{
@@ -72,22 +75,23 @@ GoZod converts the following schema types to the equivalent JSON Schema `format`
 
 ```go
 // Supported via `format`
-gozod.Email()          // => {"type": "string", "format": "email"}
-gozod.ISO.DateTime()   // => {"type": "string", "format": "date-time"}
-gozod.ISO.Date()       // => {"type": "string", "format": "date"}
-gozod.ISO.Time()       // => {"type": "string", "format": "time"}
-gozod.ISO.Duration()   // => {"type": "string", "format": "duration"}
-gozod.IPv4()           // => {"type": "string", "format": "ipv4"}
-gozod.IPv6()           // => {"type": "string", "format": "ipv6"}
-gozod.UUID()           // => {"type": "string", "format": "uuid"}
-gozod.UUIDv4()         // => {"type": "string", "format": "uuid"}
-gozod.URL()            // => {"type": "string", "format": "uri"}
+gozod.Email()         // => {"type": "string", "format": "email"}
+gozod.Uuid()          // => {"type": "string", "format": "uuid"}
+gozod.URL()           // => {"type": "string", "format": "uri"}
+gozod.JWT()           // => {"type": "string", "format": "jwt"}
+gozod.IsoDateTime()   // => {"type": "string", "format": "date-time"}
+gozod.IsoDate()       // => {"type": "string", "format": "date"}
+gozod.IsoTime()       // => {"type": "string", "format": "time"}
+gozod.IsoDuration()   // => {"type": "string", "format": "duration"}
+gozod.IPv4()          // => {"type": "string", "format": "ipv4"}
+gozod.IPv6()          // => {"type": "string", "format": "ipv6"}
 ```
 
 These schemas are supported via `contentEncoding`:
 
 ```go
-gozod.Base64()         // => {"type": "string", "contentEncoding": "base64"}
+gozod.Base64()        // => {"type": "string", "contentEncoding": "base64"}
+gozod.Base64URL()     // => {"type": "string", "contentEncoding": "base64url", "format": "base64url"}
 ```
 
 String patterns and custom formats are supported via `pattern`:
@@ -96,8 +100,34 @@ String patterns and custom formats are supported via `pattern`:
 gozod.String().Regex(regexp.MustCompile("^[a-z]+$"))
 // => {"type": "string", "pattern": "^[a-z]+$"}
 
-gozod.CIDRv4()         // => {"type": "string", "pattern": "..."}
-gozod.CIDRv6()         // => {"type": "string", "pattern": "..."}
+gozod.Uuidv4()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.Uuidv6()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.Uuidv7()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.CIDRv4()        // => {"type": "string", "format": "cidrv4", "pattern": "..."}
+gozod.CIDRv6()        // => {"type": "string", "format": "cidrv6", "pattern": "..."}
+gozod.Cuid()          // => {"type": "string", "format": "cuid", "pattern": "..."}
+gozod.Cuid2()         // => {"type": "string", "format": "cuid2", "pattern": "..."}
+gozod.Ulid()          // => {"type": "string", "format": "ulid", "pattern": "..."}
+gozod.Ksuid()         // => {"type": "string", "format": "ksuid", "pattern": "..."}
+gozod.Nanoid()        // => {"type": "string", "format": "nanoid", "pattern": "..."}
+```
+
+## File Types
+
+GoZod supports file validation that translates to JSON Schema's `binary` format and `contentMediaType` for MIME types:
+
+```go
+// A generic file
+gozod.File()
+// => {"type": "string", "format": "binary", "contentEncoding": "binary"}
+
+// A file with MIME type and size constraints
+gozod.File().Mime([]string{"image/png"}).Min(1000).Max(10000)
+// => {"type":"string","format":"binary","contentEncoding":"binary","contentMediaType":"image/png","minLength":1000,"maxLength":10000}
+
+// A file with multiple possible MIME types
+gozod.File().Mime([]string{"image/png", "image/jpeg"})
+// => {"anyOf": [{"contentMediaType":"image/png", ...}, {"contentMediaType":"image/jpeg", ...}]}
 ```
 
 ## Numeric Types
@@ -118,21 +148,22 @@ gozod.Int64()    // => {"type": "integer", "minimum": ..., "maximum": ...}
 
 ## Nullability
 
-GoZod converts both `nil` values to `{"type": "null"}` in JSON Schema:
+GoZod distinguishes between optional and nullable fields, which affects how they are represented in JSON Schema.
+
+- `Optional()`: Marks a field as not required in an object. When used on a standalone schema, it has no effect on the output.
+- `Nilable()`: Allows a value to be `null`. This is represented using `anyOf` in JSON Schema.
 
 ```go
-gozod.Nil()       // => {"type": "null"}
-gozod.Any()       // => {} (represents any value)
-```
-
-Similarly, `Optional` and `Nilable` are made nullable via `oneOf`:
-
-```go
+// Optional fields are handled by their absence from the `required` array in an object schema.
 gozod.String().Optional()
-// => {"oneOf": [{"type": "string"}, {"type": "null"}]}
+// As a standalone schema => {"type": "string"}
 
+// Nilable schemas can be their base type or null.
 gozod.String().Nilable()
-// => {"oneOf": [{"type": "string"}, {"type": "null"}]}
+// => {"anyOf": [{"type": "string"}, {"type": "null"}]}
+
+gozod.Any()       // => {} (represents any value)
+gozod.Nil()       // => {"type": "null"}
 ```
 
 ## Configuration
@@ -151,7 +182,7 @@ Below is a quick reference for each supported parameter:
 type JSONSchemaOptions struct {
     // A registry used to look up metadata for each schema
     // Any schema with an ID property will be extracted as a $def
-    Metadata *gozod.Registry
+    Metadata *gozod.Registry[gozod.GlobalMeta]
     
     // How to handle unrepresentable types
     // "throw" (default) - Unrepresentable types throw an error
@@ -170,6 +201,13 @@ type JSONSchemaOptions struct {
     
     // A function used to convert ID values to URIs for external $refs
     URI func(id string) string
+
+    // IO specifies whether to convert the "input" or "output" schema.
+    // "output" (default) or "input". Affects handling of default values.
+    IO string
+
+    // Override is a custom logic to modify the schema after generation.
+    Override func(ctx gozod.OverrideContext)
 }
 ```
 
@@ -179,14 +217,14 @@ GoZod supports metadata storage that will be included in the generated JSON Sche
 
 ```go
 // Add metadata to a schema
-emailSchema := gozod.String().Meta(gozod.GlobalMetadata{
+emailSchema := gozod.String().Meta(gozod.GlobalMeta{
     Title:       "Email Address",
     Description: "User's email address",
     Examples:    []any{"user@example.com"},
 })
 
-jsonSchema := gozod.ToJSONSchema(emailSchema)
-// The returned *jsonschema.Schema will include all metadata
+jsonSchema, _ := gozod.ToJSONSchema(emailSchema)
+// The returned JSON schema string will include all metadata
 ```
 
 ### Unrepresentable Types
@@ -205,39 +243,29 @@ gozod.String().Refine(func(val any) bool {
         return len(s) > 5
     }
     return false
-}, gozod.SchemaParams{
+}, gozod.CustomParams{
     Error: "String must be longer than 5 characters",
 })
 
-// ❌ Function schemas cannot be represented in JSON Schema
-gozod.Function(&gozod.FunctionOptions{
-    Input:  gozod.String(),
-    Output: gozod.String(),
-})
+// ❌ Function, BigInt, and Complex schemas cannot be represented in JSON Schema
+gozod.Function()
+gozod.BigInt()
+gozod.Complex()
 ```
 
-By default, GoZod will throw an error if any of these are encountered:
+> **Note on Discriminated Unions**: While GoZod supports discriminated unions, the `discriminator` keyword is not added to the generated JSON Schema. This is because the standard `jsonschema.Schema` struct does not include this field. Validation still works correctly using the `oneOf` keyword.
+
+By default, GoZod will return an error if any of these are encountered:
 
 ```go
 schema := gozod.String().Transform(func(s string) string {
     return strings.ToUpper(s)
 })
 
-_, err := gozod.ToJSONSchema(schema)
-// => returns error: "transform functions cannot be represented in JSON Schema"
-```
-
-You can change this behavior by setting the `Unrepresentable` option to `"any"`. This will convert any unrepresentable types to `{}` (the equivalent of `any` in JSON Schema):
-
-```go
-schema := gozod.String().Transform(func(s string) string {
-    return strings.ToUpper(s)
-})
-
-jsonSchema := gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{
+jsonSchema, _ := gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{
     Unrepresentable: "any",
 })
-// => returns *jsonschema.Schema representing {} (accepts any value)
+// => returns a *jsonschema.Schema representing {} (accepts any value)
 ```
 
 ### Cycles
@@ -246,15 +274,15 @@ How to handle cycles. If a cycle is encountered as `gozod.ToJSONSchema()` traver
 
 ```go
 // Define a recursive user schema
-var UserSchema gozod.ZodType[any, any]
+var UserSchema gozod.ZodSchema
 UserSchema = gozod.Struct(gozod.ObjectSchema{
     "name": gozod.String(),
-    "friend": gozod.Lazy(func() gozod.ZodType[any, any] {
+    "friend": gozod.Lazy(func() gozod.ZodSchema {
         return UserSchema
     }),
 })
 
-jsonSchema := gozod.ToJSONSchema(UserSchema)
+jsonSchema, _ := gozod.ToJSONSchema(UserSchema)
 // Returns *jsonschema.Schema with proper $ref handling for cycles
 ```
 
@@ -278,151 +306,87 @@ userSchema := gozod.Struct(gozod.ObjectSchema{
     "lastName":  nameSchema,
 })
 
-jsonSchema := gozod.ToJSONSchema(userSchema)
+jsonSchema, _ := gozod.ToJSONSchema(userSchema)
 // Both firstName and lastName will have inlined string schemas
 ```
 
 Instead you can set the `Reused` option to `"ref"` to extract these schemas into `$defs`:
 
 ```go
-jsonSchema := gozod.ToJSONSchema(userSchema, gozod.JSONSchemaOptions{
+jsonSchema, _ := gozod.ToJSONSchema(userSchema, gozod.JSONSchemaOptions{
     Reused: "ref",
 })
 // Common schemas will be extracted to $defs and referenced
 ```
 
-## Advanced Integration Example
+### Input/Output Schemas (`IO`)
 
-Here's a comprehensive example showing how to use GoZod with the `kaptinlin/jsonschema` library features:
+The `IO` option controls how schemas with default values are handled. In `"input"` mode, fields with defaults are optional. In `"output"` mode (the default), they are required.
 
 ```go
-package main
+schema := gozod.Object(gozod.ObjectSchema{
+    "a": gozod.String(),
+    "b": gozod.String().Optional(),
+    "c": gozod.String().Default("hello"),
+})
 
-import (
-    "encoding/json"
-    "fmt"
-    "log"
-    
-    "github.com/kaptinlin/gozod"
-    "github.com/kaptinlin/jsonschema"
-)
+// In "input" mode, 'c' is optional because it has a default.
+// "required" will be ["a"]
+gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: "input"})
 
-func main() {
-    // Define a complex GoZod schema
-    productSchema := gozod.Struct(gozod.ObjectSchema{
-        "id": gozod.String().UUID().Meta(gozod.GlobalMetadata{
-            Description: "Unique product identifier",
-        }),
-        "name": gozod.String().Min(1).Max(100),
-        "price": gozod.Float64().Min(0),
-        "tags": gozod.Slice(gozod.String()).Optional(),
-        "metadata": gozod.Record(
-            gozod.String(),
-            gozod.Any(),
-        ).Optional(),
-        "created_at": gozod.ISO.DateTime(),
-    })
-    
-    // Convert to JSON Schema - returns *jsonschema.Schema directly
-    validator := gozod.ToJSONSchema(productSchema, gozod.JSONSchemaOptions{
-        Unrepresentable: "any",
-    })
-    
-    // Test data validation
-    validProduct := map[string]any{
-        "id":         "550e8400-e29b-41d4-a716-446655440000",
-        "name":       "Widget Pro",
-        "price":      29.99,
-        "tags":       []string{"widget", "premium"},
-        "created_at": "2023-01-01T12:00:00Z",
-    }
-    
-    invalidProduct := map[string]any{
-        "id":    "invalid-uuid",
-        "name":  "", // too short
-        "price": -10, // negative price
-    }
-    
-    // Validate valid product
-    result := validator.Validate(validProduct)
-    if result.IsValid() {
-        fmt.Println("✅ Valid product passed validation")
-    }
-    
-    // Validate invalid product
-    result = validator.Validate(invalidProduct)
-    if !result.IsValid() {
-        fmt.Println("❌ Invalid product failed validation:")
-        
-        // Get detailed error information
-        details, _ := json.MarshalIndent(result.ToList(), "", "  ")
-        fmt.Println(string(details))
-        
-        // Optional: Use multilingual error messages
-        i18n, err := jsonschema.GetI18n()
-        if err == nil {
-            localizer := i18n.NewLocalizer("en")
-            localizedDetails, _ := json.MarshalIndent(result.ToLocalizeList(localizer), "", "  ")
-            fmt.Println("Localized errors:", string(localizedDetails))
-        }
-    }
-}
+// In "output" mode, 'c' is required.
+// "required" will be ["a", "c"]
+gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: "output"})
 ```
 
-## Custom JSON Encoder/Decoder
+### Override
 
-Since GoZod returns a `*jsonschema.Schema` directly, you can configure the underlying JSON processing if needed:
+The `Override` option allows you to programmatically modify the generated JSON schema. This is useful for adding custom keywords or making adjustments that GoZod doesn't support natively.
 
 ```go
-// Create a custom compiler for high-performance JSON processing
-import "github.com/bytedance/sonic"
-
-// If you need to serialize the schema to JSON later
-validator := gozod.ToJSONSchema(schema)
-
-// For high-performance applications, you can configure the underlying
-// jsonschema library with custom JSON encoders
-compiler := jsonschema.NewCompiler()
-compiler.WithEncoderJSON(sonic.Marshal)
-compiler.WithDecoderJSON(sonic.Unmarshal)
-
-// Use the compiler for other schemas loaded from JSON
-externalSchema, err := compiler.GetSchema("https://json-schema.org/draft/2020-12/schema")
+schema := gozod.String()
+opts := gozod.JSONSchemaOptions{
+    Override: func(ctx gozod.OverrideContext) {
+        // Add a title to all string schemas
+        if _, ok := ctx.ZodSchema.(*types.ZodString[string]); ok {
+            title := "Overridden Title"
+            ctx.JSONSchema.Title = &title
+        }
+    },
+}
+jsonSchema, _ := gozod.ToJSONSchema(schema, opts)
+// The resulting schema will contain: "title": "Overridden Title"
 ```
 
 ## Working with Registries
 
-For complex applications with multiple schemas, you can use registries to manage schema relationships:
+For complex applications with multiple schemas, you can use a registry to manage schema relationships and generate all schemas at once. `ToJSONSchema` can directly accept a registry and will return a single root schema containing all registered schemas in its `$defs`.
 
 ```go
 // Create a registry for related schemas
-registry := gozod.NewRegistry()
+registry := gozod.NewRegistry[gozod.GlobalMeta]()
 
 // Define schemas with IDs
-userSchema := gozod.Struct(gozod.ObjectSchema{
-    "id":   gozod.String().UUID(),
+var userSchema, postSchema gozod.ZodSchema
+
+userSchema = gozod.Struct(gozod.ObjectSchema{
+    "id":   gozod.String().Uuid(),
     "name": gozod.String(),
-}).Meta(gozod.GlobalMetadata{ID: "User"})
+    "posts": gozod.Lazy(func() gozod.ZodSchema {
+        return gozod.Slice(postSchema)
+    }),
+}).Meta(gozod.GlobalMeta{ID: "User"})
 
-postSchema := gozod.Struct(gozod.ObjectSchema{
-    "id":       gozod.String().UUID(),
-    "title":    gozod.String(),
-    "content":  gozod.String(),
-    "author":   gozod.Ref("User"), // Reference to User schema
-}).Meta(gozod.GlobalMetadata{ID: "Post"})
+postSchema = gozod.Struct(gozod.ObjectSchema{
+    "id":      gozod.String().Uuid(),
+    "title":   gozod.String(),
+    "author":  gozod.Lazy(func() gozod.ZodSchema { return userSchema }),
+}).Meta(gozod.GlobalMeta{ID: "Post"})
 
-// Register schemas
-registry.Add("User", userSchema)
-registry.Add("Post", postSchema)
+registry.Add(userSchema)
+registry.Add(postSchema)
 
-// Convert registry to JSON Schema collection
-validators := gozod.ToJSONSchemaCollection(registry, gozod.JSONSchemaOptions{
-    URI: func(id string) string {
-        return fmt.Sprintf("https://api.example.com/schemas/%s.json", id)
-    },
-})
-
-// validators is a map[string]*jsonschema.Schema
-userValidator := validators["User"]
-postValidator := validators["Post"]
+// Convert the entire registry to a single root JSON Schema.
+// Schemas with IDs will be defined in `$defs` and can be referenced.
+rootSchema, _ := gozod.ToJSONSchema(registry)
 ```

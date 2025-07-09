@@ -151,6 +151,12 @@ func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this boolean schema in the global registry.
+func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
@@ -202,7 +208,7 @@ func (z *ZodBool[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[T, any](z, targetFn)
+	return core.NewZodPipe[T, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -467,7 +473,7 @@ func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 			// No special handling for other types
 		}
 	}
-	check := checks.NewCustom[T](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

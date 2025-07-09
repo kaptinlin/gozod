@@ -111,6 +111,29 @@ func mergeMinimumConstraint(schema any, value any, inclusive bool) {
 		}
 		return old
 	})
+
+	// Ensure no conflicting opposite constraint remains
+	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+		bag := s.GetInternals().Bag
+		if bag == nil {
+			return
+		}
+		if inclusive {
+			// We now have an inclusive minimum; remove any existing exclusiveMin that is lower or equal
+			if ex, exists := bag["exclusiveMinimum"]; exists {
+				if utils.CompareValues(value, ex) >= 0 {
+					delete(bag, "exclusiveMinimum")
+				}
+			}
+		} else {
+			// We now have an exclusive minimum; remove inclusive min if equal or smaller
+			if mi, exists := bag["minimum"]; exists {
+				if utils.CompareValues(value, mi) >= 0 {
+					delete(bag, "minimum")
+				}
+			}
+		}
+	}
 }
 
 // mergeMaximumConstraint merges maximum constraint, choosing the stricter value
@@ -127,4 +150,27 @@ func mergeMaximumConstraint(schema any, value any, inclusive bool) {
 		}
 		return old
 	})
+
+	// Ensure no conflicting opposite constraint remains
+	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
+		bag := s.GetInternals().Bag
+		if bag == nil {
+			return
+		}
+		if inclusive {
+			// inclusive maximum => remove exclusiveMaximum if higher or equal
+			if ex, exists := bag["exclusiveMaximum"]; exists {
+				if utils.CompareValues(value, ex) <= 0 {
+					delete(bag, "exclusiveMaximum")
+				}
+			}
+		} else {
+			// exclusive maximum => remove maximum if higher or equal
+			if ma, exists := bag["maximum"]; exists {
+				if utils.CompareValues(value, ma) <= 0 {
+					delete(bag, "maximum")
+				}
+			}
+		}
+	}
 }

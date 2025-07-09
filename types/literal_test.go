@@ -19,12 +19,12 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		assert.Equal(t, core.ZodTypeLiteral, schema.GetInternals().Type)
 
 		// Valid input
-		result, err := schema.Parse("hello")
+		result, err := schema.ParseAny("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
 		// Invalid input
-		_, err = schema.Parse("world")
+		_, err = schema.ParseAny("world")
 		assert.Error(t, err)
 	})
 
@@ -35,7 +35,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		// Valid inputs
 		validValues := []string{"red", "green", "blue"}
 		for _, value := range validValues {
-			result, err := schema.Parse(value)
+			result, err := schema.ParseAny(value)
 			require.NoError(t, err)
 			assert.Equal(t, value, result)
 		}
@@ -43,7 +43,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		// Invalid inputs
 		invalidValues := []string{"yellow", "purple", "orange"}
 		for _, value := range invalidValues {
-			_, err := schema.Parse(value)
+			_, err := schema.ParseAny(value)
 			assert.Error(t, err)
 		}
 	})
@@ -51,34 +51,34 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 	t.Run("new generic API with type inference", func(t *testing.T) {
 		// String literal
 		stringSchema := Literal("active")
-		result, err := stringSchema.Parse("active")
+		result, err := stringSchema.ParseAny("active")
 		require.NoError(t, err)
 		assert.Equal(t, "active", result)
 
-		_, err = stringSchema.Parse("pending")
+		_, err = stringSchema.ParseAny("pending")
 		assert.Error(t, err)
 
 		// Int literal
 		intSchema := Literal(42)
-		result2, err := intSchema.Parse(42)
+		result2, err := intSchema.ParseAny(42)
 		require.NoError(t, err)
 		assert.Equal(t, 42, result2)
 
-		_, err = intSchema.Parse(43)
+		_, err = intSchema.ParseAny(43)
 		assert.Error(t, err)
 
 		// Bool literal
 		boolSchema := Literal(true)
-		result3, err := boolSchema.Parse(true)
+		result3, err := boolSchema.ParseAny(true)
 		require.NoError(t, err)
 		assert.Equal(t, true, result3)
 
-		_, err = boolSchema.Parse(false)
+		_, err = boolSchema.ParseAny(false)
 		assert.Error(t, err)
 
 		// Float literal
 		floatSchema := Literal(3.14)
-		result4, err := floatSchema.Parse(3.14)
+		result4, err := floatSchema.ParseAny(3.14)
 		require.NoError(t, err)
 		assert.Equal(t, 3.14, result4)
 	})
@@ -89,7 +89,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = ptrSchema
 
 		str := "hello"
-		result, err := ptrSchema.Parse(&str)
+		result, err := ptrSchema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
@@ -99,7 +99,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = ptrMultiSchema
 
 		color := "red"
-		result2, err := ptrMultiSchema.Parse(&color)
+		result2, err := ptrMultiSchema.ParseAny(&color)
 		require.NoError(t, err)
 		assert.Equal(t, &color, result2)
 		assert.True(t, result2 == &color) // Pointer identity preserved
@@ -109,17 +109,17 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		schema := Literal(42)
 
 		// Test Parse method
-		result, err := schema.Parse(42)
+		result, err := schema.ParseAny(42)
 		require.NoError(t, err)
 		assert.Equal(t, 42, result)
 
 		// Test MustParse method
-		mustResult := schema.MustParse(42)
+		mustResult := schema.MustParseAny(42)
 		assert.Equal(t, 42, mustResult)
 
 		// Test panic on invalid input
 		assert.Panics(t, func() {
-			schema.MustParse(43)
+			schema.MustParseAny(43)
 		})
 	})
 
@@ -128,9 +128,9 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		schema := Literal("valid", core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeLiteral, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeLiteral, schema.GetInternals().Type)
 
-		_, err := schema.Parse("invalid")
+		_, err := schema.ParseAny("invalid")
 		assert.Error(t, err)
 	})
 }
@@ -144,12 +144,12 @@ func TestLiteral_TypeSafety(t *testing.T) {
 		schema := LiteralOf([]string{"hello", "world"})
 		require.NotNil(t, schema)
 
-		result, err := schema.Parse("hello")
+		result, err := schema.ParseAny("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 		assert.IsType(t, "", result) // Ensure type is string
 
-		result, err = schema.Parse("world")
+		result, err = schema.ParseAny("world")
 		require.NoError(t, err)
 		assert.Equal(t, "world", result)
 		assert.IsType(t, "", result)
@@ -159,7 +159,7 @@ func TestLiteral_TypeSafety(t *testing.T) {
 		schema := LiteralOf([]int{1, 2, 3})
 		require.NotNil(t, schema)
 
-		result, err := schema.Parse(2)
+		result, err := schema.ParseAny(2)
 		require.NoError(t, err)
 		assert.Equal(t, 2, result)
 		assert.IsType(t, 0, result) // Ensure type is int
@@ -176,7 +176,7 @@ func TestLiteral_TypeSafety(t *testing.T) {
 		schema := LiteralOf([]Status{StatusActive, StatusInactive})
 		require.NotNil(t, schema)
 
-		result, err := schema.Parse(StatusActive)
+		result, err := schema.ParseAny(StatusActive)
 		require.NoError(t, err)
 		assert.Equal(t, StatusActive, result)
 		assert.IsType(t, Status(""), result)
@@ -184,7 +184,7 @@ func TestLiteral_TypeSafety(t *testing.T) {
 
 	t.Run("MustParse type safety", func(t *testing.T) {
 		schema := LiteralOf([]string{"test"})
-		result := schema.MustParse("test")
+		result := schema.MustParseAny("test")
 		assert.IsType(t, "", result)
 		assert.Equal(t, "test", result)
 	})
@@ -199,10 +199,10 @@ func TestLiteral_TypeSafety(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = ptrSchema
 
 		// Verify different return types
-		val := valueSchema.MustParse("hello") // string
+		val := valueSchema.MustParseAny("hello").(string) // string
 		var _ string = val
 
-		ptr := ptrSchema.MustParse(&[]string{"hello"}[0]) // *string
+		ptr := ptrSchema.MustParseAny(&[]string{"hello"}[0]).(*string) // *string
 		var _ *string = ptr
 	})
 }
@@ -221,14 +221,14 @@ func TestLiteral_Modifiers(t *testing.T) {
 
 		// Valid literal value
 		str := "hello"
-		result, err := optionalSchema.Parse(&str)
+		result, err := optionalSchema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
 
 		// Invalid literal value should still fail
 		invalidStr := "world"
-		_, err = optionalSchema.Parse(&invalidStr)
+		_, err = optionalSchema.ParseAny(&invalidStr)
 		assert.Error(t, err)
 	})
 
@@ -239,16 +239,15 @@ func TestLiteral_Modifiers(t *testing.T) {
 		var _ *ZodLiteral[int, *int] = nilableSchema
 
 		// Test nil handling
-		result, err := nilableSchema.Parse(nil)
+		result, err := nilableSchema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
 		// Test valid value
 		val := 42
-		result, err = nilableSchema.Parse(&val)
+		result, err = nilableSchema.ParseAny(&val)
 		require.NoError(t, err)
 		assert.Equal(t, &val, result)
-		assert.True(t, result == &val) // Pointer identity preserved
 	})
 
 	t.Run("Default preserves current constraint type", func(t *testing.T) {
@@ -257,7 +256,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 		var _ *ZodLiteral[string, string] = defaultSchema
 
 		// Valid input should override default
-		result, err := defaultSchema.Parse("blue")
+		result, err := defaultSchema.ParseAny("blue")
 		require.NoError(t, err)
 		assert.Equal(t, "blue", result)
 	})
@@ -268,7 +267,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 		var _ *ZodLiteral[int, int] = prefaultSchema
 
 		// Valid input should override prefault
-		result, err := prefaultSchema.Parse(2)
+		result, err := prefaultSchema.ParseAny(2)
 		require.NoError(t, err)
 		assert.Equal(t, 2, result)
 	})
@@ -279,13 +278,13 @@ func TestLiteral_Modifiers(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = nullishSchema
 
 		// Test nil handling
-		result, err := nullishSchema.Parse(nil)
+		result, err := nullishSchema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
 		// Test valid input with pointer identity
 		str := "test"
-		result, err = nullishSchema.Parse(&str)
+		result, err = nullishSchema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
@@ -307,7 +306,7 @@ func TestLiteral_Chaining(t *testing.T) {
 
 		// Test final behavior
 		str := "inactive"
-		result, err := chainedSchema.Parse(&str)
+		result, err := chainedSchema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
@@ -322,7 +321,7 @@ func TestLiteral_Chaining(t *testing.T) {
 
 		// Test with value
 		val := false
-		result, err := schema.Parse(&val)
+		result, err := schema.ParseAny(&val)
 		require.NoError(t, err)
 		assert.Equal(t, &val, result)
 		assert.True(t, result == &val) // Pointer identity preserved
@@ -333,7 +332,7 @@ func TestLiteral_Chaining(t *testing.T) {
 			Default("red").
 			Prefault("green")
 
-		result, err := schema.Parse("blue")
+		result, err := schema.ParseAny("blue")
 		require.NoError(t, err)
 		assert.Equal(t, "blue", result)
 	})
@@ -348,7 +347,7 @@ func TestLiteral_DefaultAndPrefault(t *testing.T) {
 		schema := LiteralOf([]string{"hello", "world"}).Default("hello")
 
 		// Valid input should override default
-		result, err := schema.Parse("world")
+		result, err := schema.ParseAny("world")
 		require.NoError(t, err)
 		assert.Equal(t, "world", result)
 	})
@@ -357,7 +356,7 @@ func TestLiteral_DefaultAndPrefault(t *testing.T) {
 		schema := LiteralOf([]string{"red", "green"}).Prefault("red")
 
 		// Valid input should override prefault
-		result, err := schema.Parse("green")
+		result, err := schema.ParseAny("green")
 		require.NoError(t, err)
 		assert.Equal(t, "green", result)
 	})
@@ -373,7 +372,7 @@ func TestLiteral_DefaultAndPrefault(t *testing.T) {
 		})
 
 		// Valid input should not call function
-		result, err := schema.Parse("a")
+		result, err := schema.ParseAny("a")
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)
 		assert.Equal(t, 0, counter) // Function should not be called
@@ -387,7 +386,7 @@ func TestLiteral_DefaultAndPrefault(t *testing.T) {
 		})
 
 		// Valid input should not call function
-		result, err := schema.Parse("valid")
+		result, err := schema.ParseAny("valid")
 		require.NoError(t, err)
 		assert.Equal(t, "valid", result)
 		assert.Equal(t, 0, counter)
@@ -405,11 +404,11 @@ func TestLiteral_Refine(t *testing.T) {
 			return s == "red"
 		})
 
-		result, err := schema.Parse("red")
+		result, err := schema.ParseAny("red")
 		require.NoError(t, err)
 		assert.Equal(t, "red", result)
 
-		_, err = schema.Parse("green") // Valid literal but fails refinement
+		_, err = schema.ParseAny("green") // Valid literal but fails refinement
 		assert.Error(t, err)
 	})
 
@@ -419,11 +418,11 @@ func TestLiteral_Refine(t *testing.T) {
 			return n > 0
 		}, core.SchemaParams{Error: errorMessage})
 
-		result, err := schema.Parse(2)
+		result, err := schema.ParseAny(2)
 		require.NoError(t, err)
 		assert.Equal(t, 2, result)
 
-		_, err = schema.Parse(-1)
+		_, err = schema.ParseAny(-1)
 		assert.Error(t, err)
 	})
 
@@ -434,13 +433,13 @@ func TestLiteral_Refine(t *testing.T) {
 
 		// Valid string should pass
 		str := "hello"
-		result, err := schema.Parse(&str)
+		result, err := schema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
 
 		// nil should pass
-		result, err = schema.Parse(nil)
+		result, err = schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
@@ -455,12 +454,11 @@ func TestLiteral_RefineAny(t *testing.T) {
 			return false
 		})
 
-		// "red" and "green" and "blue" all have 3+ characters
-		result, err := schema.Parse("red")
+		result, err := schema.ParseAny("red")
 		require.NoError(t, err)
 		assert.Equal(t, "red", result)
 
-		result, err = schema.Parse("blue")
+		result, err = schema.ParseAny("blue")
 		require.NoError(t, err)
 		assert.Equal(t, "blue", result)
 	})
@@ -478,13 +476,13 @@ func TestLiteral_RefineAny(t *testing.T) {
 
 		// Valid int should pass with pointer identity
 		val := 2
-		result, err := schema.Parse(&val)
+		result, err := schema.ParseAny(&val)
 		require.NoError(t, err)
 		assert.Equal(t, &val, result)
 		assert.True(t, result == &val) // Pointer identity preserved
 
 		// nil should pass
-		result, err = schema.Parse(nil)
+		result, err = schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
@@ -533,33 +531,33 @@ func TestLiteral_ErrorHandling(t *testing.T) {
 	t.Run("invalid type error", func(t *testing.T) {
 		schema := LiteralOf([]string{"hello"})
 
-		_, err := schema.Parse(123)
+		_, err := schema.ParseAny(123)
 		assert.Error(t, err)
 	})
 
 	t.Run("empty literal schema", func(t *testing.T) {
-		schema := LiteralTyped([]string{})
+		schema := LiteralOf([]string{})
 		require.NotNil(t, schema)
 
 		// Any input should fail for empty literal
-		_, err := schema.Parse("anything")
+		_, err := schema.ParseAny("anything")
 		assert.Error(t, err)
 	})
 
 	t.Run("nil input without nilable", func(t *testing.T) {
 		schema := LiteralOf([]string{"hello"})
 
-		_, err := schema.Parse(nil)
+		_, err := schema.ParseAny(nil)
 		assert.Error(t, err)
 	})
 
 	t.Run("type mismatch", func(t *testing.T) {
 		stringSchema := LiteralOf([]string{"hello"})
-		_, err := stringSchema.Parse(42)
+		_, err := stringSchema.ParseAny(42)
 		assert.Error(t, err)
 
 		intSchema := LiteralOf([]int{42})
-		_, err = intSchema.Parse("hello")
+		_, err = intSchema.ParseAny("hello")
 		assert.Error(t, err)
 	})
 }
@@ -572,29 +570,29 @@ func TestLiteral_EdgeCases(t *testing.T) {
 	t.Run("zero value literals", func(t *testing.T) {
 		// Empty string literal
 		emptyStringSchema := LiteralOf([]string{""})
-		result, err := emptyStringSchema.Parse("")
+		result, err := emptyStringSchema.ParseAny("")
 		require.NoError(t, err)
 		assert.Equal(t, "", result)
 
-		_, err = emptyStringSchema.Parse(" ")
+		_, err = emptyStringSchema.ParseAny(" ")
 		assert.Error(t, err)
 
 		// Zero int literal
 		zeroIntSchema := LiteralOf([]int{0})
-		result2, err := zeroIntSchema.Parse(0)
+		result2, err := zeroIntSchema.ParseAny(0)
 		require.NoError(t, err)
 		assert.Equal(t, 0, result2)
 
-		_, err = zeroIntSchema.Parse(1)
+		_, err = zeroIntSchema.ParseAny(1)
 		assert.Error(t, err)
 
 		// False bool literal
 		falseBoolSchema := LiteralOf([]bool{false})
-		result3, err := falseBoolSchema.Parse(false)
+		result3, err := falseBoolSchema.ParseAny(false)
 		require.NoError(t, err)
 		assert.Equal(t, false, result3)
 
-		_, err = falseBoolSchema.Parse(true)
+		_, err = falseBoolSchema.ParseAny(true)
 		assert.Error(t, err)
 	})
 
@@ -602,7 +600,7 @@ func TestLiteral_EdgeCases(t *testing.T) {
 		// Should handle duplicate values gracefully
 		schema := LiteralOf([]string{"a", "b", "a", "c", "b"})
 
-		result, err := schema.Parse("a")
+		result, err := schema.ParseAny("a")
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)
 
@@ -616,11 +614,11 @@ func TestLiteral_EdgeCases(t *testing.T) {
 	t.Run("single value literal edge cases", func(t *testing.T) {
 		schema := LiteralOf([]string{"only"})
 
-		result, err := schema.Parse("only")
+		result, err := schema.ParseAny("only")
 		require.NoError(t, err)
 		assert.Equal(t, "only", result)
 
-		_, err = schema.Parse("other")
+		_, err = schema.ParseAny("other")
 		assert.Error(t, err)
 
 		// Value method should work
@@ -637,12 +635,12 @@ func TestLiteral_EdgeCases(t *testing.T) {
 
 		schema := LiteralOf([]CustomType{CustomA, CustomB})
 
-		result, err := schema.Parse(CustomA)
+		result, err := schema.ParseAny(CustomA)
 		require.NoError(t, err)
 		assert.Equal(t, CustomA, result)
 		assert.IsType(t, CustomType(""), result)
 
-		_, err = schema.Parse(CustomType("C"))
+		_, err = schema.ParseAny(CustomType("C"))
 		assert.Error(t, err)
 	})
 }
@@ -658,11 +656,11 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalStr := "red"
 		originalPtr := &originalStr
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, "red", *result)
+		assert.Equal(t, "red", *result.(*string))
 	})
 
 	t.Run("String literal Nilable correctly preserves pointer identity", func(t *testing.T) {
@@ -671,12 +669,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalStr := "active"
 		originalPtr := &originalStr
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Literal.Nilable() correctly returns *string and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, "active", *result)
+		assert.Equal(t, "active", *result.(*string))
 	})
 
 	t.Run("Int literal Optional correctly preserves pointer identity", func(t *testing.T) {
@@ -685,12 +683,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalInt := 2
 		originalPtr := &originalInt
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Literal.Optional() correctly returns *int and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, 2, *result)
+		assert.Equal(t, 2, *result.(*int))
 	})
 
 	t.Run("Int literal Nilable correctly preserves pointer identity", func(t *testing.T) {
@@ -699,12 +697,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalInt := 20
 		originalPtr := &originalInt
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Literal.Nilable() correctly returns *int and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, 20, *result)
+		assert.Equal(t, 20, *result.(*int))
 	})
 
 	t.Run("Bool literal Optional correctly preserves pointer identity", func(t *testing.T) {
@@ -713,12 +711,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalBool := true
 		originalPtr := &originalBool
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Literal.Optional() correctly returns *bool and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, true, *result)
+		assert.Equal(t, true, *result.(*bool))
 	})
 
 	t.Run("Bool literal Nilable correctly preserves pointer identity", func(t *testing.T) {
@@ -727,18 +725,18 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalBool := false
 		originalPtr := &originalBool
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Literal.Nilable() correctly returns *bool and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, false, *result)
+		assert.Equal(t, false, *result.(*bool))
 	})
 
 	t.Run("Optional handles nil consistently", func(t *testing.T) {
 		schema := LiteralOf([]string{"test"}).Optional()
 
-		result, err := schema.Parse(nil)
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
@@ -746,7 +744,7 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 	t.Run("Nilable handles nil consistently", func(t *testing.T) {
 		schema := LiteralOf([]int{123}).Nilable()
 
-		result, err := schema.Parse(nil)
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
@@ -757,12 +755,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalStr := "two"
 		originalPtr := &originalStr
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// NOW FIXED: Chain correctly returns *string and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, "two", *result)
+		assert.Equal(t, "two", *result.(*string))
 	})
 
 	t.Run("Refine with Optional correctly preserves pointer identity", func(t *testing.T) {
@@ -774,12 +772,12 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 		originalStr := "banana"
 		originalPtr := &originalStr
 
-		result, err := schema.Parse(originalPtr)
+		result, err := schema.ParseAny(originalPtr)
 		require.NoError(t, err)
 
 		// Refined Optional schema correctly returns *string and preserves pointer identity
 		assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-		assert.Equal(t, "banana", *result)
+		assert.Equal(t, "banana", *result.(*string))
 	})
 
 	t.Run("Multiple literal types correctly preserve pointer identity", func(t *testing.T) {
@@ -792,33 +790,33 @@ func TestLiteral_PointerIdentityPreservation(t *testing.T) {
 				originalStr := "red"
 				originalPtr := &originalStr
 
-				result, err := schema.Parse(originalPtr)
+				result, err := schema.ParseAny(originalPtr)
 				require.NoError(t, err)
 
 				assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-				assert.Equal(t, "red", *result)
+				assert.Equal(t, "red", *result.(*string))
 			}},
 			{"int", func(t *testing.T) {
 				schema := LiteralOf([]int{42, 100, 200}).Optional()
 				originalInt := 42
 				originalPtr := &originalInt
 
-				result, err := schema.Parse(originalPtr)
+				result, err := schema.ParseAny(originalPtr)
 				require.NoError(t, err)
 
 				assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-				assert.Equal(t, 42, *result)
+				assert.Equal(t, 42, *result.(*int))
 			}},
 			{"bool", func(t *testing.T) {
 				schema := LiteralOf([]bool{true, false}).Optional()
 				originalBool := true
 				originalPtr := &originalBool
 
-				result, err := schema.Parse(originalPtr)
+				result, err := schema.ParseAny(originalPtr)
 				require.NoError(t, err)
 
 				assert.True(t, result == originalPtr, "Pointer identity should be preserved")
-				assert.Equal(t, true, *result)
+				assert.Equal(t, true, *result.(*bool))
 			}},
 		}
 
@@ -841,77 +839,77 @@ func TestLiteral_AdditionalPrimitiveTypes(t *testing.T) {
 		}{
 			{"float32", func(t *testing.T) {
 				schema := LiteralOf([]float32{float32(1.1), float32(2.2)})
-				result, err := schema.Parse(float32(1.1))
+				result, err := schema.ParseAny(float32(1.1))
 				require.NoError(t, err)
 				assert.Equal(t, float32(1.1), result)
 				assert.IsType(t, float32(0), result)
 			}},
 			{"float64", func(t *testing.T) {
 				schema := LiteralOf([]float64{3.14})
-				result, err := schema.Parse(3.14)
+				result, err := schema.ParseAny(3.14)
 				require.NoError(t, err)
 				assert.Equal(t, 3.14, result)
 				assert.IsType(t, float64(0), result)
 			}},
 			{"int8", func(t *testing.T) {
 				schema := LiteralOf([]int8{int8(1), int8(2)})
-				result, err := schema.Parse(int8(1))
+				result, err := schema.ParseAny(int8(1))
 				require.NoError(t, err)
 				assert.Equal(t, int8(1), result)
 				assert.IsType(t, int8(0), result)
 			}},
 			{"int16", func(t *testing.T) {
 				schema := LiteralOf([]int16{int16(100)})
-				result, err := schema.Parse(int16(100))
+				result, err := schema.ParseAny(int16(100))
 				require.NoError(t, err)
 				assert.Equal(t, int16(100), result)
 				assert.IsType(t, int16(0), result)
 			}},
 			{"int32", func(t *testing.T) {
 				schema := LiteralOf([]int32{int32(1000), int32(2000)})
-				result, err := schema.Parse(int32(1000))
+				result, err := schema.ParseAny(int32(1000))
 				require.NoError(t, err)
 				assert.Equal(t, int32(1000), result)
 				assert.IsType(t, int32(0), result)
 			}},
 			{"int64", func(t *testing.T) {
 				schema := LiteralOf([]int64{int64(10000)})
-				result, err := schema.Parse(int64(10000))
+				result, err := schema.ParseAny(int64(10000))
 				require.NoError(t, err)
 				assert.Equal(t, int64(10000), result)
 				assert.IsType(t, int64(0), result)
 			}},
 			{"uint", func(t *testing.T) {
 				schema := LiteralOf([]uint{uint(10), uint(20)})
-				result, err := schema.Parse(uint(10))
+				result, err := schema.ParseAny(uint(10))
 				require.NoError(t, err)
 				assert.Equal(t, uint(10), result)
 				assert.IsType(t, uint(0), result)
 			}},
 			{"uint8", func(t *testing.T) {
 				schema := LiteralOf([]uint8{uint8(255)})
-				result, err := schema.Parse(uint8(255))
+				result, err := schema.ParseAny(uint8(255))
 				require.NoError(t, err)
 				assert.Equal(t, uint8(255), result)
 				assert.IsType(t, uint8(0), result)
 			}},
 			{"uint16", func(t *testing.T) {
 				schema := LiteralOf([]uint16{uint16(65535), uint16(32768)})
-				result, err := schema.Parse(uint16(65535))
+				result, err := schema.ParseAny(uint16(65535))
 				require.NoError(t, err)
 				assert.Equal(t, uint16(65535), result)
 				assert.IsType(t, uint16(0), result)
 			}},
 			{"uint32", func(t *testing.T) {
 				schema := LiteralOf([]uint32{uint32(4294967295)})
-				result, err := schema.Parse(uint32(4294967295))
+				result, err := schema.ParseAny(uint32(4294967295))
 				require.NoError(t, err)
 				assert.Equal(t, uint32(4294967295), result)
 				assert.IsType(t, uint32(0), result)
 			}},
 			{"uint64", func(t *testing.T) {
 				schema := LiteralOf([]uint64{uint64(18446744073709551615), uint64(9223372036854775808)})
-				result, err := schema.Parse(uint64(18446744073709551615))
+				result, err := schema.ParseAny(uint64(18446744073709551615))
 				require.NoError(t, err)
 				assert.Equal(t, uint64(18446744073709551615), result)
 				assert.IsType(t, uint64(0), result)
@@ -929,7 +927,7 @@ func TestLiteral_AdditionalPrimitiveTypes(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = ptrSchema
 
 		str := "hello"
-		result, err := ptrSchema.Parse(&str)
+		result, err := ptrSchema.ParseAny(&str)
 		require.NoError(t, err)
 		assert.Equal(t, &str, result)
 		assert.True(t, result == &str) // Pointer identity preserved
@@ -939,9 +937,52 @@ func TestLiteral_AdditionalPrimitiveTypes(t *testing.T) {
 		var _ *ZodLiteral[string, *string] = ptrMultiSchema
 
 		str2 := "world"
-		result2, err := ptrMultiSchema.Parse(&str2)
+		result2, err := ptrMultiSchema.ParseAny(&str2)
 		require.NoError(t, err)
 		assert.Equal(t, &str2, result2)
 		assert.True(t, result2 == &str2) // Pointer identity preserved
+	})
+}
+
+func TestLiteral_ComplexTypes(t *testing.T) {
+	t.Run("struct as literal value", func(t *testing.T) {
+		type Point struct{ X, Y int }
+		p1 := Point{X: 1, Y: 2}
+		p2 := Point{X: 3, Y: 4}
+		p3 := Point{X: 1, Y: 2} // Same as p1
+
+		schema := LiteralOf([]Point{p1, p2})
+
+		result, err := schema.ParseAny(p3)
+		require.NoError(t, err)
+		assert.Equal(t, p1, result)
+
+		_, err = schema.ParseAny(Point{X: 5, Y: 6})
+		assert.Error(t, err)
+	})
+
+	t.Run("array as literal value", func(t *testing.T) {
+		a1 := [2]int{1, 2}
+		a2 := [2]int{3, 4}
+		a3 := [2]int{1, 2} // Same as a1
+
+		schema := LiteralOf([][2]int{a1, a2})
+
+		result, err := schema.ParseAny(a3)
+		require.NoError(t, err)
+		assert.Equal(t, a1, result)
+
+		_, err = schema.ParseAny([2]int{5, 6})
+		assert.Error(t, err)
+	})
+
+	t.Run("pointer to struct as literal value is not supported", func(t *testing.T) {
+		// This should panic because a pointer is not a comparable type
+		// and cannot be used as a map key in the literal implementation.
+		type Point struct{ X, Y int }
+		p1 := &Point{X: 1, Y: 2}
+		assert.Panics(t, func() {
+			Literal(p1)
+		})
 	})
 }

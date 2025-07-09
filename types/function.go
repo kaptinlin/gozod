@@ -174,6 +174,12 @@ func (z *ZodFunction[T]) PrefaultFunc(fn func() any) *ZodFunction[T] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this function schema.
+func (z *ZodFunction[T]) Meta(meta core.GlobalMeta) *ZodFunction[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
@@ -214,7 +220,7 @@ func (z *ZodFunction[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
 		return target.Parse(any(input), ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================

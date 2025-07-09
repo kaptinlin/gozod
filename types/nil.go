@@ -184,10 +184,14 @@ func (z *ZodNil[T]) Prefault(v any) *ZodNil[T] {
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodNil[T]) PrefaultFunc(fn func() any) *ZodNil[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(fn)
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this nil schema.
+func (z *ZodNil[T]) Meta(meta core.GlobalMeta) *ZodNil[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -209,7 +213,7 @@ func (z *ZodNil[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		nilValue := extractNil(input)
 		return target.Parse(nilValue, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================

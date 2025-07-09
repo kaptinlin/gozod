@@ -17,7 +17,7 @@ import (
 
 func TestRecord_BasicFunctionality(t *testing.T) {
 	t.Run("valid record inputs", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		testRecord := map[string]any{
 			"key1": 1,
@@ -31,7 +31,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("valid map[any]any with string keys", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		testMap := map[any]any{
 			"key1": 1,
@@ -49,7 +49,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("empty record", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		result, err := recordSchema.Parse(map[string]any{})
 		require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("invalid type inputs", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		invalidInputs := []any{
 			"not a record", 123, []int{1, 2, 3}, true, nil,
@@ -70,7 +70,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("Parse and MustParse methods", func(t *testing.T) {
-		recordSchema := Record(Bool())
+		recordSchema := Record(String(), Bool())
 		testRecord := map[string]any{"test": true}
 
 		// Test Parse method
@@ -90,7 +90,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 
 	t.Run("custom error message", func(t *testing.T) {
 		customError := "Expected a valid record"
-		recordSchema := Record(Int(), core.SchemaParams{Error: customError})
+		recordSchema := Record(String(), Int(), core.SchemaParams{Error: customError})
 
 		require.NotNil(t, recordSchema)
 
@@ -105,7 +105,7 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 
 func TestRecord_TypeSafety(t *testing.T) {
 	t.Run("record returns map[string]any type", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		require.NotNil(t, recordSchema)
 
 		testRecord := map[string]any{"test": 42}
@@ -116,7 +116,7 @@ func TestRecord_TypeSafety(t *testing.T) {
 	})
 
 	t.Run("key validation - only string keys allowed", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Valid string keys should pass
 		validRecord := map[string]any{"valid_key": 42}
@@ -137,7 +137,7 @@ func TestRecord_TypeSafety(t *testing.T) {
 
 	t.Run("value validation", func(t *testing.T) {
 		// Test that values are properly typed in the result
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Valid values should pass
 		validRecord := map[string]any{"key": 42}
@@ -152,7 +152,7 @@ func TestRecord_TypeSafety(t *testing.T) {
 	})
 
 	t.Run("MustParse type safety", func(t *testing.T) {
-		recordSchema := Record(Bool())
+		recordSchema := Record(String(), Bool())
 		testRecord := map[string]any{"test": true}
 
 		result := recordSchema.MustParse(testRecord)
@@ -167,7 +167,7 @@ func TestRecord_TypeSafety(t *testing.T) {
 
 func TestRecord_Modifiers(t *testing.T) {
 	t.Run("Optional allows nil values", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		optionalSchema := recordSchema.Optional()
 
 		// Test non-nil value - returns pointer
@@ -184,7 +184,7 @@ func TestRecord_Modifiers(t *testing.T) {
 	})
 
 	t.Run("Nilable allows nil values", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		nilableSchema := recordSchema.Nilable()
 
 		// Test nil handling
@@ -201,7 +201,7 @@ func TestRecord_Modifiers(t *testing.T) {
 	})
 
 	t.Run("Nullish combines optional and nilable", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		nullishSchema := recordSchema.Nullish()
 
 		// Test nil handling
@@ -219,7 +219,7 @@ func TestRecord_Modifiers(t *testing.T) {
 
 	t.Run("Default preserves current type", func(t *testing.T) {
 		defaultRecord := map[string]any{"default": 1}
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		defaultSchema := recordSchema.Default(defaultRecord)
 
 		// Valid input should override default
@@ -232,7 +232,7 @@ func TestRecord_Modifiers(t *testing.T) {
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		prefaultRecord := map[string]any{"prefault": 1}
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		prefaultSchema := recordSchema.Prefault(prefaultRecord)
 
 		// Valid input should override prefault
@@ -244,7 +244,7 @@ func TestRecord_Modifiers(t *testing.T) {
 	})
 
 	t.Run("DefaultFunc preserves current type", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		defaultSchema := recordSchema.DefaultFunc(func() map[string]any {
 			return map[string]any{"func_default": 42}
 		})
@@ -258,7 +258,7 @@ func TestRecord_Modifiers(t *testing.T) {
 	})
 
 	t.Run("PrefaultFunc preserves current type", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		prefaultSchema := recordSchema.PrefaultFunc(func() map[string]any {
 			return map[string]any{"func_prefault": 42}
 		})
@@ -278,7 +278,7 @@ func TestRecord_Modifiers(t *testing.T) {
 
 func TestRecord_Chaining(t *testing.T) {
 	t.Run("modifier chaining", func(t *testing.T) {
-		recordSchema := Record(String()).
+		recordSchema := Record(String(), String()).
 			Optional().
 			Min(1).
 			Max(5)
@@ -299,7 +299,7 @@ func TestRecord_Chaining(t *testing.T) {
 	})
 
 	t.Run("validation chaining", func(t *testing.T) {
-		recordSchema := Record(Int()).
+		recordSchema := Record(String(), Int()).
 			Min(2).
 			Max(4).
 			Refine(func(r map[string]any) bool {
@@ -330,7 +330,7 @@ func TestRecord_Chaining(t *testing.T) {
 	})
 
 	t.Run("complex chaining preserves type", func(t *testing.T) {
-		recordSchema := Record(Bool()).
+		recordSchema := Record(String(), Bool()).
 			Nilable().
 			Size(2).
 			Default(map[string]any{"default1": true, "default2": false})
@@ -351,7 +351,7 @@ func TestRecord_Chaining(t *testing.T) {
 
 func TestRecord_ValidationMethods(t *testing.T) {
 	t.Run("Min sets minimum number of entries", func(t *testing.T) {
-		recordSchema := Record(String()).Min(2)
+		recordSchema := Record(String(), String()).Min(2)
 
 		// Valid: meets minimum
 		validRecord := map[string]any{"key1": "value1", "key2": "value2"}
@@ -366,7 +366,7 @@ func TestRecord_ValidationMethods(t *testing.T) {
 	})
 
 	t.Run("Max sets maximum number of entries", func(t *testing.T) {
-		recordSchema := Record(String()).Max(2)
+		recordSchema := Record(String(), String()).Max(2)
 
 		// Valid: meets maximum
 		validRecord := map[string]any{"key1": "value1", "key2": "value2"}
@@ -381,7 +381,7 @@ func TestRecord_ValidationMethods(t *testing.T) {
 	})
 
 	t.Run("Size sets exact number of entries", func(t *testing.T) {
-		recordSchema := Record(String()).Size(2)
+		recordSchema := Record(String(), String()).Size(2)
 
 		// Valid: exact size
 		validRecord := map[string]any{"key1": "value1", "key2": "value2"}
@@ -402,7 +402,7 @@ func TestRecord_ValidationMethods(t *testing.T) {
 
 	t.Run("validation with custom error messages", func(t *testing.T) {
 		errorMsg := "Record must have exactly 3 entries"
-		recordSchema := Record(Int()).Size(3, core.SchemaParams{Error: errorMsg})
+		recordSchema := Record(String(), Int()).Size(3, core.SchemaParams{Error: errorMsg})
 
 		invalidRecord := map[string]any{"key1": 1}
 		_, err := recordSchema.Parse(invalidRecord)
@@ -417,17 +417,18 @@ func TestRecord_ValidationMethods(t *testing.T) {
 func TestRecord_DefaultAndPrefault(t *testing.T) {
 	t.Run("Default function", func(t *testing.T) {
 		defaultRecord := map[string]any{"default_key": 42}
-		recordSchema := Record(Int()).Default(defaultRecord)
+		recordSchema := Record(String(), Int())
+		defaultSchema := recordSchema.Default(defaultRecord)
 
 		// Valid input overrides default
 		testRecord := map[string]any{"test_key": 1}
-		result, err := recordSchema.Parse(testRecord)
+		result, err := defaultSchema.Parse(testRecord)
 		require.NoError(t, err)
 		assert.Equal(t, testRecord, result)
 	})
 
 	t.Run("DefaultFunc function", func(t *testing.T) {
-		recordSchema := Record(String()).DefaultFunc(func() map[string]any {
+		recordSchema := Record(String(), String()).DefaultFunc(func() map[string]any {
 			return map[string]any{"generated": "default"}
 		})
 
@@ -440,17 +441,18 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 
 	t.Run("Prefault function", func(t *testing.T) {
 		prefaultRecord := map[string]any{"prefault_key": 42}
-		recordSchema := Record(Int()).Prefault(prefaultRecord)
+		recordSchema := Record(String(), Int())
+		prefaultSchema := recordSchema.Prefault(prefaultRecord)
 
 		// Valid input overrides prefault
 		testRecord := map[string]any{"test_key": 1}
-		result, err := recordSchema.Parse(testRecord)
+		result, err := prefaultSchema.Parse(testRecord)
 		require.NoError(t, err)
 		assert.Equal(t, testRecord, result)
 	})
 
 	t.Run("PrefaultFunc function", func(t *testing.T) {
-		recordSchema := Record(String()).PrefaultFunc(func() map[string]any {
+		recordSchema := Record(String(), String()).PrefaultFunc(func() map[string]any {
 			return map[string]any{"generated": "prefault"}
 		})
 
@@ -468,7 +470,7 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 
 func TestRecord_Refine(t *testing.T) {
 	t.Run("refine basic validation", func(t *testing.T) {
-		recordSchema := Record(Int()).Refine(func(r map[string]any) bool {
+		recordSchema := Record(String(), Int()).Refine(func(r map[string]any) bool {
 			return len(r) >= 2
 		})
 
@@ -485,7 +487,7 @@ func TestRecord_Refine(t *testing.T) {
 	})
 
 	t.Run("refine with value validation", func(t *testing.T) {
-		recordSchema := Record(Int()).Refine(func(r map[string]any) bool {
+		recordSchema := Record(String(), Int()).Refine(func(r map[string]any) bool {
 			// All values must be positive
 			for _, v := range r {
 				if val, ok := v.(int); ok && val <= 0 {
@@ -509,7 +511,7 @@ func TestRecord_Refine(t *testing.T) {
 
 	t.Run("refine with custom error message", func(t *testing.T) {
 		errorMessage := "Record must have at least 2 entries"
-		recordSchema := Record(Int()).Refine(func(r map[string]any) bool {
+		recordSchema := Record(String(), Int()).Refine(func(r map[string]any) bool {
 			return len(r) >= 2
 		}, core.SchemaParams{Error: errorMessage})
 
@@ -524,7 +526,7 @@ func TestRecord_Refine(t *testing.T) {
 	})
 
 	t.Run("refine nilable record", func(t *testing.T) {
-		recordSchema := Record(Int()).Nilable().Refine(func(r *map[string]any) bool {
+		recordSchema := Record(String(), Int()).Nilable().Refine(func(r *map[string]any) bool {
 			// Allow nil or records with 0 or > 1 entries
 			if r == nil {
 				return true
@@ -559,7 +561,7 @@ func TestRecord_Refine(t *testing.T) {
 
 func TestRecord_RefineAny(t *testing.T) {
 	t.Run("refineAny flexible validation", func(t *testing.T) {
-		recordSchema := Record(Int()).RefineAny(func(v any) bool {
+		recordSchema := Record(String(), Int()).RefineAny(func(v any) bool {
 			r, ok := v.(map[string]any)
 			return ok && len(r) >= 1
 		})
@@ -576,7 +578,7 @@ func TestRecord_RefineAny(t *testing.T) {
 	})
 
 	t.Run("refineAny with type checking", func(t *testing.T) {
-		recordSchema := Record(Int()).RefineAny(func(v any) bool {
+		recordSchema := Record(String(), Int()).RefineAny(func(v any) bool {
 			r, ok := v.(map[string]any)
 			if !ok {
 				return false
@@ -602,14 +604,14 @@ func TestRecord_RefineAny(t *testing.T) {
 
 func TestRecord_ErrorHandling(t *testing.T) {
 	t.Run("invalid record type error", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		_, err := recordSchema.Parse("not a record")
 		assert.Error(t, err)
 	})
 
 	t.Run("non-string key error", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		invalidMap := map[any]any{123: 42} // int key instead of string
 		_, err := recordSchema.Parse(invalidMap)
@@ -618,7 +620,7 @@ func TestRecord_ErrorHandling(t *testing.T) {
 
 	t.Run("value validation error", func(t *testing.T) {
 		// Test basic error handling without relying on complex coercion behavior
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		invalidRecord := map[string]any{"key": struct{}{}}
 		_, err := recordSchema.Parse(invalidRecord)
@@ -627,7 +629,7 @@ func TestRecord_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("custom error message", func(t *testing.T) {
-		recordSchema := Record(Int(), core.SchemaParams{Error: "Expected a valid record"})
+		recordSchema := Record(String(), Int(), core.SchemaParams{Error: "Expected a valid record"})
 
 		_, err := recordSchema.Parse("invalid")
 		assert.Error(t, err)
@@ -640,7 +642,7 @@ func TestRecord_ErrorHandling(t *testing.T) {
 
 func TestRecord_EdgeCases(t *testing.T) {
 	t.Run("empty record", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		result, err := recordSchema.Parse(map[string]any{})
 		require.NoError(t, err)
@@ -648,7 +650,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil handling with nilable record", func(t *testing.T) {
-		recordSchema := Record(Int()).Nilable()
+		recordSchema := Record(String(), Int()).Nilable()
 
 		// Test nil input
 		result, err := recordSchema.Parse(nil)
@@ -664,7 +666,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty context", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Parse with empty context slice
 		testRecord := map[string]any{"key": 42}
@@ -675,7 +677,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 	t.Run("record with nil value schema", func(t *testing.T) {
 		// Test with nil value schema
-		recordSchema := Record(nil)
+		recordSchema := Record(String(), nil)
 
 		testRecord := map[string]any{"any": "any"}
 		result, err := recordSchema.Parse(testRecord)
@@ -684,7 +686,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("conversion from map[any]any with all string keys", func(t *testing.T) {
-		recordSchema := Record(String())
+		recordSchema := Record(String(), String())
 
 		// map[any]any with all string keys should convert successfully
 		mixedMap := map[any]any{
@@ -703,7 +705,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("Transform operations", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Test Transform
 		transform := recordSchema.Transform(func(r map[string]any, ctx *core.RefinementContext) (any, error) {
@@ -713,7 +715,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("large record performance", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Create a large record
 		largeRecord := make(map[string]any)
@@ -729,8 +731,8 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 	t.Run("deeply nested record validation", func(t *testing.T) {
 		// Record of string to record of string to int
-		innerRecordSchema := Record(Int())
-		outerRecordSchema := Record(innerRecordSchema)
+		innerRecordSchema := Record(String(), Int())
+		outerRecordSchema := Record(String(), innerRecordSchema)
 
 		testRecord := map[string]any{
 			"outer1": map[string]any{
@@ -762,7 +764,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 		for _, schema := range schemas {
 			t.Run(schema.name, func(t *testing.T) {
-				recordSchema := Record(schema.valSchema)
+				recordSchema := Record(String(), schema.valSchema)
 				require.NotNil(t, recordSchema)
 
 				testRecord := map[string]any{"key": schema.testValue}
@@ -774,7 +776,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("pointer value handling", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 
 		// Test with pointer to record
 		testRecord := map[string]any{"key": 42}
@@ -786,7 +788,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("concurrent access safety", func(t *testing.T) {
-		recordSchema := Record(Int())
+		recordSchema := Record(String(), Int())
 		testRecord := map[string]any{"key": 42}
 
 		// Run multiple goroutines parsing the same schema
@@ -808,7 +810,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("complex map[any]any conversion scenarios", func(t *testing.T) {
-		recordSchema := Record(String())
+		recordSchema := Record(String(), String())
 
 		// Test with various map[any]any inputs
 		testCases := []struct {
@@ -860,7 +862,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 	t.Run("schema evolution and chaining stress test", func(t *testing.T) {
 		// Create a complex chain of modifications
-		recordSchema := Record(Int()).
+		recordSchema := Record(String(), Int()).
 			Min(1).
 			Max(10).
 			Nilable().
@@ -930,7 +932,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 func TestRecord_Overwrite(t *testing.T) {
 	t.Run("basic record transformation", func(t *testing.T) {
-		schema := Record(String()).
+		schema := Record(String(), String()).
 			Overwrite(func(record map[string]any) map[string]any {
 				// Convert all string values to uppercase
 				result := make(map[string]any)
@@ -962,7 +964,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("record key transformation", func(t *testing.T) {
-		schema := Record(Int()).
+		schema := Record(String(), Int()).
 			Overwrite(func(record map[string]any) map[string]any {
 				// Add prefix to all keys and increment values
 				result := make(map[string]any)
@@ -993,7 +995,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("filtering transformation", func(t *testing.T) {
-		schema := Record(Int()).
+		schema := Record(String(), Int()).
 			Overwrite(func(record map[string]any) map[string]any {
 				// Filter out negative values
 				result := make(map[string]any)
@@ -1022,7 +1024,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("chaining with validations", func(t *testing.T) {
-		schema := Record(String()).
+		schema := Record(String(), String()).
 			Overwrite(func(record map[string]any) map[string]any {
 				// Trim whitespace from all values
 				result := make(map[string]any)
@@ -1054,7 +1056,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("pointer type handling", func(t *testing.T) {
-		schema := RecordPtr(String()).
+		schema := RecordPtr(String(), String()).
 			Overwrite(func(record *map[string]any) *map[string]any {
 				if record == nil {
 					return nil
@@ -1086,7 +1088,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
-		schema := Record(Bool()).
+		schema := Record(String(), Bool()).
 			Overwrite(func(record map[string]any) map[string]any {
 				return record // Identity transformation
 			})
@@ -1102,7 +1104,7 @@ func TestRecord_Overwrite(t *testing.T) {
 	})
 
 	t.Run("empty record handling", func(t *testing.T) {
-		schema := Record(String()).
+		schema := Record(String(), String()).
 			Overwrite(func(record map[string]any) map[string]any {
 				if len(record) == 0 {
 					// Add default entry for empty records
@@ -1126,7 +1128,7 @@ func TestRecord_Overwrite(t *testing.T) {
 
 func TestRecord_Check(t *testing.T) {
 	t.Run("adds issues for invalid record", func(t *testing.T) {
-		schema := Record(Int()).Check(func(value map[string]any, p *core.ParsePayload) {
+		schema := Record(String(), Int()).Check(func(value map[string]any, p *core.ParsePayload) {
 			if len(value) == 0 {
 				p.AddIssueWithMessage("record cannot be empty")
 			}
@@ -1140,7 +1142,7 @@ func TestRecord_Check(t *testing.T) {
 	})
 
 	t.Run("pointer schema adapts to value input", func(t *testing.T) {
-		schema := RecordPtr(Int()).Check(func(value *map[string]any, p *core.ParsePayload) {
+		schema := RecordPtr(String(), String()).Check(func(value *map[string]any, p *core.ParsePayload) {
 			if value == nil || len(*value) == 0 {
 				p.AddIssueWithMessage("pointer record empty")
 			}
@@ -1155,7 +1157,7 @@ func TestRecord_Check(t *testing.T) {
 }
 
 func TestRecord_NonOptional(t *testing.T) {
-	schema := Record(String()).NonOptional()
+	schema := Record(String(), String()).NonOptional()
 
 	_, err := schema.Parse(map[string]any{"x": "y"})
 	require.NoError(t, err)
@@ -1166,4 +1168,96 @@ func TestRecord_NonOptional(t *testing.T) {
 	if issues.IsZodError(err, &zErr) {
 		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
 	}
+}
+
+// =============================================================================
+// Key Schema Validation Tests (Enum/Literal)
+// =============================================================================
+
+func TestRecord_KeySchemaValidation(t *testing.T) {
+	keySchema := Enum("id", "name", "email")
+
+	t.Run("exhaustive enum check - valid", func(t *testing.T) {
+		schema := Record(keySchema, String())
+		validInput := map[string]any{
+			"id":    "user-123",
+			"name":  "John Doe",
+			"email": "john.doe@example.com",
+		}
+		result, err := schema.Parse(validInput)
+		require.NoError(t, err)
+		assert.Equal(t, validInput, result)
+	})
+
+	t.Run("exhaustive enum check - missing key", func(t *testing.T) {
+		schema := Record(keySchema, String())
+		invalidInput := map[string]any{
+			"id":   "user-123",
+			"name": "John Doe",
+			// "email" is missing
+		}
+		_, err := schema.Parse(invalidInput)
+		require.Error(t, err)
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode(core.InvalidType), zodErr.Issues[0].Code)
+		assert.Equal(t, []any{"email"}, zodErr.Issues[0].Path)
+	})
+
+	t.Run("exhaustive enum check - unrecognized key", func(t *testing.T) {
+		schema := Record(keySchema, String())
+		invalidInput := map[string]any{
+			"id":    "user-123",
+			"name":  "John Doe",
+			"email": "john.doe@example.com",
+			"extra": "this key is not allowed",
+		}
+		_, err := schema.Parse(invalidInput)
+		require.Error(t, err)
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode(core.UnrecognizedKeys), zodErr.Issues[0].Code)
+	})
+
+	t.Run("partial record - valid (missing keys allowed)", func(t *testing.T) {
+		schema := PartialRecord(keySchema, String())
+		partialInput := map[string]any{
+			"id": "user-123",
+		}
+		result, err := schema.Parse(partialInput)
+		require.NoError(t, err)
+		assert.Equal(t, partialInput, result)
+	})
+
+	t.Run("partial record - unrecognized key (still fails)", func(t *testing.T) {
+		schema := PartialRecord(keySchema, String())
+		invalidInput := map[string]any{
+			"id":    "user-123",
+			"extra": "not allowed",
+		}
+		_, err := schema.Parse(invalidInput)
+		require.Error(t, err) // Unrecognized keys are still checked in partial records
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Equal(t, core.IssueCode(core.UnrecognizedKeys), zodErr.Issues[0].Code)
+	})
+
+	t.Run("literal key schema", func(t *testing.T) {
+		literalKeySchema := Literal("fixedKey")
+		schema := Record(literalKeySchema, Int())
+
+		// Valid
+		_, err := schema.Parse(map[string]any{"fixedKey": 100})
+		require.NoError(t, err)
+
+		// Missing key
+		_, err = schema.Parse(map[string]any{})
+		require.Error(t, err)
+
+		// Unrecognized key
+		_, err = schema.Parse(map[string]any{"fixedKey": 100, "another": 200})
+		require.Error(t, err)
+	})
 }

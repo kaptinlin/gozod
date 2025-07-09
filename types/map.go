@@ -105,6 +105,16 @@ func (z *ZodMap[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 	return z.Parse(input, ctx...)
 }
 
+// KeyType returns the key schema for this map.
+func (z *ZodMap[T, R]) KeyType() any {
+	return z.internals.KeyType
+}
+
+// ValueType returns the value schema for this map.
+func (z *ZodMap[T, R]) ValueType() any {
+	return z.internals.ValueType
+}
+
 // =============================================================================
 // MODIFIER METHODS
 // =============================================================================
@@ -177,6 +187,12 @@ func (z *ZodMap[T, R]) PrefaultFunc(fn func() T) *ZodMap[T, R] {
 		return fn()
 	})
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this map schema.
+func (z *ZodMap[T, R]) Meta(meta core.GlobalMeta) *ZodMap[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -275,7 +291,7 @@ func (z *ZodMap[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -733,7 +749,7 @@ func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

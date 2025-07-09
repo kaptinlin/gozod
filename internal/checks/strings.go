@@ -31,7 +31,7 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set pattern for JSON Schema
-				SetBagProperty(schema, "pattern", pattern.String())
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -61,9 +61,9 @@ func Includes(substring string, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Add custom property for includes validation
-				SetBagProperty(schema, "contains", substring)
-				SetBagProperty(schema, "type", "string")
+				// Use pattern to simulate contains, escaping the substring for regex
+				pattern := regexp.QuoteMeta(substring)
+				addPatternToSchema(schema, pattern)
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Use pattern for starts with validation
-				pattern := "^" + regexp.QuoteMeta(prefix)
+				pattern := "^" + regexp.QuoteMeta(prefix) + ".*"
 				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
@@ -117,7 +117,7 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Use pattern for ends with validation
-				pattern := regexp.QuoteMeta(suffix) + "$"
+				pattern := ".*" + regexp.QuoteMeta(suffix) + "$"
 				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
@@ -243,6 +243,21 @@ func addPatternToSchema(schema any, pattern string) {
 			internals.Bag = make(map[string]any)
 		}
 
-		internals.Bag["pattern"] = pattern
+		var patterns []string
+		if existing, ok := internals.Bag["patterns"]; ok {
+			if existingPatterns, ok := existing.([]string); ok {
+				patterns = existingPatterns
+			}
+		}
+		// Avoid duplicate patterns
+		for _, existingPattern := range patterns {
+			if existingPattern == pattern {
+				// Pattern already exists; no need to add again
+				internals.Bag["patterns"] = patterns
+				return
+			}
+		}
+		patterns = append(patterns, pattern)
+		internals.Bag["patterns"] = patterns
 	}
 }

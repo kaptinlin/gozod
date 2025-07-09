@@ -225,13 +225,17 @@ func (z *ZodUnion[T, R]) Prefault(v T) *ZodUnion[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc keeps current generic type R.
 func (z *ZodUnion[T, R]) PrefaultFunc(fn func() T) *ZodUnion[T, R] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this union schema.
+func (z *ZodUnion[T, R]) Meta(meta core.GlobalMeta) *ZodUnion[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -264,7 +268,7 @@ func (z *ZodUnion[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		unionValue := extractUnionValue[T, R](input)
 		return target.Parse(unionValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================

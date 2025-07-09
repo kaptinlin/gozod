@@ -92,6 +92,15 @@ func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// MustParseAny validates the input value and panics on failure
+func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
+	result, err := z.ParseAny(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates input and returns untyped result for runtime scenarios.
 // Zero-overhead wrapper around Parse to eliminate reflection calls.
 func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
@@ -154,6 +163,35 @@ func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
 		return fn()
 	})
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this schema in the global registry.
+// This does not clone internals because metadata does not affect validation.
+func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
+	// Create a shallow clone so that metadata can differ per usage (parity with TS Zod .describe()).
+	clone := z.withInternals(&z.internals.ZodTypeInternals)
+
+	// Propagate existing metadata from the source (if any) so we don't lose previously set fields.
+	if m, ok := core.GlobalRegistry.Get(z); ok {
+		combined := m
+		if meta.ID != "" {
+			combined.ID = meta.ID
+		}
+		if meta.Title != "" {
+			combined.Title = meta.Title
+		}
+		if meta.Description != "" {
+			combined.Description = meta.Description
+		}
+		if len(meta.Examples) > 0 {
+			combined.Examples = meta.Examples
+		}
+		core.GlobalRegistry.Add(clone, combined)
+	} else {
+		core.GlobalRegistry.Add(clone, meta)
+	}
+
+	return clone
 }
 
 // =============================================================================
@@ -293,7 +331,7 @@ func (z *ZodString[T]) Overwrite(transform func(T) T, params ...any) *ZodString[
 
 // Pipe creates a pipeline with another schema
 func (z *ZodString[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
-	return core.NewZodPipe(z, func(input T, ctx *core.ParseContext) (any, error) {
+	return core.NewZodPipe(z, target, func(input T, ctx *core.ParseContext) (any, error) {
 		str := extractString(input)
 		return target.Parse(str, ctx)
 	})
@@ -325,7 +363,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 		}
 	}
 
-	check := checks.NewCustom[T](wrapped, utils.GetFirstParam(params...))
+	check := checks.NewCustom[T](wrapped, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -367,7 +405,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 		}
 	}
 
-	check := checks.NewCustom[any](wrapper, params...)
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -375,7 +413,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 
 // RefineAny adds flexible custom validation logic
 func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T] {
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -387,22 +425,30 @@ func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T]
 
 // withPtrInternals creates a new ZodString instance of type *string.
 func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*string] {
-	return &ZodString[*string]{
+	clone := &ZodString[*string]{
 		internals: &ZodStringInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	if meta, ok := core.GlobalRegistry.Get(z); ok {
+		core.GlobalRegistry.Add(clone, meta)
+	}
+	return clone
 }
 
 // withInternals creates a new ZodString instance that keeps the original generic type T.
 func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
-	return &ZodString[T]{
+	clone := &ZodString[T]{
 		internals: &ZodStringInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	if meta, ok := core.GlobalRegistry.Get(z); ok {
+		core.GlobalRegistry.Add(clone, meta)
+	}
+	return clone
 }
 
 // CloneFrom copies the internal state from another schema

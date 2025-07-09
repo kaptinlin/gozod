@@ -57,6 +57,16 @@ func (z *ZodObject[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
+// GetUnknownKeys returns the unknown keys handling mode for JSON Schema conversion
+func (z *ZodObject[T, R]) GetUnknownKeys() ObjectMode {
+	return z.internals.UnknownKeys
+}
+
+// GetCatchall returns the catchall schema for JSON Schema conversion
+func (z *ZodObject[T, R]) GetCatchall() core.ZodSchema {
+	return z.internals.Catchall
+}
+
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodObject[T, R]) IsOptional() bool {
 	return z.internals.ZodTypeInternals.IsOptional()
@@ -197,6 +207,12 @@ func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta attaches GlobalMeta to this object schema via the global registry.
+func (z *ZodObject[T, R]) Meta(meta core.GlobalMeta) *ZodObject[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -244,6 +260,12 @@ func (z *ZodObject[T, R]) Shape() core.ObjectSchema {
 		result[k] = v
 	}
 	return result
+}
+
+// Properties is an alias for Shape(), returning the object's field schemas.
+// This is included for alignment with documentation and developer convenience.
+func (z *ZodObject[T, R]) Properties() core.ObjectSchema {
+	return z.Shape()
 }
 
 // Pick creates a new object with only specified keys
@@ -431,7 +453,7 @@ func (z *ZodObject[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		baseValue := extractObjectValue[T, R](input)
 		return target.Parse(baseValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -683,7 +705,7 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 		}
 
 		if err := z.validateField(fieldValue, fieldSchema, ctx, fieldName); err != nil {
-			return nil, fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+			return nil, err
 		}
 	}
 
@@ -759,7 +781,7 @@ func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.Parse
 		return nil
 	}
 
-	parseMethod := schemaValue.MethodByName("Parse")
+	parseMethod := schemaValue.MethodByName("ParseAny")
 	if !parseMethod.IsValid() {
 		return nil
 	}
@@ -793,7 +815,7 @@ func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.Parse
 		// Check if there's an error (second return value)
 		if errInterface := results[1].Interface(); errInterface != nil {
 			if err, ok := errInterface.(error); ok {
-				return err
+				return fmt.Errorf("%s: %w", fieldName, err)
 			}
 		}
 	}
@@ -969,7 +991,7 @@ func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

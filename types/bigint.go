@@ -154,13 +154,17 @@ func (z *ZodBigInt[T]) Prefault(v *big.Int) *ZodBigInt[T] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc keeps current generic type T.
 func (z *ZodBigInt[T]) PrefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this bigint schema.
+func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -276,7 +280,7 @@ func (z *ZodBigInt[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		bigIntValue := extractBigInt(input)
 		return target.Parse(bigIntValue, ctx)
 	}
-	return core.NewZodPipe[T, any](z, targetFn)
+	return core.NewZodPipe[T, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -314,7 +318,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 	}
 
 	// Use checks package for custom validation
-	check := checks.NewCustom[any](wrapper, params...)
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -323,7 +327,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 // RefineAny provides flexible validation without type conversion
 func (z *ZodBigInt[T]) RefineAny(fn func(any) bool, params ...any) *ZodBigInt[T] {
 	// MUST use checks package for custom validation
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

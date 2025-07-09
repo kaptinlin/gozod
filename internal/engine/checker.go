@@ -85,6 +85,15 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 			continue
 		}
 
+		// Evaluate `when` predicate: skip this check if it returns false.
+		if checkInternals.When != nil {
+			// Create independent payload for when check with current value
+			whenPayload := core.NewParsePayloadWithPath(currentValue, payload.GetPath())
+			if !checkInternals.When(whenPayload) {
+				continue
+			}
+		}
+
 		// Create independent payload for each check with current value
 		checkPayload := core.NewParsePayloadWithPath(currentValue, payloadPath)
 

@@ -387,13 +387,17 @@ func (z *ZodStringBool[T]) Prefault(v bool) *ZodStringBool[T] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc keeps current generic type T.
 func (z *ZodStringBool[T]) PrefaultFunc(fn func() bool) *ZodStringBool[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this stringbool schema.
+func (z *ZodStringBool[T]) Meta(meta core.GlobalMeta) *ZodStringBool[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -432,7 +436,7 @@ func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool
 	}
 
 	// MUST use checks package for custom validation
-	check := checks.NewCustom[any](wrapper, params...)
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -441,7 +445,7 @@ func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool
 // RefineAny provides flexible validation without type conversion
 func (z *ZodStringBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodStringBool[T] {
 	// MUST use checks package for custom validation
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -489,7 +493,7 @@ func (z *ZodStringBool[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] 
 		boolValue := extractStringBool(input)
 		return target.Parse(boolValue, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================

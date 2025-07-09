@@ -61,6 +61,21 @@ type CheckParams struct {
 	Error string // Custom error message.
 }
 
+// CustomParams represents parameters for custom validation checks.
+// Corresponds to TypeScript's $ZodCustomParams, providing full configuration
+// for refinement operations including error handling, execution control, and conditional logic.
+type CustomParams struct {
+	Error  any            `json:"error,omitempty"`  // Custom error message or error map
+	Abort  bool           `json:"abort,omitempty"`  // Stop validation on failure (default: false for refine)
+	Path   []any          `json:"path,omitempty"`   // Custom error path
+	When   ZodWhenFn      `json:"-"`                // Conditional execution predicate
+	Params map[string]any `json:"params,omitempty"` // Additional parameters
+}
+
+// ZodCustomParams is a type alias for CustomParams to maintain consistency
+// with TypeScript naming conventions
+type ZodCustomParams = CustomParams
+
 // =============================================================================
 // CHECK FUNCTION SIGNATURES
 // =============================================================================

@@ -1,6 +1,7 @@
 package gozod
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -207,11 +208,11 @@ func TestCollectionTypeExports(t *testing.T) {
 	t.Run("map and record types", func(t *testing.T) {
 		_ = Map(String(), Int())
 		_ = MapPtr(String(), Int())
-		_ = Record(Int())
-		_ = RecordPtr(Int())
+		_ = Record[string](String(), Int())
+		_ = RecordPtr[string](String(), Int())
 
 		testMap := map[string]int{"key": 42}
-		result, err := Record(Int()).Parse(testMap)
+		result, err := Record[string](String(), Int()).Parse(testMap)
 		require.NoError(t, err)
 		assert.Equal(t, testMap, result)
 	})
@@ -487,4 +488,109 @@ func TestInternationalization(t *testing.T) {
 		// Assert the error message is in English
 		assert.Contains(t, err.Error(), "Too small", "Default error message should be in English")
 	})
+}
+
+// =============================================================================
+// REGISTRY TESTS
+// =============================================================================
+
+type fieldMeta struct {
+	Title       string            `json:"title"`
+	Description string            `json:"description,omitempty"`
+	Examples    []any             `json:"examples,omitempty"`
+	Extra       map[string]string `json:"extra,omitempty"`
+}
+
+func TestRegistryCRUD(t *testing.T) {
+	reg := NewRegistry[fieldMeta]()
+
+	// Define a simple schema and associated metadata
+	nameSchema := String().Min(1)
+	meta := fieldMeta{Title: "User Name", Description: "The user's full name"}
+
+	// Initially registry should not contain the schema
+	if reg.Has(nameSchema) {
+		t.Fatalf("expected Has to be false for new registry entry")
+	}
+
+	// Add metadata and verify
+	reg.Add(nameSchema, meta)
+	if !reg.Has(nameSchema) {
+		t.Fatalf("expected Has to be true after Add")
+	}
+
+	got, ok := reg.Get(nameSchema)
+	if !ok {
+		t.Fatalf("expected Get to return true after Add")
+	}
+	if got.Title != meta.Title {
+		t.Errorf("unexpected metadata title: got=%q want=%q", got.Title, meta.Title)
+	}
+
+	// Remove entry and verify it's gone
+	reg.Remove(nameSchema)
+	if reg.Has(nameSchema) {
+		t.Fatalf("expected Has to be false after Remove")
+	}
+}
+
+func TestGlobalRegistry(t *testing.T) {
+	emailSchema := Email()
+
+	meta := GlobalMeta{Title: "Email Address", Description: "A valid e-mail address"}
+
+	// Ensure clean state by removing any pre-existing entry (if present)
+	GlobalRegistry.Remove(emailSchema)
+
+	// Store metadata in the global registry
+	GlobalRegistry.Add(emailSchema, meta)
+
+	if !GlobalRegistry.Has(emailSchema) {
+		t.Fatalf("expected schema to be present in GlobalRegistry")
+	}
+
+	got, ok := GlobalRegistry.Get(emailSchema)
+	if !ok {
+		t.Fatalf("expected Get to succeed in GlobalRegistry")
+	}
+	if got.Title != meta.Title {
+		t.Errorf("unexpected title in GlobalRegistry: got=%q want=%q", got.Title, meta.Title)
+	}
+
+	// Cleanup to avoid side-effects on other tests
+	GlobalRegistry.Remove(emailSchema)
+}
+
+func TestRegistryConcurrentAccess(t *testing.T) {
+	reg := NewRegistry[int]()
+
+	// We will concurrently add and read entries to ensure thread-safety
+	const goroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	schema := Int()
+
+	// Concurrent writers
+	for i := 0; i < goroutines; i++ {
+		go func(val int) {
+			defer wg.Done()
+			reg.Add(schema, val)
+		}(i)
+	}
+
+	// Concurrent readers
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			_, _ = reg.Get(schema)
+		}()
+	}
+
+	wg.Wait()
+
+	// Registry should still contain a value for the schema
+	if !reg.Has(schema) {
+		t.Fatalf("registry lost metadata under concurrent access")
+	}
 }

@@ -184,6 +184,12 @@ func (z *ZodSlice[T, R]) PrefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this slice schema in the global registry.
+func (z *ZodSlice[T, R]) Meta(meta core.GlobalMeta) *ZodSlice[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -269,7 +275,7 @@ func (z *ZodSlice[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================
@@ -285,8 +291,9 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 		return fn(constraintValue)
 	}
 
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](wrapper, checkParams)
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
+	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -294,8 +301,9 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 
 // RefineAny provides flexible validation without type conversion
 func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T, R] {
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](fn, checkParams)
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
+	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -639,7 +647,7 @@ func (z *ZodSlice[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 			}
 		}
 	}
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

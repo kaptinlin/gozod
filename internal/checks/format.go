@@ -11,6 +11,10 @@ import (
 )
 
 // =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+// =============================================================================
 // EMAIL AND URL VALIDATION
 // =============================================================================
 
@@ -32,6 +36,7 @@ func Email(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set email format for JSON Schema
 				SetBagProperty(schema, "format", "email")
+				addPatternToSchema(schema, regexes.Email.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -60,6 +65,7 @@ func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set email format for JSON Schema
 				SetBagProperty(schema, "format", "email")
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -104,6 +110,7 @@ func URL(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set uri format for JSON Schema
 				SetBagProperty(schema, "format", "uri")
+				addPatternToSchema(schema, regexes.URL.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -128,6 +135,7 @@ func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set uri format for JSON Schema
 				SetBagProperty(schema, "format", "uri")
+				addPatternToSchema(schema, regexes.URL.String())
 				SetBagProperty(schema, "type", "string")
 
 				// Add constraint information to schema
@@ -137,58 +145,6 @@ func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
 				if options.Protocol != nil {
 					SetBagProperty(schema, "protocolPattern", options.Protocol.String())
 				}
-			},
-		},
-	}
-}
-
-// =============================================================================
-// UUID AND GUID VALIDATION
-// =============================================================================
-
-// UUID creates a UUID format validation check with JSON Schema support
-// Supports: UUID("invalid UUID") or UUID(CheckParams{Error: "invalid UUID format"})
-func UUID(params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "uuid"}
-	ApplyCheckParams(def, checkParams)
-
-	return &core.ZodCheckInternals{
-		Def: def,
-		Check: func(payload *core.ParsePayload) {
-			if !validate.UUID(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("uuid", payload.GetValue(), nil))
-			}
-		},
-		OnAttach: []func(any){
-			func(schema any) {
-				// Set uuid format for JSON Schema
-				SetBagProperty(schema, "format", "uuid")
-				SetBagProperty(schema, "type", "string")
-			},
-		},
-	}
-}
-
-// GUID creates a GUID format validation check with JSON Schema support
-// Supports: GUID("invalid GUID") or GUID(CheckParams{Error: "invalid GUID format"})
-func GUID(params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "guid"}
-	ApplyCheckParams(def, checkParams)
-
-	return &core.ZodCheckInternals{
-		Def: def,
-		Check: func(payload *core.ParsePayload) {
-			if !validate.GUID(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("guid", payload.GetValue(), nil))
-			}
-		},
-		OnAttach: []func(any){
-			func(schema any) {
-				// Set uuid format for JSON Schema (GUID is UUID variant)
-				SetBagProperty(schema, "format", "uuid")
-				SetBagProperty(schema, "type", "string")
 			},
 		},
 	}
@@ -216,6 +172,7 @@ func IPv4(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set ipv4 format for JSON Schema
 				SetBagProperty(schema, "format", "ipv4")
+				addPatternToSchema(schema, regexes.IPv4.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -240,6 +197,7 @@ func IPv6(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set ipv6 format for JSON Schema
 				SetBagProperty(schema, "format", "ipv6")
+				addPatternToSchema(schema, regexes.IPv6.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -268,6 +226,7 @@ func CIDRv4(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set custom format for JSON Schema
 				SetBagProperty(schema, "format", "cidrv4")
+				addPatternToSchema(schema, regexes.CIDRv4.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -292,6 +251,7 @@ func CIDRv6(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set custom format for JSON Schema
 				SetBagProperty(schema, "format", "cidrv6")
+				addPatternToSchema(schema, regexes.CIDRv6.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -320,6 +280,8 @@ func Base64(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set custom format for JSON Schema
 				SetBagProperty(schema, "format", "base64")
+				SetBagProperty(schema, "contentEncoding", "base64")
+				addPatternToSchema(schema, regexes.Base64.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -344,6 +306,8 @@ func Base64URL(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set custom format for JSON Schema
 				SetBagProperty(schema, "format", "base64url")
+				SetBagProperty(schema, "contentEncoding", "base64url")
+				addPatternToSchema(schema, regexes.Base64URL.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -425,6 +389,7 @@ func E164(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set custom format for JSON Schema
 				SetBagProperty(schema, "format", "e164")
+				addPatternToSchema(schema, regexes.E164.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -469,8 +434,9 @@ func ISODateTimeWithOptions(options ISODateTimeOptions, params ...any) core.ZodC
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set date-time format for JSON Schema
-				SetBagProperty(schema, "format", "date-time")
+				// Set ISO datetime format for JSON Schema (custom id)
+				SetBagProperty(schema, "format", "iso_datetime")
+				addPatternToSchema(schema, regexes.DefaultDatetime.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -493,8 +459,9 @@ func ISODateTime(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set date-time format for JSON Schema
-				SetBagProperty(schema, "format", "date-time")
+				// Set ISO datetime format for JSON Schema (custom id)
+				SetBagProperty(schema, "format", "iso_datetime")
+				addPatternToSchema(schema, regexes.DefaultDatetime.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -517,8 +484,9 @@ func ISODate(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set date format for JSON Schema
-				SetBagProperty(schema, "format", "date")
+				// Set ISO date format for JSON Schema
+				SetBagProperty(schema, "format", "iso_date")
+				addPatternToSchema(schema, regexes.Date.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -609,8 +577,9 @@ func ISOTimeWithOptions(options ISOTimeOptions, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set time format for JSON Schema
-				SetBagProperty(schema, "format", "time")
+				// Set ISO time format for JSON Schema
+				SetBagProperty(schema, "format", "iso_time")
+				addPatternToSchema(schema, regexes.DefaultTime.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -630,15 +599,14 @@ func ISOTime(params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.ISOTime(payload.GetValue()) {
-				iss := issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil)
-				iss.Inst = check
-				payload.AddIssue(iss)
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set time format for JSON Schema
-				SetBagProperty(schema, "format", "time")
+				// Set ISO time format for JSON Schema
+				SetBagProperty(schema, "format", "iso_time")
+				addPatternToSchema(schema, regexes.DefaultTime.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -658,15 +626,14 @@ func ISODuration(params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.ISODuration(payload.GetValue()) {
-				iss := issues.CreateInvalidFormatIssue("iso_duration", payload.GetValue(), nil)
-				iss.Inst = check
-				payload.AddIssue(iss)
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_duration", payload.GetValue(), nil))
 			}
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set duration format for JSON Schema
-				SetBagProperty(schema, "format", "duration")
+				// Set ISO duration format for JSON Schema
+				SetBagProperty(schema, "format", "iso_duration")
+				addPatternToSchema(schema, regexes.Duration.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -696,6 +663,7 @@ func CUID(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set cuid format for JSON Schema
 				SetBagProperty(schema, "format", "cuid")
+				addPatternToSchema(schema, regexes.CUID.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -720,6 +688,7 @@ func CUID2(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set cuid2 format for JSON Schema
 				SetBagProperty(schema, "format", "cuid2")
+				addPatternToSchema(schema, regexes.CUID2.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -744,6 +713,7 @@ func ULID(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set ulid format for JSON Schema
 				SetBagProperty(schema, "format", "ulid")
+				addPatternToSchema(schema, regexes.ULID.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -768,6 +738,7 @@ func XID(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set xid format for JSON Schema
 				SetBagProperty(schema, "format", "xid")
+				addPatternToSchema(schema, regexes.XID.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -792,6 +763,7 @@ func KSUID(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set ksuid format for JSON Schema
 				SetBagProperty(schema, "format", "ksuid")
+				addPatternToSchema(schema, regexes.KSUID.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -816,6 +788,7 @@ func NanoID(params ...any) core.ZodCheck {
 			func(schema any) {
 				// Set nanoid format for JSON Schema
 				SetBagProperty(schema, "format", "nanoid")
+				addPatternToSchema(schema, regexes.NanoID.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -843,7 +816,99 @@ func JSON(params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				// Set json format for JSON Schema
-				SetBagProperty(schema, "format", "json")
+				SetBagProperty(schema, "contentMediaType", "application/json")
+				addPatternToSchema(schema, regexes.JSONString.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
+// EMOJI VALIDATION
+// =============================================================================
+
+// Emoji creates an emoji validation check with JSON Schema support.
+// Supports: Emoji("invalid emoji") or Emoji(CheckParams{Error: "invalid emoji"})
+func Emoji(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "emoji"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.Regex(payload.GetValue(), regexes.Emoji) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("emoji", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Add pattern info for JSON Schema generation
+				SetBagProperty(schema, "format", "emoji")
+				addPatternToSchema(schema, regexes.Emoji.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
+// UUID AND GUID VALIDATION
+// =============================================================================
+
+// UUID creates a UUID format validation check with JSON Schema support
+// Supports: UUID("invalid UUID") or UUID(CheckParams{Error: "invalid UUID format"})
+func UUID(params ...any) core.ZodCheck {
+	return buildUUIDCheck("uuid", regexes.UUID, params...)
+}
+
+// GUID creates a GUID format validation check with JSON Schema support
+// Supports: GUID("invalid GUID") or GUID(CheckParams{Error: "invalid GUID format"})
+func GUID(params ...any) core.ZodCheck {
+	return buildUUIDCheck("guid", regexes.GUID, params...)
+}
+
+// =============================================================================
+// UUID VERSION-SPECIFIC VALIDATION
+// =============================================================================
+
+// UUIDv4 creates a UUID version 4 format validation check.
+// Supports: UUIDv4("invalid UUIDv4") or UUIDv4(CheckParams{Error: "invalid UUIDv4"})
+func UUIDv4(params ...any) core.ZodCheck {
+	return buildUUIDCheck("uuidv4", regexes.UUID4, params...)
+}
+
+// UUID6 creates a UUID v6 format validation check.
+// Supports: UUID6("invalid UUIDv6") or UUID6(CheckParams{Error: "invalid UUIDv6"})
+func UUID6(params ...any) core.ZodCheck {
+	return buildUUIDCheck("uuid6", regexes.UUID6, params...)
+}
+
+// UUID7 creates a UUID v7 format validation check.
+// Supports: UUID7("invalid UUIDv7") or UUID7(CheckParams{Error: "invalid UUIDv7"})
+func UUID7(params ...any) core.ZodCheck {
+	return buildUUIDCheck("uuid7", regexes.UUID7, params...)
+}
+
+// buildUUIDCheck constructs UUID-related checks with appropriate format annotation.
+func buildUUIDCheck(checkID string, pattern *regexp.Regexp, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: checkID}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.Regex(payload.GetValue(), pattern) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue(checkID, payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set format - all UUID variants use "uuid" format
+				SetBagProperty(schema, "format", "uuid")
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},

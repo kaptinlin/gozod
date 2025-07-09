@@ -49,14 +49,18 @@ func (z *ZodCheckCustom) GetZod() *core.ZodCheckInternals {
 // NewCustom creates a new custom validation check with user-defined validation logic
 // Uses unified parameter handling following Zod TypeScript v4 pattern
 func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
-	// Use unified parameter handling
+	// Use unified parameter handling with CustomParams
 	param := utils.GetFirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
+	customParams := utils.NormalizeCustomParams(param)
 
 	def := &ZodCheckCustomDef{
-		ZodCheckDef: core.ZodCheckDef{Check: "custom"},
-		Fn:          fn,
-		Params:      make(map[string]any),
+		ZodCheckDef: core.ZodCheckDef{
+			Check: "custom",
+			Error: nil,
+			Abort: customParams.Abort, // Use CustomParams.Abort directly
+		},
+		Fn:     fn,
+		Params: make(map[string]any),
 	}
 
 	// Determine function type
@@ -69,20 +73,30 @@ func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 		def.FnType = "refine" // Default to refine for backward compatibility
 	}
 
-	// Apply schema parameters using the centralized utility
-	ApplySchemaParamsToCheck(&def.ZodCheckDef, normalizedParams)
+	// Apply error configuration from CustomParams
+	if customParams.Error != nil {
+		if errorMap, ok := utils.ToErrorMap(customParams.Error); ok {
+			def.Error = errorMap
+		}
+	}
 
-	// Handle additional parameters from SchemaParams.Params
-	if normalizedParams != nil && len(normalizedParams.Params) > 0 {
-		for k, v := range normalizedParams.Params {
+	// Handle additional parameters from CustomParams.Params
+	if customParams.Params != nil && len(customParams.Params) > 0 {
+		for k, v := range customParams.Params {
 			def.Params[k] = v
 		}
+	}
+
+	// Store custom path if provided
+	if customParams.Path != nil && len(customParams.Path) > 0 {
+		def.Params["path"] = customParams.Path
 	}
 
 	// Create internals with enhanced metadata storage
 	internals := &ZodCheckCustomInternals{
 		ZodCheckInternals: core.ZodCheckInternals{
-			Def: &def.ZodCheckDef,
+			Def:  &def.ZodCheckDef,
+			When: customParams.When, // Attach when predicate from CustomParams
 		},
 		Def:  def,
 		Issc: &core.ZodIssueBase{},
@@ -110,6 +124,22 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 	payloadPath := payload.GetPath()
 	path := make([]any, len(payloadPath))
 	copy(path, payloadPath)
+
+	// Override the issue path if a custom `path` parameter is provided
+	if customPath, ok := internals.Def.Params["path"]; ok {
+		switch p := customPath.(type) {
+		case []any:
+			path = p
+		case []string:
+			conv := make([]any, len(p))
+			for i, v := range p {
+				conv[i] = v
+			}
+			path = conv
+		case string:
+			path = []any{p}
+		}
+	}
 
 	// Determine the error message to use - use mapx for safe access
 	var errorMessage string

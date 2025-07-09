@@ -175,6 +175,12 @@ func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this enum schema.
+func (z *ZodEnum[T, R]) Meta(meta core.GlobalMeta) *ZodEnum[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // ENUM SPECIFIC METHODS
 // =============================================================================
@@ -247,7 +253,7 @@ func (z *ZodEnum[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 		enumValue := extractEnumValue[T, R](input)
 		return target.Parse(enumValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================

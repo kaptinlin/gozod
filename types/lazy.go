@@ -208,6 +208,12 @@ func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this lazy schema.
+func (z *ZodLazy[T]) Meta(meta core.GlobalMeta) *ZodLazy[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
@@ -225,7 +231,7 @@ func (z *ZodLazy[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
 		return target.Parse(any(input), ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -385,6 +391,11 @@ func (w *schemaWrapper) IsNilable() bool {
 		return s.IsNilable()
 	}
 	return false
+}
+
+// GetInner returns the wrapped inner schema for JSON Schema conversion
+func (w *schemaWrapper) GetInner() any {
+	return w.inner
 }
 
 // extractLazy extracts a value from input by delegating to inner schema

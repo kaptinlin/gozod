@@ -190,7 +190,7 @@ func (z *ZodIPv4[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		str := extractNetworkString(input)
 		return target.Parse(str, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -509,7 +509,7 @@ func (z *ZodIPv6[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		str := extractNetworkString(input)
 		return target.Parse(str, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -735,6 +735,11 @@ func (z *ZodCIDRv4[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// ParseAny validates the input and returns any type (for runtime interface)
+func (z *ZodCIDRv4[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
 // =============================================================================
 // CIDRv4 MODIFIER METHODS
 // =============================================================================
@@ -812,7 +817,7 @@ func (z *ZodCIDRv4[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		str := extractNetworkString(input)
 		return target.Parse(str, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -1038,6 +1043,11 @@ func (z *ZodCIDRv6[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// ParseAny validates the input and returns any type (for runtime interface)
+func (z *ZodCIDRv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
 // =============================================================================
 // CIDRv6 MODIFIER METHODS
 // =============================================================================
@@ -1115,7 +1125,7 @@ func (z *ZodCIDRv6[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		str := extractNetworkString(input)
 		return target.Parse(str, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================

@@ -181,6 +181,12 @@ func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this array schema in the global registry.
+func (z *ZodArray[T, R]) Meta(meta core.GlobalMeta) *ZodArray[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -296,7 +302,7 @@ func (z *ZodArray[T, R]) Overwrite(transform func(R) R, params ...any) *ZodArray
 //	arrayToString := Array([]any{String()}).Pipe(String())  // []any -> string conversion
 func (z *ZodArray[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	// WrapFn Pattern: Create target function for type conversion and validation
-	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
 		// Extract T value from constraint type R
 		arrayValue := extractArrayValue[T, R](input)
 		// Apply target schema to the extracted T
@@ -304,7 +310,7 @@ func (z *ZodArray[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -796,7 +802,7 @@ func (z *ZodArray[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

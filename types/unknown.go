@@ -202,6 +202,12 @@ func (z *ZodUnknown[T, R]) PrefaultFunc(fn func() T) *ZodUnknown[T, R] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this unknown schema.
+func (z *ZodUnknown[T, R]) Meta(meta core.GlobalMeta) *ZodUnknown[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -281,11 +287,10 @@ func (z *ZodUnknown[T, R]) Transform(fn func(T, *core.RefinementContext) (any, e
 
 // Pipe creates validation pipeline to another schema using WrapFn pattern
 func (z *ZodUnknown[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		unknownValue := extractUnknownValue[T, R](input)
-		return target.Parse(unknownValue, ctx)
+	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+		return target.Parse(input, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // =============================================================================

@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 // =============================================================================
 // TRANSFORMATION & PIPELINE PRIMITIVES
 // =============================================================================
@@ -60,6 +62,11 @@ func (z *ZodTransform[In, Out]) MustParse(input any, ctx ...*ParseContext) Out {
 	return result
 }
 
+// ParseAny validates and transforms input, returning an untyped result.
+func (z *ZodTransform[In, Out]) ParseAny(input any, ctx ...*ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
 // GetInternals returns the internal state of this transformation schema.
 func (z *ZodTransform[In, Out]) GetInternals() *ZodTypeInternals {
 	return z.internals
@@ -97,6 +104,7 @@ func (z *ZodTransform[In, Out]) IsNilable() bool {
 //   - No need for adapter objects or converters
 type ZodPipe[In, Out any] struct {
 	source    ZodType[In]                          // Source schema for input validation
+	target    ZodType[any]                         // Target schema (output)
 	targetFn  func(In, *ParseContext) (Out, error) // Target function (from wrapfn)
 	internals *ZodTypeInternals                    // Internal state and metadata
 }
@@ -153,28 +161,65 @@ func (z *ZodPipe[In, Out]) IsNilable() bool {
 // Returns:
 //   - *ZodTransform[In, Out]: A new transformation schema
 func NewZodTransform[In, Out any](source ZodType[In], wrapperFn func(In, *RefinementContext) (Out, error)) *ZodTransform[In, Out] {
+	internals := source.GetInternals().Clone()
+	internals.Type = ZodTypeTransform
+
+	// The `source` is the input schema for this transformation.
+	// This is now correctly propagated for toJSONSchema's IO:"input" mode.
+	internals.SetTransform(func(data any, ctx *RefinementContext) (any, error) {
+		// This generic wrapper handles the type assertion before calling the specific transform func.
+		if typedData, ok := data.(In); ok {
+			return wrapperFn(typedData, ctx)
+		}
+		// This should ideally not happen if parsing is correct
+		return nil, fmt.Errorf("invalid type for transform: expected %T", *new(In))
+	})
+
 	return &ZodTransform[In, Out]{
 		source:    source,
 		transform: wrapperFn,
-		internals: source.GetInternals().Clone(),
+		internals: internals,
 	}
 }
 
-// NewZodPipe creates a new pipeline schema.
-// This is used by each type's Pipe method with their own wrapfn logic.
-//
-// Parameters:
-//   - source: The source schema
-//   - targetFn: The target function created by the type's Pipe method
-//
-// Returns:
-//   - *ZodPipe[In, Out]: A new pipeline schema
-func NewZodPipe[In, Out any](source ZodType[In], targetFn func(In, *ParseContext) (Out, error)) *ZodPipe[In, Out] {
+// GetInner returns the input schema for the transformation.
+func (z *ZodTransform[In, Out]) GetInner() ZodSchema {
+	// All concrete schema types implement both ZodType[T] and ZodSchema.
+	// We perform a type assertion to convert from the generic interface to the non-generic one.
+	if schema, ok := z.source.(ZodSchema); ok {
+		return schema
+	}
+	// This case should be unreachable in practice.
+	return nil
+}
+
+// NewZodPipe creates a new pipeline schema with explicit target schema information.
+func NewZodPipe[In, Out any](source ZodType[In], target ZodType[any], targetFn func(In, *ParseContext) (Out, error)) *ZodPipe[In, Out] {
+	internals := source.GetInternals().Clone()
+	internals.Type = ZodTypePipe // Mark explicit Pipe type for JSON Schema converter
+
 	return &ZodPipe[In, Out]{
 		source:    source,
+		target:    target,
 		targetFn:  targetFn,
-		internals: source.GetInternals().Clone(),
+		internals: internals,
 	}
+}
+
+// GetInner returns the input (source) schema, used by JSON-Schema converter for IO:"input" mode.
+func (z *ZodPipe[In, Out]) GetInner() ZodSchema {
+	if s, ok := z.source.(ZodSchema); ok {
+		return s
+	}
+	return nil
+}
+
+// GetOutput returns the output (target) schema, used by JSON-Schema converter for IO:"output" mode.
+func (z *ZodPipe[In, Out]) GetOutput() ZodSchema {
+	if t, ok := z.target.(ZodSchema); ok {
+		return t
+	}
+	return nil
 }
 
 // =============================================================================
@@ -195,7 +240,7 @@ func (z *ZodTransform[In, Middle]) Pipe(target ZodType[any]) *ZodPipe[Middle, an
 	targetFn := func(input Middle, ctx *ParseContext) (any, error) {
 		return target.Parse(input, ctx)
 	}
-	return NewZodPipe[Middle, any](z, targetFn)
+	return NewZodPipe[Middle, any](z, target, targetFn)
 }
 
 // Transform allows chaining transformations on ZodPipe.
@@ -212,5 +257,5 @@ func (z *ZodPipe[In, Middle]) Pipe(target ZodType[any]) *ZodPipe[Middle, any] {
 	targetFn := func(input Middle, ctx *ParseContext) (any, error) {
 		return target.Parse(input, ctx)
 	}
-	return NewZodPipe[Middle, any](z, targetFn)
+	return NewZodPipe[Middle, any](z, target, targetFn)
 }

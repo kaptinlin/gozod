@@ -6,15 +6,15 @@ import (
 	"strings"
 )
 
-// Duration matches ISO 8601-1 duration regex simplified for Go (without lookaheads)
+// Duration matches ISO 8601-1 duration regex
 // TypeScript original code:
 // export const duration: RegExp =
 //
 //	/^P(?:(\d+W)|(?!.*W)(?=\d|T\d)(\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+([.,]\d+)?S)?)?)$/;
 //
-// Note: Go's regexp doesn't support lookaheads, so this is a simplified version
-// This version matches the basic structure but needs additional validation
-var Duration = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
+// Go equivalent (simplified without lookaheads):
+// Matches either P<weeks>W or P<years>Y<months>M<days>D(T<hours>H<minutes>M<seconds>S)
+var Duration = regexp.MustCompile(`^P(?:(\d+W)|(\d+Y)?(\d+M)?(\d+D)?(?:T(\d+H)?(\d+M)?(\d+(?:[.,]\d+)?S)?)?)$`)
 
 // ExtendedDuration implements ISO 8601-2 extensions simplified for Go
 // TypeScript original code:
@@ -23,12 +23,12 @@ var Duration = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\
 //	/^[-+]?P(?!$)(?:(?:[-+]?\d+Y)|(?:[-+]?\d+[.,]\d+Y$))?(?:(?:[-+]?\d+M)|(?:[-+]?\d+[.,]\d+M$))?(?:(?:[-+]?\d+W)|(?:[-+]?\d+[.,]\d+W$))?(?:(?:[-+]?\d+D)|(?:[-+]?\d+[.,]\d+D$))?(?:T(?=[\d+-])(?:(?:[-+]?\d+H)|(?:[-+]?\d+[.,]\d+H$))?(?:(?:[-+]?\d+M)|(?:[-+]?\d+[.,]\d+M$))?(?:[-+]?\d+(?:[.,]\d+)?S)?)??$/;
 //
 // Note: Go's regexp doesn't support lookaheads, so this is a simplified version
-var ExtendedDuration = regexp.MustCompile(`^[-+]?P([-+]?\d+[.,]?\d*[YMWD]|T[-+]?\d+[.,]?\d*[HMS])+$`)
+var ExtendedDuration = regexp.MustCompile(`^[-+]?P(?:[-+]?\d+[.,]?\d*[YMWD])*(?:T(?:[-+]?\d+[.,]?\d*[HMS])*)?$`)
 
 // dateSource provides date pattern base component
 // TypeScript original code:
-// const dateSource = `((\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|(02)-(0[1-9]|1\\d|2[0-8])))`;
-var dateSource = `((\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\d|3[01])|(0[469]|11)-(0[1-9]|[12]\d|30)|(02)-(0[1-9]|1\d|2[0-8])))`
+// const dateSource = `(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))`;
+var dateSource = `(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))`
 
 // Date matches ISO 8601 date format (YYYY-MM-DD)
 // TypeScript original code:
@@ -58,11 +58,11 @@ type TimeOptions struct {
 // TypeScript original code:
 //
 //	function timeSource(args: { precision?: number | null }) {
-//	  let regex = `([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d`;
+//	  let regex = `(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?`;
 //	  if (args.precision) {
-//	    regex = `${regex}\\.\\d{${args.precision}}`;
+//	    regex = `(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d\\.\\d{${args.precision}}`;
 //	  } else if (args.precision == null) {
-//	    regex = `${regex}(\\.\\d+)?`;
+//	    regex = `(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?`;
 //	  }
 //	  return regex;
 //	}
@@ -70,29 +70,29 @@ func timeSource(precision *int) string {
 	if precision == nil {
 		// Default: supports both HH:MM and HH:MM:SS with optional fractional seconds
 		// This matches TypeScript Zod's default behavior
-		return `([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?`
+		return `(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?`
 	}
 
 	if *precision == -1 {
 		// Minute precision only (HH:MM) - no seconds allowed
 		// This matches the test case: z.string().datetime({ precision: -1 })
-		return `([01]\d|2[0-3]):[0-5]\d`
+		return `(?:[01]\d|2[0-3]):[0-5]\d`
 	}
 
 	if *precision == 0 {
 		// Second precision required (HH:MM:SS) - no fractional seconds
 		// This matches the test case: z.string().datetime({ precision: 0 })
-		return `([01]\d|2[0-3]):[0-5]\d:[0-5]\d`
+		return `(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d`
 	}
 
 	if *precision > 0 {
 		// Specific fractional precision required (HH:MM:SS.sss)
 		// This matches the test case: z.string().datetime({ precision: 3 })
-		return fmt.Sprintf(`([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{%d}`, *precision)
+		return fmt.Sprintf(`(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{%d}`, *precision)
 	}
 
 	// Fallback for negative values other than -1: treat as no precision
-	return `([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?`
+	return `(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?`
 }
 
 // Time returns a regex for matching ISO 8601 time format
@@ -116,7 +116,7 @@ func Time(opts TimeOptions) *regexp.Regexp {
 
 // DefaultTime is the time regex with any decimal precision
 // Updated to support both HH:MM and HH:MM:SS formats like TypeScript Zod 4
-var DefaultTime = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?$`)
+var DefaultTime = regexp.MustCompile(`^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?$`)
 
 // DatetimeOptions defines parameters for datetime regex pattern
 // TypeScript original code:
@@ -168,7 +168,7 @@ func Datetime(options DatetimeOptions) *regexp.Regexp {
 
 	if options.Offset {
 		// TypeScript Zod 4 requires colon in offset format: +02:00, not +0200 or +02
-		opts = append(opts, `([+-]\d{2}:\d{2})`)
+		opts = append(opts, `([+-](?:[01]\d|2[0-3]):[0-5]\d)`)
 	}
 
 	if len(opts) > 0 {
@@ -186,4 +186,4 @@ func Datetime(options DatetimeOptions) *regexp.Regexp {
 
 // DefaultDatetime is the datetime regex with Z timezone only (no offsets by default)
 // Updated to match TypeScript Zod 4 default behavior: only Z allowed, no offsets
-var DefaultDatetime = regexp.MustCompile(`^` + dateSource + `T` + timeSource(nil) + `(Z|[+-]\d{2}:\d{2})$`)
+var DefaultDatetime = regexp.MustCompile(`^` + dateSource + `T(?:` + timeSource(nil) + `(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d))$`)

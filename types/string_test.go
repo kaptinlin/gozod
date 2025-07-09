@@ -1272,3 +1272,62 @@ func TestString_EdgeCases_PointerIdentityPreservation(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// Refine advanced parameter tests (error, abort, path, when)
+// =============================================================================
+
+func TestString_RefineParameters(t *testing.T) {
+	t.Run("abort option stops subsequent refinements", func(t *testing.T) {
+		schema := String().
+			Refine(func(s string) bool { return len(s) > 8 }, core.CustomParams{Error: "Too short!", Abort: true}).
+			Refine(func(s string) bool { return strings.ToLower(s) == s }, "Must be lowercase")
+
+		_, err := schema.Parse("OH NO")
+		require.Error(t, err)
+
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+		assert.Equal(t, "Too short!", zErr.Issues[0].Message)
+	})
+
+	t.Run("path parameter overrides issue path", func(t *testing.T) {
+		schema := String().
+			Refine(func(s string) bool { return len(s) > 5 }, core.CustomParams{
+				Error: "Too short!",
+				Path:  []any{"custom", "path"},
+			})
+
+		_, err := schema.Parse("hi")
+		require.Error(t, err)
+
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+		assert.Equal(t, []any{"custom", "path"}, zErr.Issues[0].Path)
+	})
+
+	t.Run("when predicate controls execution", func(t *testing.T) {
+		// Only run validation when payload has no existing issues
+		whenFn := func(p *core.ParsePayload) bool {
+			return p.GetIssueCount() == 0
+		}
+
+		schema := String().
+			Refine(func(s string) bool { return len(s) > 3 }, "Too short!").
+			Refine(func(s string) bool { return len(s) < 10 }, core.CustomParams{
+				Error: "Too long!",
+				When:  whenFn,
+			})
+
+		// First refinement fails, second should not run due to when predicate
+		_, err := schema.Parse("hi")
+		require.Error(t, err)
+
+		var zErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zErr))
+		assert.Len(t, zErr.Issues, 1)
+		assert.Equal(t, "Too short!", zErr.Issues[0].Message)
+	})
+}

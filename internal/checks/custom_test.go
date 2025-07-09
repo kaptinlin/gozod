@@ -229,14 +229,13 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 
 	t.Run("validates with error customization", func(t *testing.T) {
 		refineFn := func(s string) bool {
-			return len(s) > 5
+			return len(s) > 8
 		}
-		customErrorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
-			return "Custom validation failed"
-		})
-		params := core.SchemaParams{
-			Error: &customErrorMap,
+
+		params := core.CustomParams{
+			Error: "Custom validation failed",
 		}
+
 		check := NewCustom[string](refineFn, params)
 
 		payload := core.NewParsePayload("hi")
@@ -376,7 +375,7 @@ func TestCustomCheckConstructors(t *testing.T) {
 			return "Custom validation error"
 		})
 
-		params := core.SchemaParams{
+		params := core.CustomParams{
 			Error: &customErrorMap,
 			Abort: true,
 		}
@@ -420,7 +419,7 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 		refineFn := func(s string) bool {
 			return false
 		}
-		params := core.SchemaParams{
+		params := core.CustomParams{
 			Params: map[string]any{
 				"nestedField": []string{"nested", "field"},
 			},

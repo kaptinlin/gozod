@@ -148,6 +148,12 @@ func (z *ZodTime[T]) PrefaultFunc(fn func() time.Time) *ZodTime[T] {
 	return z.withInternals(in)
 }
 
+// Meta stores metadata for this time schema.
+func (z *ZodTime[T]) Meta(meta core.GlobalMeta) *ZodTime[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
@@ -181,7 +187,7 @@ func (z *ZodTime[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		timeValue := extractTime(input)
 		return target.Parse(timeValue, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -224,16 +230,11 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 		}
 	}
 
-	// Use unified parameter handling
-	schemaParams := utils.NormalizeParams(params...)
+	// Use unified parameter handling with CustomParams
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
 
-	// Convert back to the format expected by checks.NewCustom
-	var checkParams any
-	if schemaParams.Error != nil {
-		checkParams = schemaParams
-	}
-
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, customParams)
 
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
@@ -242,15 +243,11 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 
 // RefineAny adds flexible custom validation logic
 func (z *ZodTime[T]) RefineAny(fn func(any) bool, params ...any) *ZodTime[T] {
-	// Use unified parameter handling
-	schemaParams := utils.NormalizeParams(params...)
+	// Use unified parameter handling with CustomParams
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
 
-	var checkParams any
-	if schemaParams.Error != nil {
-		checkParams = schemaParams
-	}
-
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

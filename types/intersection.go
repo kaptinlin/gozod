@@ -215,13 +215,17 @@ func (z *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc keeps current generic type R.
 func (z *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this intersection schema.
+func (z *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -257,7 +261,7 @@ func (z *ZodIntersection[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, 
 		baseValue := extractIntersectionValue[T, R](input)
 		return target.Parse(baseValue, ctx)
 	}
-	return core.NewZodPipe[R, any](z, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
 // =============================================================================

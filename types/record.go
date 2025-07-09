@@ -1,12 +1,14 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
@@ -19,6 +21,7 @@ import (
 // ZodRecordDef defines the schema definition for record validation
 type ZodRecordDef struct {
 	core.ZodTypeDef
+	KeyType   any // The key schema (type-erased for flexibility)
 	ValueType any // The value schema (type-erased for flexibility)
 }
 
@@ -26,6 +29,7 @@ type ZodRecordDef struct {
 type ZodRecordInternals struct {
 	core.ZodTypeInternals
 	Def       *ZodRecordDef // Schema definition reference
+	KeyType   any           // Key schema for runtime validation
 	ValueType any           // Value schema for runtime validation
 }
 
@@ -42,6 +46,16 @@ type ZodRecord[T any, R any] struct {
 // GetInternals exposes internal state for framework usage
 func (z *ZodRecord[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
+}
+
+// KeyType returns the key schema for this record, which is always a string.
+func (z *ZodRecord[T, R]) KeyType() any {
+	return z.internals.KeyType
+}
+
+// ValueType returns the value schema for JSON Schema conversion
+func (z *ZodRecord[T, R]) ValueType() any {
+	return z.internals.ValueType
 }
 
 // IsOptional returns true if this schema accepts undefined/missing values
@@ -170,10 +184,14 @@ func (z *ZodRecord[T, R]) Prefault(v T) *ZodRecord[T, R] {
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this record schema.
+func (z *ZodRecord[T, R]) Meta(meta core.GlobalMeta) *ZodRecord[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -248,7 +266,7 @@ func (z *ZodRecord[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 
 	// Use the new factory function for ZodPipe
-	return core.NewZodPipe[R, any](z, targetFn)
+	return core.NewZodPipe[R, any](z, target, targetFn)
 }
 
 // Overwrite transforms the input value while preserving the original type.
@@ -327,6 +345,7 @@ func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord
 	return &ZodRecord[T, *T]{internals: &ZodRecordInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
+		KeyType:          z.internals.KeyType,
 		ValueType:        z.internals.ValueType,
 	}}
 }
@@ -335,6 +354,7 @@ func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T,
 	return &ZodRecord[T, R]{internals: &ZodRecordInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
+		KeyType:          z.internals.KeyType,
 		ValueType:        z.internals.ValueType,
 	}}
 }
@@ -552,32 +572,94 @@ func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 
 // validateRecord validates record entries using value schema
 func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.ZodCheck, ctx *core.ParseContext) (map[string]any, error) {
-	// First apply checks (including Overwrite transformations) to get the transformed value
+	// First, apply standard checks like Min, Max, Size, and Overwrite transformations.
 	transformedValue, err := engine.ApplyChecks[any](value, checks, ctx)
 	if err != nil {
-		return nil, err
+		return nil, err // These checks return a finalized ZodError.
 	}
 
-	// Handle potential pointer type from Overwrite transformations
-	switch v := transformedValue.(type) {
-	case map[string]any:
+	// Re-assign 'value' if it was transformed by Overwrite.
+	if v, ok := transformedValue.(map[string]any); ok {
 		value = v
-	case *map[string]any:
-		if v != nil {
-			value = *v
-		}
-	default:
-		// If transformation returned unexpected type, keep original value
-		// This handles the case where no transformation was applied
+	} else if v, ok := transformedValue.(*map[string]any); ok && v != nil {
+		value = *v
 	}
 
-	// Always validate each value if value schema is provided - this is what makes Record different from map[string]any
+	var rawIssues []core.ZodRawIssue
+	allowedKeys, isExhaustive := tryGetExpectedKeys(z.internals.KeyType)
+	isPartial, _ := z.internals.Bag["partial"].(bool)
+
+	// --- Key Validation ---
+	if isExhaustive {
+		seenKeys, unrecognizedKeys := make(map[string]bool), []string{}
+		for key := range value {
+			if !stringInSlice(key, allowedKeys) {
+				unrecognizedKeys = append(unrecognizedKeys, key)
+			}
+			seenKeys[key] = true
+		}
+
+		if len(unrecognizedKeys) > 0 {
+			rawIssues = append(rawIssues, issues.CreateUnrecognizedKeysIssue(unrecognizedKeys, value))
+		}
+
+		if !isPartial { // Exhaustiveness check for non-partial records.
+			valueTypeName := core.ZodTypeAny
+			if valType, ok := z.internals.ValueType.(core.ZodType[any]); ok {
+				valueTypeName = valType.GetInternals().Type
+			}
+			for _, k := range allowedKeys {
+				if !seenKeys[k] {
+					issue := issues.CreateInvalidTypeIssue(valueTypeName, nil)
+					issue.Path = append(issue.Path, k) // Manually set path for missing key.
+					rawIssues = append(rawIssues, issue)
+				}
+			}
+		}
+	} else if z.internals.KeyType != nil {
+		// Non-exhaustive key validation (e.g., string with pattern).
+		if keySchema, ok := z.internals.KeyType.(core.ZodType[any]); ok {
+			for key := range value {
+				if _, keyErr := keySchema.Parse(key); keyErr != nil {
+					// For non-ZodError errors, propagate immediately to match strict validation behavior.
+					var zodErr *issues.ZodError
+					if errors.As(keyErr, &zodErr) {
+						for _, issue := range zodErr.Issues {
+							rawIssues = append(rawIssues, issues.ConvertZodIssueToRaw(issue))
+						}
+					} else {
+						return nil, keyErr
+					}
+				}
+			}
+		}
+	}
+
+	// --- Value Validation ---
 	if z.internals.ValueType != nil {
 		for key, val := range value {
+			// Pre-emptive check for obviously wrong types for numeric schemas to prevent panics.
+			if vs, ok := z.internals.ValueType.(core.ZodType[any]); ok {
+				internals := vs.GetInternals()
+				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumber(val) {
+					return nil, fmt.Errorf("value validation failed for key '%s': expected numeric, got %T", key, val)
+				}
+			}
+
+			// Use generic validateValue helper to leverage existing reflection logic
 			if err := z.validateValue(val, z.internals.ValueType, ctx, key); err != nil {
 				return nil, err
 			}
 		}
+	}
+
+	if len(rawIssues) > 0 {
+		finalizedIssues := make([]core.ZodIssue, len(rawIssues))
+		config := core.GetConfig()
+		for i, raw := range rawIssues {
+			finalizedIssues[i] = issues.FinalizeIssue(raw, ctx, config)
+		}
+		return nil, issues.NewZodError(finalizedIssues)
 	}
 
 	return value, nil
@@ -626,6 +708,54 @@ func (z *ZodRecord[T, R]) validateValue(value any, schema any, ctx *core.ParseCo
 	return nil
 }
 
+// tryGetExpectedKeys attempts to extract expected keys from an enum/literal schema via reflection.
+func tryGetExpectedKeys(schema any) ([]string, bool) {
+	if schema == nil {
+		return nil, false
+	}
+
+	v := reflect.ValueOf(schema)
+	if !v.IsValid() || v.IsNil() {
+		return nil, false
+	}
+
+	// Enumerate common methods: Options() []string or EnumValues() []string etc.
+	if method := v.MethodByName("Options"); method.IsValid() {
+		res := method.Call(nil)
+		if len(res) == 1 {
+			if arr, ok := res[0].Interface().([]string); ok {
+				return arr, true
+			}
+		}
+	}
+	if method := v.MethodByName("EnumValues"); method.IsValid() {
+		res := method.Call(nil)
+		if len(res) == 1 {
+			if arr, ok := res[0].Interface().([]string); ok {
+				return arr, true
+			}
+		}
+	}
+	if method := v.MethodByName("Values"); method.IsValid() {
+		res := method.Call(nil)
+		if len(res) == 1 {
+			if arr, ok := res[0].Interface().([]string); ok {
+				return arr, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func stringInSlice(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 // =============================================================================
 // CONSTRUCTOR FUNCTIONS
 // =============================================================================
@@ -640,6 +770,7 @@ func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
 			Bag:    make(map[string]any),
 		},
 		Def:       def,
+		KeyType:   def.KeyType,
 		ValueType: def.ValueType,
 	}
 
@@ -647,6 +778,7 @@ func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		recordDef := &ZodRecordDef{
 			ZodTypeDef: *newDef,
+			KeyType:    def.KeyType,
 			ValueType:  def.ValueType,
 		}
 		return any(newZodRecordFromDef[T, R](recordDef)).(core.ZodType[any])
@@ -663,18 +795,38 @@ func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
 // FACTORY FUNCTIONS
 // =============================================================================
 
-// Record creates record schema with string keys and typed values - returns value constraint
-func Record(valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, map[string]any] {
-	return RecordTyped[map[string]any, map[string]any](valueSchema, paramArgs...)
+// Record creates record schema with key schema and value schema - returns value constraint
+func Record(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, map[string]any] {
+	return RecordTyped[map[string]any, map[string]any](keySchema, valueSchema, paramArgs...)
 }
 
-// RecordPtr creates record schema with string keys and typed values - returns pointer constraint
-func RecordPtr(valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, *map[string]any] {
-	return RecordTyped[map[string]any, *map[string]any](valueSchema, paramArgs...)
+// RecordPtr creates record schema returning pointer constraint
+func RecordPtr(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, *map[string]any] {
+	return RecordTyped[map[string]any, *map[string]any](keySchema, valueSchema, paramArgs...)
+}
+
+// PartialRecord creates a record schema that skips exhaustive key checks (equivalent to Zod's partialRecord)
+func PartialRecord(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, map[string]any] {
+	schema := Record(keySchema, valueSchema, paramArgs...)
+	if schema.internals.Bag == nil {
+		schema.internals.Bag = make(map[string]any)
+	}
+	schema.internals.Bag["partial"] = true
+	return schema
+}
+
+// PartialRecordPtr variant returning pointer constraint
+func PartialRecordPtr(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, *map[string]any] {
+	schema := RecordPtr(keySchema, valueSchema, paramArgs...)
+	if schema.internals.Bag == nil {
+		schema.internals.Bag = make(map[string]any)
+	}
+	schema.internals.Bag["partial"] = true
+	return schema
 }
 
 // RecordTyped creates typed record schema with generic constraints
-func RecordTyped[T any, R any](valueSchema any, paramArgs ...any) *ZodRecord[T, R] {
+func RecordTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodRecord[T, R] {
 	param := utils.GetFirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
@@ -683,6 +835,7 @@ func RecordTyped[T any, R any](valueSchema any, paramArgs ...any) *ZodRecord[T, 
 			Type:   core.ZodTypeRecord,
 			Checks: []core.ZodCheck{},
 		},
+		KeyType:   keySchema,
 		ValueType: valueSchema,
 	}
 
@@ -693,9 +846,8 @@ func RecordTyped[T any, R any](valueSchema any, paramArgs ...any) *ZodRecord[T, 
 
 	recordSchema := newZodRecordFromDef[T, R](def)
 
-	// Ensure validator is called when value schema exists
-	// Add a minimal check that always passes to trigger validation
-	if valueSchema != nil {
+	// Ensure validator is called when key or value schema exists
+	if keySchema != nil || valueSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
 		recordSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
 	}
@@ -728,7 +880,7 @@ func (z *ZodRecord[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		}
 	}
 
-	check := checks.NewCustom[R](wrapper, utils.GetFirstParam(params...))
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

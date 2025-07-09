@@ -299,6 +299,46 @@ func NormalizeParams(params ...any) *core.SchemaParams {
 	}
 }
 
+// NormalizeCustomParams normalizes input parameters into a standard CustomParams struct
+// Supports variadic arguments where the first parameter is used:
+// - nil -> empty CustomParams
+// - string -> { Error: string }
+// - CustomParams -> normalized copy
+// - *CustomParams -> normalized copy
+// - any -> { Error: any }
+func NormalizeCustomParams(params ...any) *core.CustomParams {
+	if len(params) == 0 {
+		return &core.CustomParams{}
+	}
+
+	param := params[0]
+	if param == nil {
+		return &core.CustomParams{}
+	}
+
+	switch v := param.(type) {
+	case string:
+		// String shorthand for error message
+		return &core.CustomParams{Error: v}
+
+	case core.CustomParams:
+		// Copy to avoid mutation
+		return &v
+
+	case *core.CustomParams:
+		if v == nil {
+			return &core.CustomParams{}
+		}
+		// Copy to avoid mutation
+		result := *v
+		return &result
+
+	default:
+		// For any other type, use it as error message
+		return &core.CustomParams{Error: v}
+	}
+}
+
 // ApplySchemaParams applies SchemaParams to a type definition
 // Updates the definition with normalized parameters
 func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {

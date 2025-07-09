@@ -11,7 +11,7 @@ import (
 //	/^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/;
 var IPv4 = regexp.MustCompile(`^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$`)
 
-// IPv6 matches IPv6 addresses
+// IPv6 matches IPv6 addresses – comprehensive pattern covering multiple compressed forms.
 // TypeScript original code:
 // export const ipv6: RegExp =
 //

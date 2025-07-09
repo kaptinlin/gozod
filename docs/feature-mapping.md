@@ -86,14 +86,14 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 
 ### Coercion Method Mapping
 
-| TypeScript Zod v4 | GoZod Method | GoZod Namespace | Status | Description |
-|-------------------|-------------|-----------------|--------|-------------|
-| `z.coerce.string()` | `gozod.CoerceString()` | `gozod.Coerce.String()` | ✅ | Force string conversion, supports int, float, bool, etc. |
-| `z.coerce.number()` | `gozod.CoerceNumber()` | `gozod.Coerce.Number()` | ✅ | Force numeric conversion, supports string, bool, etc. |
-| `z.coerce.boolean()` | `gozod.CoerceBool()` | `gozod.Coerce.Bool()` | ✅ | Force boolean conversion, supports string, number, etc. |
-| `z.coerce.bigint()` | `gozod.CoerceBigInt()` | `gozod.Coerce.BigInt()` | ✅ | Force big integer conversion, supports string, number, etc. |
-| - | `gozod.CoerceComplex64()` | `gozod.Coerce.Complex64()` | ✅ | Go unique: Force single precision complex conversion |
-| - | `gozod.CoerceComplex128()` | `gozod.Coerce.Complex128()` | ✅ | Go unique: Force double precision complex conversion |
+| TypeScript Zod v4 | GoZod Method | Status | Description |
+|-------------------|-----------------|--------|-------------|
+| `z.coerce.string()` | `gozod.Coerce.String()` | ✅ | Force string conversion, supports int, float, bool, etc. |
+| `z.coerce.number()` | `gozod.Coerce.Number()` | ✅ | Force numeric conversion, supports string, bool, etc. |
+| `z.coerce.boolean()` | `gozod.Coerce.Bool()` | ✅ | Force boolean conversion, supports string, number, etc. |
+| `z.coerce.bigint()` | `gozod.Coerce.BigInt()` | ✅ | Force big integer conversion, supports string, number, etc. |
+| - | `gozod.Coerce.Complex64()` | ✅ | Go unique: Force single precision complex conversion |
+| - | `gozod.Coerce.Complex128()` | ✅ | Go unique: Force double precision complex conversion |
 
 ### String Validation Method Mapping
 

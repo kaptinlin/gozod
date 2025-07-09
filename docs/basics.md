@@ -177,6 +177,61 @@ nilableSchema := gozod.String().Nilable()
 result, _ = nilableSchema.Parse(nil)          // result: (*string)(nil)
 ```
 
+### Working with Pointer Schemas
+
+Schemas like `gozod.StringPtr()` and `gozod.IntPtr()` are useful when you need to distinguish between a field that was not provided versus a field that was explicitly set to its zero value (e.g., `""` or `0`). A common use case is handling partial data updates, for example, from a JSON API into a struct.
+
+The schema will parse the input into a pointer. You can then check if the pointer is `nil` to determine if a value was provided.
+
+```go
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/go-zod/gozod"
+)
+
+// First, define the Go struct you intend to populate.
+// Using pointer types is crucial for optional fields in update operations.
+type UpdatePayload struct {
+	Nickname *string `json:"nickname"`
+	Age      *int    `json:"age"`
+}
+
+// Next, create a schema from your struct. The keys in the schema
+// should match the `json` tags of your struct fields.
+var updateSchema = gozod.Struct[UpdatePayload](gozod.StructSchema{
+	"nickname": gozod.StringPtr().Min(2).Optional(),
+	"age":      gozod.IntPtr().Min(0).Optional(),
+})
+
+// Example: Simulate a PATCH request where only the nickname is provided.
+jsonData := `{"nickname": "gopher"}`
+var payload UpdatePayload
+_ = json.Unmarshal([]byte(jsonData), &payload)
+
+// Parse the struct directly. GoZod returns a new, validated struct.
+validatedPayload, err := updateSchema.Parse(payload)
+if err != nil {
+	// ... handle error
+}
+
+// You can now safely work with the strongly-typed, validated struct.
+if validatedPayload.Nickname != nil {
+	fmt.Printf("Nickname was provided: %s\n", *validatedPayload.Nickname)
+} else {
+	fmt.Println("Nickname was not provided.")
+}
+
+if validatedPayload.Age != nil {
+	fmt.Printf("Age was provided: %d\n", *validatedPayload.Age)
+} else {
+	fmt.Println("Age was not provided.")
+}
+// Output:
+// Nickname was provided: gopher
+// Age was not provided.
+```
+
 ## Common Patterns
 
 ### Schema Composition
@@ -263,9 +318,9 @@ passwordSchema := gozod.String().Min(8).Refine(func(s string) bool {
 })
 
 // Same idea with the lightweight Check helper
-passwordSchema := gozod.String().Check(func(v string, p *core.ParsePayload) {
+passwordSchema := gozod.String().Check(func(v string, p *gozod.ParsePayload) {
     if len(v) < 8 {
-        p.AddIssueWithCode(core.TooSmall, "password too short")
+        p.AddIssueWithCode(gozod.IssueTooSmall, "password too short")
     }
     if !strings.ContainsAny(v, "!@#$%^&*()") {
         p.AddIssueWithMessage("missing special character")

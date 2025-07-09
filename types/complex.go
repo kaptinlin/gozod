@@ -253,13 +253,19 @@ func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc keeps the current generic type T.
 func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
 	return z.withInternals(in)
+}
+
+// Meta stores metadata for this complex number schema.
+func (z *ZodComplex[T]) Meta(meta core.GlobalMeta) *ZodComplex[T] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // =============================================================================
@@ -420,7 +426,7 @@ func (z *ZodComplex[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 		complexVal := extractComplex128(input)
 		return target.Parse(complexVal, ctx)
 	}
-	return core.NewZodPipe[T, any](z, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, wrapperFn)
 }
 
 // =============================================================================
@@ -478,7 +484,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 		}
 	}
 
-	check := checks.NewCustom[any](wrapper, params...)
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -486,7 +492,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 
 // RefineAny provides flexible validation without type conversion
 func (z *ZodComplex[T]) RefineAny(fn func(any) bool, params ...any) *ZodComplex[T] {
-	check := checks.NewCustom[any](fn, params...)
+	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

@@ -19,7 +19,7 @@ GoZod provides comprehensive data validation with:
 // Input → [Coercion] → [Validation] → [Transformation] → Output
 schema := gozod.String().Min(3).Overwrite(func(s string) string {
     return strings.ToUpper(s)
-}).Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+}).Transform(func(s string, ctx *gozod.RefinementContext) (any, error) {
     return fmt.Sprintf("Result: %s", s), nil
 })
 ```
@@ -29,16 +29,34 @@ Need multiple business-rules at once? Use `.Check(fn)` to inspect the current va
 and push unlimited issues via the provided `ParsePayload`:
 
 ```go
-schema := gozod.Int().Check(func(v int, p *core.ParsePayload) {
+schema := gozod.Int().Check(func(v int, p *gozod.ParsePayload) {
     if v%2 != 0 {
         p.AddIssueWithMessage("number must be even")
     }
     if v < 0 {
-        p.AddIssueWithCode(core.TooSmall, "number must be positive")
+        p.AddIssueWithCode(gozod.IssueTooSmall, "number must be positive")
     }
 })
 
 _, err := schema.Parse(-3) // err contains both issues above
+```
+
+For single custom validations, use `.Refine()` with optional `gozod.CustomParams`:
+
+```go
+// Simple refinement
+schema := gozod.String().Refine(func(s string) bool {
+    return len(s) > 5
+}, "Too short")
+
+// Advanced refinement with custom parameters
+schema = gozod.String().Refine(func(s string) bool {
+    return len(s) > 5
+}, gozod.CustomParams{
+    Error: "String too short",
+    Abort: true,
+    Path:  []any{"custom", "validation"},
+})
 ```
 
 ### Type Preservation
@@ -76,9 +94,13 @@ result, _ := gozod.String().Parse(&str)  // Returns &str (same pointer)
 ### Modifiers & Transformations
 - [Modifiers & Wrappers](#-modifiers--wrappers)
 - [Transform & Pipe](#-transform--pipe)
+- [Custom Refinement](#custom-refinement)
 
 ### Utilities
 - [Type Coercion](#-type-coercion)
+
+### Record Validation
+- [Record Validation](#-record-validation)
 
 ---
 
@@ -367,7 +389,7 @@ validUser := User{Name: "John", Age: 30, Email: "john@example.com"}
 result, err := basicSchema.Parse(validUser)  // Valid
 
 // Struct with field validation
-userSchema := gozod.Struct[User](core.StructSchema{
+userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2),
     "age":   gozod.Int().Min(0).Max(150),
     "email": gozod.String().Email(),
@@ -379,7 +401,7 @@ result, err = userSchema.Parse(validUser)  // Valid with field validation
 
 ```go
 // StructPtr for pointer types
-userPtrSchema := gozod.StructPtr[User](core.StructSchema{
+userPtrSchema := gozod.StructPtr[User](gozod.StructSchema{
     "name":  gozod.String().Min(2),
     "email": gozod.String().Email(),
 })
@@ -399,7 +421,7 @@ type Person struct {
 }
 
 // Schema uses JSON tag names for field mapping
-personSchema := gozod.Struct[Person](core.StructSchema{
+personSchema := gozod.Struct[Person](gozod.StructSchema{
     "id":        gozod.Int().Min(1),        // Maps to ID field
     "full_name": gozod.String().Min(2),     // Maps to FullName field
     "active":    gozod.Bool(),              // Maps to Active field
@@ -414,9 +436,9 @@ result, err := personSchema.Parse(validPerson)  // Valid: JSON tag mapping
 | Method | Description | Example |
 |--------|-------------|---------|
 | `gozod.Struct[T]()` | Basic struct validation | `gozod.Struct[User]()` |
-| `gozod.Struct[T](schema)` | Struct with field validation | `gozod.Struct[User](core.StructSchema{...})` |
+| `gozod.Struct[T](schema)` | Struct with field validation | `gozod.Struct[User](gozod.StructSchema{...})` |
 | `gozod.StructPtr[T]()` | Pointer struct validation | `gozod.StructPtr[User]()` |
-| `gozod.StructPtr[T](schema)` | Pointer struct with field validation | `gozod.StructPtr[User](core.StructSchema{...})` |
+| `gozod.StructPtr[T](schema)` | Pointer struct with field validation | `gozod.StructPtr[User](gozod.StructSchema{...})` |
 
 ---
 
@@ -519,6 +541,50 @@ _, err = restrictedMap.Parse(map[string]int{
 | `.Min(n)` | Minimum entries | `gozod.Map(gozod.String(), gozod.Int()).Min(1)` |
 | `.Max(n)` | Maximum entries | `gozod.Map(gozod.String(), gozod.Int()).Max(10)` |
 | `.Length(n)` | Exact entries | `gozod.Map(gozod.String(), gozod.Int()).Length(5)` |
+
+### 📑 Record Validation
+
+`Record` validates key–value objects where **keys are strings** (e.g. JSON objects).  Compared to `Map`:
+
+1. Keys are always strings. You can supply an `Enum`, `Literal`, or `Union` schema to enforce an exhaustive key set.
+2. Unknown keys are rejected by default, ensuring inputs match the expected fields (`PartialRecord` relaxes the missing-key check).
+3. `Map` is more generic and accepts any comparable key type; `Record` gives stricter guarantees for object-shaped data.
+
+#### Basic Record Validation
+
+```go
+// Strict record: keys must be "id", "name", "email"
+userRecord := gozod.Record(
+    gozod.Enum("id", "name", "email"), // key schema (exhaustive)
+    gozod.String(),                        // value schema
+)
+
+validInput := map[string]any{
+    "id":    "user-123",
+    "name":  "Alice",
+    "email": "alice@example.com",
+}
+_, err := userRecord.Parse(validInput) // ✅
+```
+
+#### Partial Records
+
+```go
+partial := gozod.PartialRecord(
+    gozod.Enum("id", "name", "email"),
+    gozod.String(),
+)
+
+// "email" can be omitted; unknown keys are still rejected
+partial.Parse(map[string]any{"id": "123"})
+```
+
+#### Choosing between Record and Map
+
+| Use-case | Recommended |
+|----------|-------------|
+| Strict JSON objects / fixed fields | **Record** |
+| Dynamic or non-string keys | **Map** |
 
 ---
 
@@ -745,14 +811,14 @@ isNilable := schema.IsNilable()    // false
 
 ```go
 // Transform - modifies data after validation
-upperSchema := gozod.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+upperSchema := gozod.String().Transform(func(s string, ctx *gozod.RefinementContext) (any, error) {
     return strings.ToUpper(s), nil
 })
 result, err := upperSchema.Parse("hello")  // Valid: "HELLO"
 
 // Pipe - chains validation and transformation
 pipeline := gozod.String().
-    Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+    Transform(func(s string, ctx *gozod.RefinementContext) (any, error) {
         return strings.TrimSpace(s), nil
     }).
     Pipe(gozod.String().Min(3))
@@ -765,6 +831,39 @@ overwriteSchema := gozod.String().Min(3).Overwrite(func(s string) string {
 result, err = overwriteSchema.Parse("hi")  // Valid: "HI" (transformed then validated)
 ```
 
+### Custom Refinement
+
+```go
+// Basic refinement with message
+passwordSchema := gozod.String().Refine(func(s string) bool {
+    return len(s) >= 8
+}, "Password must be at least 8 characters")
+
+// Advanced refinement with CustomParams
+complexSchema := gozod.String().Refine(func(s string) bool {
+    return len(s) >= 8
+}, gozod.CustomParams{
+    Error: "Password too short",
+    Abort: true,  // Stop validation on failure
+    Path:  []any{"password", "strength"},  // Custom error path
+    When: func(p *gozod.ParsePayload) bool {
+        return p.GetIssueCount() == 0  // Only run if no previous errors
+    },
+})
+```
+
+### CustomParams Reference
+
+The `gozod.CustomParams` structure provides advanced control over refinement behavior:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Error` | `any` | Custom error message or error object |
+| `Abort` | `bool` | Stop validation chain on failure |
+| `Path` | `[]any` | Override error path for better error reporting |
+| `When` | `gozod.ZodWhenFn` | Conditional execution predicate |
+| `Params` | `map[string]any` | Additional metadata for error handling |
+
 ### Transform/Pipe Methods Reference
 
 | Method | Description | Execution Phase | Type Change |
@@ -772,7 +871,7 @@ result, err = overwriteSchema.Parse("hi")  // Valid: "HI" (transformed then vali
 | `.Transform(fn)` | Modify data after validation | Post-validation | Yes (string → any) |
 | `.Overwrite(fn)` | Transform data during validation | Mid-validation | No (string → string) |
 | `.Pipe(schema)` | Chain to another schema | Sequential validation | Depends on target schema |
-| `.Refine(fn, msg)` | Custom validation only | Validation phase | No (preserves input) |
+| `.Refine(fn, params)` | Custom validation with advanced parameters | Validation phase | No (preserves input) |
 
 ---
 
@@ -812,7 +911,7 @@ result, _ = timeSchema.Parse("2023-12-25")               // Date string to time.
 
 ```go
 // Enable coercion via parameters
-coerceSchema := gozod.String(core.SchemaParams{Coerce: true})
+coerceSchema := gozod.String(gozod.SchemaParams{Coerce: true})
 result, _ := coerceSchema.Parse(123)  // "123"
 
 // Coercion with validation
