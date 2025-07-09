@@ -1,2 +1,0 @@
-pnpm semver-check
-lint-staged --verbose
