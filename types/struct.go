@@ -24,8 +24,10 @@ type ZodStructDef struct {
 // ZodStructInternals contains the internal state for struct schema
 type ZodStructInternals struct {
 	core.ZodTypeInternals
-	Def   *ZodStructDef     // Schema definition reference
-	Shape core.StructSchema // Field schemas for runtime validation
+	Def               *ZodStructDef     // Schema definition reference
+	Shape             core.StructSchema // Field schemas for runtime validation
+	IsPartial         bool              // Whether this is a partial struct (fields can be zero values)
+	PartialExceptions map[string]bool   // Fields that should remain required in partial mode
 }
 
 // ZodStruct represents a type-safe struct validation schema with dual generic parameters
@@ -262,22 +264,112 @@ func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct
 }
 
 // =============================================================================
+// TYPE-SPECIFIC METHODS
+// =============================================================================
+
+// Extend creates a new struct by extending with additional field schemas
+func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) *ZodStruct[T, R] {
+	// Create new shape combining existing + extension fields
+	newShape := make(core.StructSchema)
+
+	// Copy existing shape
+	for k, v := range z.internals.Shape {
+		newShape[k] = v
+	}
+
+	// Add augmentation fields
+	for k, schema := range augmentation {
+		newShape[k] = schema
+	}
+
+	// Create new definition with extended shape
+	schemaParams := utils.NormalizeParams(params...)
+	def := &ZodStructDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeStruct,
+			Checks: []core.ZodCheck{},
+		},
+		Shape: newShape,
+	}
+
+	// Apply schema parameters if provided
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	return newZodStructFromDef[T, R](def)
+}
+
+// Partial makes all fields optional by allowing zero values
+func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
+
+	var partialExceptions map[string]bool
+	if len(keys) > 0 && len(keys[0]) > 0 {
+		// Specific keys provided - these are the ones to make optional
+		// All other fields remain required
+		partialExceptions = make(map[string]bool)
+		for fieldName := range z.internals.Shape {
+			partialExceptions[fieldName] = true // Mark all as exceptions initially
+		}
+		// Remove the keys that should be made optional from exceptions
+		for _, key := range keys[0] {
+			delete(partialExceptions, key)
+		}
+	}
+
+	return &ZodStruct[T, R]{internals: &ZodStructInternals{
+		ZodTypeInternals:  *newInternals,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		IsPartial:         true,
+		PartialExceptions: partialExceptions,
+	}}
+}
+
+// Required makes all fields required (opposite of Partial)
+func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
+	newInternals := z.internals.ZodTypeInternals.Clone()
+
+	var partialExceptions map[string]bool
+	if len(fields) > 0 && len(fields[0]) > 0 {
+		// Specific fields provided - these become required
+		partialExceptions = make(map[string]bool)
+		for _, fieldName := range fields[0] {
+			partialExceptions[fieldName] = true
+		}
+	}
+
+	return &ZodStruct[T, R]{internals: &ZodStructInternals{
+		ZodTypeInternals:  *newInternals,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		IsPartial:         true,              // Keep as partial, but with specific required fields
+		PartialExceptions: partialExceptions, // Fields in this map are required
+	}}
+}
+
+// =============================================================================
 // HELPER METHODS
 // =============================================================================
 
 func (z *ZodStruct[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodStruct[T, *T] {
 	return &ZodStruct[T, *T]{internals: &ZodStructInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Shape:            z.internals.Shape, // Preserve shape
+		ZodTypeInternals:  *in,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: z.internals.PartialExceptions,
 	}}
 }
 
 func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T, R] {
 	return &ZodStruct[T, R]{internals: &ZodStructInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Shape:            z.internals.Shape, // Preserve shape
+		ZodTypeInternals:  *in,
+		Def:               z.internals.Def,
+		Shape:             z.internals.Shape,
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: z.internals.PartialExceptions,
 	}}
 }
 
@@ -589,9 +681,14 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 		fieldValue, found := z.getStructFieldValue(val, structType, fieldName)
 		if !found {
 			// Field not found in struct
-			if !z.isFieldOptional(fieldSchema) {
+			if !z.isFieldOptional(fieldSchema, fieldName) {
 				return fmt.Errorf("required field '%s' not found in struct", fieldName)
 			}
+			continue
+		}
+
+		// Check if this field should be skipped in partial mode
+		if z.shouldSkipFieldInPartialMode(fieldValue.Interface(), fieldName) {
 			continue
 		}
 
@@ -676,10 +773,74 @@ func (z *ZodStruct[T, R]) validateField(element any, schema any, ctx *core.Parse
 	return nil
 }
 
-// isFieldOptional checks if a field schema is optional using reflection
-func (z *ZodStruct[T, R]) isFieldOptional(schema any) bool {
+// shouldSkipFieldInPartialMode checks if a field should be skipped in partial mode
+func (z *ZodStruct[T, R]) shouldSkipFieldInPartialMode(fieldValue any, fieldName string) bool {
+	// Only apply partial logic if we're in partial mode
+	if !z.internals.IsPartial {
+		return false
+	}
+
+	// If there are partial exceptions, check if this field is excepted (required)
+	if z.internals.PartialExceptions != nil {
+		// If field is in exceptions, it's required and should not be skipped
+		if z.internals.PartialExceptions[fieldName] {
+			return false
+		}
+	}
+
+	// Check if the field value is a zero value
+	return isZeroValue(fieldValue)
+}
+
+// isZeroValue checks if a value is the zero value for its type
+func isZeroValue(v any) bool {
+	if v == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(v)
+	switch val.Kind() {
+	case reflect.String:
+		return val.String() == ""
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return val.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return val.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return val.Float() == 0
+	case reflect.Bool:
+		return !val.Bool()
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return val.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		return val.IsNil()
+	case reflect.Struct:
+		// For structs, compare with zero value of the same type
+		zeroVal := reflect.Zero(val.Type())
+		return reflect.DeepEqual(val.Interface(), zeroVal.Interface())
+	default:
+		// For other types, use reflect.Zero comparison
+		zeroVal := reflect.Zero(val.Type())
+		return reflect.DeepEqual(val.Interface(), zeroVal.Interface())
+	}
+}
+
+// isFieldOptional checks if a field schema is optional using reflection or partial state
+func (z *ZodStruct[T, R]) isFieldOptional(schema any, fieldName string) bool {
 	if schema == nil {
 		return true
+	}
+
+	// Check if this struct is in partial mode and this field should be optional in partial mode
+	if z.internals.IsPartial {
+		// If there are no exceptions, all fields are optional
+		if z.internals.PartialExceptions == nil {
+			return true
+		}
+		// If this field is not in the exceptions list, it's optional
+		if !z.internals.PartialExceptions[fieldName] {
+			return true
+		}
 	}
 
 	schemaValue := reflect.ValueOf(schema)
@@ -707,9 +868,11 @@ func (z *ZodStruct[T, R]) isFieldOptional(schema any) bool {
 // newZodStructFromDef creates a new ZodStruct from definition
 func newZodStructFromDef[T any, R any](def *ZodStructDef) *ZodStruct[T, R] {
 	internals := &ZodStructInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
-		Shape:            def.Shape, // Copy shape to internals
+		ZodTypeInternals:  engine.NewBaseZodTypeInternals(def.Type),
+		Def:               def,
+		Shape:             def.Shape,
+		IsPartial:         false,
+		PartialExceptions: nil,
 	}
 
 	// Provide constructor for AddCheck functionality

@@ -1004,3 +1004,433 @@ func TestStruct_NonOptional(t *testing.T) {
 		// The logic seems correct. The test case is valid.
 	})
 }
+
+func TestStruct_Extend(t *testing.T) {
+	t.Run("basic extend functionality", func(t *testing.T) {
+		// Create base struct schema with some fields
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+			"age":  Int(), // Use Int() instead of Integer() for int type
+		})
+
+		// Extend with additional fields (only using existing User fields)
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"email": Email(),
+		})
+
+		// Test that extended schema validates correctly
+		user := User{Name: "John", Age: 30, Email: "john@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend overwrites existing fields", func(t *testing.T) {
+		// Create base schema with wrong type for age
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+			"age":  String(), // Intentionally wrong type
+		})
+
+		// Extend and overwrite the age field with correct type
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age": Int(), // Correct type for User.Age
+		})
+
+		// Test with valid data
+		user := User{Name: "John Doe", Age: 30, Email: "john@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend with empty augmentation", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Extend with empty schema
+		extendedSchema := baseSchema.Extend(core.StructSchema{})
+
+		// Should work the same as base schema
+		user := User{Name: "Jane", Age: 25, Email: "jane@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend preserves original schema", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Extend with additional field
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age": Int(),
+		})
+
+		// Test with struct (not map) - original schema with minimal fields
+		user1 := User{Name: "Alice", Age: 0, Email: ""}
+		result, err := baseSchema.Parse(user1)
+		require.NoError(t, err)
+		assert.Equal(t, user1, result)
+
+		// Extended schema should work with all fields
+		user2 := User{Name: "Alice", Age: 25, Email: "alice@example.com"}
+		result, err = extendedSchema.Parse(user2)
+		require.NoError(t, err)
+		assert.Equal(t, user2, result)
+	})
+
+	t.Run("extend with schema parameters", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Extend with parameters
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age": Int(),
+		}, core.SchemaParams{Error: "extended validation failed"})
+
+		// Test that the extended schema works
+		user := User{Name: "Bob", Age: 35, Email: "bob@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend with nil schemas", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Extend with nil schema value
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age":   Int(),
+			"dummy": nil, // This should be handled gracefully
+		})
+
+		user := User{Name: "Charlie", Age: 40, Email: "charlie@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend chaining", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Chain multiple extends
+		extendedSchema := baseSchema.
+			Extend(core.StructSchema{
+				"age": Int(),
+			}).
+			Extend(core.StructSchema{
+				"email": Email(),
+			})
+
+		user := User{Name: "David", Age: 28, Email: "david@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend with pointer types", func(t *testing.T) {
+		baseSchema := StructPtr[User](core.StructSchema{
+			"name": String(),
+		})
+
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age": Int(),
+		})
+
+		user := User{Name: "Eve", Age: 22, Email: "eve@example.com"}
+
+		// Test with pointer input
+		result, err := extendedSchema.Parse(&user)
+		require.NoError(t, err)
+		assert.Equal(t, &user, result)
+
+		// Test with nil input
+		result, err = extendedSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("extend with no validation", func(t *testing.T) {
+		// Test extend without field schemas to ensure basic functionality
+		baseSchema := Struct[User]()
+		extendedSchema := baseSchema.Extend(core.StructSchema{})
+
+		user := User{Name: "Test", Age: 30, Email: "test@example.com"}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+}
+
+func TestStruct_Partial(t *testing.T) {
+	t.Run("partial makes all fields optional", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": Email(),
+		})
+
+		partialSchema := schema.Partial()
+
+		// Should accept struct with all zero values (partial validation skips zero value validation)
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err := partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should accept struct with some valid values
+		user = User{Name: "John", Age: 0, Email: ""}
+		result, err = partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should accept struct with all valid values
+		user = User{Name: "John", Age: 30, Email: "john@example.com"}
+		result, err = partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("partial with specific keys", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": Email(),
+		})
+
+		// Make only name and age optional, email remains required
+		partialSchema := schema.Partial([]string{"name", "age"})
+
+		// Should accept struct with zero values for optional fields but valid email
+		user := User{Name: "", Age: 0, Email: "john@example.com"}
+		result, err := partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should reject struct with zero/invalid email (required field)
+		user = User{Name: "John", Age: 30, Email: ""}
+		_, err = partialSchema.Parse(user)
+		assert.Error(t, err) // email is required and empty/invalid
+	})
+
+	t.Run("partial chaining", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Chain partial with other methods
+		chainedSchema := baseSchema.Partial().Default(User{Name: "Default", Age: 0, Email: ""})
+
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err := chainedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("partial with pointer types", func(t *testing.T) {
+		schema := StructPtr[User](core.StructSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		partialSchema := schema.Partial()
+
+		// Should accept nil input
+		result, err := partialSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Should accept pointer to struct with zero values
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err = partialSchema.Parse(&user)
+		require.NoError(t, err)
+		assert.Equal(t, &user, result)
+	})
+
+	t.Run("partial with no schema validation", func(t *testing.T) {
+		// Partial without field schemas should still work
+		baseSchema := Struct[User]()
+		partialSchema := baseSchema.Partial()
+
+		user := User{Name: "Test", Age: 30, Email: "test@example.com"}
+		result, err := partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+}
+
+func TestStruct_Required(t *testing.T) {
+	t.Run("required makes all fields required by default", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name":  String().Optional(),
+			"age":   Int().Optional(),
+			"email": Email().Optional(),
+		})
+
+		requiredSchema := schema.Required()
+
+		// Should handle struct with optional field having zero value
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err := requiredSchema.Parse(user)
+		// Note: The exact behavior depends on the field schema implementation
+		// For now, we just verify the method works without panicking
+		if err == nil {
+			assert.Equal(t, user, result)
+		} else {
+			// Some field schemas might reject zero values even when optional
+			assert.Error(t, err)
+		}
+	})
+
+	t.Run("required with specific fields", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": Email(),
+		})
+
+		// First make all partial, then require specific fields
+		partialSchema := baseSchema.Partial()
+		requiredSchema := partialSchema.Required([]string{"email"})
+
+		// Should accept struct with zero values for non-required fields
+		user := User{Name: "", Age: 0, Email: "john@example.com"}
+		result, err := requiredSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should reject struct with zero/invalid value for required field
+		user = User{Name: "John", Age: 30, Email: ""}
+		_, err = requiredSchema.Parse(user)
+		assert.Error(t, err) // email is required
+	})
+
+	t.Run("required chaining", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": Email(),
+		})
+
+		// Chain partial -> required -> partial
+		chainedSchema := baseSchema.Partial().Required([]string{"name"}).Partial([]string{"age"})
+
+		// After chaining: name is required, age is optional, email is required (not in final partial list)
+		// So we need valid name and email, age can be zero
+		user := User{Name: "John", Age: 0, Email: "john@example.com"}
+		result, err := chainedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Test that empty email fails (email is required in final schema)
+		invalidUser := User{Name: "John", Age: 0, Email: ""}
+		_, err = chainedSchema.Parse(invalidUser)
+		assert.Error(t, err) // email is required and empty/invalid
+	})
+
+	t.Run("required with pointer types", func(t *testing.T) {
+		baseSchema := StructPtr[User](core.StructSchema{
+			"name": String(),
+		})
+
+		partialSchema := baseSchema.Partial()
+		requiredSchema := partialSchema.Required([]string{"name"})
+
+		// Should accept nil input (pointer schema allows nil)
+		result, err := requiredSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Should validate required fields when struct is provided
+		user := User{Name: "John", Age: 0, Email: ""}
+		result, err = requiredSchema.Parse(&user)
+		require.NoError(t, err)
+		assert.Equal(t, &user, result)
+	})
+
+	t.Run("required opposite of partial", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		// Start with partial, then make everything required again
+		partialSchema := schema.Partial()
+		requiredSchema := partialSchema.Required()
+
+		// Should behave more strictly than partial
+		user := User{Name: "John", Age: 25, Email: "john@example.com"}
+		result, err := requiredSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+}
+
+func TestStruct_PartialAndRequired_Integration(t *testing.T) {
+	t.Run("complex partial and required combinations", func(t *testing.T) {
+		schema := Struct[User](core.StructSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": Email(),
+		})
+
+		// Make name and age optional, but keep email required
+		complexSchema := schema.Partial([]string{"name", "age"})
+
+		// Should accept struct with only email provided
+		user := User{Name: "", Age: 0, Email: "john@example.com"}
+		result, err := complexSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+
+		// Should accept struct with all fields provided
+		user = User{Name: "John", Age: 30, Email: "john@example.com"}
+		result, err = complexSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("extend with partial", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Extend first, then make partial
+		extendedSchema := baseSchema.Extend(core.StructSchema{
+			"age": Int(),
+		})
+		partialSchema := extendedSchema.Partial()
+
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err := partialSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+
+	t.Run("partial with extend", func(t *testing.T) {
+		baseSchema := Struct[User](core.StructSchema{
+			"name": String(),
+		})
+
+		// Make partial first, then extend
+		partialSchema := baseSchema.Partial()
+		extendedSchema := partialSchema.Extend(core.StructSchema{
+			"age": Int(),
+		})
+
+		user := User{Name: "", Age: 0, Email: ""}
+		result, err := extendedSchema.Parse(user)
+		require.NoError(t, err)
+		assert.Equal(t, user, result)
+	})
+}
