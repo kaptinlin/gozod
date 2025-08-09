@@ -6,7 +6,7 @@ Complete type interface documentation for GoZod - a powerful, type-safe validati
 
 GoZod provides comprehensive data validation with:
 - **Type Safety**: Full Go generics support with preserved type information
-- **Complete Strict Semantics**: All methods require exact type input - no automatic conversions
+- **Type-Safe Semantics**: All methods require exact type input - no automatic conversions
 - **Maximum Performance**: Optimized validation pipeline with zero-overhead type handling
 - **Composable Schemas**: Chain validations, transformations, and type conversions
 - **Rich Validation**: Built-in validators for strings, numbers, objects, arrays, and more
@@ -165,20 +165,36 @@ result5, _ := optionalSchema.Parse(&str)      // ✅ *string → *string (preser
 schema := gozod.String()
 result, err := schema.Parse("hello")  // Valid: "hello"
 
+// Compile-time type safety with StrictParse
+name := "hello"
+result, err = schema.StrictParse(name)  // Input type guaranteed at compile-time
+
 // Length validation
 nameSchema := gozod.String().Min(2).Max(50)
 result, err = nameSchema.Parse("Alice")  // Valid: "Alice"
 _, err = nameSchema.Parse("A")           // Error: too short
+
+// StrictParse with validation
+validName := "Alice"
+result, err = nameSchema.StrictParse(validName)  // Compile-time string type guarantee
 
 // Pattern validation
 emailSchema := gozod.String().Email()
 result, err = emailSchema.Parse("user@example.com")  // Valid
 _, err = emailSchema.Parse("invalid-email")          // Error
 
+// StrictParse for email validation
+email := "user@example.com"
+result, err = emailSchema.StrictParse(email)  // Type-safe email validation
+
 // Regular expression
 usernameSchema := gozod.String().RegexString(`^[a-zA-Z0-9_]+$`)
 result, err = usernameSchema.Parse("user_123")  // Valid
 _, err = usernameSchema.Parse("user@123")       // Error
+
+// StrictParse with regex
+username := "user_123"
+result, err = usernameSchema.StrictParse(username)  // Compile-time safety
 ```
 
 
@@ -213,20 +229,36 @@ ageSchema := gozod.Int().Min(0).Max(120)
 result, err := ageSchema.Parse(25)   // Valid: 25
 _, err = ageSchema.Parse(-1)         // Error: too small
 
+// StrictParse for compile-time type safety
+age := 25
+result, err = ageSchema.StrictParse(age)  // Input type guaranteed at compile-time
+
 // Float validation
 priceSchema := gozod.Float64().Positive()
 result, err = priceSchema.Parse(19.99)  // Valid: 19.99
 _, err = priceSchema.Parse(-5.0)        // Error: must be positive
+
+// StrictParse with float64
+price := 19.99
+result, err = priceSchema.StrictParse(price)  // Type-safe validation
 
 // Range constraints
 scoreSchema := gozod.Int().Gte(0).Lt(100)
 result, err = scoreSchema.Parse(85)   // Valid: 85
 _, err = scoreSchema.Parse(100)       // Error: too big
 
+// StrictParse with constraints
+score := 85
+result, err = scoreSchema.StrictParse(score)  // Compile-time int guarantee
+
 // Special validations
 evenSchema := gozod.Int().MultipleOf(2)
 result, err = evenSchema.Parse(4)   // Valid: 4
 _, err = evenSchema.Parse(3)        // Error: not multiple of 2
+
+// StrictParse with custom validation
+evenNumber := 4
+result, err = evenSchema.StrictParse(evenNumber)  // Type-safe even number check
 ```
 
 ### Number Methods Reference
@@ -257,6 +289,10 @@ result, err := activeSchema.Parse(true)   // Valid: true
 result, err = activeSchema.Parse(false)  // Valid: false
 _, err = activeSchema.Parse("true")       // Error: wrong type
 
+// StrictParse for compile-time boolean safety
+isActive := true
+result, err = activeSchema.StrictParse(isActive)  // Input type guaranteed
+
 // String-to-Boolean conversion
 stringBoolSchema := gozod.StringBool()
 result, err = stringBoolSchema.Parse("true")   // Valid: true
@@ -264,11 +300,19 @@ result, err = stringBoolSchema.Parse("false")  // Valid: false
 result, err = stringBoolSchema.Parse("1")      // Valid: true
 result, err = stringBoolSchema.Parse("0")      // Valid: false
 
+// StrictParse with StringBool
+boolString := "true"
+result, err = stringBoolSchema.StrictParse(boolString)  // Type-safe string-to-bool
+
 // StringBool with prefault (accepts string input type)
 stringBoolWithPrefault := gozod.StringBool().Prefault("true")
 result, err = stringBoolWithPrefault.Parse(nil)        // Valid: true (uses prefault)
 result, err = stringBoolWithPrefault.Parse("false")    // Valid: false
 _, err = stringBoolWithPrefault.Parse(123)              // Error: invalid type
+
+// StrictParse with prefault
+falseString := "false"
+result, err = stringBoolWithPrefault.StrictParse(falseString)  // Compile-time safety
 ```
 
 ---
@@ -414,6 +458,9 @@ basicSchema := gozod.Struct[User]()
 validUser := User{Name: "John", Age: 30, Email: "john@example.com"}
 result, err := basicSchema.Parse(validUser)  // Valid
 
+// StrictParse for compile-time struct type safety
+result, err = basicSchema.StrictParse(validUser)  // Input type guaranteed at compile-time
+
 // Struct with field validation
 userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2),
@@ -421,6 +468,9 @@ userSchema := gozod.Struct[User](gozod.StructSchema{
     "email": gozod.String().Email(),
 })
 result, err = userSchema.Parse(validUser)  // Valid with field validation
+
+// StrictParse with field validation
+result, err = userSchema.StrictParse(validUser)  // Type-safe struct validation
 ```
 
 ### Strict Type Requirements

@@ -162,9 +162,17 @@ schema := String().Default("hello")  // Returns *ZodString[string]
 ```
 
 #### Parse vs StrictParse Methods
-- `Parse(input any)` - Accepts any type, performs runtime type checking
-- `StrictParse(input T)` - Accepts exact type T, compile-time type safety
-- All types should implement both methods for API consistency
+- `Parse(input any)` - Accepts any type, performs runtime type checking, flexible for unknown inputs
+- `StrictParse(input T)` - Accepts exact type T, compile-time type safety, optimal performance
+- `MustParse(input any)` - Panic-based version of Parse for critical failures
+- `MustStrictParse(input T)` - Panic-based version of StrictParse for critical failures
+- All types must implement both methods for complete API consistency
+
+**Usage Guidelines:**
+- Use `Parse()` for external data (JSON, user input, API responses)
+- Use `StrictParse()` for internal validation where types are known
+- StrictParse provides better performance by skipping runtime type checking
+- Both methods share the same validation pipeline and modifier behavior
 
 #### Constructor Pattern
 Every type has value and pointer constructors:
@@ -239,7 +247,13 @@ result2, _ := schema2.Parse(nil) // => 5 ("hello" goes through transform)
 - **Integration Tests**: Cross-package validation in `internal/` packages  
 - **Performance Benchmarks**: Critical path optimization validation
 - **Prefault/Default Testing**: Verify correct Zod v4 semantic behavior
-- **StrictParse Coverage**: Ensure all types implement both Parse and StrictParse
+- **Parse/StrictParse Coverage**: 
+  - Test both Parse and StrictParse methods with identical validation logic
+  - Verify Parse handles any input types correctly with runtime type checking
+  - Verify StrictParse accepts exact constraint types with compile-time safety
+  - Test error handling consistency between both methods
+  - Benchmark performance differences between Parse and StrictParse
+- **Panic Method Testing**: Verify MustParse and MustStrictParse panic behavior
 - Follow existing test patterns for consistency
 
 ### Performance Optimization Guidelines
@@ -308,14 +322,21 @@ if err != nil {
 ## API Consistency Requirements
 
 **All schema types must implement:**
-- `Parse(input any) (T, error)` - Runtime type checking
-- `StrictParse(input T) (T, error)` - Compile-time type safety  
-- `MustParse(input any) T` - Panic on error
-- `MustStrictParse(input T) T` - Panic on error with strict typing
-- `GetInternals() *core.ZodTypeInternals` - Access internals
-- `IsOptional() bool` - Check if schema is optional
-- `IsNilable() bool` - Check if schema allows nil
-- `Coerce(input any) (any, bool)` - Type coercion capability
+- `Parse(input any) (T, error)` - Runtime type checking with flexible input handling
+- `StrictParse(input T) (T, error)` - Compile-time type safety with exact type matching
+- `MustParse(input any) T` - Panic-based Parse for critical error scenarios
+- `MustStrictParse(input T) T` - Panic-based StrictParse for type-safe critical scenarios
+- `GetInternals() *core.ZodTypeInternals` - Access internal schema state
+- `IsOptional() bool` - Check if schema accepts missing values
+- `IsNilable() bool` - Check if schema allows explicit nil values
+- `Coerce(input any) (any, bool)` - Type coercion capability for primitive types
+
+**Method Implementation Requirements:**
+- Parse and StrictParse must use identical validation pipelines
+- StrictParse should optimize for known input types when possible
+- Both methods must handle modifiers (Optional, Default, etc.) consistently
+- Error messages and paths should be identical between Parse and StrictParse
+- MustParse/MustStrictParse should panic with the same error as their non-panic versions
 
 **Engine API Usage Patterns:**
 - **Primitive types**: Use `engine.ParsePrimitive` and `engine.ParsePrimitiveStrict`
@@ -347,12 +368,13 @@ if err != nil {
 
 ### Implementation Order
 1. **Define type structure** (Def, Internals, main type)
-2. **Implement core interfaces** (ZodType, Parse, StrictParse methods)
+2. **Implement core interfaces** (ZodType, Parse, StrictParse, MustParse, MustStrictParse methods)
 3. **Add validation methods** (Min, Max, specific checks)
 4. **Implement modifiers** (Optional, Nilable, Default, Prefault)
 5. **Add advanced features** (Refine, Transform, Pipe)
-6. **Write comprehensive tests** with full coverage
-7. **Add documentation and examples**
+6. **Write comprehensive tests** with both Parse and StrictParse coverage
+7. **Add performance benchmarks** comparing Parse vs StrictParse
+8. **Add documentation and examples** showing both parsing approaches
 
 ### Build System Integration
 ```bash

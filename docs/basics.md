@@ -44,11 +44,11 @@ var ContactSchema = gozod.Object(gozod.ObjectSchema{
 
 ## Parsing Data
 
-GoZod provides two methods for parsing data:
+GoZod provides multiple methods for parsing data:
 
 ### `.Parse()` - Standard Error Handling
 
-Use `.Parse()` for standard Go error handling patterns:
+Use `.Parse()` for standard Go error handling patterns with flexible input types:
 
 ```go
 userData := map[string]any{
@@ -70,14 +70,49 @@ validatedUser := result.(map[string]any)
 fmt.Printf("Valid user: %s\n", validatedUser["username"])
 ```
 
-### `.MustParse()` - Panic on Failure
+### `.StrictParse()` - Compile-Time Type Safety
 
-Use `.MustParse()` when validation failure should terminate the program:
+Use `.StrictParse()` when you have the exact input type and want compile-time guarantees:
+
+```go
+// With known string type
+nameSchema := gozod.String().Min(2).Max(50)
+name := "Alice"
+result, err := nameSchema.StrictParse(name)  // Input type guaranteed at compile-time
+if err != nil {
+    log.Printf("Name validation failed: %v", err)
+    return
+}
+fmt.Printf("Valid name: %s\n", result)
+
+// With struct types
+type User struct {
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+userSchema := gozod.Struct[User]()
+user := User{Name: "John", Email: "john@example.com"}
+validatedUser, err := userSchema.StrictParse(user)  // Type-safe struct validation
+if err != nil {
+    log.Printf("User validation failed: %v", err)
+    return
+}
+fmt.Printf("Valid user: %+v\n", validatedUser)
+```
+
+### `.MustParse()` and `.MustStrictParse()` - Panic on Failure
+
+Use these methods when validation failure should terminate the program:
 
 ```go
 // Configuration validation during startup
 config := ConfigSchema.MustParse(configData)
 // Will panic if validation fails - use only when failure is not recoverable
+
+// Type-safe panic version
+user := User{Name: "Admin", Email: "admin@example.com"}
+validatedUser := userSchema.MustStrictParse(user)  // Panics on validation failure
 ```
 
 ## Handling Errors
@@ -145,10 +180,10 @@ if err != nil {
 
 GoZod preserves Go's type system and provides intelligent type inference:
 
-### Strict Type Requirements and Pointer Identity
+### Type Requirements and Pointer Identity
 
 ```go
-// GoZod uses complete strict type semantics
+// GoZod uses type-safe semantics
 value := "hello"
 
 // Value schemas: strict value input only
@@ -190,7 +225,7 @@ result, _ = nilableSchema.Parse(nil)          // result: (*string)(nil)
 
 Schemas like `gozod.StringPtr()` and `gozod.IntPtr()` are useful when you need to distinguish between a field that was not provided versus a field that was explicitly set to its zero value (e.g., `""` or `0`). These schemas require strict pointer input and preserve pointer identity, making them ideal for handling partial data updates.
 
-**Important**: ALL GoZod schemas now use strict type requirements:
+**Important**: All GoZod schemas use type-safe requirements:
 - `gozod.String()` only accepts `string` input
 - `gozod.StringPtr()` only accepts `*string` input  
 - `gozod.Struct[T]()` only accepts `T` input

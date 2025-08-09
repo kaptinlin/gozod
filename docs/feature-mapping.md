@@ -85,9 +85,9 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.parse(data)` | `.Parse(data)` | `unknown -> T` (throws) | `any -> (T, error)` | ✅ Go error handling |
 | `.safeParse(data)` | `.Parse(data)` | `unknown -> SafeParseResult<T>` | `any -> (T, error)` | ✅ Go uses (T, error) pattern |
 | `.parseAsync(data)` | *Not implemented* | `Promise<T>` | - | ❌ Go is synchronous |
-| - | `.StrictParse(data)` | - | `T -> (T, error)` | ✅ **Go enhancement**: Compile-time type safety |
-| - | `.MustParse(data)` | - | `any -> T` (panics on error) | ✅ **Go enhancement**: Panic-based parsing |
-| - | `.MustStrictParse(data)` | - | `T -> T` (panics on error) | ✅ **Go enhancement**: Type-safe panic parsing |
+| - | `.StrictParse(data)` | - | `T -> (T, error)` | ✅ **Go enhancement**: Compile-time type safety with exact input types |
+| - | `.MustParse(data)` | - | `any -> T` (panics on error) | ✅ **Go enhancement**: Panic-based parsing for flexible input |
+| - | `.MustStrictParse(data)` | - | `T -> T` (panics on error) | ✅ **Go enhancement**: Type-safe panic parsing with exact input types |
 
 ### Coercion Method Mapping
 
@@ -348,9 +348,53 @@ _, err := prefaultSchema.Parse(123)     // Error: wrong type (no prefault for no
 | **Pointer type safety** | Explicit pointer vs value type validation | No equivalent - handled via union types |
 | **All Go numeric types** | int8, int16, uint32, complex64, etc. | Limited to `number` and `bigint` |
 | **Coercion package** | Separate import for type coercion | Built into `z.coerce.*` |
-| **Strict vs flexible parsing** | `Parse()` vs `StrictParse()` methods | Compile-time inference only |
+| **Dual parsing methods** | `Parse(any)` vs `StrictParse(T)` methods | Compile-time inference only |
+| **Compile-time type safety** | `StrictParse(T)` guarantees exact input types | TypeScript type checking only |
+| **Panic-based parsing** | `MustParse()` and `MustStrictParse()` methods | Throwing behavior with different error handling |
 | **Partial struct validation** | Skip zero-value fields in structs | Object-level only |
 | **JSON tag mapping** | Automatic field mapping from struct tags | Manual field specification |
+
+### StrictParse vs Parse Usage Patterns
+
+GoZod provides both flexible and strict parsing methods for different use cases:
+
+#### Parse() - Runtime Flexibility
+```go
+// Parse accepts any input and performs runtime type checking
+schema := gozod.String().Min(3)
+result1, err := schema.Parse("hello")        // string input ✅
+result2, err := schema.Parse(123)            // int input ❌ (runtime error)
+result3, err := schema.Parse(userInput)      // unknown type ✅ (checked at runtime)
+```
+
+#### StrictParse() - Compile-Time Safety
+```go
+// StrictParse requires exact input type known at compile-time
+schema := gozod.String().Min(3)
+name := "hello"
+result1, err := schema.StrictParse(name)     // string input ✅ (compile-time guarantee)
+result2, err := schema.StrictParse("hello")  // string literal ✅
+// result3, err := schema.StrictParse(123)   // ❌ Compile error: cannot use int as string
+
+// Struct example
+type User struct { Name string }
+userSchema := gozod.Struct[User]()
+user := User{Name: "Alice"}
+validUser, err := userSchema.StrictParse(user)  // User input ✅ (type-safe)
+// invalidUser, err := userSchema.StrictParse("not a user")  // ❌ Compile error
+```
+
+#### When to Use Each Method
+
+| Use Case | Recommended Method | Reason |
+|----------|-------------------|--------|
+| **API input validation** | `Parse()` | Input type unknown at compile-time |
+| **JSON unmarshaling** | `Parse()` | Dynamic data from external sources |
+| **Configuration validation** | `Parse()` | Data comes from files/environment |
+| **Function parameters** | `StrictParse()` | Input type known and guaranteed |
+| **Struct field validation** | `StrictParse()` | Working with typed struct instances |
+| **Library internal validation** | `StrictParse()` | Performance and type safety benefits |
+| **Critical path validation** | `StrictParse()` | Skip runtime type checking overhead |
 
 ---
 

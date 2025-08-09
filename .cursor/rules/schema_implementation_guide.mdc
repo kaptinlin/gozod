@@ -141,7 +141,10 @@ func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 - **`base`** – concrete Go type stored internally (`string`, `map[string]any`, etc.)
 - **`constraint`** – user-visible generic type (`T` or `*T`)
 - Always provide both `Parse` and `StrictParse` implementations
+- `Parse(any)` provides runtime type checking and flexible input handling
+- `StrictParse(T)` provides compile-time type safety and exact type matching
 - Use type-specific extract and validate functions for complex types
+- Both methods should use the same validation pipeline but different input handling
 
 ---
 
@@ -303,10 +306,13 @@ func StringPtr(params ...core.SchemaParams) *ZodString[*string] {
 ```
 
 **Key Requirements:**
-- Both `Parse` and `StrictParse` must be implemented
+- Both `Parse` and `StrictParse` must be implemented for complete API
+- `Parse(any)` for flexible runtime input, `StrictParse(T)` for compile-time safety
+- Both `MustParse` and `MustStrictParse` panic-based versions required
 - `Default` and `Prefault` accept value types, not pointers
 - All modifier methods must clone internals (Copy-on-Write)
 - Use engine integration patterns consistently
+- StrictParse should bypass runtime type checking when possible
 
 ---
 
@@ -400,7 +406,7 @@ No direct `fmt.Errorf` inside parsing/validation code.
 
 ## 13  Common Pitfalls
 
-* **Missing StrictParse Implementation** – All schemas must implement both `Parse(any)` and `StrictParse(T)` for complete strict type semantics.
+* **Missing StrictParse Implementation** – All schemas must implement both `Parse(any)` and `StrictParse(T)` for complete type-safe semantics. `Parse` provides flexibility, `StrictParse` provides compile-time guarantees.
 * **Mis-ordering the 8 sections** – Cursor inserts code in wrong spot.  
 * **`Default(v R)` instead of `Default(v T)`** – breaks API consistency.  
 * **Default/Prefault Type Safety** – `Default(value T)` and `Prefault(value T)` must accept value types (string), not pointer types (*string), for compile-time safety.
@@ -418,6 +424,9 @@ No direct `fmt.Errorf` inside parsing/validation code.
 - [ ] File respects 8-section order & headings.  
 - [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).  
 - [ ] Both `Parse(any)` and `StrictParse(T)` implemented using engine helpers.
+- [ ] `Parse` method handles `any` input with runtime type checking.
+- [ ] `StrictParse` method accepts exact constraint type `T` with compile-time safety.
+- [ ] Both methods share the same validation pipeline and modifier handling.
 - [ ] Both `MustParse` and `MustStrictParse` implemented.
 - [ ] `GetInternals`, `IsOptional`, `IsNilable` methods implemented.
 - [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.  

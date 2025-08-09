@@ -9,7 +9,7 @@
 ## ✨ Key Features
 
 - **TypeScript Zod v4 Compatible API** - Familiar syntax with Go-native optimizations
-- **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
+- **Type-Safe Validation** - All methods require exact input types, zero automatic conversions
 - **Native Go Struct Support** - First-class struct validation with field-level validation and JSON tag mapping
 - **Maximum Performance** - Zero-overhead validation with optimal execution paths
 - **Zero Dependencies** - Pure Go implementation, no external libraries
@@ -42,9 +42,21 @@ func main() {
         fmt.Println("Valid name:", result) // "Alice"
     }
 
+    // Compile-time type safety with StrictParse
+    name := "Alice"
+    result, err = nameSchema.StrictParse(name) // Input type guaranteed at compile-time
+    if err == nil {
+        fmt.Println("Validated name:", result)
+    }
+
     // Email validation
     emailSchema := gozod.String().Email()
     result, err = emailSchema.Parse("user@example.com")
+    // result: "user@example.com", err: nil
+
+    // StrictParse for known string input
+    email := "user@example.com"
+    result, err = emailSchema.StrictParse(email)
     // result: "user@example.com", err: nil
 }
 ```
@@ -209,7 +221,7 @@ gozod.Struct[Person](gozod.StructSchema{
 gozod.Slice[string](gozod.String()).Min(1).Max(10).NonEmpty()
 ```
 
-### Strict Type Semantics and Modifiers
+### Type Safety and Modifiers
 ```go
 // Value schemas: strict value input only
 gozod.String().Email()       // Requires string input, returns string
@@ -228,9 +240,9 @@ gozod.String().Default("anonymous")  // Short-circuits on nil input
 gozod.String().Transform(strings.ToUpper).Prefault("fallback")  // Pre-parse default for nil
 ```
 
-### Complete Strict Type Semantics
+### Type Safety Requirements
 ```go
-// ALL schemas require exact input types - no automatic conversions
+// All schemas require exact input types - no automatic conversions
 stringSchema := gozod.String()     // Requires string, returns string  
 stringPtrSchema := gozod.StringPtr() // Requires *string, returns *string
 
@@ -316,7 +328,6 @@ var TreeNode = gozod.LazyAny(func() any {
 
 - **[Getting Started Guide](docs/basics.md)** - Fundamental usage patterns and core concepts
 - **[Complete API Reference](docs/api.md)** - Comprehensive type interface documentation
-- **[Complete Strict Mode Refactor](refactor.md)** - Breaking changes to all method behaviors and comprehensive migration guide
 - **[Error Handling & Customization](docs/error-customization.md)** - Custom error messages and internationalization
 - **[Error Formatting](docs/error-formatting.md)** - Different error output formats for various use cases
 - **[JSON Schema Integration](docs/json-schema.md)** - Generate and work with JSON schemas
@@ -334,7 +345,7 @@ GoZod provides comprehensive compatibility with TypeScript Zod v4 while adding G
 - **Modifiers**: `optional`, `nilable`, `default` with Go semantics
 
 ### Key Enhancements
-- **Complete Strict Type Semantics**: All methods require exact input types with zero automatic conversions
+- **Type-Safe Validation**: All methods require exact input types with zero automatic conversions
 - **Native Go Struct Validation**: Type-safe struct validation with field schemas, JSON tag mapping, and partial validation support
 - **Maximum Performance**: Optimized validation paths with minimal overhead and memory allocations
 - **Go-Specific Types**: Support for all Go numeric types (`int8`-`int64`, `uint8`-`uint64`, `float32/64`, `complex64/128`)
