@@ -622,3 +622,82 @@ func TestArray_NonOptional(t *testing.T) {
 	_, err = chain.Parse(nil)
 	assert.Error(t, err)
 }
+
+// Test multiple error collection (added for testing raw issue refactoring)
+func TestArray_MultipleErrorCollection(t *testing.T) {
+	t.Run("collects multiple element validation errors", func(t *testing.T) {
+		// Create array with 3 string elements, each requiring min length 5
+		schema := Array([]any{String().Min(5), String().Min(5), String().Min(5)})
+
+		// Input with multiple validation failures
+		input := []any{"hi", "ok", "bye"} // All strings are too short (< 5 chars)
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have multiple issues in the error
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 3 element validation errors (one for each element)
+		assert.Len(t, zodErr.Issues, 3)
+
+		// Check that each error has the correct path (array index)
+		for i, issue := range zodErr.Issues {
+			assert.Equal(t, []any{i}, issue.Path, "Issue %d should have path [%d]", i, i)
+			assert.Contains(t, issue.Message, "Too small", "Issue %d should be a 'too small' error", i)
+		}
+	})
+
+	t.Run("fails fast on length errors (TypeScript Zod v4 behavior)", func(t *testing.T) {
+		// Create array expecting exactly 2 integers, each > 10
+		schema := Array([]any{Int().Min(10), Int().Min(10)})
+
+		// Input with wrong length - should fail fast without validating elements
+		input := []any{5, 8, 15} // 3 elements (should be 2), first two are < 10
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have only length error (fail fast behavior)
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have only 1 length error (fail fast on length, no element validation)
+		assert.Len(t, zodErr.Issues, 1)
+
+		// Verify it's a length error
+		issue := zodErr.Issues[0]
+		assert.Empty(t, issue.Path, "Length error should have empty path")
+		assert.Equal(t, core.TooBig, issue.Code, "Should be a too_big error")
+		assert.Contains(t, issue.Message, "expected exactly 2", "Length error message")
+	})
+
+	t.Run("collects multiple element errors when length is correct", func(t *testing.T) {
+		// Create array expecting exactly 2 integers, each > 10
+		schema := Array([]any{Int().Min(10), Int().Min(10)})
+
+		// Input with correct length but element validation failures
+		input := []any{5, 8} // 2 elements (correct length), but both are < 10
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have multiple element issues
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 2 element validation errors
+		assert.Len(t, zodErr.Issues, 2)
+
+		// All should be element errors with proper paths
+		for i, issue := range zodErr.Issues {
+			assert.Equal(t, []any{i}, issue.Path, "Issue %d should have path [%d]", i, i)
+			assert.Equal(t, core.InvalidElement, issue.Code, "Issue %d should be invalid_element", i)
+			assert.Contains(t, issue.Message, "Too small", "Issue %d should be a 'too small' error", i)
+		}
+	})
+}

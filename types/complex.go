@@ -142,6 +142,69 @@ func (z *ZodComplex[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, err
 	return z.Parse(input, ctx...)
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodComplex[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	var zero T
+
+	// Determine the type code based on T
+	var expectedType core.ZodTypeCode
+	switch any(zero).(type) {
+	case complex64, *complex64:
+		expectedType = core.ZodTypeComplex64
+	case complex128, *complex128:
+		expectedType = core.ZodTypeComplex128
+	default:
+		// Fallback to complex128
+		expectedType = core.ZodTypeComplex128
+	}
+
+	// Use the internally recorded type code if available
+	if z.internals.Type != "" {
+		expectedType = z.internals.Type
+	}
+
+	switch any(zero).(type) {
+	case complex64, *complex64:
+		return engine.ParsePrimitiveStrict[complex64, T](
+			input,
+			&z.internals.ZodTypeInternals,
+			expectedType,
+			z.applyComplexChecks64,
+			ctx...,
+		)
+	case complex128, *complex128:
+		return engine.ParsePrimitiveStrict[complex128, T](
+			input,
+			&z.internals.ZodTypeInternals,
+			expectedType,
+			z.applyComplexChecks128,
+			ctx...,
+		)
+	default:
+		// Fallback to complex128
+		return engine.ParsePrimitiveStrict[complex128, T](
+			input,
+			&z.internals.ZodTypeInternals,
+			expectedType,
+			z.applyComplexChecks128,
+			ctx...,
+		)
+	}
+}
+
+// MustStrictParse provides compile-time type safety and panics on validation failure.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodComplex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // =============================================================================
 // HELPER METHODS
 // =============================================================================
@@ -233,7 +296,21 @@ func (z *ZodComplex[T]) Nullish() *ZodComplex[*complex128] {
 // Default preserves current generic type T
 func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetDefaultValue(v)
+	// Convert the default value to the appropriate constraint type
+	var zero T
+	switch any(zero).(type) {
+	case *complex64:
+		val := complex64(v)
+		in.SetDefaultValue(&val)
+	case *complex128:
+		in.SetDefaultValue(&v)
+	case complex64:
+		in.SetDefaultValue(complex64(v))
+	case complex128:
+		in.SetDefaultValue(v)
+	default:
+		in.SetDefaultValue(v)
+	}
 	return z.withInternals(in)
 }
 
@@ -241,7 +318,22 @@ func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetDefaultFunc(func() any {
-		return fn()
+		v := fn()
+		// Convert the default value to the appropriate constraint type
+		var zero T
+		switch any(zero).(type) {
+		case *complex64:
+			val := complex64(v)
+			return &val
+		case *complex128:
+			return &v
+		case complex64:
+			return complex64(v)
+		case complex128:
+			return v
+		default:
+			return v
+		}
 	})
 	return z.withInternals(in)
 }
@@ -249,7 +341,21 @@ func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 // Prefault provides fallback values on validation failure
 func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultValue(v)
+	// Convert the prefault value to the appropriate constraint type
+	var zero T
+	switch any(zero).(type) {
+	case *complex64:
+		val := complex64(v)
+		in.SetPrefaultValue(&val)
+	case *complex128:
+		in.SetPrefaultValue(&v)
+	case complex64:
+		in.SetPrefaultValue(complex64(v))
+	case complex128:
+		in.SetPrefaultValue(v)
+	default:
+		in.SetPrefaultValue(v)
+	}
 	return z.withInternals(in)
 }
 
@@ -257,7 +363,22 @@ func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetPrefaultFunc(func() any {
-		return fn()
+		v := fn()
+		// Convert the prefault value to the appropriate constraint type
+		var zero T
+		switch any(zero).(type) {
+		case *complex64:
+			val := complex64(v)
+			return &val
+		case *complex128:
+			return &v
+		case complex64:
+			return complex64(v)
+		case complex128:
+			return v
+		default:
+			return v
+		}
 	})
 	return z.withInternals(in)
 }

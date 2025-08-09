@@ -6,6 +6,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmoji(t *testing.T) {
@@ -750,5 +751,81 @@ func TestBase64URLModifiers(t *testing.T) {
 		result, err := schema.Parse(nil)
 		assert.NoError(t, err)
 		assert.Equal(t, defaultVal, result)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestText_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		schema := Emoji().Default("😀").Prefault("😁")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "😀", result)
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default should bypass validation and return immediately
+		// Use an invalid emoji as default to test short-circuit
+		schema := Emoji().Default("not-an-emoji")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "not-an-emoji", result)
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass text validation
+		validEmoji := "🎉"
+		schema := Emoji().Prefault(validEmoji)
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, validEmoji, result)
+	})
+
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Emoji().Prefault("🚀")
+
+		// Invalid input should fail validation, not use Prefault
+		_, err := schema.Parse("not-an-emoji")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid string: must match pattern")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Base64().DefaultFunc(func() string {
+			defaultCalled = true
+			return "SGVsbG8="
+		}).PrefaultFunc(func() string {
+			prefaultCalled = true
+			return "V29ybGQ="
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "SGVsbG8=", result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Test that invalid prefault value fails validation
+		schema := JWT()
+
+		// Test with valid prefault
+		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+		validSchema := schema.Prefault(validJWT)
+		result, err := validSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, validJWT, result)
 	})
 }

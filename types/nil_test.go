@@ -128,19 +128,18 @@ func TestNil_Modifiers(t *testing.T) {
 		valueSchema := Nil().Prefault("fallback")
 		var _ *ZodNil[any] = valueSchema
 
-		// Test prefault works for non-nil input
-		result, err := valueSchema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, "fallback", result)
+		// Test prefault only works for nil input
+		_, err := valueSchema.Parse("invalid")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected nil")
 
 		// Pointer constraint preserved
 		ptrSchema := NilPtr().Prefault("fallback")
 		var _ *ZodNil[*any] = ptrSchema
 
-		ptrResult, err := ptrSchema.Parse("invalid")
-		require.NoError(t, err)
-		require.NotNil(t, ptrResult)
-		assert.Equal(t, "fallback", *ptrResult)
+		_, err = ptrSchema.Parse("invalid")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected nil")
 	})
 }
 
@@ -150,20 +149,20 @@ func TestNil_Modifiers(t *testing.T) {
 
 func TestNil_Chaining(t *testing.T) {
 	t.Run("modifier chaining", func(t *testing.T) {
+		// Use Zod v4 recommended order: Prefault before Optional/Nilable
+		// Since Nil type only accepts nil values, use nil as prefault value
 		schema := Nil().
+			Prefault(nil).
 			Optional().
-			Nilable().
-			Prefault("fallback")
+			Nilable()
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
-		// Non-nil input should use prefault
-		result, err = schema.Parse("test")
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, "fallback", *result)
+		// Non-nil input should return error (NOT use prefault)
+		_, err = schema.Parse("test")
+		require.Error(t, err)
 	})
 
 	t.Run("complex chaining", func(t *testing.T) {
@@ -172,16 +171,15 @@ func TestNil_Chaining(t *testing.T) {
 			Default("default").
 			Prefault("fallback")
 
-		// Valid nil input
+		// Valid nil input should use default value due to Default modifier
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Invalid input should use prefault
-		result, err = schema.Parse("invalid")
-		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.Equal(t, "fallback", *result)
+		assert.Equal(t, "default", *result)
+
+		// Invalid input should return error (NOT use prefault)
+		_, err = schema.Parse("invalid")
+		require.Error(t, err)
 	})
 }
 
@@ -190,58 +188,98 @@ func TestNil_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestNil_DefaultAndPrefault(t *testing.T) {
-	t.Run("default with nil", func(t *testing.T) {
-		schema := Nil().Default("default_value")
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		// Note: For Nil type, nil is a valid input, so we need to test with Optional to see Default behavior
+		schema := Nil().Optional().Default("default_value").Prefault("prefault_value")
 
-		// Valid nil input should not use default (nil is valid for nil type)
-		result, err := schema.Parse(nil)
+		// When input is nil, Default should take precedence for Optional Nil
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		resultPtr, ok := result.(*any)
+		require.True(t, ok)
+		require.NotNil(t, resultPtr)
+		assert.Equal(t, "default_value", *resultPtr)
+	})
+
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// For Nil type with Optional, Default should bypass validation
+		schema := Nil().Optional().Default("bypass_validation")
+
+		// Default should bypass validation even for Optional Nil
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		resultPtr, ok := result.(*any)
+		require.True(t, ok)
+		require.NotNil(t, resultPtr)
+		assert.Equal(t, "bypass_validation", *resultPtr)
+	})
+
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// For Nil type, nil is valid, so Prefault won't trigger on nil input
+		// We test with Optional to see Prefault behavior on nil
+		schema := Nil().Optional().Prefault(nil) // Prefault with nil value
+
+		// Prefault should provide nil value and pass validation
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
-	t.Run("defaultFunc with nil", func(t *testing.T) {
-		schema := Nil().DefaultFunc(func() any {
-			return "default_value"
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := Nil().Prefault(nil)
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := schema.ParseAny("invalid_input")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "expected nil")
+
+		// Nil input is valid for Nil type, so it should pass without using Prefault
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Nil().Optional().DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func_value"
+		}).PrefaultFunc(func() any {
+			prefaultCalled = true
+			return nil
 		})
 
-		// Valid nil input should return nil
-		result, err := schema.Parse(nil)
+		// DefaultFunc should be called and take precedence
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		require.NotNil(t, result)
+		resultPtr, ok := result.(*any)
+		require.True(t, ok)
+		require.NotNil(t, resultPtr)
+		assert.Equal(t, "default_func_value", *resultPtr)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
-	t.Run("prefault with invalid input", func(t *testing.T) {
-		schema := Nil().Prefault("fallback_value")
+	// Test 6: Prefault takes precedence over Optional for nil input (Zod v4 recommended order)
+	t.Run("Prefault takes precedence over Optional", func(t *testing.T) {
+		// Create a Nil schema with Prefault and Optional (recommended order)
+		// Since Nil type only accepts nil values, we use nil as prefault value
+		schema := Nil().Prefault(nil).Optional()
 
-		// Valid nil input
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
+		// Should return nil without error because Prefault takes precedence
+		result, err := schema.ParseAny(nil)
+		assert.NoError(t, err)
 		assert.Nil(t, result)
-
-		// Invalid input should use prefault
-		result, err = schema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, "fallback_value", result)
-	})
-
-	t.Run("prefaultFunc with invalid input", func(t *testing.T) {
-		counter := 0
-		schema := Nil().PrefaultFunc(func() any {
-			counter++
-			return "fallback"
-		})
-
-		// Valid nil input should not call function
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-		assert.Equal(t, 0, counter, "Function should not be called for valid input")
-
-		// Invalid input should call prefault function
-		result, err = schema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, "fallback", result)
-		assert.Equal(t, 1, counter, "Function should be called once for invalid input")
 	})
 }
 
@@ -556,30 +594,6 @@ func TestNil_Pipe(t *testing.T) {
 }
 
 // =============================================================================
-// Factory function aliases tests
-// =============================================================================
-
-func TestNil_Aliases(t *testing.T) {
-	t.Run("Null is alias for Nil", func(t *testing.T) {
-		schema := Null()
-		var _ *ZodNil[any] = schema
-
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("NullPtr is alias for NilPtr", func(t *testing.T) {
-		schema := NullPtr()
-		var _ *ZodNil[*any] = schema
-
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-}
-
-// =============================================================================
 // Error conditions tests
 // =============================================================================
 
@@ -591,14 +605,14 @@ func TestNil_Errors(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("non-nil input with insufficient prefault fails", func(t *testing.T) {
-		// If prefault doesn't apply, should still fail
+	t.Run("non-nil input with prefault still fails", func(t *testing.T) {
+		// Prefault only applies to nil input, not validation failures
 		schema := Nil().Prefault("fallback")
 
-		// This should use prefault and succeed
-		result, err := schema.Parse("invalid")
-		require.NoError(t, err)
-		assert.Equal(t, "fallback", result)
+		// Non-nil input should still fail even with prefault
+		_, err := schema.Parse("invalid")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected nil")
 	})
 }
 

@@ -54,99 +54,46 @@ func (z *ZodNever[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse validates the input value with never logic (always fails except special cases)
-func (z *ZodNever[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	}
-	if parseCtx == nil {
-		parseCtx = core.NewParseContext()
-	}
-
-	// Handle nil input first
-	if input == nil {
-		// Try default value first
-		if z.internals.ZodTypeInternals.DefaultValue != nil {
-			return convertToNeverConstraintType[T, R](any(z.internals.ZodTypeInternals.DefaultValue).(T)), nil //nolint:unconvert
+// validateNeverValue is the validator function for Never type
+// Never type should not accept any value, but allows prefault fallback
+func validateNeverValue[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Apply any additional checks first
+	if len(checks) > 0 {
+		validatedValue, err := engine.ApplyChecks[T](value, checks, ctx)
+		if err != nil {
+			var zero T
+			return zero, err
 		}
-
-		// Try default function
-		if z.internals.ZodTypeInternals.DefaultFunc != nil {
-			defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
-			return convertToNeverConstraintType[T, R](any(defaultValue).(T)), nil //nolint:unconvert
-		}
-
-		// Check if nil is allowed (optional/nilable) - after default handling
-		if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
-			var zero R
-			return zero, nil
-		}
-
-		// For Never type, nil is rejected like any other value, so fall through to prefault handling
+		value = validatedValue
 	}
 
-	// Never type core logic: always fail for non-nil inputs
-	// Try prefault fallback mechanism after primary validation fails
-	return z.tryPrefaultFallback(input, parseCtx)
+	// Never type rejects all values using standard invalid type error
+	var zero T
+	return zero, issues.CreateInvalidTypeError(core.ZodTypeNever, value, ctx)
 }
 
-// tryPrefaultFallback attempts to use prefault values when validation fails
-func (z *ZodNever[T, R]) tryPrefaultFallback(originalInput any, ctx *core.ParseContext) (R, error) {
-	internals := &z.internals.ZodTypeInternals
+// validateNeverValueWithPrefault handles Never type validation with prefault support
+// For Never type, all inputs should be rejected with the custom message
+func (z *ZodNever[T, R]) validateNeverValueWithPrefault(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Never type rejects all values, including prefault values
+	return validateNeverValue[T](value, checks, ctx)
+}
 
-	// Try prefault value first
-	if internals.PrefaultValue != nil {
-		prefaultValue := internals.PrefaultValue
-
-		if len(internals.Checks) > 0 {
-			validated, err := engine.ApplyChecks[any](prefaultValue, internals.Checks, ctx)
-			if err != nil {
-				var zero R
-				return zero, err
-			}
-			prefaultValue = validated
-		}
-
-		if converted, ok := convertToNeverConstraintValue[T, R](prefaultValue); ok {
-			return converted, nil
-		}
-
-		var zero R
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeNever, prefaultValue)
-		finalIssue := issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
+// Parse validates the input value with never logic using unified engine parsing
+func (z *ZodNever[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	// Create a validator that can access internals for prefault handling
+	validator := func(value T, checks []core.ZodCheck, parseCtx *core.ParseContext) (T, error) {
+		return z.validateNeverValueWithPrefault(value, checks, parseCtx)
 	}
 
-	if internals.PrefaultFunc != nil {
-		prefaultValue := internals.PrefaultFunc()
-
-		if len(internals.Checks) > 0 {
-			validated, err := engine.ApplyChecks[any](prefaultValue, internals.Checks, ctx)
-			if err != nil {
-				var zero R
-				return zero, err
-			}
-			prefaultValue = validated
-		}
-
-		if converted, ok := convertToNeverConstraintValue[T, R](prefaultValue); ok {
-			return converted, nil
-		}
-
-		var zero R
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeNever, prefaultValue)
-		finalIssue := issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
-	// No prefault available, create and return error using unified error handling
-	var zero R
-	rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeNever, originalInput)
-	rawIssue.Message = "Never type should not accept any value"
-	rawIssue.Inst = z // Pass schema instance for custom error message extraction
-	finalIssue := issues.FinalizeIssue(rawIssue, ctx, core.GetConfig())
-	return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
+	return engine.ParsePrimitive[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeNever,
+		validator,
+		engine.ConvertToConstraintType[T, R],
+		ctx...,
+	)
 }
 
 // MustParse validates the input value and panics on failure
@@ -161,6 +108,30 @@ func (z *ZodNever[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodNever[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type R.
+func (z *ZodNever[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitiveStrict[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeNever,
+		validateNeverValue[T],
+		ctx...,
+	)
+}
+
+// MustStrictParse provides compile-time type safety and panics on validation failure.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type R.
+func (z *ZodNever[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 //////////////////////////
@@ -267,12 +238,12 @@ func (z *ZodNever[T, R]) Refine(fn func(R) bool, params ...any) *ZodNever[T, R] 
 	schemaParams := utils.NormalizeParams(params...)
 
 	// Convert back to the format expected by checks.NewCustom
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -283,12 +254,12 @@ func (z *ZodNever[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNever[T
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -329,28 +300,6 @@ func (z *ZodNever[T, R]) Unwrap() *ZodNever[T, R] {
 //////////////////////////
 // TYPE CONVERSION HELPERS
 //////////////////////////
-
-// convertToNeverConstraintType converts a base type T to constraint type R
-func convertToNeverConstraintType[T any, R any](value T) R {
-	var zero R
-	zeroType := reflect.TypeOf(zero)
-
-	// Handle pointer types using reflection
-	if zeroType != nil && zeroType.Kind() == reflect.Ptr {
-		if any(value) == nil {
-			// Return nil pointer
-			return reflect.Zero(zeroType).Interface().(R)
-		}
-
-		// Create pointer to value
-		valuePtr := reflect.New(zeroType.Elem())
-		valuePtr.Elem().Set(reflect.ValueOf(value))
-		return valuePtr.Interface().(R)
-	}
-
-	// For non-pointer constraint types, return value directly
-	return any(value).(R)
-}
 
 // extractNeverValue extracts base type T from constraint type R
 func extractNeverValue[T any, R any](value R) T {

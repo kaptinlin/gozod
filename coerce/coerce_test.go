@@ -814,17 +814,19 @@ func TestCoercion_ParameterPassing(t *testing.T) {
 
 func TestCoercion_ModifierChaining(t *testing.T) {
 	t.Run("coerced schemas support modifier chaining", func(t *testing.T) {
-		// Test Bool with Optional and Default - Optional should take precedence
+		// Test Bool with Optional and Default - Default should short-circuit
 		schema1 := Bool().Optional().Default(true)
 		result, err := schema1.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result) // Optional takes precedence, returns nil for nil input
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result) // Default short-circuits, returns default value
 
-		// Test order independence - Default then Optional should behave the same
+		// Test order independence - Default should short-circuit regardless of order
 		schema2 := Bool().Default(true).Optional()
 		result, err = schema2.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result) // Optional takes precedence regardless of order
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result) // Default short-circuits regardless of order
 
 		// Test with actual value - both should work the same
 		result, err = schema1.Parse("true")
@@ -857,7 +859,8 @@ func TestCoercion_ModifierChaining(t *testing.T) {
 		schema := BoolPtr().Nilable().Default(true)
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result) // Nilable takes precedence
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result) // Default takes precedence and short-circuits
 
 		// Test StringPtr with modifiers
 		stringSchema := StringPtr().Optional()

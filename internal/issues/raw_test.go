@@ -208,7 +208,7 @@ func TestOptionFunctions(t *testing.T) {
 func TestPropertyInitialization(t *testing.T) {
 	t.Run("properties map is initialized when needed", func(t *testing.T) {
 		// Start with empty issue
-		issue := ZodRawIssue{
+		issue := core.ZodRawIssue{
 			Code:  "test",
 			Input: nil,
 		}
@@ -223,7 +223,7 @@ func TestPropertyInitialization(t *testing.T) {
 	})
 
 	t.Run("properties map is reused when it exists", func(t *testing.T) {
-		issue := ZodRawIssue{
+		issue := core.ZodRawIssue{
 			Code:       "test",
 			Properties: map[string]any{"existing": "value"},
 		}
@@ -270,7 +270,7 @@ func TestRawIssueEdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles nil properties maps in option functions", func(t *testing.T) {
-		issue := ZodRawIssue{Code: "test", Properties: nil}
+		issue := core.ZodRawIssue{Code: "test", Properties: nil}
 
 		assert.NotPanics(t, func() {
 			WithExpected("string")(&issue)

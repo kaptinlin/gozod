@@ -210,12 +210,12 @@ func TestStringBool_Modifiers(t *testing.T) {
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		// bool maintains bool
 		boolSchema := StringBool()
-		prefaultBoolSchema := boolSchema.Prefault(true)
+		prefaultBoolSchema := boolSchema.Prefault("true")
 		var _ *ZodStringBool[bool] = prefaultBoolSchema
 
 		// *bool maintains *bool
 		ptrSchema := StringBoolPtr()
-		prefaultPtrSchema := ptrSchema.Prefault(false)
+		prefaultPtrSchema := ptrSchema.Prefault("false")
 		var _ *ZodStringBool[*bool] = prefaultPtrSchema
 	})
 }
@@ -257,7 +257,7 @@ func TestStringBool_Chaining(t *testing.T) {
 	t.Run("default and prefault chaining", func(t *testing.T) {
 		schema := StringBool().
 			Default(true).
-			Prefault(false)
+			Prefault("false")
 
 		result, err := schema.Parse("true")
 		require.NoError(t, err)
@@ -304,25 +304,79 @@ func TestStringBool_DefaultAndPrefault(t *testing.T) {
 		assert.True(t, called)
 	})
 
+	// Test Default priority over Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		schema := StringBool().Default(true).Prefault("false")
+
+		// Nil input should use Default (higher priority), not Prefault
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, true, result) // Default value, not Prefault value
+	})
+
+	// Test Default short-circuit bypasses validation
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// Create a schema with custom validation that would reject the default value
+		options := &StringBoolOptions{
+			Truthy: []string{"yes"},
+			Falsy:  []string{"no"},
+			Case:   "sensitive",
+		}
+		schema := StringBool(options).Default(true) // Default bypasses validation
+
+		// Nil input should use default and bypass validation
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Valid input should still go through validation
+		result, err = schema.Parse("yes")
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Invalid input should fail validation
+		_, err = schema.Parse("true")
+		require.Error(t, err)
+	})
+
 	t.Run("prefault value behavior", func(t *testing.T) {
-		schema := StringBool().Prefault(false)
+		schema := StringBool().Prefault("false")
 
 		// Valid input should work normally
 		result, err := schema.Parse("true")
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 
-		// Invalid input should use prefault
-		result, err = schema.Parse("invalid")
+		// Invalid input should return error (NOT use prefault)
+		_, err = schema.Parse("invalid")
+		require.Error(t, err)
+
+		// Nil input should use prefault
+		result, err = schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, false, result)
 	})
 
+	// Test Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Create a schema with custom validation that would reject the prefault value
+		options := &StringBoolOptions{
+			Truthy: []string{"yes"},
+			Falsy:  []string{"no"},
+			Case:   "sensitive",
+		}
+		schema := StringBool(options).Prefault("false") // This should fail validation
+
+		// Nil input should trigger prefault, but prefault should fail validation
+		_, err := schema.Parse(nil)
+		require.Error(t, err) // Prefault value fails validation
+	})
+
 	t.Run("prefault function behavior", func(t *testing.T) {
 		called := false
-		schema := StringBool().PrefaultFunc(func() bool {
+		schema := StringBool().PrefaultFunc(func() string {
 			called = true
-			return false
+			return "false"
 		})
 
 		// Valid input should not call function
@@ -331,11 +385,47 @@ func TestStringBool_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, true, result)
 		assert.False(t, called)
 
-		// Invalid input should call function
-		result, err = schema.Parse("invalid")
+		// Invalid input should return error (NOT call function)
+		_, err = schema.Parse("invalid")
+		require.Error(t, err)
+		assert.False(t, called)
+
+		// Nil input should call function
+		result, err = schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, false, result)
 		assert.True(t, called)
+	})
+
+	// Test Prefault error handling
+	t.Run("Prefault error handling", func(t *testing.T) {
+		schema := StringBool().PrefaultFunc(func() string {
+			// This will create a string value that should pass StringBool validation
+			return "true"
+		})
+
+		// Nil input should use prefault function
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	// Test StringBoolPtr behavior
+	t.Run("StringBoolPtr Default and Prefault", func(t *testing.T) {
+		schema := StringBoolPtr().Default(true)
+
+		// Nil input should use default
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+
+		// Test Prefault with pointer type
+		prefaultSchema := StringBoolPtr().Prefault("false")
+		result2, err2 := prefaultSchema.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, false, *result2)
 	})
 }
 
@@ -952,7 +1042,7 @@ func TestStringBool_Overwrite(t *testing.T) {
 
 	t.Run("custom truthy/falsy handling", func(t *testing.T) {
 		// Create StringBool with custom truthy/falsy values
-		schema := StringBoolTyped[bool](StringBoolOptions{
+		schema := StringBool(&StringBoolOptions{
 			Truthy: []string{"on", "enabled", "active"},
 			Falsy:  []string{"off", "disabled", "inactive"},
 			Case:   "insensitive",
@@ -1001,5 +1091,173 @@ func TestStringBool_Overwrite(t *testing.T) {
 		result, err = schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, false, result) // default true -> inverted to false
+	})
+}
+
+// =============================================================================
+// StrictParse and MustStrictParse tests
+// =============================================================================
+
+func TestStringBool_StrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		schema := StringBool()
+
+		// Test StrictParse with truthy bool values
+		truthyValues := []bool{true}
+		for _, value := range truthyValues {
+			result, err := schema.StrictParse(value)
+			require.NoError(t, err, "Should parse truthy value: %v", value)
+			assert.Equal(t, true, result)
+			assert.IsType(t, true, result)
+		}
+
+		// Test StrictParse with falsy bool values
+		falsyValues := []bool{false}
+		for _, value := range falsyValues {
+			result, err := schema.StrictParse(value)
+			require.NoError(t, err, "Should parse falsy value: %v", value)
+			assert.Equal(t, false, result)
+			assert.IsType(t, false, result)
+		}
+	})
+
+	t.Run("case sensitivity", func(t *testing.T) {
+		schema := StringBool()
+
+		// Test bool values (no case sensitivity for bools)
+		boolValues := []bool{true, false}
+		for _, value := range boolValues {
+			_, err := schema.StrictParse(value)
+			require.NoError(t, err, "Should parse bool value: %v", value)
+		}
+	})
+
+	t.Run("with validation constraints", func(t *testing.T) {
+		schema := StringBool().Refine(func(b bool) bool {
+			return b == true // Only allow true values
+		}, "Must be true")
+
+		// Valid case
+		result, err := schema.StrictParse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+
+		// Invalid case - false not allowed
+		_, err = schema.StrictParse(false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Must be true")
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := StringBoolPtr()
+		boolVal := true
+
+		// Test with valid pointer input
+		result, err := schema.StrictParse(&boolVal)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+		assert.IsType(t, (*bool)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := StringBoolPtr().Default(true)
+		var nilPtr *bool = nil
+
+		// Test with nil input (should use default)
+		result, err := schema.StrictParse(nilPtr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+	})
+
+	t.Run("with prefault values", func(t *testing.T) {
+		schema := StringBoolPtr().Refine(func(b *bool) bool {
+			return b != nil && *b == true // Only allow true values
+		}, "Must be true").Prefault("true") // Use true as prefault to pass validation
+		falseBoolVal := false
+
+		// Test with validation failure (should NOT use prefault, should return error)
+		_, err := schema.StrictParse(&falseBoolVal)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Must be true")
+
+		// Test with nil input - StrictParse expects boolean input type, not string prefault
+		// So this should fail with type error since nil is not a valid boolean
+		_, err2 := schema.StrictParse(nil)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "expected boolean")
+	})
+
+	t.Run("invalid type values", func(t *testing.T) {
+		schema := StringBool()
+
+		// Test with invalid type values - these should cause type errors
+		// Note: In strict parsing, we expect bool type, so other types should error
+		// This test demonstrates type safety of StrictParse
+		_, err := schema.Parse("invalid") // Use Parse instead for string input
+		assert.Error(t, err, "Should error for invalid string value")
+	})
+}
+
+func TestStringBool_MustStrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		schema := StringBool()
+
+		// Test MustStrictParse with truthy values
+		result := schema.MustStrictParse(true)
+		assert.Equal(t, true, result)
+		assert.IsType(t, true, result)
+
+		// Test MustStrictParse with falsy values
+		falseResult := schema.MustStrictParse(false)
+		assert.Equal(t, false, falseResult)
+		assert.IsType(t, false, falseResult)
+	})
+
+	t.Run("panic behavior", func(t *testing.T) {
+		schema := StringBool().Refine(func(b bool) bool {
+			return b == true // Only allow true values
+		}, "Must be true")
+
+		// Test panic with validation failure
+		assert.Panics(t, func() {
+			schema.MustStrictParse(false) // Should panic
+		})
+
+		// Test panic with invalid type through Parse method
+		schemaInvalid := StringBool()
+		assert.Panics(t, func() {
+			schemaInvalid.MustParse("invalid") // Should panic
+		})
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := StringBoolPtr()
+		boolVal := true
+
+		// Test with valid pointer input
+		result := schema.MustStrictParse(&boolVal)
+		require.NotNil(t, result)
+		assert.Equal(t, true, *result)
+		assert.IsType(t, (*bool)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := StringBoolPtr().Default(false)
+		var nilPtr *bool = nil
+
+		// Test with nil input (should use default)
+		result := schema.MustStrictParse(nilPtr)
+		require.NotNil(t, result)
+		assert.Equal(t, false, *result)
+	})
+
+	t.Run("bool value parsing", func(t *testing.T) {
+		schema := StringBool()
+
+		// Test bool values
+		assert.Equal(t, true, schema.MustStrictParse(true))
+		assert.Equal(t, false, schema.MustStrictParse(false))
 	})
 }

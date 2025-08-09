@@ -6,6 +6,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -56,18 +57,18 @@ func (z *ZodDiscriminatedUnion[T, R]) IsNilable() bool {
 
 // Parse validates input using discriminated union logic with direct validation approach
 func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	// Check for delayed construction error
-	if constructionError, exists := z.internals.Bag["construction_error"]; exists {
-		if errMsg, ok := constructionError.(string); ok {
-			return *new(R), fmt.Errorf("%s", errMsg)
-		}
-	}
-
 	var parseCtx *core.ParseContext
 	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
 	} else {
 		parseCtx = &core.ParseContext{}
+	}
+
+	// Check for delayed construction error
+	if constructionError, exists := z.internals.Bag["construction_error"]; exists {
+		if errMsg, ok := constructionError.(string); ok {
+			return *new(R), issues.CreateInvalidSchemaError(errMsg, input, parseCtx)
+		}
 	}
 
 	// Handle nil values for optional/nilable cases
@@ -101,13 +102,13 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 			}
 			return z.Parse(prefaultValue, parseCtx)
 		}
-		return *new(R), fmt.Errorf("expected map[string]any, got %T", input)
+		return *new(R), issues.CreateInvalidTypeError(core.ZodTypeObject, input, parseCtx)
 	}
 
 	// Get the value of the discriminator key
 	discriminatorValue, exists := inputMap[z.internals.Discriminator]
 	if !exists {
-		return *new(R), fmt.Errorf("missing discriminator field '%s'", z.internals.Discriminator)
+		return *new(R), issues.CreateMissingRequiredError(z.internals.Discriminator, "discriminator field", input, parseCtx)
 	}
 
 	// Find the corresponding schema based on the discriminator value
@@ -133,7 +134,7 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 			}
 		}
 		if result == nil {
-			return *new(R), fmt.Errorf("no schema matched discriminator value: %v, errors: %v", discriminatorValue, allErrs)
+			return *new(R), issues.CreateInvalidUnionError(allErrs, input, parseCtx)
 		}
 	}
 
@@ -157,6 +158,46 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 // MustParse validates the input value and panics on failure
 func (z *ZodDiscriminatedUnion[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodDiscriminatedUnion[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput, ok := convertToDiscriminatedUnionConstraintValue[T, R](input)
+	if !ok {
+		var zero R
+		if len(ctx) == 0 {
+			ctx = []*core.ParseContext{core.NewParseContext()}
+		}
+		return zero, issues.CreateTypeConversionError(
+			fmt.Sprintf("%T", input),
+			"discriminated union constraint type",
+			any(input),
+			ctx[0],
+		)
+	}
+
+	// For discriminated unions, we use a custom validation approach
+	// since they don't fit the standard ParseComplexStrict pattern
+	result, err := z.Parse(constraintInput, ctx...)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodDiscriminatedUnion[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -295,12 +336,12 @@ func (z *ZodDiscriminatedUnion[T, R]) Refine(fn func(R) bool, params ...any) *Zo
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -311,12 +352,12 @@ func (z *ZodDiscriminatedUnion[T, R]) RefineAny(fn func(any) bool, params ...any
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

@@ -139,6 +139,225 @@ func TestFile_TypeSafety(t *testing.T) {
 // more complex setup. This basic test ensures the dual generic parameter architecture works.
 
 // =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestFile_DefaultAndPrefault(t *testing.T) {
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		defaultFile := &multipart.FileHeader{
+			Filename: "default.txt",
+			Header:   make(map[string][]string),
+			Size:     1024,
+		}
+		prefaultFile := &multipart.FileHeader{
+			Filename: "prefault.txt",
+			Header:   make(map[string][]string),
+			Size:     2048,
+		}
+
+		// File type
+		schema1 := File().Default(defaultFile).Prefault(prefaultFile)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		if file, ok := result1.(*multipart.FileHeader); ok {
+			assert.Equal(t, "default.txt", file.Filename) // Should be default, not prefault
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+
+		// FilePtr type
+		schema2 := FilePtr().Default(defaultFile).Prefault(prefaultFile)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		if file, ok := (*result2).(*multipart.FileHeader); ok {
+			assert.Equal(t, "default.txt", file.Filename) // Should be default, not prefault
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+	})
+
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Create a default file that would fail size validation
+		defaultFile := &multipart.FileHeader{
+			Filename: "small.txt",
+			Header:   make(map[string][]string),
+			Size:     100, // Too small for Min(1000)
+		}
+
+		// File type - default value violates Min(1000) but should still work
+		schema1 := File().Min(1000).Default(defaultFile)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		if file, ok := result1.(*multipart.FileHeader); ok {
+			assert.Equal(t, int64(100), file.Size) // Default bypasses validation
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+
+		// FilePtr type - default value violates Min(1000) but should still work
+		schema2 := FilePtr().Min(1000).Default(defaultFile)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		if file, ok := (*result2).(*multipart.FileHeader); ok {
+			assert.Equal(t, int64(100), file.Size) // Default bypasses validation
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+	})
+
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// File type - prefault value passes validation
+		prefaultFile := &multipart.FileHeader{
+			Filename: "large.txt",
+			Header:   make(map[string][]string),
+			Size:     2000, // Passes Min(1000)
+		}
+		schema1 := File().Min(1000).Prefault(prefaultFile)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		if file, ok := result1.(*multipart.FileHeader); ok {
+			assert.Equal(t, int64(2000), file.Size)
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+
+		// FilePtr type - prefault value passes validation
+		schema2 := FilePtr().Min(1000).Prefault(prefaultFile)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		if file, ok := (*result2).(*multipart.FileHeader); ok {
+			assert.Equal(t, int64(2000), file.Size)
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+	})
+
+	// Test 4: Prefault only triggered by nil input
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		prefaultFile := &multipart.FileHeader{
+			Filename: "prefault.txt",
+			Header:   make(map[string][]string),
+			Size:     1024,
+		}
+		schema := File().Prefault(prefaultFile)
+
+		// Valid input should override prefault
+		validFile := &multipart.FileHeader{
+			Filename: "valid.txt",
+			Header:   make(map[string][]string),
+			Size:     2048,
+		}
+		result, err := schema.Parse(validFile)
+		require.NoError(t, err)
+		if file, ok := result.(*multipart.FileHeader); ok {
+			assert.Equal(t, "valid.txt", file.Filename) // Should be input, not prefault
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+
+		// Invalid input should NOT trigger prefault (should return error)
+		_, err = schema.Parse("invalid_input")
+		require.Error(t, err)
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		defaultFunc := func() any {
+			defaultCalled = true
+			return &multipart.FileHeader{
+				Filename: "default_func.txt",
+				Header:   make(map[string][]string),
+				Size:     1024,
+			}
+		}
+
+		prefaultFunc := func() any {
+			prefaultCalled = true
+			return &multipart.FileHeader{
+				Filename: "prefault_func.txt",
+				Header:   make(map[string][]string),
+				Size:     2048,
+			}
+		}
+
+		// Test DefaultFunc priority over PrefaultFunc
+		schema1 := File().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // Should not be called due to default priority
+		if file, ok := result1.(*multipart.FileHeader); ok {
+			assert.Equal(t, "default_func.txt", file.Filename)
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+
+		// Reset flags
+		defaultCalled = false
+		prefaultCalled = false
+
+		// Test PrefaultFunc alone
+		schema2 := File().PrefaultFunc(prefaultFunc)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, prefaultCalled)
+		if file, ok := result2.(*multipart.FileHeader); ok {
+			assert.Equal(t, "prefault_func.txt", file.Filename)
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+	})
+
+	// Test 6: Prefault validation failure
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// Create a prefault file that fails validation
+		prefaultFile := &multipart.FileHeader{
+			Filename: "small.txt",
+			Header:   make(map[string][]string),
+			Size:     100, // Too small for Min(1000)
+		}
+
+		schema := File().Min(1000).Prefault(prefaultFile)
+		_, err := schema.Parse(nil)
+		require.Error(t, err) // Prefault should fail validation
+		assert.Contains(t, err.Error(), "File size must be at least 1000 bytes")
+	})
+
+	// Test 7: FilePtr with Default and Prefault
+	t.Run("FilePtr with Default and Prefault", func(t *testing.T) {
+		defaultFile := &multipart.FileHeader{
+			Filename: "default_ptr.txt",
+			Header:   make(map[string][]string),
+			Size:     1024,
+		}
+		prefaultFile := &multipart.FileHeader{
+			Filename: "prefault_ptr.txt",
+			Header:   make(map[string][]string),
+			Size:     2048,
+		}
+
+		schema := FilePtr().Default(defaultFile).Prefault(prefaultFile)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		if file, ok := (*result).(*multipart.FileHeader); ok {
+			assert.Equal(t, "default_ptr.txt", file.Filename) // Should be default
+		} else {
+			t.Fatal("Expected multipart.FileHeader")
+		}
+	})
+}
+
+// =============================================================================
 // OVERWRITE TESTS
 // =============================================================================
 
@@ -254,7 +473,9 @@ func TestFile_Overwrite(t *testing.T) {
 						Header:   multipartFile.Header,
 						Size:     multipartFile.Size,
 					}
-					result := any(newFile)
+					// Create nested pointer structure: *any -> *any -> *multipart.FileHeader
+					innerAny := any(newFile)
+					result := any(&innerAny)
 					return &result
 				}
 				return file

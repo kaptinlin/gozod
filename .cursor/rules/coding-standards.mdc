@@ -15,6 +15,7 @@ This document defines comprehensive coding standards and best practices for the 
 - **Preserve Go Type Inference Advantages**: `String().Parse("hello")` → `string`, `String().Parse(&"hello")` → `*string`
 - **Nilable Modifier Semantics**: Only changes handling of `nil`, doesn't change type inference logic
 - **Avoid Type Coercion**: Let Go's type system work naturally
+- **Compile-time Type Safety**: Use type system to prevent incorrect usage at compile time
 
 ### 2. Full TypeScript Zod v4 Correspondence
 - **Complete API Compatibility**: Maintain the same method signatures, parameters, and return value structures
@@ -73,8 +74,8 @@ This document defines comprehensive coding standards and best practices for the 
 | `.optional()` | `.Optional()` | Missing field handling |
 | `.nullable()` | `.Nilable()` | Null value handling, preserve type inference |
 | `.nullish()` | `.Nullish()` | Combines optional and nullable |
-| `.default(value)` | `gozod.Default(schema, value)` | Wrapper pattern |
-| `.catch(value)` | `gozod.Prefault(schema, value)` | Fallback value mechanism |
+| `.default(value)` | `.Default(value)` | Default value with value type parameter |
+| `.catch(value)` | `.Prefault(value)` | Pre-parse default for nil input |
 
 ### Validation Method Mapping
 
@@ -160,23 +161,49 @@ var emailRegex = ...  // Package-level variables should be capitalized
 
 ## 🚀 Performance Optimization Guidelines
 
+### 0. Core Optimization Principles
+- **Elegance First, Moderate Optimization**: Prioritize code readability and maintainability over aggressive optimization
+- **Avoid Over-Engineering**: Focus on practical performance improvements, avoid excessive complexity
+- **Balance Performance and Maintainability**: Find the optimal balance between performance gains and code elegance
+- **Progressive Improvement**: Implement optimizations incrementally, each step independently verifiable
+
 ### 1. Memory Allocation Optimization
 - **Pre-allocate Slices**: Use `make([]T, 0, capacity)` when size is known
 - **Object Pools**: Use `sync.Pool` for frequently allocated objects
 - **String Building**: Use `strings.Builder` instead of string concatenation
 - **Avoid Unnecessary Copying**: Use pointers to pass large structs
+- **Reduce Boxing/Unboxing**: Minimize type conversions and interface{} usage
+- **Zero-Allocation Fast Paths**: Optimize common scenarios to avoid allocations
 
 ### 2. Compile-Time Optimization
 - **Pre-compile Regular Expressions**: Pre-compile common regex at package level
 - **Extract Constants**: Extract magic numbers as named constants
 - **Inline Functions**: Use inlining for simple functions instead of function calls
 - **Type Assertion Optimization**: Use type switch instead of multiple assertions
+- **Generic Constraints**: Leverage compile-time type binding to reduce runtime overhead
+- **Compile-Time Type Safety**: Use generics to eliminate runtime type checks where possible
 
 ### 3. Runtime Optimization
 - **Early Return**: Check and return as early as possible
 - **Conditional Execution**: Avoid unnecessary computations
 - **Cache Results**: Cache expensive computation results
 - **Batch Operations**: Combine multiple small operations into batch operations
+- **Hot Path Optimization**: Identify and optimize the most frequently executed code paths
+- **Reduce Function Call Overhead**: Minimize indirect calls and unnecessary function layers
+
+### 4. Reflection and Type Conversion Optimization
+- **Minimize Reflection Usage**: Use reflection only when absolutely necessary
+- **Fast Path for Common Types**: Provide compile-time optimized paths for frequent types
+- **Reduce Type Assertions**: Leverage generics to avoid runtime type checking
+- **Smart Nil Checking**: Optimize nil detection for different type categories
+- **Direct Type Operations**: Use direct generic operations instead of interface{} conversions
+
+### 5. Parser and Validation Optimization
+- **Super Fast Path**: Implement ultra-fast paths for simple validation scenarios
+- **Condition Ordering**: Place most common conditions first in conditional chains
+- **Merge Similar Logic**: Consolidate repeated type checking and validation patterns
+- **Reduce Indirection**: Minimize function pointer calls and indirect operations
+- **Lazy Evaluation**: Defer expensive operations until actually needed
 
 ## 🎯 TypeScript vs Go Difference Handling
 
@@ -261,6 +288,26 @@ func (z *ZodBool[T]) Default(v bool) *ZodBool[T] {
 }
 ```
 
+**Usage Examples:**
+
+```go
+// ✅ Correct: Modifiers return new instances
+originalSchema := String()
+optionalSchema := originalSchema.Optional() // Returns new *ZodString[*string]
+
+// ✅ Correct: Type-safe chaining
+schema := String().Min(1).Max(100).Optional()
+
+// ✅ Correct: Default accepts value type, compile-time type safety
+schema := String().Default("hello") // Accepts string, not *string
+
+// ❌ Wrong: Modifying original instance
+schema.internals.isOptional = true // Direct state modification
+
+// ❌ Wrong: Passing pointer to Default (compile-time prevention)
+// schema := String().Default(&"hello") // Compile error
+```
+
 Key characteristics:
 
 - **Immutable modifier chain**: Original schema is never mutated.
@@ -309,5 +356,38 @@ Key characteristics:
 - **Backward compatibility**: Maintain compatibility within major versions
 - **Deprecation warnings**: Provide clear migration paths for deprecated features
 - **Change documentation**: Document all API changes with examples
+
+## 🎯 Performance Optimization Implementation Guidelines
+
+### 1. Optimization Implementation Principles
+- **Don't Over-Optimize**: Avoid introducing complex abstractions for marginal gains
+- **Maintain Elegance**: Prioritize code simplicity and maintainability over aggressive optimization
+- **Progressive Improvement**: Implement simple, effective optimizations first; avoid large-scale refactoring
+- **Thorough Validation**: Every optimization must have corresponding performance and functional tests
+
+### 2. Risk Assessment and Mitigation
+- **Code Complexity**: Balance performance optimization with code readability
+- **Regression Risk**: Optimizations may introduce new bugs; require comprehensive testing
+- **Maintenance Cost**: Over-optimization may increase future maintenance difficulty
+- **API Compatibility**: Ensure optimizations don't affect existing APIs and behavior
+
+### 3. Success Metrics for Performance Optimization
+- **Moderate Performance Gains**: Target 10-20% performance improvement (realistic goals)
+- **Reduced System Overhead**: Minimize reflection calls and unnecessary allocations
+- **100% Test Coverage**: Maintain complete test pass rate
+- **Code Elegance**: Keep code clean and readable
+- **No Breaking Changes**: Avoid introducing breaking changes
+
+### 4. Optimization Implementation Phases
+1. **Phase 1: Low-Hanging Fruit**: Optimize obvious inefficiencies (reflection, type conversions)
+2. **Phase 2: Hot Path Optimization**: Focus on most frequently executed code paths
+3. **Phase 3: Advanced Optimizations**: Implement more sophisticated optimizations if needed
+4. **Phase 4: Performance Validation**: Benchmark testing and functional verification
+
+### 5. Performance Testing Requirements
+- **Baseline Benchmarks**: Establish performance baselines before optimization
+- **Comparative Testing**: Compare before/after performance metrics
+- **Regression Testing**: Ensure optimizations don't break existing functionality
+- **Real-World Scenarios**: Test with realistic data and usage patterns
 
 This document serves as the authoritative guide for all GoZod development, ensuring consistency, quality, and compatibility across the entire codebase.

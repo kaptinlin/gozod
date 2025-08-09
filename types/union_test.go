@@ -255,10 +255,11 @@ func TestUnion_Chaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, 42, *result)
 
-		// Test nil handling
+		// Test nil handling - Default should short-circuit and return default value
 		result, err = schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		require.NotNil(t, result)
+		assert.Equal(t, "fallback", *result)
 	})
 
 	t.Run("default and prefault chaining", func(t *testing.T) {
@@ -291,41 +292,73 @@ func TestUnion_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestUnion_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default with function", func(t *testing.T) {
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		schema := Union([]any{String(), Int()}).Default("default_value").Prefault("prefault_value")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_value", result)
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default should bypass validation and return immediately
+		// Use a value that wouldn't match any union member as default
+		schema := Union([]any{String(), Int()}).Default([]string{"invalid", "type"})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"invalid", "type"}, result)
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass union validation
+		schema := Union([]any{String(), Int()}).Prefault("valid_string")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "valid_string", result)
+	})
+
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Union([]any{String(), Int()}).Prefault("prefault_fallback")
+
+		// Invalid input should fail validation, not use Prefault
+		_, err := schema.Parse([]string{"invalid", "type"})
+		require.Error(t, err)
+		// The error should indicate union validation failure, not use prefault
+		assert.Contains(t, err.Error(), "Invalid input")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
 		schema := Union([]any{String(), Int()}).DefaultFunc(func() any {
-			return "function default"
+			defaultCalled = true
+			return "default_func"
+		}).PrefaultFunc(func() any {
+			prefaultCalled = true
+			return "prefault_func"
 		})
 
-		result, err := schema.Parse("input")
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "input", result)
+		assert.Equal(t, "default_func", result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
 	})
 
-	t.Run("Prefault with function", func(t *testing.T) {
-		schema := Union([]any{String(), Int()}).PrefaultFunc(func() any {
-			return "function prefault"
-		})
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Test that invalid prefault value fails validation
+		schema := Union([]any{String(), Int()})
 
-		result, err := schema.Parse("valid")
+		// Test with valid prefault
+		validSchema := schema.Prefault(42) // Valid int
+		result, err := validSchema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "valid", result)
-	})
-
-	t.Run("Default vs Prefault behavior", func(t *testing.T) {
-		// Default should be used when input is nil/undefined
-		defaultSchema := Union([]any{String()}).Default("default")
-
-		// Prefault should be used when validation fails
-		prefaultSchema := Union([]any{String()}).Prefault("prefault")
-
-		// Test valid input (both should return the input)
-		result1, err1 := defaultSchema.Parse("hello")
-		require.NoError(t, err1)
-		assert.Equal(t, "hello", result1)
-
-		result2, err2 := prefaultSchema.Parse("hello")
-		require.NoError(t, err2)
-		assert.Equal(t, "hello", result2)
+		assert.Equal(t, 42, result)
 	})
 }
 

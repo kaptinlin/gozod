@@ -87,6 +87,40 @@ func (z *ZodBool[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodBool[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Use the internally recorded type code by default, fall back to bool if not set
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeBool
+	}
+
+	// Create validator that applies checks to the constraint type T
+	validator := func(value bool, checks []core.ZodCheck, c *core.ParseContext) (bool, error) {
+		return engine.ApplyChecks[bool](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[bool, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		expectedType,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodBool[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates input and returns untyped result for runtime scenarios.
 // Zero-overhead wrapper around Parse to eliminate reflection calls.
 func (z *ZodBool[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
@@ -138,7 +172,16 @@ func (z *ZodBool[T]) DefaultFunc(fn func() bool) *ZodBool[T] {
 // Prefault keeps the current generic type T.
 func (z *ZodBool[T]) Prefault(v bool) *ZodBool[T] {
 	in := z.internals.ZodTypeInternals.Clone()
-	in.SetPrefaultValue(v)
+	// Convert the prefault value to the appropriate constraint type
+	var zero T
+	switch any(zero).(type) {
+	case *bool:
+		in.SetPrefaultValue(&v)
+	case bool:
+		in.SetPrefaultValue(v)
+	default:
+		in.SetPrefaultValue(v)
+	}
 	return z.withInternals(in)
 }
 
@@ -146,7 +189,17 @@ func (z *ZodBool[T]) Prefault(v bool) *ZodBool[T] {
 func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
 	in := z.internals.ZodTypeInternals.Clone()
 	in.SetPrefaultFunc(func() any {
-		return fn()
+		v := fn()
+		// Convert the prefault value to the appropriate constraint type
+		var zero T
+		switch any(zero).(type) {
+		case *bool:
+			return &v
+		case bool:
+			return v
+		default:
+			return v
+		}
 	})
 	return z.withInternals(in)
 }
@@ -301,13 +354,14 @@ func (z *ZodBool[T]) Refine(fn func(T) bool, params ...any) *ZodBool[T] {
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	// Convert back to the format expected by checks.NewCustom
-	var checkParams any
+	// Extract the error message for checks.NewCustom
+	// NewCustom expects direct error message, not SchemaParams
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
@@ -319,12 +373,14 @@ func (z *ZodBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodBool[T] {
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	// Extract the error message for checks.NewCustom
+	// NewCustom expects direct error message, not SchemaParams
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

@@ -97,8 +97,96 @@ func (z *ZodLazy[T]) Coerce(input any) (any, bool) {
 
 // Parse validates and returns the parsed value using lazy evaluation
 func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
-	result, err := engine.ParseComplex[any](
-		input,
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 {
+		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
+	}
+
+	// Handle modifiers first
+	internals := &z.internals.ZodTypeInternals
+
+	// Handle nil input explicitly
+	if input == nil {
+		// Check for modifiers first
+		if internals.NonOptional {
+			var zero T
+			return zero, issues.CreateNonOptionalError(parseCtx)
+		}
+
+		// Default/DefaultFunc - short circuit
+		if internals.DefaultValue != nil {
+			return any(internals.DefaultValue).(T), nil
+		}
+		if internals.DefaultFunc != nil {
+			defaultValue := internals.DefaultFunc()
+			return any(defaultValue).(T), nil
+		}
+
+		// Prefault/PrefaultFunc - use as new input
+		if internals.PrefaultValue != nil {
+			input = internals.PrefaultValue
+		} else if internals.PrefaultFunc != nil {
+			input = internals.PrefaultFunc()
+		} else if internals.Optional || internals.Nilable {
+			// Optional/Nilable - allow nil
+			var zero T
+			return zero, nil
+		} else {
+			// Reject nil input
+			var zero T
+			return zero, issues.CreateInvalidTypeError(core.ZodTypeLazy, nil, parseCtx)
+		}
+	}
+
+	// Core lazy evaluation logic - validate with inner schema
+	result, err := z.validateLazy(input, internals.Checks, parseCtx)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
+	if result == nil {
+		var zero T
+		return zero, nil
+	}
+
+	// Handle type conversion for pointer types
+	var zero T
+	switch any(zero).(type) {
+	case *any:
+		// If T is *any, we need to convert result to *any
+		if result == nil {
+			return any((*any)(nil)).(T), nil
+		}
+		// Create a pointer to the result
+		resultPtr := &result
+		return any(resultPtr).(T), nil
+	default:
+		// For any type, direct conversion
+		return result.(T), nil
+	}
+}
+
+// MustParse is the type-safe variant that panics on error
+func (z *ZodLazy[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// ParseAny validates the input value and returns any type (for runtime interface)
+func (z *ZodLazy[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodLazy[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	result, err := engine.ParseComplexStrict[any](
+		any(input),
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeLazy,
 		z.extractLazy,
@@ -125,18 +213,13 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	return any(result).(T), nil //nolint:unconvert
 }
 
-// MustParse is the type-safe variant that panics on error
-func (z *ZodLazy[T]) MustParse(input any, ctx ...*core.ParseContext) T {
-	result, err := z.Parse(input, ctx...)
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodLazy[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
 	return result
-}
-
-// ParseAny validates the input value and returns any type (for runtime interface)
-func (z *ZodLazy[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
 }
 
 // =============================================================================
@@ -252,12 +335,12 @@ func (z *ZodLazy[T]) Refine(fn func(T) bool, params ...any) *ZodLazy[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -266,12 +349,12 @@ func (z *ZodLazy[T]) Refine(fn func(T) bool, params ...any) *ZodLazy[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodLazy[T]) RefineAny(fn func(any) bool, params ...any) *ZodLazy[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -348,7 +431,7 @@ func (w *schemaWrapper) Parse(input any, ctx ...*core.ParseContext) (any, error)
 	}:
 		return s.Parse(input, ctx...)
 	default:
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, input)
+		rawIssue := issues.NewRawIssue(core.InvalidType, input, issues.WithExpected(string(core.ZodTypeLazy)))
 		return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(rawIssue, nil, nil)})
 	}
 }
@@ -400,21 +483,9 @@ func (w *schemaWrapper) GetInner() any {
 
 // extractLazy extracts a value from input by delegating to inner schema
 func (z *ZodLazy[T]) extractLazy(value any) (any, bool) {
-	innerSchema := z.getInnerType()
-	if innerSchema == nil {
-		return nil, false
-	}
-
-	// Delegate to inner schema for parsing
-	result, err := innerSchema.Parse(value)
-	if err != nil {
-		// Recursive reference case – treat current value as already validated
-		if isExpectedLazyError(err) {
-			return value, true
-		}
-		return nil, false
-	}
-	return result, true
+	// For Lazy types, we accept any value and let validation handle the logic
+	// This is different from other extractors because Lazy delegates to inner schema
+	return value, true
 }
 
 // extractLazyPtr extracts a pointer value from input by delegating to inner schema
@@ -456,7 +527,7 @@ func (z *ZodLazy[T]) validateLazy(value any, checks []core.ZodCheck, ctx *core.P
 		if internals.Optional || internals.Nilable {
 			return value, nil
 		}
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, value)
+		rawIssue := issues.NewRawIssue(core.InvalidType, value, issues.WithExpected(string(core.ZodTypeLazy)))
 		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
@@ -464,17 +535,18 @@ func (z *ZodLazy[T]) validateLazy(value any, checks []core.ZodCheck, ctx *core.P
 	// Get inner schema
 	innerSchema := z.getInnerType()
 	if innerSchema == nil {
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeLazy, value)
+		rawIssue := issues.NewRawIssue(core.InvalidType, value, issues.WithExpected(string(core.ZodTypeLazy)))
 		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// Delegate validation to inner schema
+	// Delegate validation to inner schema - this is the core lazy validation logic
+	// that must always run regardless of whether checks are present
 	result, err := innerSchema.Parse(value, ctx)
 	if err != nil {
 		// Recursive reference case – treat current value as already validated
 		if isExpectedLazyError(err) {
-			result = value
+			return engine.ApplyChecks[any](value, checks, ctx)
 		} else {
 			return nil, err
 		}

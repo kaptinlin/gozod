@@ -7,6 +7,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -55,44 +56,97 @@ func (z *ZodArray[T, R]) IsNilable() bool {
 }
 
 // Parse validates input using array-specific parsing logic
+// Parse validates input using array-specific parsing logic with engine.ParseComplex
 func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+	result, err := engine.ParseComplex[[]any](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeArray,
+		z.extractArrayForEngine,
+		z.extractArrayPtrForEngine,
+		z.validateArrayForEngine,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
 	}
 
-	// Handle nil input for optional/nilable schemas
-	if input == nil {
-		var zero R
-		if z.internals.Optional || z.internals.Nilable {
+	// Handle different return types from ParseComplex
+	switch v := result.(type) {
+	case []any:
+		// Direct array type - convert to constraint type R
+		return convertArrayFromGeneric[T, R](v), nil
+	case *[]any:
+		// Pointer to array - convert to constraint type R
+		if v == nil {
+			var zero R
 			return zero, nil
 		}
-		return zero, fmt.Errorf("array value cannot be nil")
-	}
-
-	// Extract array from input
-	arrayValue, err := z.extractArray(input)
-	if err != nil {
+		return convertArrayFromGeneric[T, R](*v), nil
+	case nil:
+		// Nil result (for optional/nilable cases)
 		var zero R
-		return zero, err
-	}
-
-	// Validate the array and get transformed value
-	transformedArray, err := z.validateArray(arrayValue, z.internals.Checks, parseCtx)
-	if err != nil {
+		return zero, nil
+	default:
+		// Try direct type assertion as fallback
+		if typedResult, ok := result.(R); ok {
+			return typedResult, nil
+		}
 		var zero R
-		return zero, err
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeArray, result, ctx[0])
 	}
-
-	// Convert to constraint type R using safe conversion
-	return convertArrayFromGeneric[T, R](transformedArray), nil
 }
 
 // MustParse validates the input value and panics on failure
 func (z *ZodArray[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodArray[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput, ok := convertToArrayType[T, R](input)
+	if !ok {
+		var zero R
+		if len(ctx) == 0 {
+			ctx = []*core.ParseContext{core.NewParseContext()}
+		}
+		return zero, issues.CreateTypeConversionError(
+			fmt.Sprintf("%T", input),
+			"array constraint type",
+			any(input),
+			ctx[0],
+		)
+	}
+
+	result, err := engine.ParseComplexStrict[[]any, R](
+		constraintInput,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeArray,
+		z.extractArrayForEngine,
+		z.extractArrayPtrForEngine,
+		z.validateArrayForEngine,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodArray[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -352,12 +406,12 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 	schemaParams := utils.NormalizeParams(params...)
 
 	// Convert back to the format expected by checks.NewCustom
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
@@ -369,12 +423,12 @@ func (z *ZodArray[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodArray[T
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -559,11 +613,11 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 	}
 }
 
-// validateArray validates the array content
-func (z *ZodArray[T, R]) validateArray(value []any, checks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
+// validateArrayWithIssues validates the array content using raw issues (new approach)
+func (z *ZodArray[T, R]) validateArrayWithIssues(value []any, checks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
 	// Defensive check for nil internals
 	if z.internals == nil {
-		return nil, fmt.Errorf("array schema internals is nil")
+		return nil, issues.CreateInvalidTypeError(core.ZodTypeArray, value, ctx)
 	}
 
 	// First apply checks (including Overwrite transformations) to get the transformed value
@@ -579,33 +633,55 @@ func (z *ZodArray[T, R]) validateArray(value []any, checks []core.ZodCheck, ctx 
 	actualLen := len(value)
 	hasRest := z.internals.Rest != nil
 
-	// Validate length
+	var collectedIssues []core.ZodRawIssue
+
+	// Validate length first - fail fast on length errors (TypeScript Zod v4 behavior)
 	if hasRest {
 		// With rest parameter: must have at least fixed length
 		if actualLen < fixedLen {
-			return nil, fmt.Errorf("array has %d elements, expected at least %d", actualLen, fixedLen)
+			issue := issues.CreateTooSmallIssue(fixedLen, true, "array", value)
+			issue.Properties["is_rest_param"] = true
+			collectedIssues = append(collectedIssues, issue)
+			// Fail fast - return immediately on length error
+			return nil, issues.CreateArrayValidationIssues(collectedIssues)
 		}
 	} else {
-		// Without rest parameter: must match exactly
+		// Without rest parameter: must match exactly - fail fast on length error
 		if actualLen != fixedLen {
-			return nil, fmt.Errorf("array has %d elements, expected exactly %d", actualLen, fixedLen)
+			if actualLen < fixedLen {
+				issue := issues.CreateFixedLengthArrayIssue(fixedLen, actualLen, value, true)
+				collectedIssues = append(collectedIssues, issue)
+			} else {
+				issue := issues.CreateFixedLengthArrayIssue(fixedLen, actualLen, value, false)
+				collectedIssues = append(collectedIssues, issue)
+			}
+			// Fail fast - return immediately on length error (TypeScript Zod v4 behavior)
+			return nil, issues.CreateArrayValidationIssues(collectedIssues)
 		}
 	}
 
-	// Validate fixed part
+	// Length is correct, now validate all elements and collect multiple errors
+	// Validate fixed part - collect all element errors instead of stopping at first
 	for i := 0; i < fixedLen && i < actualLen; i++ {
 		if err := z.validateElement(value[i], z.internals.Items[i], ctx, i); err != nil {
-			return nil, fmt.Errorf("element at index %d validation failed: %w", i, err)
+			issue := issues.CreateElementValidationIssue(i, "array", value[i], err)
+			collectedIssues = append(collectedIssues, issue)
 		}
 	}
 
-	// Validate rest part
-	if hasRest {
+	// Validate rest part - collect all rest element errors
+	if hasRest && actualLen > fixedLen {
 		for i := fixedLen; i < actualLen; i++ {
 			if err := z.validateElement(value[i], z.internals.Rest, ctx, i); err != nil {
-				return nil, fmt.Errorf("rest element at index %d validation failed: %w", i, err)
+				issue := issues.CreateElementValidationIssue(i, "array rest", value[i], err)
+				collectedIssues = append(collectedIssues, issue)
 			}
 		}
+	}
+
+	// If we collected any issues, return them as a combined error
+	if len(collectedIssues) > 0 {
+		return nil, issues.CreateArrayValidationIssues(collectedIssues)
 	}
 
 	return value, nil
@@ -619,7 +695,7 @@ func (z *ZodArray[T, R]) validateElement(value any, schema any, ctx *core.ParseC
 
 	// Defensive check for context
 	if ctx == nil {
-		return fmt.Errorf("validation context is nil")
+		return issues.CreateCustomError("validation context is nil", nil, value, &core.ParseContext{})
 	}
 
 	// Try using reflection to call Parse method - this handles all schema types
@@ -806,4 +882,33 @@ func (z *ZodArray[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// extractArrayForEngine extracts []any from input for engine.ParseComplex
+func (z *ZodArray[T, R]) extractArrayForEngine(input any) ([]any, bool) {
+	result, err := z.extractArray(input)
+	if err != nil {
+		return nil, false
+	}
+	return result, true
+}
+
+// extractArrayPtrForEngine extracts pointer to []any from input for engine.ParseComplex
+func (z *ZodArray[T, R]) extractArrayPtrForEngine(input any) (*[]any, bool) {
+	// Try direct pointer extraction
+	if ptr, ok := input.(*[]any); ok {
+		return ptr, true
+	}
+
+	// Try extracting array and return pointer to it
+	result, err := z.extractArray(input)
+	if err != nil {
+		return nil, false
+	}
+	return &result, true
+}
+
+// validateArrayForEngine validates []any for engine.ParseComplex
+func (z *ZodArray[T, R]) validateArrayForEngine(value []any, checks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
+	return z.validateArrayWithIssues(value, checks, ctx)
 }

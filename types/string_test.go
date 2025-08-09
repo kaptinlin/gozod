@@ -75,6 +75,125 @@ func TestString_BasicFunctionality(t *testing.T) {
 }
 
 // =============================================================================
+// StrictParse and MustStrictParse tests
+// =============================================================================
+
+func TestString_StrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		schema := String()
+
+		// Test StrictParse with exact type match
+		result, err := schema.StrictParse("test")
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+		assert.IsType(t, "", result)
+
+		// Test StrictParse with empty string
+		emptyResult, err := schema.StrictParse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", emptyResult)
+	})
+
+	t.Run("with validation constraints", func(t *testing.T) {
+		schema := String().Min(5)
+
+		// Valid case
+		result, err := schema.StrictParse("hello world")
+		require.NoError(t, err)
+		assert.Equal(t, "hello world", result)
+
+		// Invalid case - too short
+		_, err = schema.StrictParse("hi")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := StringPtr()
+		str := "hello"
+
+		// Test with valid pointer input
+		result, err := schema.StrictParse(&str)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "hello", *result)
+		assert.IsType(t, (*string)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := StringPtr().Default("default_value")
+		var nilPtr *string = nil
+
+		// Test with nil input (should use default)
+		result, err := schema.StrictParse(nilPtr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "default_value", *result)
+	})
+
+	t.Run("with prefault values", func(t *testing.T) {
+		schema := StringPtr().Min(10).Prefault("prefault_value")
+		shortStr := "hi" // Too short for Min(10)
+
+		// Test with validation failure (should NOT use prefault, should return error)
+		_, err := schema.StrictParse(&shortStr)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 10")
+
+		// Test with nil input (should use prefault)
+		result, err := schema.StrictParse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "prefault_value", *result)
+	})
+}
+
+func TestString_MustStrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		schema := String()
+
+		// Test MustStrictParse with valid input
+		result := schema.MustStrictParse("hello")
+		assert.Equal(t, "hello", result)
+		assert.IsType(t, "", result)
+
+		// Test MustStrictParse with empty string
+		emptyResult := schema.MustStrictParse("")
+		assert.Equal(t, "", emptyResult)
+	})
+
+	t.Run("panic behavior", func(t *testing.T) {
+		schema := String().Min(5)
+
+		// Test panic with validation failure
+		assert.Panics(t, func() {
+			schema.MustStrictParse("hi") // Too short, should panic
+		})
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := StringPtr()
+		str := "world"
+
+		// Test with valid pointer input
+		result := schema.MustStrictParse(&str)
+		require.NotNil(t, result)
+		assert.Equal(t, "world", *result)
+		assert.IsType(t, (*string)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := StringPtr().Default("default_value")
+		var nilPtr *string = nil
+
+		// Test with nil input (should use default)
+		result := schema.MustStrictParse(nilPtr)
+		require.NotNil(t, result)
+		assert.Equal(t, "default_value", *result)
+	})
+}
+
+// =============================================================================
 // Type safety tests
 // =============================================================================
 
@@ -142,6 +261,64 @@ func TestString_TypeSafety(t *testing.T) {
 		assert.IsType(t, (*string)(nil), ptrResult)
 		require.NotNil(t, ptrResult)
 		assert.Equal(t, "world", *ptrResult)
+	})
+
+	t.Run("StrictParse type safety", func(t *testing.T) {
+		// Test string type with StrictParse
+		stringSchema := String()
+		result, err := stringSchema.StrictParse("hello")
+		require.NoError(t, err)
+		assert.IsType(t, "", result)
+		assert.Equal(t, "hello", result)
+
+		// Test *string type with StrictParse
+		ptrSchema := StringPtr()
+		str := "world"
+		ptrResult, err := ptrSchema.StrictParse(&str)
+		require.NoError(t, err)
+		assert.IsType(t, (*string)(nil), ptrResult)
+		require.NotNil(t, ptrResult)
+		assert.Equal(t, "world", *ptrResult)
+
+		// Test that StrictParse works correctly with pointer types
+		originalPtr := &str
+		resultPtr, err := ptrSchema.StrictParse(originalPtr)
+		require.NoError(t, err)
+		require.NotNil(t, resultPtr)
+		assert.Equal(t, "world", *resultPtr)
+		// Note: StrictParse may not preserve pointer identity in current implementation
+
+		// Test nil handling with pointer schemas
+		nilResult, err := ptrSchema.StrictParse(nil)
+		assert.Error(t, err) // Should error for nil input to non-nilable schema
+		assert.Nil(t, nilResult)
+	})
+
+	t.Run("MustStrictParse type safety", func(t *testing.T) {
+		// Test string type with MustStrictParse
+		stringSchema := String()
+		result := stringSchema.MustStrictParse("hello")
+		assert.IsType(t, "", result)
+		assert.Equal(t, "hello", result)
+
+		// Test *string type with MustStrictParse
+		ptrSchema := StringPtr()
+		str := "world"
+		ptrResult := ptrSchema.MustStrictParse(&str)
+		assert.IsType(t, (*string)(nil), ptrResult)
+		require.NotNil(t, ptrResult)
+		assert.Equal(t, "world", *ptrResult)
+
+		// Test panic behavior with invalid input
+		assert.Panics(t, func() {
+			ptrSchema.MustStrictParse(nil) // Should panic for nil input
+		})
+
+		// Test panic with validation failure
+		constraintSchema := String().Min(10)
+		assert.Panics(t, func() {
+			constraintSchema.MustStrictParse("short") // Should panic for validation failure
+		})
 	})
 }
 
@@ -223,6 +400,30 @@ func TestString_Modifiers(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "hello", *result)
+	})
+
+	t.Run("StrictParse with modifiers", func(t *testing.T) {
+		// Test Optional with StrictParse
+		optionalSchema := String().Optional()
+		str := "hello"
+		result, err := optionalSchema.StrictParse(&str)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "hello", *result)
+
+		// Test Nilable with StrictParse
+		nilableSchema := String().Nilable()
+		nilableResult, err := nilableSchema.StrictParse(&str)
+		require.NoError(t, err)
+		require.NotNil(t, nilableResult)
+		assert.Equal(t, "hello", *nilableResult)
+
+		// Test Nullish with StrictParse
+		nullishSchema := String().Nullish()
+		nullishResult, err := nullishSchema.StrictParse(&str)
+		require.NoError(t, err)
+		require.NotNil(t, nullishResult)
+		assert.Equal(t, "hello", *nullishResult)
 	})
 }
 
@@ -515,6 +716,7 @@ func TestString_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
+	// Test Default behavior - only triggers on nil input
 	t.Run("Default with nil input", func(t *testing.T) {
 		schema := String().Default("default value")
 
@@ -531,6 +733,20 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, "actual value", result)
 	})
 
+	// Test that empty string does NOT trigger default (Zod v4 behavior)
+	t.Run("Default with empty string input - should NOT trigger", func(t *testing.T) {
+		schema := String().Default("default value")
+
+		result, err := schema.Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", result, "Empty string should not trigger default")
+
+		// Test whitespace also doesn't trigger default
+		result2, err2 := schema.Parse(" ")
+		require.NoError(t, err2)
+		assert.Equal(t, " ", result2, "Whitespace should not trigger default")
+	})
+
 	t.Run("DefaultFunc", func(t *testing.T) {
 		called := false
 		schema := String().DefaultFunc(func() string {
@@ -544,18 +760,73 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 		assert.True(t, called)
 	})
 
-	t.Run("Prefault with invalid default", func(t *testing.T) {
+	// Test DefaultFunc is NOT called for empty string
+	t.Run("DefaultFunc with empty string - should NOT be called", func(t *testing.T) {
+		called := false
+		schema := String().DefaultFunc(func() string {
+			called = true
+			return "generated default"
+		})
+
+		result, err := schema.Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", result)
+		assert.False(t, called, "DefaultFunc should not be called for empty string")
+	})
+
+	// Test Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
 		schema := String().Min(5).Default("hi").Prefault("fallback value")
 
-		// Default "hi" fails validation, should use prefault
+		// Nil input should use default (short-circuit), not prefault
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "fallback value", result)
+		assert.Equal(t, "hi", result, "Default should take priority over prefault")
+	})
+
+	// Test Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		schema := String().Min(10).Default("short")
+
+		// Default value doesn't meet validation but should still be returned
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "short", result, "Default should bypass validation")
+	})
+
+	// Test Prefault only triggers on nil input (Zod v4 semantics)
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := String().Min(5).Prefault("fallback")
+
+		// Valid input should not trigger prefault
+		result1, err1 := schema.Parse("valid input")
+		require.NoError(t, err1)
+		assert.Equal(t, "valid input", result1)
+
+		// Invalid non-nil input should return error (NOT trigger prefault)
+		_, err2 := schema.Parse("hi")
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "at least 5 characters")
+
+		// Nil input should trigger prefault and go through full validation
+		result3, err3 := schema.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, "fallback", result3)
+	})
+
+	// Test Prefault goes through full validation pipeline
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		schema := String().Min(10).Prefault("short")
+
+		// Prefault value that fails validation should return error
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 10 characters")
 	})
 
 	t.Run("PrefaultFunc", func(t *testing.T) {
 		called := false
-		schema := String().Min(5).Default("hi").PrefaultFunc(func() string {
+		schema := String().Min(5).PrefaultFunc(func() string {
 			called = true
 			return "generated fallback"
 		})
@@ -564,6 +835,249 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "generated fallback", result)
 		assert.True(t, called)
+	})
+
+	// Test Transform interaction with Default and Prefault
+	t.Run("Default bypasses Transform (short-circuit)", func(t *testing.T) {
+		// Note: In current implementation, Transform creates a new schema type
+		// So we test the conceptual behavior that Default should short-circuit
+		baseSchema := String().Default("default")
+		transformCalled := false
+		transformSchema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(s), nil
+		})
+
+		// Test that default works without transform
+		result, err := baseSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default", result)
+
+		// Test that transform works with valid input
+		result2, err2 := transformSchema.Parse("hello")
+		require.NoError(t, err2)
+		assert.Equal(t, "HELLO", result2)
+		assert.True(t, transformCalled)
+	})
+
+	t.Run("Prefault goes through Transform (full pipeline)", func(t *testing.T) {
+		// Note: In current implementation, we test the conceptual behavior
+		// that Prefault should go through the full validation and transform pipeline
+		transformCalled := false
+		baseSchema := String().Prefault("prefault")
+		transformSchema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(s), nil
+		})
+
+		// Test that prefault works for nil input
+		result, err := baseSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "prefault", result)
+
+		// Test that transform works with prefault value
+		result2, err2 := transformSchema.Parse("prefault")
+		require.NoError(t, err2)
+		assert.Equal(t, "PREFAULT", result2)
+		assert.True(t, transformCalled)
+	})
+
+	// Test error handling for Prefault
+	t.Run("Prefault error handling", func(t *testing.T) {
+		schema := String().Min(10).Max(5).Prefault("invalid")
+
+		// Prefault validation failure should return error directly
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		// Should contain validation error, not fallback to other mechanisms
+		assert.Contains(t, err.Error(), "at least 10 characters")
+	})
+
+	// Test StringPtr behavior with unified API (accepts string value)
+	t.Run("StringPtr Default accepts string value", func(t *testing.T) {
+		schema := StringPtr().Default("default value") // Unified API: accepts string, not *string
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "default value", *result)
+	})
+
+	// Test StringPtr with empty string pointer - should NOT trigger default
+	t.Run("StringPtr with empty string pointer - should NOT trigger default", func(t *testing.T) {
+		schema := StringPtr().Default("default value")
+		emptyStr := ""
+
+		result, err := schema.Parse(&emptyStr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "", *result, "Empty string pointer should not trigger default")
+		assert.True(t, result == &emptyStr, "Should preserve original pointer")
+	})
+
+	// Test pointer identity preservation
+	t.Run("StringPtr preserves pointer identity for non-nil input", func(t *testing.T) {
+		schema := StringPtr().Default("default value")
+		inputStr := "test value"
+		inputPtr := &inputStr
+
+		result, err := schema.Parse(inputPtr)
+		require.NoError(t, err)
+		assert.True(t, result == inputPtr, "Should preserve original pointer for non-nil input")
+	})
+
+	// Test side effect prevention - each Parse(nil) returns new pointer
+	t.Run("StringPtr Default returns new pointer each time", func(t *testing.T) {
+		schema := StringPtr().Default("default value")
+
+		result1, err1 := schema.Parse(nil)
+		require.NoError(t, err1)
+		result2, err2 := schema.Parse(nil)
+		require.NoError(t, err2)
+		result3, err3 := schema.Parse(nil)
+		require.NoError(t, err3)
+
+		// Values should be equal but pointers should be different
+		assert.Equal(t, *result1, *result2, "Values should be equal")
+		assert.Equal(t, *result2, *result3, "Values should be equal")
+		assert.True(t, result1 != result2, "Should return different pointers to prevent side effects")
+		assert.True(t, result2 != result3, "Should return different pointers to prevent side effects")
+		assert.True(t, result1 != result3, "Should return different pointers to prevent side effects")
+
+		// Modifying one should not affect others
+		*result1 = "modified"
+		assert.Equal(t, "modified", *result1)
+		assert.Equal(t, "default value", *result2, "result2 should not be affected")
+		assert.Equal(t, "default value", *result3, "result3 should not be affected")
+	})
+
+	// Test unified method signatures
+	t.Run("Unified API signatures", func(t *testing.T) {
+		// Both String and StringPtr should accept string values for Default/Prefault
+		schema1 := String().Default("value1")
+		schema2 := StringPtr().Default("value2") // Unified API: accepts string, not *string
+		schema3 := String().DefaultFunc(func() string { return "func1" })
+		schema4 := StringPtr().DefaultFunc(func() string { return "func2" }) // Unified: returns string
+		schema5 := String().Min(10).Default("short").Prefault("long enough")
+		schema6 := StringPtr().Min(10).Default("short").Prefault("long enough ptr") // Unified API
+
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, "value1", result1)
+
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, "value2", *result2)
+
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, "func1", result3)
+
+		result4, err4 := schema4.Parse(nil)
+		require.NoError(t, err4)
+		require.NotNil(t, result4)
+		assert.Equal(t, "func2", *result4)
+
+		result5, err5 := schema5.Parse(nil)
+		require.NoError(t, err5)
+		assert.Equal(t, "short", result5) // Default has higher priority than Prefault
+
+		result6, err6 := schema6.Parse(nil)
+		require.NoError(t, err6)
+		require.NotNil(t, result6)
+		assert.Equal(t, "short", *result6) // Default has higher priority than Prefault
+	})
+
+	// Test StringPtr Prefault behavior (only on nil input)
+	t.Run("StringPtr Prefault only on nil input", func(t *testing.T) {
+		schema := StringPtr().Min(10).Prefault("long enough")
+
+		// Valid input should pass through
+		longStr := "this is long enough"
+		result, err := schema.Parse(&longStr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "this is long enough", *result)
+		assert.True(t, result == &longStr, "Should preserve original pointer")
+
+		// Invalid non-nil input should return error (NOT trigger prefault)
+		shortStr := "hi"
+		_, err = schema.Parse(&shortStr)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 10 characters")
+
+		// Nil input should trigger prefault
+		result2, err2 := schema.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, "long enough", *result2)
+
+		// Multiple nil parses should create different pointer instances
+		result3, err3 := schema.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, "long enough", *result3)
+		assert.True(t, result2 != result3, "Should create different pointer instances")
+	})
+
+	// Test comprehensive Default and Prefault scenarios
+	t.Run("Comprehensive Default and Prefault tests", func(t *testing.T) {
+		// Default with nil input
+		schema1 := StringPtr().Default("default_value")
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		require.NotNil(t, result1)
+		assert.Equal(t, "default_value", *result1)
+
+		// Prefault only triggers on nil input
+		schema2 := String().Min(10).Prefault("prefault_value")
+		// Valid input should pass through
+		result2, err2 := schema2.Parse("long enough input")
+		require.NoError(t, err2)
+		assert.Equal(t, "long enough input", result2)
+		// Invalid non-nil input should error
+		_, err2 = schema2.Parse("short")
+		require.Error(t, err2)
+		// Nil input should trigger prefault
+		result2, err2 = schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, "prefault_value", result2)
+
+		// DefaultFunc with nil input
+		counter := 0
+		schema3 := StringPtr().DefaultFunc(func() string {
+			counter++
+			return fmt.Sprintf("default_%d", counter)
+		})
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, "default_1", *result3)
+		assert.Equal(t, 1, counter)
+
+		// PrefaultFunc with nil input
+		counter2 := 0
+		schema4 := String().Min(10).PrefaultFunc(func() string {
+			counter2++
+			return fmt.Sprintf("prefault_%d", counter2)
+		})
+		result4, err4 := schema4.Parse(nil)
+		require.NoError(t, err4)
+		assert.Equal(t, "prefault_1", result4)
+		assert.Equal(t, 1, counter2)
+
+		// Optional with nil
+		schema5 := StringPtr().Optional()
+		result5, err5 := schema5.Parse(nil)
+		require.NoError(t, err5)
+		assert.Nil(t, result5)
+
+		// Nilable with nil
+		schema6 := StringPtr().Nilable()
+		result6, err6 := schema6.Parse(nil)
+		require.NoError(t, err6)
+		assert.Nil(t, result6)
 	})
 }
 

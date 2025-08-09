@@ -306,57 +306,142 @@ func TestFloat_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestFloat_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with Float64", func(t *testing.T) {
-		schema := Float64().Default(200.5)
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// Float64 type
+		schema1 := Float64().Default(100.5).Prefault(200.5)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, 100.5, result1) // Should be default, not prefault
 
-		// Valid input should override default
-		result, err := schema.Parse(float64(100.5))
-		require.NoError(t, err)
-		assert.Equal(t, float64(100.5), result)
+		// Float64Ptr type
+		schema2 := Float64Ptr().Default(100.5).Prefault(200.5)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, 100.5, *result2) // Should be default, not prefault
 	})
 
-	t.Run("default value with Float64Ptr", func(t *testing.T) {
-		schema := Float64Ptr().Default(200.5)
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Float64 type - default value violates Min(50.0) but should still work
+		schema1 := Float64().Min(50.0).Default(10.0)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, 10.0, result1) // Default bypasses validation
 
-		// Valid input should override default
-		result, err := schema.Parse(float64(100.5))
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, float64(100.5), *result)
+		// Float64Ptr type - default value violates Min(50.0) but should still work
+		schema2 := Float64Ptr().Min(50.0).Default(10.0)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, 10.0, *result2) // Default bypasses validation
 	})
 
-	t.Run("default function", func(t *testing.T) {
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Float64 type - prefault value passes validation
+		schema1 := Float64().Min(50.0).Prefault(100.0)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, 100.0, result1) // Prefault passes validation
+
+		// Float64 type - prefault value fails validation
+		schema2 := Float64().Min(50.0).Prefault(10.0)
+		_, err2 := schema2.Parse(nil)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "Too small") // Prefault fails validation
+
+		// Float64Ptr type - prefault value passes validation
+		schema3 := Float64Ptr().Min(50.0).Prefault(100.0)
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, 100.0, *result3) // Prefault passes validation
+
+		// Float64Ptr type - prefault value fails validation
+		schema4 := Float64Ptr().Min(50.0).Prefault(10.0)
+		_, err4 := schema4.Parse(nil)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small") // Prefault fails validation
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		// Float64 type
+		schema1 := Float64().Min(50.0).Prefault(100.0)
+
+		// Nil input triggers prefault
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, 100.0, result1)
+
+		// Non-nil input validation failure should not trigger prefault
+		_, err2 := schema1.Parse(10.0) // Less than Min(50.0)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "Too small")
+
+		// Float64Ptr type
+		schema2 := Float64Ptr().Min(50.0).Prefault(100.0)
+
+		// Nil input triggers prefault
+		result3, err3 := schema2.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, 100.0, *result3)
+
+		// Non-nil input validation failure should not trigger prefault
+		_, err4 := schema2.Parse(10.0) // Less than Min(50.0)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		// DefaultFunc should not be called for non-nil input
 		callCount := 0
-		schema := Float64().DefaultFunc(func() float64 {
+		schema1 := Float64().DefaultFunc(func() float64 {
 			callCount++
-			return 200.5
+			return 100.0
 		})
 
-		// Valid input should not call default function
-		result, err := schema.Parse(float64(100.5))
-		require.NoError(t, err)
-		assert.Equal(t, float64(100.5), result)
+		// Non-nil input should not call DefaultFunc
+		result1, err1 := schema1.Parse(50.0)
+		require.NoError(t, err1)
+		assert.Equal(t, 50.0, result1)
 		assert.Equal(t, 0, callCount)
-	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		schema := Float64().Prefault(200.5)
+		// Nil input should call DefaultFunc
+		result2, err2 := schema1.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, 100.0, result2)
+		assert.Equal(t, 1, callCount)
 
-		// Valid input should override prefault
-		result, err := schema.Parse(float64(100.5))
-		require.NoError(t, err)
-		assert.Equal(t, float64(100.5), result)
-	})
-
-	t.Run("prefault function", func(t *testing.T) {
-		schema := Float64().PrefaultFunc(func() float64 {
-			return 200.5
+		// PrefaultFunc should go through validation
+		schema2 := Float64().Min(50.0).PrefaultFunc(func() float64 {
+			return 100.0 // Valid value
 		})
+		result3, err3 := schema2.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, 100.0, result3)
 
-		// Valid input should override prefault
-		result, err := schema.Parse(float64(100.5))
-		require.NoError(t, err)
-		assert.Equal(t, float64(100.5), result)
+		// PrefaultFunc with invalid value should fail
+		schema3 := Float64().Min(50.0).PrefaultFunc(func() float64 {
+			return 10.0 // Invalid value
+		})
+		_, err4 := schema3.Parse(nil)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small")
+	})
+
+	// Test 6: Error handling - prefault validation failure
+	t.Run("Error handling - prefault validation failure", func(t *testing.T) {
+		// Prefault value fails validation, should return error directly
+		schema := Float64().Min(100.0).Prefault(50.0)
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+		// Should not try any other fallback
 	})
 }
 
@@ -1677,10 +1762,11 @@ func TestFloat_ComprehensiveTypeSafety(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, float64(99.9), *result)
 
-		// Test nil handling
+		// Test nil handling - Default should always win (Zod v4 behavior)
 		nilResult, err := withDefaultSchema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, nilResult)
+		require.NotNil(t, nilResult) // Default takes precedence over Nilable
+		assert.Equal(t, 10.5, *nilResult)
 	})
 
 	t.Run("All float types Optional modifier", func(t *testing.T) {
@@ -1784,10 +1870,11 @@ func TestFloat_TypeEvolutionChaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, float64(75.5), *result)
 
-		// Test nil handling
+		// Test nil handling - Default should always win (Zod v4 behavior)
 		nilResult, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, nilResult)
+		require.NotNil(t, nilResult) // Default takes precedence over Nilable
+		assert.Equal(t, float64(50.0), *nilResult)
 	})
 
 	t.Run("reverse type evolution: pointer to value schema", func(t *testing.T) {
@@ -2008,4 +2095,182 @@ func TestFloat_NonOptional(t *testing.T) {
 
 	_, err = ptrSchema.Parse(nil)
 	assert.Error(t, err)
+}
+
+// =============================================================================
+// StrictParse and MustStrictParse tests
+// =============================================================================
+
+func TestFloat_StrictParse(t *testing.T) {
+	t.Run("basic functionality float32", func(t *testing.T) {
+		schema := Float32()
+
+		// Test StrictParse with exact type match
+		result, err := schema.StrictParse(float32(42.5))
+		require.NoError(t, err)
+		assert.Equal(t, float32(42.5), result)
+		assert.IsType(t, float32(0), result)
+
+		// Test StrictParse with negative value
+		negResult, err := schema.StrictParse(float32(-10.5))
+		require.NoError(t, err)
+		assert.Equal(t, float32(-10.5), negResult)
+	})
+
+	t.Run("basic functionality float64", func(t *testing.T) {
+		schema := Float64()
+
+		// Test StrictParse with exact type match
+		result, err := schema.StrictParse(float64(123.456))
+		require.NoError(t, err)
+		assert.Equal(t, float64(123.456), result)
+		assert.IsType(t, float64(0), result)
+
+		// Test StrictParse with zero
+		zeroResult, err := schema.StrictParse(float64(0))
+		require.NoError(t, err)
+		assert.Equal(t, float64(0), zeroResult)
+	})
+
+	t.Run("with validation constraints", func(t *testing.T) {
+		schema := Float64().Min(10.0)
+
+		// Valid case
+		result, err := schema.StrictParse(float64(15.5))
+		require.NoError(t, err)
+		assert.Equal(t, float64(15.5), result)
+
+		// Invalid case - too small
+		_, err = schema.StrictParse(float64(5.0))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 10")
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := Float64Ptr()
+		floatVal := float64(99.99)
+
+		// Test with valid pointer input
+		result, err := schema.StrictParse(&floatVal)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, float64(99.99), *result)
+		assert.IsType(t, (*float64)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := Float32Ptr().Default(42.0)
+		var nilPtr *float32 = nil
+
+		// Test with nil input (should use default)
+		result, err := schema.StrictParse(nilPtr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, float32(42.0), *result)
+	})
+
+	t.Run("with prefault values", func(t *testing.T) {
+		schema := Float64Ptr().Min(100.0).Prefault(float64(200.0))
+		smallVal := float64(50.0) // Too small for Min(100.0)
+
+		// Test with validation failure (should NOT use prefault, should return error)
+		_, err := schema.StrictParse(&smallVal)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 100")
+
+		// Test with nil input (should use prefault)
+		result, err := schema.StrictParse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, float64(200.0), *result)
+	})
+
+	t.Run("special float values", func(t *testing.T) {
+		schema := Float64()
+
+		// Test infinity
+		infResult, err := schema.StrictParse(math.Inf(1))
+		require.NoError(t, err)
+		assert.True(t, math.IsInf(infResult, 1))
+
+		// Test negative infinity
+		negInfResult, err := schema.StrictParse(math.Inf(-1))
+		require.NoError(t, err)
+		assert.True(t, math.IsInf(negInfResult, -1))
+
+		// Test NaN
+		nanResult, err := schema.StrictParse(math.NaN())
+		require.NoError(t, err)
+		assert.True(t, math.IsNaN(nanResult))
+	})
+}
+
+func TestFloat_MustStrictParse(t *testing.T) {
+	t.Run("basic functionality float32", func(t *testing.T) {
+		schema := Float32()
+
+		// Test MustStrictParse with valid input
+		result := schema.MustStrictParse(float32(123.45))
+		assert.Equal(t, float32(123.45), result)
+		assert.IsType(t, float32(0), result)
+
+		// Test MustStrictParse with zero
+		zeroResult := schema.MustStrictParse(float32(0))
+		assert.Equal(t, float32(0), zeroResult)
+	})
+
+	t.Run("basic functionality float64", func(t *testing.T) {
+		schema := Float64()
+
+		// Test MustStrictParse with valid input
+		result := schema.MustStrictParse(float64(456.789))
+		assert.Equal(t, float64(456.789), result)
+		assert.IsType(t, float64(0), result)
+
+		// Test MustStrictParse with negative value
+		negResult := schema.MustStrictParse(float64(-99.99))
+		assert.Equal(t, float64(-99.99), negResult)
+	})
+
+	t.Run("panic behavior", func(t *testing.T) {
+		schema := Float64().Min(100.0)
+
+		// Test panic with validation failure
+		assert.Panics(t, func() {
+			schema.MustStrictParse(float64(50.0)) // Too small, should panic
+		})
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := Float32Ptr()
+		floatVal := float32(77.77)
+
+		// Test with valid pointer input
+		result := schema.MustStrictParse(&floatVal)
+		require.NotNil(t, result)
+		assert.Equal(t, float32(77.77), *result)
+		assert.IsType(t, (*float32)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := Float64Ptr().Default(float64(88.88))
+		var nilPtr *float64 = nil
+
+		// Test with nil input (should use default)
+		result := schema.MustStrictParse(nilPtr)
+		require.NotNil(t, result)
+		assert.Equal(t, float64(88.88), *result)
+	})
+
+	t.Run("special float values", func(t *testing.T) {
+		schema := Float64()
+
+		// Test infinity
+		infResult := schema.MustStrictParse(math.Inf(1))
+		assert.True(t, math.IsInf(infResult, 1))
+
+		// Test NaN
+		nanResult := schema.MustStrictParse(math.NaN())
+		assert.True(t, math.IsNaN(nanResult))
+	})
 }

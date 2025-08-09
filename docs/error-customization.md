@@ -1,6 +1,6 @@
 # Error Customization
 
-GoZod provides flexible error customization to create user-friendly validation messages. This document explains how to work with validation errors and customize error messages.
+GoZod provides flexible error customization to create user-friendly validation messages that match TypeScript Zod v4 patterns. This document explains how to work with validation errors and customize error messages following Go language conventions.
 
 ## Understanding ZodError
 
@@ -37,97 +37,128 @@ Each validation issue contains:
 - **Message** - Human-readable error description
 - **Path** - Field path where validation failed
 - **Input** - The invalid input value
-- **Context-specific properties** - Additional details accessible via getter methods
+- **Properties** - Additional context-specific metadata
 
-## Custom Error Messages
+## Schema-Level Custom Errors
 
-Every GoZod schema and validation method accepts custom error messages through `SchemaParams`:
+Every GoZod schema accepts custom error messages through the error parameter:
 
 ```go
-// Basic custom error message
+// String parameter shorthand
+schema := gozod.String("Please enter a valid string")
+
+// SchemaParams struct
 schema := gozod.String(gozod.SchemaParams{
     Error: "Please enter a valid string",
 })
 
-_, err := schema.Parse(42)
-if err != nil {
-    var zodErr *gozod.ZodError
-    if errors.As(err, &zodErr) {
-        fmt.Println(zodErr.Issues[0].Message) // "Please enter a valid string"
-    }
-}
-```
-
-## Where to Apply Custom Errors
-
-Custom error messages can be applied to any schema or validation method:
-
-```go
-// Schema constructors
-stringSchema := gozod.String(gozod.SchemaParams{Error: "Must be text"})
-numberSchema := gozod.Int(gozod.SchemaParams{Error: "Must be a number"})
-
-// Validation methods
-emailSchema := gozod.String().Email(gozod.SchemaParams{Error: "Invalid email address"})
-minLengthSchema := gozod.String().Min(5, gozod.SchemaParams{Error: "Too short"})
+// Validation method errors
+emailSchema := gozod.String().Email("Please enter a valid email address")
+minLengthSchema := gozod.String().Min(5, "Password must be at least 5 characters")
 
 // Collection validations
-arraySchema := gozod.Slice(gozod.String(), gozod.SchemaParams{Error: "Must be an array of strings"})
+arraySchema := gozod.Slice(gozod.String(), "Must be an array of strings")
+```
 
-// Object validations
-userSchema := gozod.Object(gozod.ObjectSchema{
-    "name": gozod.String(gozod.SchemaParams{Error: "Name is required"}),
-    "age":  gozod.Int().Min(18, gozod.SchemaParams{Error: "Must be at least 18"}),
+## Dynamic Error Functions
+
+Use error functions for context-aware messages:
+
+```go
+schema := gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
+    if issue.Input == nil {
+        return "Password is required"
+    }
+    current := len(fmt.Sprintf("%v", issue.Input))
+    minimum := issue.GetMinimum()
+    return fmt.Sprintf("Password too short (%d/%v characters)", current, minimum)
 })
 ```
 
-## Dynamic Error Messages
+## Per-Parse Error Customization
 
-Use functions to create context-aware error messages:
+Customize errors on a per-parse basis by passing an error function to the parse method:
 
 ```go
-schema := gozod.String().Min(8, gozod.SchemaParams{
+schema := gozod.String()
+
+result, err := schema.ParseWithContext(12, &gozod.ParseContext{
     Error: func(issue gozod.ZodRawIssue) string {
-        if issue.Input == nil {
-            return "Password is required"
-        }
-        current := len(fmt.Sprintf("%v", issue.Input))
-        required := issue.GetMinimum()
-        return fmt.Sprintf("Password too short (%d/%d characters)", current, required)
+        return "Custom per-parse error message"
     },
 })
 ```
 
-## Context-Aware Error Functions
+This has lower precedence than schema-level custom messages.
 
-Error functions receive detailed validation context:
+## Global Error Configuration
+
+Set global error customization using `gozod.Config()`:
+
+```go
+// Set global custom error map
+gozod.Config(&gozod.ZodConfig{
+    CustomError: func(issue gozod.ZodRawIssue) string {
+        switch issue.Code {
+        case "invalid_type":
+            return fmt.Sprintf("Expected %s, received %s", 
+                              issue.GetExpected(), issue.GetReceived())
+        case "too_small":
+            return fmt.Sprintf("Value too small (minimum: %v)", issue.GetMinimum())
+        case "too_big":
+            return fmt.Sprintf("Value too large (maximum: %v)", issue.GetMaximum())
+        default:
+            return fmt.Sprintf("Validation failed: %s", issue.Code)
+        }
+    },
+})
+```
+
+## Internationalization
+
+GoZod provides built-in locale support for error messages:
+
+```go
+import "github.com/kaptinlin/gozod/locales"
+
+// Set global locale to Chinese
+gozod.Config(locales.ZhCN())
+
+// All subsequent validation errors will be in Chinese
+_, err := gozod.String().Email().Parse("invalid-email")
+// Error message will be: "格式无效：请输入有效的电子邮件地址"
+```
+
+Available locales:
+- `locales.EN()` - English (default)
+- `locales.ZhCN()` - Simplified Chinese
+
+## Error Message Context
+
+Error functions receive detailed validation context through the `ZodRawIssue`:
 
 ```go
 userSchema := gozod.Object(gozod.ObjectSchema{
-    "username": gozod.String().Min(3, gozod.SchemaParams{
-        Error: func(issue gozod.ZodRawIssue) string {
-            switch issue.Code {
-            case "invalid_type":
-                return "Username must be text"
-            case "too_small":
-                return fmt.Sprintf("Username must be at least %v characters", issue.GetMinimum())
-            default:
-                return "Invalid username"
-            }
-        },
+    "username": gozod.String().Min(3, func(issue gozod.ZodRawIssue) string {
+        switch issue.Code {
+        case "invalid_type":
+            return "Username must be text"
+        case "too_small":
+            return fmt.Sprintf("Username must be at least %v characters", issue.GetMinimum())
+        default:
+            return "Invalid username"
+        }
     }),
-    "age": gozod.Int().Min(18, gozod.SchemaParams{
-        Error: func(issue gozod.ZodRawIssue) string {
-            if issue.Code == "too_small" {
-                return "Must be at least 18 years old"
-            }
-            return "Invalid age"
-        },
+    "age": gozod.Int().Min(18, func(issue gozod.ZodRawIssue) string {
+        if issue.Code == "too_small" {
+            return "Must be at least 18 years old"
+        }
+        return "Invalid age"
     }),
 })
 ```
 
-## Available Context Properties
+### Available Context Properties
 
 The `ZodRawIssue` provides validation context through getter methods:
 
@@ -166,7 +197,7 @@ if keys := issue.GetKeys(); len(keys) > 0 {
 
 ## Error Codes
 
-GoZod uses standardized error codes compatible with TypeScript Zod:
+GoZod uses standardized error codes compatible with TypeScript Zod v4:
 
 | Code | Description | Available Properties |
 |------|-------------|---------------------|
@@ -180,133 +211,28 @@ GoZod uses standardized error codes compatible with TypeScript Zod:
 | `invalid_value` | Value not in allowed set | `GetValues()` |
 | `custom` | Custom validation failed | - |
 
-## Form Validation Example
-
-```go
-package main
-
-import (
-    "errors"
-    "fmt"
-    "github.com/kaptinlin/gozod"
-)
-
-func validateUserForm(data map[string]any) error {
-    schema := gozod.Object(gozod.ObjectSchema{
-        "username": gozod.String().Min(3, gozod.SchemaParams{
-            Error: "Username must be at least 3 characters",
-        }),
-        "email": gozod.String().Email(gozod.SchemaParams{
-            Error: "Please enter a valid email address",
-        }),
-        "password": gozod.String().Min(8, gozod.SchemaParams{
-            Error: func(issue gozod.ZodRawIssue) string {
-                return fmt.Sprintf("Password must be at least %v characters", issue.GetMinimum())
-            },
-        }),
-        "age": gozod.Int().Min(18, gozod.SchemaParams{
-            Error: "You must be at least 18 years old",
-        }),
-    })
-    
-    _, err := schema.Parse(data)
-    if err != nil {
-        var zodErr *gozod.ZodError
-        if errors.As(err, &zodErr) {
-            fmt.Println("Validation errors:")
-            for _, issue := range zodErr.Issues {
-                field := "form"
-                if len(issue.Path) > 0 {
-                    field = fmt.Sprintf("%v", issue.Path[0])
-                }
-                fmt.Printf("- %s: %s\n", field, issue.Message)
-            }
-        }
-        return err
-    }
-    
-    return nil
-}
-
-func main() {
-    invalidData := map[string]any{
-        "username": "ab",
-        "email":    "not-an-email",
-        "password": "short",
-        "age":      16,
-    }
-    
-    validateUserForm(invalidData)
-    // Output:
-    // Validation errors:
-    // - username: Username must be at least 3 characters
-    // - email: Please enter a valid email address
-    // - password: Password must be at least 8 characters
-    // - age: You must be at least 18 years old
-}
-```
-
-## Global Error Configuration
-
-GoZod ships with built-in locales for internationalization (i18n). To set a global error language, simply pass a locale-specific config to `gozod.Config()`.
-
-```go
-import "github.com/kaptinlin/gozod/locales"
-
-// Set the global error language to Chinese.
-gozod.Config(locales.ZhCN())
-
-// All subsequent validation errors will be in Chinese.
-_, err := gozod.String().Email().Parse("invalid-email")
-// err.Error() will now be in Chinese: "格式无效：请输入有效的电子邮件地址"
-```
-
-This is the recommended way to handle internationalization. It has lower precedence than `CustomError` but higher than the default built-in messages.
-
-You can also define your own `CustomError` map for more specific global overrides. This takes highest priority.
-
-```go
-gozod.Config(&gozod.ZodConfig{
-    CustomError: func(issue gozod.ZodRawIssue) string {
-        switch issue.Code {
-        case "invalid_type":
-            return fmt.Sprintf("Expected %s, received %s", 
-                              issue.GetExpected(), issue.GetReceived())
-        case "too_small":
-            return fmt.Sprintf("Value too small (minimum: %v)", issue.GetMinimum())
-        case "too_big":
-            return fmt.Sprintf("Value too large (maximum: %v)", issue.GetMaximum())
-        default:
-            return fmt.Sprintf("Validation failed: %s", issue.Code)
-        }
-    },
-})
-```
-
 ## Error Message Precedence
 
-GoZod resolves error messages using this priority order:
+GoZod resolves error messages using this priority order (highest to lowest):
 
-1. **Schema-level error** (highest priority)
-2. **ParseContext.Error** 
-3. **Global CustomError**
-4. **Global LocaleError**
-5. **Default error message** (lowest priority)
+1. **Schema-level error** - Custom messages defined in schemas
+2. **Per-parse error** - Custom error functions passed to Parse methods
+3. **Global CustomError** - Global error map set via `gozod.Config()`
+4. **Global LocaleError** - Locale-specific error messages
+5. **Default error message** - Built-in English messages
 
 ```go
 // Schema-level error (highest priority)
-schema := gozod.String(gozod.SchemaParams{
-    Error: "Schema-level error",
-})
+schema := gozod.String("Schema-level error")
 
-// ParseContext error (second priority)
+// Per-parse error (second priority)
 ctx := &gozod.ParseContext{
     Error: func(issue gozod.ZodRawIssue) string {
         return "Context-level error"
     },
 }
 
-_, err := schema.Parse(42, ctx)
+_, err := schema.ParseWithContext(42, ctx)
 // Uses "Schema-level error" (highest priority)
 ```
 
@@ -318,14 +244,10 @@ Write clear, actionable error messages:
 
 ```go
 // ❌ Technical message
-gozod.String().Email(gozod.SchemaParams{
-    Error: "Email format validation failed",
-})
+gozod.String().Email("Email format validation failed")
 
 // ✅ User-friendly message
-gozod.String().Email(gozod.SchemaParams{
-    Error: "Please enter a valid email address",
-})
+gozod.String().Email("Please enter a valid email address")
 ```
 
 ### 2. Provide Context
@@ -333,13 +255,11 @@ gozod.String().Email(gozod.SchemaParams{
 Include helpful context in error messages:
 
 ```go
-gozod.String().Min(8, gozod.SchemaParams{
-    Error: func(issue gozod.ZodRawIssue) string {
-        current := len(fmt.Sprintf("%v", issue.Input))
-        required := issue.GetMinimum()
-        return fmt.Sprintf("Password must be at least %v characters (got %d)", 
-                          required, current)
-    },
+gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
+    current := len(fmt.Sprintf("%v", issue.Input))
+    required := issue.GetMinimum()
+    return fmt.Sprintf("Password must be at least %v characters (got %d)", 
+                      required, current)
 })
 ```
 
@@ -352,13 +272,11 @@ func formatFieldError(fieldName string, requirement string) string {
     return fmt.Sprintf("%s %s", fieldName, requirement)
 }
 
-usernameSchema := gozod.String().Min(3, gozod.SchemaParams{
-    Error: formatFieldError("Username", "must be at least 3 characters"),
-})
+usernameSchema := gozod.String().Min(3, 
+    formatFieldError("Username", "must be at least 3 characters"))
 
-passwordSchema := gozod.String().Min(8, gozod.SchemaParams{
-    Error: formatFieldError("Password", "must be at least 8 characters"),
-})
+passwordSchema := gozod.String().Min(8, 
+    formatFieldError("Password", "must be at least 8 characters"))
 ```
 
 ### 4. Handle Different Error Types
@@ -385,8 +303,8 @@ func createFieldError(fieldName string) func(gozod.ZodRawIssue) string {
 }
 
 userSchema := gozod.Object(gozod.ObjectSchema{
-    "username": gozod.String().Min(3, gozod.SchemaParams{Error: createFieldError("Username")}),
-    "email":    gozod.String().Email(gozod.SchemaParams{Error: createFieldError("Email")}),
+    "username": gozod.String().Min(3, createFieldError("Username")),
+    "email":    gozod.String().Email(createFieldError("Email")),
 })
 ```
 
@@ -397,20 +315,12 @@ userSchema := gozod.Object(gozod.ObjectSchema{
 ```go
 profileSchema := gozod.Object(gozod.ObjectSchema{
     "personal": gozod.Object(gozod.ObjectSchema{
-        "firstName": gozod.String(gozod.SchemaParams{
-            Error: "First name is required",
-        }),
-        "lastName": gozod.String(gozod.SchemaParams{
-            Error: "Last name is required",
-        }),
+        "firstName": gozod.String("First name is required"),
+        "lastName": gozod.String("Last name is required"),
     }),
     "contact": gozod.Object(gozod.ObjectSchema{
-        "email": gozod.String().Email(gozod.SchemaParams{
-            Error: "Valid email address required",
-        }),
-        "phone": gozod.String().Min(10, gozod.SchemaParams{
-            Error: "Phone number must be at least 10 digits",
-        }),
+        "email": gozod.String().Email("Valid email address required"),
+        "phone": gozod.String().Min(10, "Phone number must be at least 10 digits"),
     }),
 })
 ```
@@ -418,24 +328,56 @@ profileSchema := gozod.Object(gozod.ObjectSchema{
 ### Conditional Error Messages
 
 ```go
-ageSchema := gozod.Int(gozod.SchemaParams{
-    Error: func(issue gozod.ZodRawIssue) string {
-        if issue.Code == "invalid_type" {
-            if issue.Input == nil {
-                return "Age is required"
-            }
-            return "Age must be a number"
+ageSchema := gozod.Int(func(issue gozod.ZodRawIssue) string {
+    switch issue.Code {
+    case "invalid_type":
+        if issue.Input == nil {
+            return "Age is required"
         }
-        if issue.Code == "too_small" {
-            minimum := issue.GetMinimum()
-            if minimum != nil && minimum.(int) == 18 {
-                return "You must be at least 18 years old to register"
-            }
-            return fmt.Sprintf("Age must be at least %v", minimum)
+        return "Age must be a number"
+    case "too_small":
+        minimum := issue.GetMinimum()
+        if minimum != nil && minimum.(int) == 18 {
+            return "You must be at least 18 years old to register"
         }
+        return fmt.Sprintf("Age must be at least %v", minimum)
+    default:
         return "Invalid age"
-    },
+    }
 }).Min(18)
 ```
 
-Error customization in GoZod provides the flexibility to create user-friendly validation experiences. By leveraging custom error messages, context-aware functions, and proper error handling patterns, you can build applications that provide clear guidance when validation fails.
+### Form Validation Example
+
+```go
+func validateUserForm(data map[string]any) error {
+    schema := gozod.Object(gozod.ObjectSchema{
+        "username": gozod.String().Min(3, "Username must be at least 3 characters"),
+        "email": gozod.String().Email("Please enter a valid email address"),
+        "password": gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
+            return fmt.Sprintf("Password must be at least %v characters", issue.GetMinimum())
+        }),
+        "age": gozod.Int().Min(18, "You must be at least 18 years old"),
+    })
+    
+    _, err := schema.Parse(data)
+    if err != nil {
+        var zodErr *gozod.ZodError
+        if errors.As(err, &zodErr) {
+            fmt.Println("Validation errors:")
+            for _, issue := range zodErr.Issues {
+                field := "form"
+                if len(issue.Path) > 0 {
+                    field = fmt.Sprintf("%v", issue.Path[0])
+                }
+                fmt.Printf("- %s: %s\n", field, issue.Message)
+            }
+        }
+        return err
+    }
+    
+    return nil
+}
+```
+
+Error customization in GoZod provides the flexibility to create user-friendly validation experiences that follow Go language conventions while maintaining compatibility with TypeScript Zod v4 patterns. By leveraging custom error messages, context-aware functions, and proper error handling patterns, you can build applications that provide clear guidance when validation fails.

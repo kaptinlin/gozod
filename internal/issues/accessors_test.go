@@ -426,11 +426,11 @@ func TestAccessorIntegration(t *testing.T) {
 		assert.Equal(t, core.ZodTypeNumber, received)
 	})
 
-	t.Run("accessor methods work with creation helpers", func(t *testing.T) {
-		// Test that creation helpers produce issues with working accessors
-		invalidTypeIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
-		tooBigIssue := CreateTooBigIssue(100, true, "number", 150)
-		formatIssue := CreateInvalidFormatIssue("email", "invalid@", nil)
+	t.Run("accessor methods work with raw issues", func(t *testing.T) {
+		// Test that raw issues work with accessors
+		invalidTypeIssue := NewRawIssue(core.InvalidType, "test", WithExpected("string"), WithReceived("number"))
+		tooBigIssue := NewRawIssue(core.TooBig, "150", WithOrigin("number"), WithMaximum(100), WithInclusive(true))
+		formatIssue := NewRawIssue(core.InvalidFormat, "invalid@", WithFormat("email"))
 
 		// Verify accessors work correctly
 		assert.Equal(t, "string", GetRawIssueExpected(invalidTypeIssue))

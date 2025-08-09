@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -71,34 +73,112 @@ func (z *ZodStruct[T, R]) GetCatchall() core.ZodSchema {
 	return nil
 }
 
-// Parse validates input using struct-specific parsing logic
+// Parse validates input using struct-specific parsing logic with engine.ParseComplex
 func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
+	parseCtx := core.NewParseContext()
 	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
 	}
 
-	// Handle nil input for optional/nilable schemas or pointer constraint types
-	if input == nil {
-		var zero R
-		// Check if R is a pointer type (like *T)
-		var zeroR R
-		_, isConstraintPtr := any(zeroR).(*T)
+	// Check if constraint type R is a pointer type
+	var zeroR R
+	isPointerConstraint := reflect.TypeOf(zeroR).Kind() == reflect.Ptr
 
-		if z.internals.Optional || z.internals.Nilable || isConstraintPtr {
+	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParseComplex
+	// But only if no other modifiers (Optional, Nilable, Prefault) are set
+	originalInternals := &z.internals.ZodTypeInternals
+	if isPointerConstraint &&
+		!originalInternals.Optional &&
+		!originalInternals.Nilable &&
+		originalInternals.PrefaultValue == nil &&
+		originalInternals.PrefaultFunc == nil {
+		// Create a copy of internals with Optional flag temporarily enabled
+		modifiedInternals := *originalInternals
+		modifiedInternals.Optional = true
+		originalInternals = &modifiedInternals
+	}
+
+	result, err := engine.ParseComplex[T](
+		input,
+		originalInternals,
+		core.ZodTypeStruct,
+		z.extractStructForEngine,
+		z.extractStructPtrForEngine,
+		z.validateStructForEngine,
+		parseCtx,
+	)
+	if err != nil {
+		var zero R
+		// Check if this is a generic struct type error that we can improve
+		if errStr := err.Error(); strings.Contains(errStr, "Invalid input: expected struct, received") {
+			// Generate more specific error with actual type information
+			return zero, z.createStructTypeError(input, parseCtx)
+		}
+		return zero, err
+	}
+
+	// Convert result to constraint type R
+	if structVal, ok := result.(T); ok {
+		return convertToStructConstraintType[T, R](structVal), nil
+	}
+
+	// Handle pointer to T
+	if structPtr, ok := result.(*T); ok {
+		if structPtr == nil {
+			var zero R
 			return zero, nil
 		}
-		return zero, fmt.Errorf("struct value cannot be nil")
+		return convertToStructConstraintType[T, R](*structPtr), nil
 	}
 
-	return z.parseGoStruct(input, z.internals.Checks, parseCtx)
+	// Handle nil result for optional/nilable schemas
+	if result == nil {
+		var zero R
+		return zero, nil
+	}
+
+	// This should not happen in well-formed schemas
+	var zero R
+	return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", result), "struct", input, parseCtx)
 }
 
 // MustParse validates the input value and panics on failure
 func (z *ZodStruct[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodStruct[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput := convertToStructConstraintType[T, R](input)
+
+	result, err := engine.ParseComplexStrict[T, R](
+		constraintInput,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeStruct,
+		z.extractStructForEngine,
+		z.extractStructPtrForEngine,
+		z.validateStructForEngine,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodStruct[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -423,6 +503,15 @@ func extractStructValue[T any, R any](value R) T {
 func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
+	// Handle nil values for pointer types
+	if value == nil {
+		if _, ok := any(zero).(*T); ok {
+			// R is *T, return nil pointer
+			return zero, true
+		}
+		return zero, false
+	}
+
 	// Direct type match
 	if r, ok := any(value).(R); ok { //nolint:unconvert
 		return r, true
@@ -491,16 +580,35 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 }
 
 // =============================================================================
-// VALIDATION LOGIC
+// ENGINE INTEGRATION METHODS
 // =============================================================================
 
-// parseGoStruct handles direct Go struct validation
-func (z *ZodStruct[T, R]) parseGoStruct(input any, checks []core.ZodCheck, ctx *core.ParseContext) (R, error) {
-	// Allow map inputs by converting them to struct T when possible
+// extractStructForEngine extracts struct value T from input for engine processing
+func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
+	var zero T
+
+	// Handle nil input
+	if input == nil {
+		return zero, false
+	}
+
+	// Handle direct type T
+	if structVal, ok := input.(T); ok {
+		return structVal, true
+	}
+
+	// Handle pointer to T
+	if val := reflect.ValueOf(input); val.Kind() == reflect.Ptr && !val.IsNil() {
+		if structVal, ok := val.Elem().Interface().(T); ok {
+			return structVal, true
+		}
+	}
+
+	// Handle map conversion
 	switch m := input.(type) {
 	case map[string]any:
 		if converted, ok := convertMapToStructStrict[T](m); ok {
-			input = converted
+			return converted, true
 		}
 	case map[any]any:
 		strMap := make(map[string]any)
@@ -510,168 +618,138 @@ func (z *ZodStruct[T, R]) parseGoStruct(input any, checks []core.ZodCheck, ctx *
 			}
 		}
 		if converted, ok := convertMapToStructStrict[T](strMap); ok {
-			input = converted
+			return converted, true
 		}
 	}
 
-	var zero R
-
-	// Check if the constraint type R is a pointer type
-	var isConstraintPtr bool
-	var zeroR R
-	_, isConstraintPtr = any(zeroR).(*T)
-
-	if isConstraintPtr {
-		// R is *T, so we expect pointer input or we can accept T and convert to *T
-		if input == nil {
-			return zero, nil // Return nil pointer
-		}
-
-		// If input is a pointer, validate it
-		val := reflect.ValueOf(input)
-		if val.Kind() == reflect.Ptr {
-			if val.IsNil() {
-				return zero, nil // Return nil pointer
-			}
-
-			// Get the underlying struct value for validation
-			structValue := val.Elem().Interface()
-			if !z.validateGoStructType(structValue) {
-				return zero, fmt.Errorf("expected pointer to struct of type %T, got %T", *new(T), input)
-			}
-
-			// Validate struct fields if schema is defined
-			if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
-				if err := z.validateStructFields(structValue, ctx); err != nil {
-					return zero, err
-				}
-			}
-
-			// Run validation checks on the underlying struct
-			if len(checks) > 0 {
-				transformedValue, err := engine.ApplyChecks(structValue, checks, ctx)
-				if err != nil {
-					return zero, err
-				}
-				// For Go struct types, we need to handle transformation carefully
-				if transformedStruct, ok := transformedValue.(T); ok {
-					structValue = transformedStruct
-					// Create new pointer for the transformed struct
-					return any(&structValue).(R), nil //nolint:unconvert
-				}
-			}
-
-			// Return the original pointer
-			return any(input).(R), nil //nolint:unconvert
-		} else {
-			// Input is not a pointer, validate as T and convert to *T
-			if !z.validateGoStructType(input) {
-				return zero, fmt.Errorf("expected struct of type %T, got %T", *new(T), input)
-			}
-
-			// Validate struct fields if schema is defined
-			if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
-				if err := z.validateStructFields(input, ctx); err != nil {
-					return zero, err
-				}
-			}
-
-			// Run validation checks
-			structValue := input
-			if len(checks) > 0 {
-				transformedValue, err := engine.ApplyChecks(structValue, checks, ctx)
-				if err != nil {
-					return zero, err
-				}
-				if transformedStruct, ok := transformedValue.(T); ok {
-					structValue = transformedStruct
-				}
-			}
-
-			// Convert to pointer
-			return convertToStructConstraintType[T, R](any(structValue).(T)), nil //nolint:unconvert
-		}
-	} else {
-		// R is T, so we expect direct struct input or pointer that we can dereference
-		if input == nil {
-			return zero, fmt.Errorf("struct cannot be nil")
-		}
-
-		// Handle pointer input - dereference to get T
-		val := reflect.ValueOf(input)
-		if val.Kind() == reflect.Ptr {
-			if val.IsNil() {
-				return zero, fmt.Errorf("struct cannot be nil")
-			}
-			input = val.Elem().Interface()
-		}
-
-		// Validate that input is of the expected type T
-		if !z.validateGoStructType(input) {
-			return zero, fmt.Errorf("expected struct of type %T, got %T", *new(T), input)
-		}
-
-		// Validate struct fields if schema is defined
-		if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
-			if err := z.validateStructFields(input, ctx); err != nil {
-				return zero, err
-			}
-		}
-
-		// Run validation checks using the engine
-		if len(checks) > 0 {
-			transformedValue, err := engine.ApplyChecks(input, checks, ctx)
-			if err != nil {
-				return zero, err
-			}
-			// For Go struct types, use the transformed value if it's the right type
-			if transformedStruct, ok := transformedValue.(T); ok {
-				input = transformedStruct
-			}
-		}
-
-		// Convert to constraint type R
-		return convertToStructConstraintType[T, R](any(input).(T)), nil //nolint:unconvert
-	}
+	return zero, false
 }
 
-// validateGoStructType validates that the input is of the expected Go struct type
-func (z *ZodStruct[T, R]) validateGoStructType(input any) bool {
+// createStructTypeError creates a specific struct type error with concrete type information
+func (z *ZodStruct[T, R]) createStructTypeError(input any, ctx *core.ParseContext) error {
+	var zero T
+	expectedType := reflect.TypeOf(zero)
+	inputType := reflect.TypeOf(input)
+
+	// Ensure we have a valid context for the error
+	if ctx == nil {
+		ctx = core.NewParseContext()
+	}
+
+	if expectedType != nil && inputType != nil {
+		message := fmt.Sprintf("Invalid input: expected struct of type %s, got %s", expectedType, inputType)
+		return issues.CreateCustomError(message, map[string]any{
+			"expected": expectedType.String(),
+			"received": inputType.String(),
+		}, input, ctx)
+	}
+
+	// Fallback to generic error
+	return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
+}
+
+// extractStructPtrForEngine extracts pointer to struct *T from input for engine processing
+func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
+	// Handle nil input
 	if input == nil {
-		return false
+		return nil, true
 	}
 
-	// Get the type of T
-	var zeroT T
-	expectedType := reflect.TypeOf(zeroT)
-	actualType := reflect.TypeOf(input)
+	// Handle direct *T
+	if structPtr, ok := input.(*T); ok {
+		return structPtr, true
+	}
 
-	// Check if types match
-	return actualType == expectedType
+	// Handle T and convert to *T
+	if structVal, ok := input.(T); ok {
+		return &structVal, true
+	}
+
+	// Handle pointer to T via reflection
+	if val := reflect.ValueOf(input); val.Kind() == reflect.Ptr && !val.IsNil() {
+		if structVal, ok := val.Elem().Interface().(T); ok {
+			structCopy := structVal
+			return &structCopy, true
+		}
+	}
+
+	// Handle map conversion
+	switch m := input.(type) {
+	case map[string]any:
+		if converted, ok := convertMapToStructStrict[T](m); ok {
+			return &converted, true
+		}
+	case map[any]any:
+		strMap := make(map[string]any)
+		for k, v := range m {
+			if ks, ok := k.(string); ok {
+				strMap[ks] = v
+			}
+		}
+		if converted, ok := convertMapToStructStrict[T](strMap); ok {
+			return &converted, true
+		}
+	}
+
+	return nil, false
 }
 
-// validateStructFields validates struct fields against the defined schema
+// validateStructForEngine validates struct value using schema checks
+func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Validate struct fields if schema is defined
+	if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
+		if err := z.validateStructFields(any(value), ctx); err != nil {
+			return value, err
+		}
+	}
+
+	// Apply validation checks
+	if len(checks) > 0 {
+		transformedValue, err := engine.ApplyChecks(value, checks, ctx)
+		if err != nil {
+			return value, err
+		}
+
+		// Use reflection to check if transformed value can be converted to T
+		transformedVal := reflect.ValueOf(transformedValue)
+		if transformedVal.IsValid() && !transformedVal.IsZero() {
+			if transformedVal.Type().AssignableTo(reflect.TypeOf(value)) {
+				return transformedVal.Interface().(T), nil
+			}
+		}
+	}
+
+	return value, nil
+}
+
+// =============================================================================
+// VALIDATION LOGIC
+// =============================================================================
+
+// validateStructFields validates struct fields against the defined schema with multiple error collection (TypeScript Zod v4 behavior adapted for Go structs)
 func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext) error {
 	if z.internals.Shape == nil || len(z.internals.Shape) == 0 {
 		return nil // No field schemas defined
 	}
 
+	var collectedIssues []core.ZodRawIssue
+
 	// Use reflection to access struct fields
 	val := reflect.ValueOf(input)
 	if val.Kind() == reflect.Ptr {
 		if val.IsNil() {
-			return fmt.Errorf("cannot validate fields of nil struct")
+			return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 		}
 		val = val.Elem()
 	}
 
 	if val.Kind() != reflect.Struct {
-		return fmt.Errorf("input is not a struct, got %T", input)
+		return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 	}
 
 	structType := val.Type()
 
-	// Validate each field defined in the schema
+	// Validate each field defined in the schema and collect all errors (TypeScript Zod v4 behavior)
 	for fieldName, fieldSchema := range z.internals.Shape {
 		if fieldSchema == nil {
 			continue // Skip nil schemas
@@ -682,7 +760,13 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 		if !found {
 			// Field not found in struct
 			if !z.isFieldOptional(fieldSchema, fieldName) {
-				return fmt.Errorf("required field '%s' not found in struct", fieldName)
+				// Create missing required field issue
+				rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Missing required struct field: %s", fieldName), map[string]any{
+					"expected": "nonoptional",
+					"received": "undefined",
+				}, nil)
+				rawIssue.Path = []any{fieldName}
+				collectedIssues = append(collectedIssues, rawIssue)
 			}
 			continue
 		}
@@ -692,10 +776,49 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 			continue
 		}
 
-		// Validate the field value using its schema
-		if err := z.validateField(fieldValue.Interface(), fieldSchema, ctx, fieldName); err != nil {
-			return fmt.Errorf("field '%s' validation failed: %w", fieldName, err)
+		// Validate field directly to preserve original error codes
+		if err := z.validateFieldDirect(fieldValue.Interface(), fieldSchema, ctx); err != nil {
+			// Collect field validation errors with path prefix (TypeScript Zod v4 behavior adapted for Go structs)
+			var zodErr *issues.ZodError
+			if errors.As(err, &zodErr) {
+				// Propagate all issues from field validation with path prefix
+				for _, fieldIssue := range zodErr.Issues {
+					// Create raw issue preserving original code and essential properties
+					rawIssue := core.ZodRawIssue{
+						Code:       fieldIssue.Code,
+						Message:    fieldIssue.Message,
+						Input:      fieldIssue.Input,
+						Path:       append([]any{fieldName}, fieldIssue.Path...), // Prepend field name to path
+						Properties: make(map[string]any),
+					}
+					// Copy essential properties from ZodIssue to ZodRawIssue
+					if fieldIssue.Minimum != nil {
+						rawIssue.Properties["minimum"] = fieldIssue.Minimum
+					}
+					if fieldIssue.Maximum != nil {
+						rawIssue.Properties["maximum"] = fieldIssue.Maximum
+					}
+					if fieldIssue.Expected != "" {
+						rawIssue.Properties["expected"] = fieldIssue.Expected
+					}
+					if fieldIssue.Received != "" {
+						rawIssue.Properties["received"] = fieldIssue.Received
+					}
+					rawIssue.Properties["inclusive"] = fieldIssue.Inclusive
+					collectedIssues = append(collectedIssues, rawIssue)
+				}
+			} else {
+				// Handle non-ZodError by creating a raw issue with field path
+				rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, fieldValue.Interface())
+				rawIssue.Path = []any{fieldName}
+				collectedIssues = append(collectedIssues, rawIssue)
+			}
 		}
+	}
+
+	// If we collected any issues, return them as a combined error
+	if len(collectedIssues) > 0 {
+		return issues.CreateArrayValidationIssues(collectedIssues)
 	}
 
 	return nil
@@ -730,10 +853,15 @@ func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType refl
 	return reflect.Value{}, false
 }
 
-// validateField validates a single field using its schema (similar to object.go)
-func (z *ZodStruct[T, R]) validateField(element any, schema any, ctx *core.ParseContext, fieldName string) error {
+// validateFieldDirect validates a single field using its schema without wrapping errors (preserves original error codes)
+func (z *ZodStruct[T, R]) validateFieldDirect(element any, schema any, ctx *core.ParseContext) error {
 	if schema == nil {
 		return nil
+	}
+
+	// Ensure we have a valid context
+	if ctx == nil {
+		ctx = core.NewParseContext()
 	}
 
 	// Try using reflection to call Parse method - this handles all schema types
@@ -765,7 +893,7 @@ func (z *ZodStruct[T, R]) validateField(element any, schema any, ctx *core.Parse
 		// Check if there's an error (second return value)
 		if errInterface := results[1].Interface(); errInterface != nil {
 			if err, ok := errInterface.(error); ok {
-				return err
+				return err // Return the error directly without wrapping
 			}
 		}
 	}
@@ -818,6 +946,9 @@ func isZeroValue(v any) bool {
 		// For structs, compare with zero value of the same type
 		zeroVal := reflect.Zero(val.Type())
 		return reflect.DeepEqual(val.Interface(), zeroVal.Interface())
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.UnsafePointer:
+		return false
 	default:
 		// For other types, use reflect.Zero comparison
 		zeroVal := reflect.Zero(val.Type())

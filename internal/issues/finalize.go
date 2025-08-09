@@ -85,6 +85,12 @@ func ExtractSchemaLevelError(iss core.ZodRawIssue) string {
 
 	// Try to extract error mapping from different types of schema internals
 	switch inst := iss.Inst.(type) {
+	case *core.ZodTypeInternals:
+		// Handle direct ZodTypeInternals (most common case from ParsePrimitive)
+		if inst.Error != nil {
+			return (*inst.Error)(iss)
+		}
+
 	case *core.ZodCheckInternals:
 		// Handle check internals directly
 		if inst.Def != nil && inst.Def.Error != nil {
@@ -231,6 +237,15 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 
 	// Handle params map with nil default
 	issue.Params = mapx.GetMapDefault(properties, "params", nil)
+
+	// Handle element_error for InvalidElement issues
+	if elementError, exists := properties["element_error"]; exists && elementError != nil {
+		if rawIssue, ok := elementError.(core.ZodRawIssue); ok {
+			// Convert the raw issue to a finalized issue
+			finalizedElementIssue := FinalizeIssue(rawIssue, nil, nil)
+			issue.Issues = []core.ZodIssue{finalizedElementIssue}
+		}
+	}
 }
 
 // =============================================================================

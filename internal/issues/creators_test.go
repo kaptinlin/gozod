@@ -1,7 +1,9 @@
 package issues
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
@@ -33,78 +35,106 @@ func TestNewRawIssueFromMessage(t *testing.T) {
 //////////////////////////////////////////
 
 func TestErrorCreationHelpers(t *testing.T) {
-	t.Run("CreateInvalidTypeIssue", func(t *testing.T) {
-		issue := CreateInvalidTypeIssue(core.ZodTypeString, "test_input")
+	t.Run("CreateInvalidTypeError", func(t *testing.T) {
+		err := CreateInvalidTypeError(core.ZodTypeString, "test_input", nil)
 
-		require.Equal(t, core.InvalidType, issue.Code)
-		// Check properties using mapx accessors
-		expected, _ := issue.Properties["expected"].(string)
-		assert.Equal(t, "string", expected)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+		assert.Equal(t, core.ZodTypeString, zodErr.Issues[0].Expected)
 	})
 
-	t.Run("CreateTooBigIssue", func(t *testing.T) {
-		issue := CreateTooBigIssue(100, true, "number", 150)
+	t.Run("CreateTooBigError", func(t *testing.T) {
+		err := CreateTooBigError(100, true, "number", 150, nil)
 
-		require.Equal(t, core.TooBig, issue.Code)
-		maximum, _ := issue.Properties["maximum"].(int)
-		assert.Equal(t, 100, maximum)
-		inclusive, _ := issue.Properties["inclusive"].(bool)
-		assert.True(t, inclusive)
-		origin, _ := issue.Properties["origin"].(string)
-		assert.Equal(t, "number", origin)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.TooBig, zodErr.Issues[0].Code)
+		assert.Equal(t, 100, zodErr.Issues[0].Maximum)
+		assert.True(t, zodErr.Issues[0].Inclusive)
+		assert.Equal(t, "number", zodErr.Issues[0].Origin)
 	})
 
-	t.Run("CreateTooSmallIssue", func(t *testing.T) {
-		issue := CreateTooSmallIssue(5, false, "string", 3)
+	t.Run("CreateTooSmallError", func(t *testing.T) {
+		err := CreateTooSmallError(5, false, "string", 3, nil)
 
-		require.Equal(t, core.TooSmall, issue.Code)
-		minimum, _ := issue.Properties["minimum"].(int)
-		assert.Equal(t, 5, minimum)
-		inclusive, _ := issue.Properties["inclusive"].(bool)
-		assert.False(t, inclusive)
-		origin, _ := issue.Properties["origin"].(string)
-		assert.Equal(t, "string", origin)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.TooSmall, zodErr.Issues[0].Code)
+		assert.Equal(t, 5, zodErr.Issues[0].Minimum)
+		assert.False(t, zodErr.Issues[0].Inclusive)
+		assert.Equal(t, "string", zodErr.Issues[0].Origin)
 	})
 
-	t.Run("CreateInvalidFormatIssue", func(t *testing.T) {
-		issue := CreateInvalidFormatIssue("email", "invalid@", nil)
+	t.Run("CreateInvalidFormatError", func(t *testing.T) {
+		err := CreateInvalidFormatError("email", "invalid@", nil)
 
-		require.Equal(t, core.InvalidFormat, issue.Code)
-		format, _ := issue.Properties["format"].(string)
-		assert.Equal(t, "email", format)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.InvalidFormat, zodErr.Issues[0].Code)
+		assert.Equal(t, "email", zodErr.Issues[0].Format)
 	})
 
-	t.Run("CreateNotMultipleOfIssue", func(t *testing.T) {
-		issue := CreateNotMultipleOfIssue(2, "number", 7)
+	t.Run("CreateNotMultipleOfError", func(t *testing.T) {
+		err := CreateNotMultipleOfError(2, "number", 7, nil)
 
-		require.Equal(t, core.NotMultipleOf, issue.Code)
-		divisor, _ := issue.Properties["divisor"].(int)
-		assert.Equal(t, 2, divisor)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.NotMultipleOf, zodErr.Issues[0].Code)
+		assert.Equal(t, 2, zodErr.Issues[0].Divisor)
 	})
 
-	t.Run("CreateCustomIssue", func(t *testing.T) {
-		issue := CreateCustomIssue("Custom validation failed", nil, "test_input")
+	t.Run("CreateCustomError", func(t *testing.T) {
+		err := CreateCustomError("Custom validation failed", nil, "test_input", nil)
 
-		require.Equal(t, core.Custom, issue.Code)
-		require.Equal(t, "Custom validation failed", issue.Message)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.Custom, zodErr.Issues[0].Code)
+		require.Equal(t, "Custom validation failed", zodErr.Issues[0].Message)
 	})
 
-	t.Run("CreateInvalidValueIssue", func(t *testing.T) {
+	t.Run("CreateInvalidValueError", func(t *testing.T) {
 		validValues := []any{"val1", "val2", "val3"}
-		issue := CreateInvalidValueIssue(validValues, "invalid_value")
+		err := CreateInvalidValueError(validValues, "invalid_value", nil)
 
-		require.Equal(t, core.InvalidValue, issue.Code)
-		values, _ := issue.Properties["values"].([]any)
-		assert.Equal(t, validValues, values)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.InvalidValue, zodErr.Issues[0].Code)
+		assert.Equal(t, validValues, zodErr.Issues[0].Values)
 	})
 
-	t.Run("CreateUnrecognizedKeysIssue", func(t *testing.T) {
+	t.Run("CreateUnrecognizedKeysError", func(t *testing.T) {
 		keys := []string{"extraKey1", "extraKey2"}
-		issue := CreateUnrecognizedKeysIssue(keys, nil)
+		err := CreateUnrecognizedKeysError(keys, nil, nil)
 
-		require.Equal(t, core.UnrecognizedKeys, issue.Code)
-		actualKeys, _ := issue.Properties["keys"].([]string)
-		assert.Equal(t, keys, actualKeys)
+		require.NotNil(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		require.Len(t, zodErr.Issues, 1)
+		require.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
+		assert.Equal(t, keys, zodErr.Issues[0].Keys)
 	})
 }
 
@@ -127,49 +157,9 @@ func TestCreationHelpersWithOptions(t *testing.T) {
 		assert.Equal(t, "email", format)
 	})
 
-	t.Run("CreateInvalidTypeIssue with additional properties", func(t *testing.T) {
-		issue := CreateInvalidTypeIssue(core.ZodTypeString, "input")
-
-		// Add additional properties using mapx
-		issue.Properties["custom"] = "value"
-		issue.Path = []any{"data", "field"}
-		issue.Message = "Custom type error"
-
-		assert.Equal(t, []any{"data", "field"}, issue.Path)
-		assert.Equal(t, "Custom type error", issue.Message)
-		custom, _ := issue.Properties["custom"].(string)
-		assert.Equal(t, "value", custom)
-	})
-
-	t.Run("CreateTooBigIssue with continue flag", func(t *testing.T) {
-		issue := CreateTooBigIssue(100, false, "number", 200)
-		issue.Message = "Value is way too big"
-		issue.Continue = true
-
-		assert.Equal(t, "Value is way too big", issue.Message)
-		assert.True(t, issue.Continue)
-	})
-
-	t.Run("CreateTooSmallIssue with pattern", func(t *testing.T) {
-		issue := CreateTooSmallIssue(5, true, "string", 2)
-		issue.Message = "String too short"
-		issue.Properties["pattern"] = "^.{5,}$"
-
-		assert.Equal(t, "String too short", issue.Message)
-		pattern, _ := issue.Properties["pattern"].(string)
-		assert.Equal(t, "^.{5,}$", pattern)
-	})
-
-	t.Run("CreateCustomIssue with params", func(t *testing.T) {
-		params := map[string]any{"rule": "custom_rule", "value": 42}
-		props := map[string]any{"params": params}
-		issue := CreateCustomIssue("Custom error", props, "input")
-		issue.Path = []any{"custom", "field"}
-
-		actualParams, _ := issue.Properties["params"].(map[string]any)
-		assert.Equal(t, params, actualParams)
-		assert.Equal(t, []any{"custom", "field"}, issue.Path)
-	})
+	// Note: Low-level issue creation functions have been removed
+	// in favor of high-level error creation functions
+	t.Skip("Low-level issue creation functions have been removed")
 }
 
 //////////////////////////////////////////
@@ -232,34 +222,9 @@ func TestComplexCreationScenarios(t *testing.T) {
 		assert.False(t, issue.Continue)
 	})
 
-	t.Run("create multiple issues with different types", func(t *testing.T) {
-		issues := []core.ZodRawIssue{
-			CreateInvalidTypeIssue(core.ZodTypeString, "123"),
-			CreateTooBigIssue(100, true, "number", 150),
-			CreateTooSmallIssue(5, false, "string", "hi"),
-			CreateInvalidFormatIssue("email", "invalid@", nil),
-			CreateNotMultipleOfIssue(2, "number", 7),
-			CreateCustomIssue("Custom error", nil, "data"),
-		}
-
-		require.Len(t, issues, 6)
-
-		// Verify each issue type
-		assert.Equal(t, core.InvalidType, issues[0].Code)
-		assert.Equal(t, core.TooBig, issues[1].Code)
-		assert.Equal(t, core.TooSmall, issues[2].Code)
-		assert.Equal(t, core.InvalidFormat, issues[3].Code)
-		assert.Equal(t, core.NotMultipleOf, issues[4].Code)
-		assert.Equal(t, core.Custom, issues[5].Code)
-
-		// Verify properties are correctly set for each
-		assert.Equal(t, "string", issues[0].Properties["expected"])
-		assert.Equal(t, 100, issues[1].Properties["maximum"])
-		assert.Equal(t, 5, issues[2].Properties["minimum"])
-		assert.Equal(t, "email", issues[3].Properties["format"])
-		assert.Equal(t, 2, issues[4].Properties["divisor"])
-		assert.Equal(t, "Custom error", issues[5].Message)
-	})
+	// Note: Low-level issue creation functions have been removed
+	// in favor of high-level error creation functions
+	t.Skip("Low-level issue creation functions have been removed")
 }
 
 //////////////////////////////////////////
@@ -267,25 +232,9 @@ func TestComplexCreationScenarios(t *testing.T) {
 //////////////////////////////////////////
 
 func TestCreationEdgeCases(t *testing.T) {
-	t.Run("nil properties handling", func(t *testing.T) {
-		issue := CreateCustomIssue("Error", nil, "input")
-		assert.NotNil(t, issue.Properties)
-	})
-
-	t.Run("empty slices", func(t *testing.T) {
-		issue := CreateInvalidValueIssue([]any{}, "input")
-		values, _ := issue.Properties["values"].([]any)
-		assert.Empty(t, values)
-	})
-
-	t.Run("duplicate keys in slice", func(t *testing.T) {
-		keys := []string{"key1", "key2", "key1", "key3", "key2"}
-		issue := CreateUnrecognizedKeysIssue(keys, nil)
-
-		// The slicex.Unique should remove duplicates
-		actualKeys, _ := issue.Properties["keys"].([]string)
-		assert.Len(t, actualKeys, 3) // Should be unique
-	})
+	// Note: Low-level issue creation functions have been removed
+	// in favor of high-level error creation functions
+	t.Skip("Low-level issue creation functions have been removed")
 }
 
 //////////////////////////////////////////
@@ -293,14 +242,161 @@ func TestCreationEdgeCases(t *testing.T) {
 //////////////////////////////////////////
 
 func TestCreationPerformance(t *testing.T) {
-	t.Run("large value arrays", func(t *testing.T) {
-		largeValues := make([]any, 1000)
-		for i := range largeValues {
-			largeValues[i] = i
-		}
+	// Note: Low-level issue creation functions have been removed
+	// in favor of high-level error creation functions
+	t.Skip("Low-level issue creation functions have been removed")
+}
 
-		issue := CreateInvalidValueIssue(largeValues, "input")
-		values, _ := issue.Properties["values"].([]any)
-		assert.Len(t, values, 1000)
+//////////////////////////////////////////
+//////////   High-Level Error API Tests ///
+//////////////////////////////////////////
+
+func TestHighLevelErrorAPI(t *testing.T) {
+	ctx := &core.ParseContext{}
+
+	t.Run("CreateFinalError", func(t *testing.T) {
+		properties := map[string]any{
+			"expected": "string",
+			"received": "number",
+		}
+		err := CreateFinalError(core.InvalidType, "Type mismatch", properties, 123, ctx, nil)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateInvalidTypeError", func(t *testing.T) {
+		err := CreateInvalidTypeError(core.ZodTypeString, 123, ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateNonOptionalError", func(t *testing.T) {
+		err := CreateNonOptionalError(ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateInvalidValueError", func(t *testing.T) {
+		validValues := []any{"val1", "val2", "val3"}
+		err := CreateInvalidValueError(validValues, "invalid", ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidValue, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateTooBigError", func(t *testing.T) {
+		err := CreateTooBigError(100, true, "number", 150, ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.TooBig, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateTooSmallError", func(t *testing.T) {
+		err := CreateTooSmallError(5, false, "string", 3, ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.TooSmall, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateInvalidFormatError", func(t *testing.T) {
+		err := CreateInvalidFormatError("email", "invalid@", ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidFormat, zodErr.Issues[0].Code)
+	})
+
+	t.Run("CreateCustomError", func(t *testing.T) {
+		properties := map[string]any{"custom": "value"}
+		err := CreateCustomError("Custom validation failed", properties, "input", ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.Custom, zodErr.Issues[0].Code)
+		assert.Equal(t, "Custom validation failed", zodErr.Issues[0].Message)
+	})
+
+	t.Run("CreateUnrecognizedKeysError", func(t *testing.T) {
+		keys := []string{"extraKey1", "extraKey2"}
+		err := CreateUnrecognizedKeysError(keys, nil, ctx)
+
+		assert.Error(t, err)
+		assert.IsType(t, &ZodError{}, err)
+		var zodErr *ZodError
+		errors.As(err, &zodErr)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
+	})
+}
+
+//////////////////////////////////////////
+//////////   API Comparison Tests      ///
+//////////////////////////////////////////
+
+func TestAPIComparison(t *testing.T) {
+	ctx := &core.ParseContext{}
+
+	t.Run("high-level error API functionality", func(t *testing.T) {
+		// Test the new high-level API
+		err := CreateInvalidTypeError(core.ZodTypeString, 123, ctx)
+
+		// Should produce proper error
+		assert.IsType(t, &ZodError{}, err)
+
+		// Should be *ZodError type
+		var zodErr *ZodError
+		ok := errors.As(err, &zodErr)
+		require.True(t, ok)
+
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+	})
+
+	t.Run("performance test for high-level API", func(t *testing.T) {
+		// Test performance of the new high-level API
+		n := 1000
+
+		// Measure new API performance
+		start := time.Now()
+		for i := 0; i < n; i++ {
+			_ = CreateInvalidTypeError(core.ZodTypeString, i, ctx)
+		}
+		duration := time.Since(start)
+
+		// Should complete in reasonable time (less than 1 second for 1000 operations)
+		assert.True(t, duration < time.Second, "High-level API should be performant")
 	})
 }

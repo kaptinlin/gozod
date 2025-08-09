@@ -1,6 +1,37 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
+
+// isNilInput performs compile-time nil checking to avoid reflection
+func isNilInput(input any) bool {
+	// Fast path: direct nil comparison for interfaces and pointers
+	// This handles the most common cases without reflection
+	if input == nil {
+		return true
+	}
+
+	// Use reflection only when necessary for complex types
+	v := reflect.ValueOf(input)
+	if !v.IsValid() {
+		return true
+	}
+
+	// Check for nil pointers, interfaces, slices, maps, channels, and functions
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
+		return v.IsNil()
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+		reflect.Array, reflect.String, reflect.Struct, reflect.UnsafePointer:
+		return false
+	default:
+		return false
+	}
+}
 
 // =============================================================================
 // TRANSFORMATION & PIPELINE PRIMITIVES
@@ -38,7 +69,30 @@ type ZodTransform[In, Out any] struct {
 }
 
 // Parse validates input with the source schema, then applies the transformation.
+// Follows Zod v4 semantics: Default/DefaultFunc values skip transformation completely.
 func (z *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (Out, error) {
+	// Check if this is a Default/DefaultFunc short-circuit case
+	// These should skip transformation completely
+	sourceInternals := z.source.GetInternals()
+	isDefaultShortCircuit := (sourceInternals.DefaultValue != nil && isNilInput(input)) ||
+		(sourceInternals.DefaultFunc != nil && isNilInput(input))
+
+	if isDefaultShortCircuit {
+		// For Default/DefaultFunc, skip transformation and return the default value directly
+		validated, err := z.source.Parse(input, ctx...)
+		if err != nil {
+			var zero Out
+			return zero, err
+		}
+		// Convert the default value to Out type without transformation
+		if result, ok := any(validated).(Out); ok {
+			return result, nil
+		}
+		// If type conversion fails, return zero value
+		var zero Out
+		return zero, nil
+	}
+
 	// Step 1: Validate with source schema
 	validated, err := z.source.Parse(input, ctx...)
 	if err != nil {

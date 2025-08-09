@@ -159,7 +159,9 @@ func FormatErrorWithMapper(error *ZodError, mapper func(ZodIssue) string) ZodFor
 				}
 			case core.InvalidType, core.InvalidValue, core.InvalidFormat,
 				core.TooBig, core.TooSmall, core.NotMultipleOf,
-				core.UnrecognizedKeys, core.Custom:
+				core.UnrecognizedKeys, core.Custom, core.InvalidSchema,
+				core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired,
+				core.TypeConversion, core.NilPointer:
 				// Handle regular issues with path-based organization
 				if slicex.IsEmpty(issue.Path) {
 					// Root-level errors go into _errors array

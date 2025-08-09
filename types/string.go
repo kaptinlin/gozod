@@ -92,6 +92,35 @@ func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Use the internally recorded type code by default, fall back to string if not set
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeString
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		expectedType,
+		engine.ApplyChecks[string],
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // MustParseAny validates the input value and panics on failure
 func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	result, err := z.ParseAny(input, ctx...)
@@ -392,7 +421,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 		case *string:
 			// Schema output is *string – convert incoming value (string or nil) to *string
 			if v == nil {
-				return fn(any((*string)(nil)).(T))
+				return true // Allow nil to pass refinement for nilable types
 			}
 			if strVal, ok := v.(string); ok {
 				sCopy := strVal

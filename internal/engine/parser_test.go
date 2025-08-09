@@ -34,7 +34,7 @@ func mockConverter[T any](result any, ctx *core.ParseContext, expectedType core.
 		return val, nil
 	}
 	var zero T
-	return zero, CreateInvalidTypeError(expectedType, result, ctx)
+	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
 }
 
 // mockTypeExtractor creates a type extractor for testing
@@ -161,7 +161,7 @@ func TestParsePrimitive(t *testing.T) {
 				if val, ok := result.(string); ok {
 					return &val, nil
 				}
-				return nil, CreateInvalidTypeError(expectedType, result, ctx)
+				return nil, issues.CreateInvalidTypeError(expectedType, result, ctx)
 			},
 		)
 
@@ -203,7 +203,7 @@ func TestParsePrimitive(t *testing.T) {
 		assert.Equal(t, "from_func", result)
 	})
 
-	t.Run("prefault value after parsing failure", func(t *testing.T) {
+	t.Run("prefault value not used for parsing failure", func(t *testing.T) {
 		internals := createMockInternals()
 		internals.SetPrefaultValue("prefault")
 		validator := mockValidator[string](false)
@@ -216,11 +216,12 @@ func TestParsePrimitive(t *testing.T) {
 			mockConverter[string],
 		)
 
-		require.NoError(t, err)
-		assert.Equal(t, "prefault", result)
+		// Should return error, not use prefault for non-nil input
+		require.Error(t, err)
+		assert.Empty(t, result)
 	})
 
-	t.Run("prefault function after parsing failure", func(t *testing.T) {
+	t.Run("prefault function not used for parsing failure", func(t *testing.T) {
 		internals := createMockInternals()
 		internals.SetPrefaultFunc(func() any { return "prefault_func" })
 		validator := mockValidator[string](false)
@@ -233,8 +234,26 @@ func TestParsePrimitive(t *testing.T) {
 			mockConverter[string],
 		)
 
+		// Should return error, not use prefault for non-nil input
+		require.Error(t, err)
+		assert.Empty(t, result)
+	})
+
+	t.Run("prefault value used for nil input", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetPrefaultValue("prefault")
+		validator := mockValidator[string](false)
+
+		result, err := ParsePrimitive[string, string](
+			nil, // nil input should use prefault
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
 		require.NoError(t, err)
-		assert.Equal(t, "prefault_func", result)
+		assert.Equal(t, "prefault", result)
 	})
 
 	t.Run("transform function applied", func(t *testing.T) {
@@ -564,47 +583,7 @@ func TestApplyTransformIfPresent(t *testing.T) {
 	})
 }
 
-func TestTryPrefaultFallback(t *testing.T) {
-	t.Run("no prefault available", func(t *testing.T) {
-		internals := createMockInternals()
-		parseCore := func(any) (any, error) { return "parsed", nil }
-		originalErr := errors.New("original error")
-
-		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
-
-		assert.Error(t, err)
-		assert.Equal(t, originalErr, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("prefault value success", func(t *testing.T) {
-		internals := createMockInternals()
-		internals.SetPrefaultValue("prefault")
-		parseCore := func(input any) (any, error) {
-			return input, nil
-		}
-		originalErr := errors.New("original error")
-
-		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
-
-		assert.NoError(t, err)
-		assert.Equal(t, "prefault", result)
-	})
-
-	t.Run("prefault function success", func(t *testing.T) {
-		internals := createMockInternals()
-		internals.SetPrefaultFunc(func() any { return "prefault_func" })
-		parseCore := func(input any) (any, error) {
-			return input, nil
-		}
-		originalErr := errors.New("original error")
-
-		result, err := tryPrefaultFallback[string](internals, parseCore, originalErr)
-
-		assert.NoError(t, err)
-		assert.Equal(t, "prefault_func", result)
-	})
-}
+// TestTryPrefaultFallback removed - function has been deleted and integrated into processModifiers
 
 func TestGetOrCreateContext(t *testing.T) {
 	t.Run("no context provided", func(t *testing.T) {
@@ -629,5 +608,90 @@ func TestGetOrCreateContext(t *testing.T) {
 
 		assert.Equal(t, ctx1, ctx) // Should use first one
 		assert.True(t, ctx.ReportInput)
+	})
+}
+
+// =============================================================================
+// BENCHMARK TESTS
+// =============================================================================
+
+// BenchmarkParseStrict tests the performance of ParsePrimitiveStrict with different scenarios
+func BenchmarkParseStrict(b *testing.B) {
+	// Mock validator function
+	validator := func(value string, checks []core.ZodCheck, ctx *core.ParseContext) (string, error) {
+		return value, nil
+	}
+
+	b.Run("UltraFastPath", func(b *testing.B) {
+		// No checks, no modifiers - should hit ultra-fast path
+		internals := &core.ZodTypeInternals{}
+		input := "test"
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = ParsePrimitiveStrict[string, string](input, internals, core.ZodTypeString, validator)
+		}
+	})
+
+	b.Run("WithChecks", func(b *testing.B) {
+		// With validation checks
+		internals := &core.ZodTypeInternals{
+			Checks: []core.ZodCheck{}, // Empty but non-nil slice
+		}
+		input := "test"
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = ParsePrimitiveStrict[string, string](input, internals, core.ZodTypeString, validator)
+		}
+	})
+
+	b.Run("WithNilInput", func(b *testing.B) {
+		// Test nil handling
+		internals := &core.ZodTypeInternals{
+			Nilable: true,
+		}
+		var input *string
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _ = ParsePrimitiveStrict[string, *string](input, internals, core.ZodTypeString, validator)
+		}
+	})
+}
+
+// BenchmarkProcessModifiers tests the performance of the processModifiers function with nil input
+func BenchmarkProcessModifiers(b *testing.B) {
+	b.Run("NonOptional", func(b *testing.B) {
+		internals := &core.ZodTypeInternals{
+			NonOptional: true,
+		}
+		ctx := &core.ParseContext{}
+		parseCore := func(any) (any, error) { return "parsed", nil }
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _, _ = processModifiers[string](nil, internals, core.ZodTypeString, parseCore, ctx)
+		}
+	})
+
+	b.Run("WithDefault", func(b *testing.B) {
+		internals := &core.ZodTypeInternals{
+			DefaultValue: "default",
+		}
+		ctx := &core.ParseContext{}
+		parseCore := func(any) (any, error) { return "parsed", nil }
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _, _ = processModifiers[string](nil, internals, core.ZodTypeString, parseCore, ctx)
+		}
+	})
+
+	b.Run("Nilable", func(b *testing.B) {
+		internals := &core.ZodTypeInternals{
+			Nilable: true,
+		}
+		ctx := &core.ParseContext{}
+		parseCore := func(any) (any, error) { return "parsed", nil }
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, _, _ = processModifiers[*string](nil, internals, core.ZodTypeString, parseCore, ctx)
+		}
 	})
 }

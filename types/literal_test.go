@@ -343,53 +343,77 @@ func TestLiteral_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestLiteral_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with string literal", func(t *testing.T) {
-		schema := LiteralOf([]string{"hello", "world"}).Default("hello")
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		schema := LiteralOf([]string{"hello", "world"}).Default("hello").Prefault("world")
 
-		// Valid input should override default
-		result, err := schema.ParseAny("world")
+		// When input is nil, Default should take precedence
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "world", result)
+		assert.Equal(t, "hello", result)
 	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		schema := LiteralOf([]string{"red", "green"}).Prefault("red")
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// Create a schema where default value is not in the allowed literals
+		schema := LiteralOf([]string{"valid1", "valid2"}).Default("invalid_default")
 
-		// Valid input should override prefault
-		result, err := schema.ParseAny("green")
+		// Default should bypass validation even if it's not in the literal list
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "green", result)
+		assert.Equal(t, "invalid_default", result)
 	})
 
-	t.Run("defaultFunc", func(t *testing.T) {
-		counter := 0
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// Create a schema where prefault value is not in the allowed literals
+		schema := LiteralOf([]string{"valid1", "valid2"}).Prefault("invalid_prefault")
+
+		// Prefault should fail validation if it's not in the literal list
+		_, err := schema.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected literal, received")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := LiteralOf([]string{"valid1", "valid2"}).Prefault("valid1")
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := schema.ParseAny("invalid_input")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected literal, received")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
 		schema := LiteralOf([]string{"a", "b"}).DefaultFunc(func() string {
-			counter++
-			if counter%2 == 1 {
-				return "a"
-			}
+			defaultCalled = true
+			return "a"
+		}).PrefaultFunc(func() string {
+			prefaultCalled = true
 			return "b"
 		})
 
-		// Valid input should not call function
-		result, err := schema.ParseAny("a")
+		// DefaultFunc should be called and take precedence
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)
-		assert.Equal(t, 0, counter) // Function should not be called
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
-		schema := LiteralOf([]string{"valid"}).PrefaultFunc(func() string {
-			counter++
-			return "fallback"
-		})
+	// Test 6: Error handling for Prefault validation failure
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		schema := LiteralOf([]int{1, 2, 3}).Prefault(999) // Prefault value not in literal list
 
-		// Valid input should not call function
-		result, err := schema.ParseAny("valid")
-		require.NoError(t, err)
-		assert.Equal(t, "valid", result)
-		assert.Equal(t, 0, counter)
+		// Should return validation error, not attempt fallback
+		_, err := schema.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected literal, received")
 	})
 }
 
@@ -427,16 +451,16 @@ func TestLiteral_Refine(t *testing.T) {
 	})
 
 	t.Run("refine with nil handling", func(t *testing.T) {
+		// Use Zod v4 recommended order: Nilable before Refine
 		schema := LiteralOf([]string{"hello", "world"}).Nilable().Refine(func(s string) bool {
-			return s != "" // Accept non-empty strings
+			return s != "" // Accept non-empty strings (nil is handled by Nilable)
 		})
 
 		// Valid string should pass
-		str := "hello"
-		result, err := schema.ParseAny(&str)
+		result, err := schema.ParseAny("hello")
 		require.NoError(t, err)
-		assert.Equal(t, &str, result)
-		assert.True(t, result == &str) // Pointer identity preserved
+		expected := "hello"
+		assert.Equal(t, &expected, result)
 
 		// nil should pass
 		result, err = schema.ParseAny(nil)

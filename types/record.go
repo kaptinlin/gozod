@@ -68,43 +68,91 @@ func (z *ZodRecord[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse validates input using direct validation approach
+// Parse validates input using unified ParseComplex API
 func (z *ZodRecord[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	result, err := engine.ParseComplex[T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeRecord,
+		z.extractRecordType,
+		z.extractRecordPtr,
+		z.validateRecordValue,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	// Convert result to constraint type R
+	if convertedResult, ok := convertToRecordConstraintValue[T, R](result); ok {
+		return convertedResult, nil
+	}
+
+	// Fallback conversion
+	var zero R
 	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
+	if len(ctx) > 0 {
 		parseCtx = ctx[0]
 	} else {
 		parseCtx = &core.ParseContext{}
 	}
-
-	// Handle nil values for optional/nilable cases
-	if input == nil {
-		if z.internals.Nilable || z.internals.Optional {
-			var zero R
-			return zero, nil
-		}
-		return *new(R), fmt.Errorf("input cannot be nil")
-	}
-
-	// Extract record value using proper conversion
-	recordValue, err := z.extractRecord(input)
-	if err != nil {
-		return *new(R), err
-	}
-
-	// Validate the record content
-	transformedRecord, err := z.validateRecord(recordValue, z.internals.Checks, parseCtx)
-	if err != nil {
-		return *new(R), err
-	}
-
-	// Convert to constraint type R using safe conversion
-	return convertRecordFromGeneric[T, R](transformedRecord), nil
+	return zero, issues.CreateTypeConversionError(
+		fmt.Sprintf("%T", result),
+		fmt.Sprintf("%T", zero),
+		result,
+		parseCtx,
+	)
 }
 
 // MustParse validates the input value and panics on failure
 func (z *ZodRecord[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodRecord[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput, ok := convertToRecordConstraintValue[T, R](input)
+	if !ok {
+		var zero R
+		if len(ctx) == 0 {
+			ctx = []*core.ParseContext{core.NewParseContext()}
+		}
+		return zero, issues.CreateTypeConversionError(
+			fmt.Sprintf("%T", input),
+			"record constraint type",
+			any(input),
+			ctx[0],
+		)
+	}
+
+	result, err := engine.ParseComplexStrict[T, R](
+		constraintInput,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeRecord,
+		z.extractRecordType,
+		z.extractRecordPtr,
+		z.validateRecordValue,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse is the variant that panics on error
+func (z *ZodRecord[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -201,11 +249,11 @@ func (z *ZodRecord[T, R]) Meta(meta core.GlobalMeta) *ZodRecord[T, R] {
 // Min sets minimum number of entries
 func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
-	check := checks.MinSize(minLen, checkParams)
+	check := checks.MinSize(minLen, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -214,11 +262,11 @@ func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
 // Max sets maximum number of entries
 func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
-	check := checks.MaxSize(maxLen, checkParams)
+	check := checks.MaxSize(maxLen, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -227,11 +275,11 @@ func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
 // Size sets exact number of entries
 func (z *ZodRecord[T, R]) Size(exactLen int, params ...any) *ZodRecord[T, R] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
-	check := checks.Size(exactLen, checkParams)
+	check := checks.Size(exactLen, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -310,12 +358,12 @@ func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -326,12 +374,12 @@ func (z *ZodRecord[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodRecord
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -367,60 +415,131 @@ func (z *ZodRecord[T, R]) CloneFrom(source any) {
 }
 
 // =============================================================================
-// TYPE CONVERSION HELPERS
+// EXTRACTION AND VALIDATION HELPERS
 // =============================================================================
 
-// convertRecordFromGeneric safely converts map[string]any to constraint type R
-func convertRecordFromGeneric[T any, R any](recordValue map[string]any) R {
-	// First convert to base type T
-	var baseValue T
-	switch any(baseValue).(type) {
-	case map[string]int:
-		// Convert map[string]any to map[string]int
-		converted := make(map[string]int)
-		for k, v := range recordValue {
-			if intVal, ok := v.(int); ok {
-				converted[k] = intVal
-			}
-		}
-		baseValue = any(converted).(T)
-	case map[string]string:
-		// Convert map[string]any to map[string]string
-		converted := make(map[string]string)
-		for k, v := range recordValue {
-			if strVal, ok := v.(string); ok {
-				converted[k] = strVal
-			}
-		}
-		baseValue = any(converted).(T)
-	case map[string]any:
-		// Direct assignment for map[string]any
-		baseValue = any(recordValue).(T)
-	default:
-		// For other types, try direct conversion
-		baseValue = any(recordValue).(T)
+// extractRecordType extracts T value from input for ParseComplex
+func (z *ZodRecord[T, R]) extractRecordType(input any) (T, bool) {
+	var zero T
+	recordValue, err := z.extractRecord(input)
+	if err != nil {
+		return zero, false
 	}
 
-	// Then convert base type to constraint type
-	return convertToRecordConstraintType[T, R](baseValue)
+	// Convert map[string]any to T
+	if converted, ok := any(recordValue).(T); ok {
+		return converted, true
+	}
+
+	// Try to convert using reflection for different map types
+	if reflectx.IsMap(any(zero)) {
+		zeroValue := reflect.ValueOf(zero)
+		zeroType := zeroValue.Type()
+
+		// Create a new map of the target type
+		newMap := reflect.MakeMap(zeroType)
+
+		// Convert each value to the target value type
+		valueType := zeroType.Elem()
+		for k, v := range recordValue {
+			keyValue := reflect.ValueOf(k)
+			valValue := reflect.ValueOf(v)
+
+			// Convert value to target type if needed
+			if valValue.Type().ConvertibleTo(valueType) {
+				convertedVal := valValue.Convert(valueType)
+				newMap.SetMapIndex(keyValue, convertedVal)
+			} else {
+				// If conversion fails, return false
+				return zero, false
+			}
+		}
+
+		// Convert the result back to T
+		if typedResult, ok := newMap.Interface().(T); ok {
+			return typedResult, true
+		}
+	}
+
+	return zero, false
 }
 
-// convertToRecordConstraintType converts a base type T to constraint type R
-func convertToRecordConstraintType[T any, R any](value T) R {
-	var zero R
-	switch any(zero).(type) {
-	case *map[string]any:
-		// Need to return *map[string]any from map[string]any
-		if recordVal, ok := any(value).(map[string]any); ok {
-			recordCopy := recordVal
-			return any(&recordCopy).(R)
+// extractRecordPtr extracts *T from input for ParseComplex
+func (z *ZodRecord[T, R]) extractRecordPtr(input any) (*T, bool) {
+	if ptr, ok := input.(*T); ok {
+		return ptr, true
+	}
+	return nil, false
+}
+
+// validateRecordValue validates T value with checks for ParseComplex
+func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Convert T back to map[string]any for validation using reflection
+	var recordValue map[string]any
+	if converted, ok := any(value).(map[string]any); ok {
+		recordValue = converted
+	} else {
+		// Use reflection to convert T to map[string]any
+		valueReflect := reflect.ValueOf(value)
+		if valueReflect.Kind() != reflect.Map {
+			return value, fmt.Errorf("internal error: T is not a map type")
 		}
-		return any((*map[string]any)(nil)).(R)
-	default:
-		// Return T directly
-		return any(value).(R)
+
+		recordValue = make(map[string]any)
+		for _, key := range valueReflect.MapKeys() {
+			keyStr, ok := key.Interface().(string)
+			if !ok {
+				return value, fmt.Errorf("internal error: map key is not string")
+			}
+			recordValue[keyStr] = valueReflect.MapIndex(key).Interface()
+		}
+	}
+
+	// Validate the record content
+	transformedRecord, err := z.validateRecord(recordValue, checks, ctx)
+	if err != nil {
+		return value, err
+	}
+
+	// Convert back to T using reflection
+	if result, ok := any(transformedRecord).(T); ok {
+		return result, nil
+	} else {
+		// Use reflection to convert map[string]any back to T
+		targetType := reflect.TypeOf(value)
+		if targetType.Kind() != reflect.Map {
+			return value, fmt.Errorf("internal error: T is not a map type")
+		}
+
+		newMap := reflect.MakeMap(targetType)
+		valueType := targetType.Elem()
+
+		for k, v := range transformedRecord {
+			keyValue := reflect.ValueOf(k)
+			valValue := reflect.ValueOf(v)
+
+			// Convert value to target type if needed
+			if valValue.Type() != valueType {
+				if valValue.CanConvert(valueType) {
+					valValue = valValue.Convert(valueType)
+				} else {
+					return value, fmt.Errorf("internal error: cannot convert value type")
+				}
+			}
+
+			newMap.SetMapIndex(keyValue, valValue)
+		}
+
+		if result, ok := newMap.Interface().(T); ok {
+			return result, nil
+		}
+		return value, fmt.Errorf("internal error: cannot convert validated record back to T")
 	}
 }
+
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
 
 // extractRecordValue extracts base type T from constraint type R
 func extractRecordValue[T any, R any](value R) T {
@@ -440,6 +559,13 @@ func extractRecordValue[T any, R any](value R) T {
 func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
+	// Handle nil values for pointer types
+	if value == nil {
+		if _, ok := any(zero).(*map[string]any); ok {
+			return any((*map[string]any)(nil)).(R), true
+		}
+	}
+
 	// Direct type match
 	if r, ok := any(value).(R); ok {
 		return r, true
@@ -451,6 +577,16 @@ func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 		if recordVal, ok := value.(map[string]any); ok {
 			recordCopy := recordVal
 			return any(&recordCopy).(R), true
+		}
+		// Handle *map[string]any to *map[string]any conversion
+		if recordPtr, ok := value.(*map[string]any); ok {
+			return any(recordPtr).(R), true
+		}
+	} else {
+		// Handle non-pointer constraint type (R = map[string]any)
+		// Need to convert *map[string]any to map[string]any
+		if recordPtr, ok := value.(*map[string]any); ok && recordPtr != nil {
+			return any(*recordPtr).(R), true
 		}
 	}
 
@@ -600,7 +736,8 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 		}
 
 		if len(unrecognizedKeys) > 0 {
-			rawIssues = append(rawIssues, issues.CreateUnrecognizedKeysIssue(unrecognizedKeys, value))
+			rawIssue := issues.NewRawIssue(core.UnrecognizedKeys, value, issues.WithKeys(unrecognizedKeys))
+			rawIssues = append(rawIssues, rawIssue)
 		}
 
 		if !isPartial { // Exhaustiveness check for non-partial records.
@@ -610,8 +747,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 			}
 			for _, k := range allowedKeys {
 				if !seenKeys[k] {
-					issue := issues.CreateInvalidTypeIssue(valueTypeName, nil)
-					issue.Path = append(issue.Path, k) // Manually set path for missing key.
+					issue := issues.NewRawIssue(core.InvalidType, nil, issues.WithExpected(string(valueTypeName)), issues.WithPath([]any{k}))
 					rawIssues = append(rawIssues, issue)
 				}
 			}
@@ -642,7 +778,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 			if vs, ok := z.internals.ValueType.(core.ZodType[any]); ok {
 				internals := vs.GetInternals()
 				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumber(val) {
-					return nil, fmt.Errorf("value validation failed for key '%s': expected numeric, got %T", key, val)
+					return nil, issues.CreateInvalidTypeError(core.ZodTypeFloat, val, ctx)
 				}
 			}
 

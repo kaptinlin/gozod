@@ -3,11 +3,16 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"sync/atomic"
 )
 
 // =============================================================================
 // CORE SCHEMA INTERFACE & INTERNALS
 // =============================================================================
+
+// Global priority counter for modifier application order tracking
+var modifierPriorityCounter int64
+
 //
 // This file defines the **public contract** for every schema in the `gozod`
 // ecosystem. It establishes a minimal, universal interface that ensures all
@@ -105,6 +110,11 @@ type ZodTypeInternals struct {
 	PrefaultValue any
 	PrefaultFunc  func() any
 
+	// Modifier priority tracking (higher number = applied later = higher priority)
+	OptionalPriority int // Priority when Optional/Nilable was applied
+	PrefaultPriority int // Priority when Prefault was applied
+	DefaultPriority  int // Priority when Default was applied
+
 	// Transform function
 	Transform func(any, *RefinementContext) (any, error)
 
@@ -180,11 +190,17 @@ func (z *ZodTypeInternals) IsNonOptional() bool {
 // SetOptional marks the field as optional.
 func (z *ZodTypeInternals) SetOptional(value bool) {
 	z.Optional = value
+	if value {
+		z.OptionalPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
+	}
 }
 
 // SetNilable allows nil values for this field.
 func (z *ZodTypeInternals) SetNilable(value bool) {
 	z.Nilable = value
+	if value {
+		z.OptionalPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
+	}
 }
 
 // SetNonOptional marks the field as nonoptional (disallow nil with custom expected tag).
@@ -200,21 +216,25 @@ func (z *ZodTypeInternals) SetCoerce(value bool) {
 // SetDefaultValue sets a default value.
 func (z *ZodTypeInternals) SetDefaultValue(value any) {
 	z.DefaultValue = value
+	z.DefaultPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
 }
 
 // SetDefaultFunc sets a default value function.
 func (z *ZodTypeInternals) SetDefaultFunc(fn func() any) {
 	z.DefaultFunc = fn
+	z.DefaultPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
 }
 
 // SetPrefaultValue sets a prefault value.
 func (z *ZodTypeInternals) SetPrefaultValue(value any) {
 	z.PrefaultValue = value
+	z.PrefaultPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
 }
 
 // SetPrefaultFunc sets a prefault value function.
 func (z *ZodTypeInternals) SetPrefaultFunc(fn func() any) {
 	z.PrefaultFunc = fn
+	z.PrefaultPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
 }
 
 // SetTransform sets a transform function.

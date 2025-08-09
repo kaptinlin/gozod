@@ -32,7 +32,7 @@ func TestNever_BasicFunctionality(t *testing.T) {
 			require.Error(t, err, "Expected error for input: %v", input)
 
 			// Verify error message
-			assert.Contains(t, err.Error(), "Never type should not accept any value")
+			assert.Contains(t, err.Error(), "expected never, received")
 		}
 	})
 
@@ -44,32 +44,44 @@ func TestNever_BasicFunctionality(t *testing.T) {
 		})
 	})
 
-	t.Run("prefault provides fallback", func(t *testing.T) {
+	t.Run("prefault only replaces nil then gets rejected", func(t *testing.T) {
 		schema := Never().Prefault("fallback")
 
-		// Test various inputs - all should return fallback
-		testCases := []any{
-			"string", 42, 3.14, true, false, nil, []int{1, 2, 3},
+		// Non-nil inputs should be rejected directly by Never
+		nonNilInputs := []any{
+			"string", 42, 3.14, true, false, []int{1, 2, 3},
 		}
 
-		for _, input := range testCases {
-			result, err := schema.Parse(input)
-			require.NoError(t, err, "Expected no error with prefault for input: %v", input)
-			assert.Equal(t, "fallback", result)
+		for _, input := range nonNilInputs {
+			_, err := schema.Parse(input)
+			require.Error(t, err, "Expected error for non-nil input: %v", input)
+			assert.Contains(t, err.Error(), "expected never, received")
 		}
+
+		// Nil input should be replaced by prefault, then rejected by Never
+		_, err := schema.Parse(nil)
+		require.Error(t, err, "Expected error even with prefault for nil input")
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 
-	t.Run("prefaultFunc provides dynamic fallback", func(t *testing.T) {
+	t.Run("prefaultFunc only replaces nil then gets rejected", func(t *testing.T) {
 		callCount := 0
 		schema := Never().PrefaultFunc(func() any {
 			callCount++
 			return "dynamic_fallback"
 		})
 
-		result, err := schema.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, "dynamic_fallback", result)
-		assert.Equal(t, 1, callCount)
+		// Non-nil input should be rejected directly, prefaultFunc not called
+		_, err := schema.Parse("test")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
+		assert.Equal(t, 0, callCount, "PrefaultFunc should not be called for non-nil input")
+
+		// Nil input should trigger prefaultFunc, then get rejected
+		_, err = schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
+		assert.Equal(t, 1, callCount, "PrefaultFunc should be called for nil input")
 	})
 }
 
@@ -158,16 +170,96 @@ func TestNever_Modifiers(t *testing.T) {
 	t.Run("Prefault with Optional", func(t *testing.T) {
 		schema := Never().Optional().Prefault("prefault_value")
 
-		// Prefault should override Never's rejection for non-nil
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, "prefault_value", *result)
+		// Never should still reject non-nil inputs even with Prefault
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 
-		// Nil should still work for Optional
+		// With new priority (Prefault > Optional), nil triggers Prefault which provides invalid value for Never
 		result2, err := schema.Parse(nil)
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received string")
 		assert.Nil(t, result2)
+	})
+}
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestNever_DefaultAndPrefault(t *testing.T) {
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		schema := Never().Default("default_value").Prefault("prefault_value")
+
+		// When input is nil, Default should take precedence
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_value", result)
+	})
+
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// Never type rejects all values, but Default should bypass this
+		schema := Never().Default("bypass_never")
+
+		// Default should bypass Never's rejection mechanism
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "bypass_never", result)
+	})
+
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// Never type with Prefault should replace nil then reject
+		schema := Never().Prefault("fallback_value")
+
+		// Non-nil input should be rejected directly
+		_, err := schema.ParseAny("any_input")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
+
+		// Nil input should be replaced by prefault, then rejected
+		_, err = schema.ParseAny(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		// For Never type, all inputs should be rejected even with Prefault
+		schema := Never().Prefault("fallback_value")
+
+		// Non-nil input should be rejected by Never
+		_, err := schema.ParseAny("non_nil_input")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
+
+		// Nil input should also be rejected by Never
+		_, err2 := schema.ParseAny(nil)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "expected never, received")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Never().DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func_value"
+		}).PrefaultFunc(func() any {
+			prefaultCalled = true
+			return "prefault_func_value"
+		})
+
+		// DefaultFunc should be called and take precedence
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_func_value", result)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 }
 
@@ -175,64 +267,9 @@ func TestNever_Modifiers(t *testing.T) {
 // Refinement tests
 // =============================================================================
 
-func TestNever_Refine(t *testing.T) {
-	t.Run("basic refinement with prefault", func(t *testing.T) {
-		// Never with prefault + refinement
-		schema := Never().Prefault("fallback").Refine(func(v any) bool {
-			// Only accept specific fallback value
-			return v == "fallback"
-		})
-
-		// Should pass because prefault provides "fallback" which passes refinement
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, "fallback", result)
-	})
-
-	t.Run("refinement fails on prefault", func(t *testing.T) {
-		schema := Never().Prefault("fallback").Refine(func(v any) bool {
-			// Reject the fallback value
-			return v != "fallback"
-		})
-
-		// Should fail because prefault provides "fallback" but refinement rejects it
-		_, err := schema.Parse("anything")
-		assert.Error(t, err)
-	})
-
-	t.Run("refine with pointer constraints", func(t *testing.T) {
-		schema := Never().Nilable().Prefault("test").Refine(func(v *any) bool {
-			// Accept nil or specific values
-			if v == nil {
-				return true
-			}
-			return *v == "test"
-		})
-
-		// Nil should be accepted
-		result, err := schema.Parse(nil)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-
-		// Non-nil should get prefault value and pass refinement
-		result2, err := schema.Parse("anything")
-		require.NoError(t, err)
-		require.NotNil(t, result2)
-		assert.Equal(t, "test", *result2)
-	})
-
-	t.Run("RefineAny with flexible validation", func(t *testing.T) {
-		schema := Never().Prefault(42).RefineAny(func(v any) bool {
-			// Only accept numbers
-			_, ok := v.(int)
-			return ok
-		})
-
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, 42, result)
-	})
-}
+// TestNever_Refine test cases have been removed
+// Reason: z.never() should reject all inputs, even if prefault is set, refine function will not be executed
+// Because prefault values will be rejected by never, these tests are based on incorrect assumptions
 
 // =============================================================================
 // Factory function tests
@@ -296,7 +333,7 @@ func TestNever_Factories(t *testing.T) {
 
 func TestNever_Transform(t *testing.T) {
 	t.Run("transform with prefault", func(t *testing.T) {
-		// Transform is rarely useful with Never, but can work with prefault
+		// Transform with Never should still reject all inputs
 		schema := Never().Prefault("hello").Transform(func(input any, ctx *core.RefinementContext) (any, error) {
 			if str, ok := input.(string); ok {
 				return str + "_transformed", nil
@@ -304,9 +341,9 @@ func TestNever_Transform(t *testing.T) {
 			return input, nil
 		})
 
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, "hello_transformed", result)
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 }
 
@@ -315,12 +352,12 @@ func TestNever_Pipe(t *testing.T) {
 		// Create a simple any schema for piping
 		anySchema := Any()
 
-		// Never with prefault piped to any validation
+		// Never with prefault should still reject all inputs
 		schema := Never().Prefault("valid_string").Pipe(anySchema)
 
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, "valid_string", result)
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 }
 
@@ -330,24 +367,23 @@ func TestNever_Pipe(t *testing.T) {
 
 func TestNever_TypeConversion(t *testing.T) {
 	t.Run("constraint type conversion", func(t *testing.T) {
-		// Test with different constraint types
+		// Never type always rejects all inputs, even if prefault is set
 		schema1 := NeverTyped[string, string]().Prefault("test")
-		result1, err := schema1.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, "test", result1)
+		_, err := schema1.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 
 		schema2 := NeverTyped[int, int]().Prefault(42)
-		result2, err := schema2.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, 42, result2)
+		_, err = schema2.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 
 	t.Run("pointer constraint handling", func(t *testing.T) {
 		schema := NeverTyped[string, *string]().Prefault("test")
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, "test", *result)
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 }
 
@@ -382,21 +418,18 @@ func TestNever_CloneAndUnwrap(t *testing.T) {
 
 func TestNever_EdgeCases(t *testing.T) {
 	t.Run("multiple modifiers combination", func(t *testing.T) {
+		// Test combination of multiple modifiers, but not including Refine (because Never type should not execute refine functions)
 		schema := Never().
 			Optional().
 			Default("default").
-			Prefault("prefault").
-			Refine(func(v *any) bool {
-				return v != nil && *v == "prefault"
-			})
+			Prefault("prefault")
 
-		// Non-nil input should use prefault
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, "prefault", *result)
+		// Non-nil input should be rejected by Never (Never type always rejects non-nil inputs)
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 
-		// Nil input should use default
+		// Nil input should use default (Default has higher priority than Prefault)
 		result2, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result2)
@@ -425,8 +458,8 @@ func TestNever_EdgeCases(t *testing.T) {
 
 		schema := Never().Prefault(complexFallback)
 
-		result, err := schema.Parse("anything")
-		require.NoError(t, err)
-		assert.Equal(t, complexFallback, result)
+		_, err := schema.Parse("anything")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected never, received")
 	})
 }

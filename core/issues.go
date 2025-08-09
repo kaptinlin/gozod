@@ -82,40 +82,6 @@ type ZodIssueInvalidValue struct {
 	Options []any `json:"options"` // List of valid options
 }
 
-// ZodError represents a validation error
-// Contains all issues found during validation
-type ZodError struct {
-	Message string        `json:"message"` // Overall error message
-	Issues  []ZodRawIssue `json:"issues"`  // List of all validation issues
-}
-
-// Error implements the error interface
-func (e *ZodError) Error() string {
-	if e.Message != "" {
-		return e.Message
-	}
-
-	// If overall message is empty, format from issues
-	if len(e.Issues) == 0 {
-		return "Validation failed"
-	}
-
-	// Use the first issue's message
-	if e.Issues[0].Message != "" {
-		return e.Issues[0].Message
-	}
-
-	// Fallback to generic message
-	return "Validation failed"
-}
-
-// ZodIssueInvalidUnion represents invalid union error
-// Used when none of the union alternatives match
-type ZodIssueInvalidUnion struct {
-	ZodIssueBase
-	UnionErrors []ZodError `json:"unionErrors"` // Errors from each union alternative
-}
-
 // =============================================================================
 // ZODISSUE METHODS
 // =============================================================================

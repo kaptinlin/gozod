@@ -261,11 +261,18 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 		if derr != nil {
 			return nil, derr
 		}
-		finalSchema = &lib.Schema{
-			AnyOf: []*lib.Schema{
-				baseSchema,
-				{Type: []string{"null"}},
-			},
+
+		// Special case: if the base schema is already a pure null type,
+		// don't wrap it in anyOf to avoid duplication
+		if internals.Type == core.ZodTypeNil {
+			finalSchema = baseSchema
+		} else {
+			finalSchema = &lib.Schema{
+				AnyOf: []*lib.Schema{
+					baseSchema,
+					{Type: []string{"null"}},
+				},
+			}
 		}
 	} else {
 		finalSchema, err = c.doConvert(schema)

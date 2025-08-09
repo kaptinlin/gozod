@@ -225,10 +225,11 @@ func TestMap_Chaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, testMap, *result)
 
-		// Test nil handling
+		// Test nil handling - Default should short-circuit and return default value
 		result, err = mapSchema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		require.NotNil(t, result)
+		assert.Equal(t, &defaultMap, result)
 	})
 
 	t.Run("complex chaining", func(t *testing.T) {
@@ -489,7 +490,8 @@ func TestMap_ErrorHandling(t *testing.T) {
 		invalidMap := map[any]any{123: 42} // int key instead of string
 		_, err := mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "key validation failed")
+		// Now we expect the original error message without wrapping
+		assert.Contains(t, err.Error(), "Invalid input: expected string, received number")
 	})
 
 	t.Run("value validation error", func(t *testing.T) {
@@ -498,7 +500,8 @@ func TestMap_ErrorHandling(t *testing.T) {
 		invalidMap := map[any]any{"key": "not_an_int"}
 		_, err := mapSchema.Parse(invalidMap)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "value validation failed")
+		// Now we expect the original error message without wrapping
+		assert.Contains(t, err.Error(), "Invalid input: expected int, received string")
 	})
 
 	t.Run("custom error message", func(t *testing.T) {
@@ -1011,4 +1014,155 @@ func TestMap_NonOptional(t *testing.T) {
 	if issues.IsZodError(err, &zErr) {
 		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
 	}
+}
+
+// =============================================================================
+// Multi-error collection tests (TypeScript Zod v4 behavior)
+// =============================================================================
+
+func TestMap_MultiErrorCollection(t *testing.T) {
+	t.Run("collect all key-value validation errors", func(t *testing.T) {
+		// Create a map schema with validations that will fail for multiple entries
+		keySchema := String().Min(5, "Key must be at least 5 characters")
+		valueSchema := Int().Min(10, "Value must be at least 10")
+		mapSchema := Map(keySchema, valueSchema)
+
+		// Test with invalid data that will trigger multiple errors
+		invalidMap := map[any]any{
+			"a":     5,  // Key too short (< 5 chars), Value too small (< 10)
+			"bb":    8,  // Key too short (< 5 chars), Value too small (< 10)
+			"valid": 15, // Valid key and value
+			"c":     3,  // Key too short (< 5 chars), Value too small (< 10)
+		}
+
+		_, err := mapSchema.Parse(invalidMap)
+		require.Error(t, err)
+
+		// Check that it's a ZodError with multiple issues
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 6 validation errors (3 key errors + 3 value errors)
+		assert.Len(t, zodErr.Issues, 6)
+
+		// Check that all errors have correct paths and codes
+		keyErrorsCount := 0
+		valueErrorsCount := 0
+
+		for _, issue := range zodErr.Issues {
+			assert.Len(t, issue.Path, 1, "Each error should have map key in path")
+			key := issue.Path[0]
+
+			// Verify path corresponds to invalid keys
+			assert.Contains(t, []any{"a", "bb", "c"}, key, "Error should be for invalid keys only")
+
+			// Count error types
+			if issue.Code == core.IssueCode("too_small") {
+				if key == "a" || key == "bb" || key == "c" {
+					// Could be either key or value error for these keys
+					if strings.Contains(issue.Message, "Key must be at least 5 characters") {
+						keyErrorsCount++
+					} else if strings.Contains(issue.Message, "Value must be at least 10") {
+						valueErrorsCount++
+					}
+				}
+			}
+		}
+
+		// Should have errors for both keys and values
+		assert.Equal(t, 3, keyErrorsCount, "Should have 3 key validation errors")
+		assert.Equal(t, 3, valueErrorsCount, "Should have 3 value validation errors")
+	})
+
+	t.Run("collect key-only validation errors", func(t *testing.T) {
+		// Create schema that only validates keys (no value validation)
+		keySchema := String().Email("Invalid email format")
+		mapSchema := Map(keySchema, nil) // No value schema
+
+		// Test with invalid keys
+		invalidMap := map[any]any{
+			"not-email1":        "value1",
+			"not-email2":        "value2",
+			"valid@example.com": "value3", // Valid key
+			"not-email3":        "value4",
+		}
+
+		_, err := mapSchema.Parse(invalidMap)
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 3 key validation errors (only for invalid email keys)
+		assert.Len(t, zodErr.Issues, 3)
+
+		for _, issue := range zodErr.Issues {
+			assert.Equal(t, core.IssueCode("invalid_format"), issue.Code)
+			assert.Contains(t, issue.Message, "Invalid email format")
+			assert.Len(t, issue.Path, 1, "Each error should have map key in path")
+			key := issue.Path[0]
+			assert.Contains(t, []any{"not-email1", "not-email2", "not-email3"}, key)
+		}
+	})
+
+	t.Run("collect value-only validation errors", func(t *testing.T) {
+		// Create schema that only validates values (no key validation)
+		valueSchema := Int().Max(100, "Value must be at most 100")
+		mapSchema := Map(nil, valueSchema) // No key schema
+
+		// Test with invalid values
+		invalidMap := map[any]any{
+			"key1": 150, // Too large
+			"key2": 50,  // Valid value
+			"key3": 200, // Too large
+			"key4": 300, // Too large
+		}
+
+		_, err := mapSchema.Parse(invalidMap)
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 3 value validation errors
+		assert.Len(t, zodErr.Issues, 3)
+
+		for _, issue := range zodErr.Issues {
+			assert.Equal(t, core.IssueCode("too_big"), issue.Code)
+			assert.Contains(t, issue.Message, "Value must be at most 100")
+			assert.Len(t, issue.Path, 1, "Each error should have map key in path")
+			key := issue.Path[0]
+			assert.Contains(t, []any{"key1", "key3", "key4"}, key)
+		}
+	})
+
+	t.Run("mixed valid and invalid entries", func(t *testing.T) {
+		// Test with a mix of valid and invalid entries
+		keySchema := String().Min(3)
+		valueSchema := Int().Min(5)
+		mapSchema := Map(keySchema, valueSchema)
+
+		mixedMap := map[any]any{
+			"ab":   1,  // Key too short, Value too small
+			"abc":  10, // Valid key and value
+			"abcd": 3,  // Valid key, Value too small
+			"xy":   15, // Key too short, Valid value
+		}
+
+		_, err := mapSchema.Parse(mixedMap)
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should collect all validation errors, no early termination
+		assert.Len(t, zodErr.Issues, 4) // 2 key errors + 2 value errors
+
+		// Verify all errors have correct path structure
+		for _, issue := range zodErr.Issues {
+			assert.Len(t, issue.Path, 1, "Each error should have map key in path")
+			key := issue.Path[0]
+			assert.Contains(t, []any{"ab", "abcd", "xy"}, key, "Errors should only be for invalid entries")
+		}
+	})
 }

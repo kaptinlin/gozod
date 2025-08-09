@@ -348,7 +348,9 @@ func TestErrorIntegration(t *testing.T) {
 				return fmt.Sprintf("SIZE_ERROR: Value must be at least %v at %s",
 					issue.Minimum, ToDotPath(issue.Path))
 			case core.InvalidValue, core.InvalidFormat, core.InvalidUnion, core.InvalidKey,
-				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom:
+				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom,
+				core.InvalidSchema, core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired,
+				core.TypeConversion, core.NilPointer:
 				return fmt.Sprintf("ERROR: %s at %s",
 					issue.Message, ToDotPath(issue.Path))
 			default:

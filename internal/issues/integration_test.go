@@ -51,28 +51,36 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 			create func() core.ZodRawIssue
 		}{
 			{
-				name:   "invalid type helper",
-				create: func() core.ZodRawIssue { return CreateInvalidTypeIssue(core.ZodTypeString, "test") },
+				name: "invalid type helper",
+				create: func() core.ZodRawIssue {
+					return NewRawIssue(core.InvalidType, "test", WithExpected("string"), WithReceived("number"))
+				},
 			},
 			{
-				name:   "too big helper",
-				create: func() core.ZodRawIssue { return CreateTooBigIssue(100, true, "number", 150) },
+				name: "too big helper",
+				create: func() core.ZodRawIssue {
+					return NewRawIssue(core.TooBig, 150, WithMaximum(100), WithInclusive(true), WithOrigin("number"))
+				},
 			},
 			{
-				name:   "too small helper",
-				create: func() core.ZodRawIssue { return CreateTooSmallIssue(5, false, "string", 3) },
+				name: "too small helper",
+				create: func() core.ZodRawIssue {
+					return NewRawIssue(core.TooSmall, 3, WithMinimum(5), WithInclusive(false), WithOrigin("string"))
+				},
 			},
 			{
 				name:   "invalid format helper",
-				create: func() core.ZodRawIssue { return CreateInvalidFormatIssue("email", "invalid@", nil) },
+				create: func() core.ZodRawIssue { return NewRawIssue(core.InvalidFormat, "invalid@", WithFormat("email")) },
 			},
 			{
-				name:   "not multiple of helper",
-				create: func() core.ZodRawIssue { return CreateNotMultipleOfIssue(2, "number", 7) },
+				name: "not multiple of helper",
+				create: func() core.ZodRawIssue {
+					return NewRawIssue(core.NotMultipleOf, 7, WithDivisor(2), WithOrigin("number"))
+				},
 			},
 			{
 				name:   "custom helper",
-				create: func() core.ZodRawIssue { return CreateCustomIssue("Custom error", nil, "test") },
+				create: func() core.ZodRawIssue { return NewRawIssueFromMessage("Custom error", "test", nil) },
 			},
 		}
 
@@ -229,7 +237,9 @@ func TestErrorProcessingIntegration(t *testing.T) {
 				return fmt.Sprintf("SIZE_ERROR: Value must be at least %v at %s",
 					issue.Minimum, ToDotPath(issue.Path))
 			case core.InvalidValue, core.InvalidFormat, core.InvalidUnion, core.InvalidKey,
-				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom:
+				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom,
+				core.InvalidSchema, core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired,
+				core.TypeConversion, core.NilPointer:
 				return fmt.Sprintf("ERROR: %s at %s",
 					issue.Message, ToDotPath(issue.Path))
 			default:
@@ -320,14 +330,11 @@ func TestPerformanceIntegration(t *testing.T) {
 
 	t.Run("API validation error response simulation", func(t *testing.T) {
 		// Simulate typical API validation error response
-		rawIssue1 := CreateInvalidTypeIssue(core.ZodTypeString, "john123")
-		rawIssue1.Path = []any{"username"}
+		rawIssue1 := NewRawIssue(core.InvalidType, "john123", WithExpected("string"), WithReceived("number"), WithPath([]any{"username"}))
 
-		rawIssue2 := CreateTooSmallIssue(3, true, "string", "ab")
-		rawIssue2.Path = []any{"password"}
+		rawIssue2 := NewRawIssue(core.TooSmall, "ab", WithMinimum(3), WithInclusive(true), WithOrigin("string"), WithPath([]any{"password"}))
 
-		rawIssue3 := CreateInvalidFormatIssue("email", "invalid.email", nil)
-		rawIssue3.Path = []any{"email"}
+		rawIssue3 := NewRawIssue(core.InvalidFormat, "invalid.email", WithFormat("email"), WithPath([]any{"email"}))
 
 		// Convert raw issues to finalized issues
 		issues := []core.ZodIssue{
@@ -351,7 +358,9 @@ func TestPerformanceIntegration(t *testing.T) {
 			case core.InvalidFormat:
 				return fmt.Sprintf("Field must be a valid %s", issue.Format)
 			case core.InvalidValue, core.InvalidUnion, core.InvalidKey,
-				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom:
+				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom,
+				core.InvalidSchema, core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired,
+				core.TypeConversion, core.NilPointer:
 				return issue.Message
 			default:
 				return issue.Message
@@ -372,8 +381,7 @@ func TestPerformanceIntegration(t *testing.T) {
 	})
 
 	t.Run("development vs production error handling", func(t *testing.T) {
-		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
-		rawIssue.Path = []any{"data", "field"}
+		rawIssue := NewRawIssue(core.InvalidType, "test", WithExpected("string"), WithReceived("number"), WithPath([]any{"data", "field"}))
 
 		// Development mode - include input
 		devCtx := &core.ParseContext{ReportInput: true}
@@ -628,14 +636,11 @@ func TestRealWorldScenarios(t *testing.T) {
 
 	t.Run("API validation error response simulation", func(t *testing.T) {
 		// Simulate typical API validation error response
-		rawIssue1 := CreateInvalidTypeIssue(core.ZodTypeString, "john123")
-		rawIssue1.Path = []any{"username"}
+		rawIssue1 := NewRawIssue(core.InvalidType, "john123", WithExpected("string"), WithReceived("number"), WithPath([]any{"username"}))
 
-		rawIssue2 := CreateTooSmallIssue(3, true, "string", "ab")
-		rawIssue2.Path = []any{"password"}
+		rawIssue2 := NewRawIssue(core.TooSmall, "ab", WithMinimum(3), WithInclusive(true), WithOrigin("string"), WithPath([]any{"password"}))
 
-		rawIssue3 := CreateInvalidFormatIssue("email", "invalid.email", nil)
-		rawIssue3.Path = []any{"email"}
+		rawIssue3 := NewRawIssue(core.InvalidFormat, "invalid.email", WithFormat("email"), WithPath([]any{"email"}))
 
 		// Convert raw issues to finalized issues
 		issues := []core.ZodIssue{
@@ -659,7 +664,9 @@ func TestRealWorldScenarios(t *testing.T) {
 			case core.InvalidFormat:
 				return fmt.Sprintf("Field must be a valid %s", issue.Format)
 			case core.InvalidValue, core.InvalidUnion, core.InvalidKey,
-				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom:
+				core.InvalidElement, core.TooBig, core.NotMultipleOf, core.UnrecognizedKeys, core.Custom,
+				core.InvalidSchema, core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired,
+				core.TypeConversion, core.NilPointer:
 				return issue.Message
 			default:
 				return issue.Message
@@ -680,8 +687,7 @@ func TestRealWorldScenarios(t *testing.T) {
 	})
 
 	t.Run("development vs production error handling", func(t *testing.T) {
-		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "test")
-		rawIssue.Path = []any{"data", "field"}
+		rawIssue := NewRawIssue(core.InvalidType, "test", WithExpected("string"), WithReceived("number"), WithPath([]any{"data", "field"}))
 
 		// Development mode - include input
 		devCtx := &core.ParseContext{ReportInput: true}

@@ -23,11 +23,15 @@ GoZod follows a *type-safe, layered* architecture that mirrors the API surface o
 
 ```
 go module gozod
-├── core      # Foundation contracts (no concrete logic)
-├── pkg       # Re-usable, reflection-free helpers (zero deps)
-├── internal  # Private runtime engine (generic parser, checks, issues)
-├── types     # Public schema implementations (String, Array, …)
-└── locales   # Built-in i18n bundles
+├── bin/         # Build outputs and tools
+├── coerce/      # Root-level coercion utilities  
+├── core/        # Foundation contracts (no concrete logic)
+├── docs/        # Documentation and guides
+├── examples/    # Example implementations and usage
+├── internal/    # Private runtime engine (generic parser, checks, issues)
+├── locales/     # Built-in i18n bundles
+├── pkg/         # Re-usable, reflection-free helpers (zero deps)  
+└── types/       # Public schema implementations (String, Array, …)
 ```
 
 ### 2.1 One-Way Dependency Rule
@@ -41,15 +45,39 @@ graph TD;
   core --> types;
   internal --> locales;
   types --> locales;
+  coerce --> types;
+  coerce --> internal;
 ```
 
-*`types`* never import each other; all cross-type logic lives in *internal* or *pkg*.
+*`types`* never import each other; all cross-type logic lives in *internal*, *pkg*, or *coerce*.
 
 ---
 
 ## 3. Directory Reference
 
-### 3.1 `core/` – Foundation Layer
+### 3.1 Root Level Files
+
+| File | Purpose |
+|------|---------|
+| `gozod.go` | Main entry point with all public constructors and exports |
+| `gozod_test.go` | Integration tests for the main API |
+| `json_schema.go` | JSON Schema generation functionality |
+| `json_schema_test.go` | Tests for JSON Schema generation |
+| `CLAUDE.md` | Project instructions for Claude Code AI assistant |
+| `Makefile` | Build automation and common tasks |
+
+### 3.2 `bin/` – Build Outputs
+Generated binaries, tools, and build artifacts. Not checked into version control.
+
+### 3.3 `coerce/` – Root-Level Coercion
+High-level coercion utilities that bridge between `pkg/coerce` and the schema system:
+
+| File | Purpose |
+|------|---------|
+| `coerce.go` | Type coercion integration with schema validation |
+| `coerce_test.go` | Tests for coercion functionality |
+
+### 3.4 `core/` – Foundation Layer
 
 | File | Purpose |
 |------|---------|
@@ -62,10 +90,41 @@ graph TD;
 | `issues.go`     | User-facing error types (`ZodIssue`, `ZodError`) |
 | `constants.go`  | Library-wide constants (issue codes, type ids) |
 | `config.go`     | Global config & default error map |
+| `registry.go`   | Schema metadata and registration system |
 
 > **Golden rule:** *core contains zero business logic; it only defines contracts and small helpers required by every other layer.*
 
-### 3.2 `pkg/` – Utilities Layer
+### 3.5 `docs/` – Documentation
+
+| File | Purpose |
+|------|---------|
+| `api.md` | Public API reference and examples |
+| `basics.md` | Basic usage and getting started guide |
+| `error-customization.md` | Guide for customizing error messages |
+| `error-formatting.md` | Error formatting and localization |
+| `feature-mapping.md` | Mapping between TypeScript Zod and GoZod features |
+| `json-schema.md` | JSON Schema generation documentation |
+| `metadata.md` | Schema metadata system documentation |
+
+### 3.6 `examples/` – Example Implementations
+
+Comprehensive examples showcasing different GoZod features:
+
+| Directory | Focus |
+|-----------|-------|
+| `quickstart/` | Basic usage patterns |
+| `primitive/` | Primitive type validation |
+| `object/` | Object schema examples |
+| `union/` | Union type validation |
+| `intersection/` | Intersection types |
+| `advanced_lazy/` | Lazy evaluation and circular references |
+| `coerce/` | Type coercion examples |
+| `config/` | Configuration and customization |
+| `error_handling/` | Error handling patterns |
+| `format/` | Format validation examples |
+| `i18n/` | Internationalization examples |
+
+### 3.7 `pkg/` – Utilities Layer
 
 Stateless, allocation-conscious helpers independent of GoZod runtime:
 
@@ -79,16 +138,16 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `structx`   | Struct ⇄ map conversion without `encoding/json` |
 | `regexes`   | Pre-compiled, namespaced regex library |
 
-### 3.3 `internal/` – Runtime Engine (🤫 private)
+### 3.8 `internal/` – Runtime Engine (🤫 private)
 
-| Sub-dir | Role |
-|---------|------|
-| `engine`   | Generic parser, coercion and check runner |
-| `checks`   | Concrete check factories (length, numeric, format …) |
-| `issues`   | Raw issue builders, finalisers & formatters |
-| `utils`    | Low-level helpers used only by the engine |
+| Sub-dir | Role | Key Files |
+|---------|------|-----------|
+| `engine`   | Generic parser, coercion and check runner | `parser.go`, `checker.go`, `types.go`, `errors.go`, `params.go` |
+| `checks`   | Concrete check factories (length, numeric, format …) | `checks.go`, `custom.go`, `format.go`, `length.go`, `numeric.go`, `strings.go`, `file.go` |
+| `issues`   | Raw issue builders, finalisers & formatters | `creators.go`, `formatters.go`, `finalize.go`, `errors.go`, `types.go`, `raw.go`, `accessors.go` |
+| `utils`    | Low-level helpers used only by the engine | `utils.go` |
 
-### 3.4 `types/` – Schema Implementations
+### 3.9 `types/` – Schema Implementations
 
 Each file maps 1-to-1 with a Zod API call and follows the **three-layer template**:
 
@@ -102,11 +161,34 @@ type ZodString struct { internals core.ZodTypeInternals }
 func (z *ZodString) Parse(...) { return engine.ParseType[string](mdc:...) }
 ```
 
-Wrapper types (*Default*, *Prefault*, *Optional*, *Nilable*) embed or proxy the underlying schema and live in their own files.
+Current schema implementations include:
 
-### 3.5 `locales/`
+| Schema Type | Files | Purpose |
+|-------------|-------|---------|
+| **Primitives** | `string.go`, `bool.go`, `integer.go`, `float.go`, `bigint.go`, `complex.go` | Basic Go types |
+| **Special Types** | `any.go`, `unknown.go`, `never.go`, `nil.go` | Special validation types |
+| **Collections** | `array.go`, `slice.go`, `map.go`, `record.go` | Container types |
+| **Objects** | `object.go`, `struct.go` | Structured data types |
+| **Composition** | `union.go`, `discriminated_union.go`, `intersection.go` | Type composition |
+| **Functions** | `function.go` | Function validation |
+| **Formats** | `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go` | Format-specific validation |
+| **Text** | `text.go`, `stringbool.go` | Text processing types |
+| **Advanced** | `lazy.go`, `literal.go`, `enum.go`, `transform.go` | Advanced type features |
 
-Tiny, zero-dep bundles of translated error messages. New languages implement the `Locale` interface and register themselves in `locales.go`.
+All schema files include comprehensive test counterparts (`*_test.go`).
+
+### 3.10 `locales/` – Internationalization
+
+Tiny, zero-dep bundles of translated error messages:
+
+| File | Purpose |
+|------|---------|
+| `locales.go` | Locale interface and registration system |
+| `locales_test.go` | Locale system tests |
+| `en.go` | English error messages (default) |
+| `zh_cn.go` | Simplified Chinese error messages |
+
+New languages implement the `Locale` interface and register themselves in `locales.go`.
 
 ---
 
@@ -123,9 +205,35 @@ Tiny, zero-dep bundles of translated error messages. New languages implement the
 
 ---
 
-## 5. Naming Conventions
+## 5. File Organization Patterns
 
-* **Schema files**: `string.go`, `integer.go`, `object.go`, `union.go`…
-* **Wrapper files**: `default.go`, `optional.go`, `prefault.go`, `nilable.go`
-* **Check factories**: live inside `internal/checks/`; file name matches concern (`numeric.go`, `strings.go`)
-* **Packages** never use underscores; files do where clarity wins (`coercion.go`, `parser_test.go`).
+### 5.1 Schema Files (`types/`)
+- One schema type per file: `string.go`, `integer.go`, `object.go`, `union.go`
+- Comprehensive test files: `string_test.go`, `integer_test.go`, etc.
+- All files follow the 8-section template from the implementation guide
+
+### 5.2 Internal Organization
+- **Check factories**: Live inside `internal/checks/`; file name matches concern (`numeric.go`, `strings.go`)
+- **Engine components**: Grouped by function (`parser.go`, `checker.go`, `types.go`)
+- **Issue handling**: Separated by responsibility (`creators.go`, `formatters.go`, `errors.go`)
+
+### 5.3 Package and File Naming
+- **Packages** never use underscores; prefer descriptive names
+- **Files** use underscores where clarity wins (`coerce_test.go`, `parser_test.go`)
+- **Test files** always end with `_test.go` and mirror the source file name
+
+## 6. Development Workflow Integration
+
+### 6.1 Build System (`Makefile`)
+```make
+test:     # Run all tests with race detection
+lint:     # Run golangci-lint and mod tidy checks  
+build:    # Build all packages
+clean:    # Clean build artifacts
+```
+
+### 6.2 Documentation Strategy
+- **Code examples** live in `examples/` with working `main.go` files
+- **API documentation** in `docs/` with comprehensive guides
+- **Implementation guides** in `.cursor/rules/` for AI assistance
+- **Project instructions** in `CLAUDE.md` for Claude Code integration

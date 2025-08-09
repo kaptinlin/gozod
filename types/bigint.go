@@ -6,6 +6,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
@@ -66,6 +67,47 @@ func (z *ZodBigInt[T]) Coerce(input any) (any, bool) {
 
 // Parse returns a value that matches the generic type T with full type safety.
 func (z *ZodBigInt[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	// Handle nil input explicitly before ParsePrimitive
+	if input == nil {
+		var zero T
+		var parseCtx *core.ParseContext
+		if len(ctx) > 0 {
+			parseCtx = ctx[0]
+		} else {
+			parseCtx = &core.ParseContext{}
+		}
+
+		// Check modifiers for nil handling
+		internals := &z.internals.ZodTypeInternals
+
+		// NonOptional flag - nil not allowed
+		if internals.NonOptional {
+			return zero, issues.CreateNonOptionalError(parseCtx)
+		}
+
+		// Default/DefaultFunc - short circuit
+		if internals.DefaultValue != nil {
+			return engine.ConvertToConstraintType[*big.Int, T](internals.DefaultValue, parseCtx, core.ZodTypeBigInt)
+		}
+		if internals.DefaultFunc != nil {
+			defaultValue := internals.DefaultFunc()
+			return engine.ConvertToConstraintType[*big.Int, T](defaultValue, parseCtx, core.ZodTypeBigInt)
+		}
+
+		// Prefault/PrefaultFunc - use as new input
+		if internals.PrefaultValue != nil {
+			input = internals.PrefaultValue
+		} else if internals.PrefaultFunc != nil {
+			input = internals.PrefaultFunc()
+		} else if internals.Optional || internals.Nilable {
+			// Optional/Nilable - allow nil
+			return engine.ConvertToConstraintType[*big.Int, T](nil, parseCtx, core.ZodTypeBigInt)
+		} else {
+			// Reject nil input
+			return zero, issues.CreateInvalidTypeError(core.ZodTypeBigInt, nil, parseCtx)
+		}
+	}
+
 	return engine.ParsePrimitive[*big.Int, T](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -88,6 +130,35 @@ func (z *ZodBigInt[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodBigInt[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodBigInt[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value *big.Int, checks []core.ZodCheck, c *core.ParseContext) (*big.Int, error) {
+		return engine.ApplyChecks[*big.Int](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[*big.Int, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeBigInt,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse provides compile-time type safety and panics on validation failure.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodBigInt[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // =============================================================================

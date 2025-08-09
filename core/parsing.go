@@ -30,6 +30,10 @@ type ParseContext struct {
 	// ReportInput includes the input field in issue objects.
 	// When true, validation issues will include the original input value.
 	ReportInput bool
+
+	// IsPrefaultContext indicates if this parsing is for a prefault value
+	// When true, validators should allow prefault values to proceed to refinement
+	IsPrefaultContext bool
 }
 
 // -----------------------------------------------------------------------------

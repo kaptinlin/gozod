@@ -24,17 +24,23 @@ func getParsedTypeZh(input any) string {
 	case core.ParsedTypeNaN:
 		return "非数字(NaN)"
 	case core.ParsedTypeNil:
-		return "空值(null)"
-	case core.ParsedTypeSlice, core.ParsedTypeArray:
+		return "空值(nil)" // Go's nil value representation
+	case core.ParsedTypeSlice:
+		return "切片" // Go's slice type
+	case core.ParsedTypeArray:
 		return "数组"
-	case core.ParsedTypeMap, core.ParsedTypeObject, core.ParsedTypeStruct:
+	case core.ParsedTypeMap:
+		return "映射"
+	case core.ParsedTypeObject:
 		return "对象"
+	case core.ParsedTypeStruct:
+		return "结构体"
 	case core.ParsedTypeFloat, core.ParsedTypeNumber:
 		return "数字"
 	case core.ParsedTypeBigint:
 		return "大整数"
 	case core.ParsedTypeBool:
-		return "布尔值"
+		return "布尔值" // Go's boolean type
 	case core.ParsedTypeString:
 		return "字符串"
 	case core.ParsedTypeFunction:
@@ -231,6 +237,38 @@ func formatZhCN(raw core.ZodRawIssue) string {
 		}
 		return fmt.Sprintf("%s 中包含无效值(value)", origin)
 
+	case core.MissingRequired:
+		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
+		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "字段")
+		if fieldName == "" {
+			return fmt.Sprintf("缺少必需的%s", fieldType)
+		}
+		return fmt.Sprintf("缺少必需的%s: %s", fieldType, fieldName)
+
+	case core.TypeConversion:
+		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "未知类型")
+		toType := mapx.GetStringDefault(raw.Properties, "to_type", "未知类型")
+		return fmt.Sprintf("类型转换失败：无法将 %s 转换为 %s", fromType, toType)
+
+	case core.InvalidSchema:
+		// Prefer reason from properties if provided
+		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		if reason != "" {
+			return fmt.Sprintf("无效的模式定义：%s", reason)
+		}
+		return "无效的模式定义"
+
+	case core.InvalidDiscriminator:
+		field := mapx.GetStringDefault(raw.Properties, "field", "判别字段")
+		return fmt.Sprintf("无效或缺失的判别字段：%s", field)
+
+	case core.IncompatibleTypes:
+		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "值")
+		return fmt.Sprintf("无法合并%s：类型不兼容", conflictType)
+
+	case core.NilPointer:
+		return "遇到空指针"
+
 	case core.Custom:
 		message := mapx.GetStringDefault(raw.Properties, "message", "")
 		if message != "" {
@@ -332,4 +370,13 @@ func ZhCN() *core.ZodConfig {
 	return &core.ZodConfig{
 		LocaleError: formatZhCN,
 	}
+}
+
+// =============================================================================
+// ENHANCED ERROR MESSAGE UTILITIES
+// =============================================================================
+
+// FormatMessageZh formats a single issue using Chinese locale
+func FormatMessageZh(issue core.ZodRawIssue) string {
+	return formatZhCN(issue)
 }

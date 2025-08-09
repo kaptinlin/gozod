@@ -47,91 +47,38 @@ func (z *ZodAny[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse returns the input value as-is with modifier support using direct validation
+// validateAnyValue is the Any type validator - accepts any value and applies checks
+func validateAnyValue[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Any type accepts any value, only need to apply checks
+	return engine.ApplyChecks[T](value, checks, ctx)
+}
+
+// Parse returns the input value as-is with modifier support using engine.ParsePrimitive
 func (z *ZodAny[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+	// Create converter adapter for engine.ParsePrimitive
+	converter := func(value any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
+		return convertToAnyConstraintType[T, R](value), nil
 	}
 
-	// Handle nil input
-	if input == nil {
-		// NonOptional -> dedicated error
-		if z.internals.NonOptional {
-			return *new(R), engine.CreateNonOptionalError(parseCtx)
-		}
-		// Check if nil is allowed (optional/nilable) - this takes precedence
-		if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
-			var zero R
-			return zero, nil
-		}
+	return engine.ParsePrimitive[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeAny,
+		validateAnyValue[T],
+		converter,
+		ctx...,
+	)
+}
 
-		// Try default value
-		if z.internals.ZodTypeInternals.DefaultValue != nil {
-			return z.Parse(z.internals.ZodTypeInternals.DefaultValue, parseCtx)
-		}
-
-		// Try default function
-		if z.internals.ZodTypeInternals.DefaultFunc != nil {
-			defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
-			return z.Parse(defaultValue, parseCtx)
-		}
-
-		// For Any type, nil is accepted by default unless explicitly restricted by checks
-		if len(z.internals.ZodTypeInternals.Checks) > 0 {
-			transformedValue, err := engine.ApplyChecks(input, z.internals.ZodTypeInternals.Checks, parseCtx)
-			if err != nil {
-				// Try prefault on validation failure
-				if z.internals.ZodTypeInternals.PrefaultValue != nil {
-					return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
-				}
-				if z.internals.ZodTypeInternals.PrefaultFunc != nil {
-					prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
-					return z.Parse(prefaultValue, parseCtx)
-				}
-
-				return *new(R), err
-			}
-			// Use the transformed value from ApplyChecks
-			return convertToAnyConstraintType[T, R](transformedValue), nil
-		}
-		var zero R
-		return zero, nil
-	}
-
-	// Any type accepts any value - run validation checks if any exist
-	if len(z.internals.ZodTypeInternals.Checks) > 0 {
-		transformedValue, err := engine.ApplyChecks(input, z.internals.ZodTypeInternals.Checks, parseCtx)
-		if err != nil {
-			// Try prefault on validation failure
-			if z.internals.ZodTypeInternals.PrefaultValue != nil {
-				return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
-			}
-			if z.internals.ZodTypeInternals.PrefaultFunc != nil {
-				prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
-				return z.Parse(prefaultValue, parseCtx)
-			}
-
-			return *new(R), err
-		}
-		// Use the transformed value from ApplyChecks
-		input = transformedValue
-	}
-
-	// Apply transform if present
-	if z.internals.ZodTypeInternals.Transform != nil {
-		refCtx := &core.RefinementContext{ParseContext: parseCtx}
-		result, err := z.internals.ZodTypeInternals.Transform(input, refCtx)
-		if err != nil {
-			return *new(R), err
-		}
-		return convertToAnyConstraintType[T, R](result), nil
-	}
-
-	// Convert result to constraint type R and return
-	return convertToAnyConstraintType[T, R](input), nil
+// StrictParse provides type-safe parsing with compile-time guarantees using engine.ParsePrimitiveStrict
+func (z *ZodAny[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitiveStrict[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeAny,
+		validateAnyValue[T],
+		ctx...,
+	)
 }
 
 // MustParse is the variant that panics on error
@@ -262,12 +209,12 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
 	param := utils.GetFirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
-	var checkParams any
+	var errorMessage any
 	if normalizedParams.Error != nil {
-		checkParams = normalizedParams
+		errorMessage = normalizedParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -279,12 +226,12 @@ func (z *ZodAny[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodAny[T, R] {
 	param := utils.GetFirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
-	var checkParams any
+	var errorMessage any
 	if normalizedParams.Error != nil {
-		checkParams = normalizedParams
+		errorMessage = normalizedParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -353,7 +300,10 @@ func convertToAnyConstraintType[T any, R any](value any) R {
 		}
 		return any((*any)(nil)).(R)
 	default:
-		// Return value directly as R
+		// Return value directly as R, handle nil case safely
+		if value == nil {
+			return zero // Return zero value for nil
+		}
 		return any(value).(R)
 	}
 }
@@ -408,6 +358,9 @@ func newZodAnyFromDef[T any, R any](def *ZodAnyDef) *ZodAny[T, R] {
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 	}
+
+	// Any type should default to accepting nil values like in Zod v4
+	internals.Nilable = true
 
 	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {

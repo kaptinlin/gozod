@@ -6,7 +6,6 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/validate"
@@ -68,27 +67,6 @@ func (z *ZodIPv4[T]) Coerce(input any) (any, bool) {
 
 // Parse returns type-safe IPv4 address using unified engine API
 func (z *ZodIPv4[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
-	// Special nil handling: IPv4 schemas should *not* apply default values on nil input
-	// unless explicitly marked Optional/Nilable.
-	parseCtx := (*core.ParseContext)(nil)
-	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	}
-	if parseCtx == nil {
-		parseCtx = core.NewParseContext()
-	}
-
-	if input == nil {
-		if z.internals.ZodTypeInternals.Optional || z.internals.ZodTypeInternals.Nilable {
-			var zero T
-			return zero, nil
-		}
-		var zero T
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeIPv4, nil)
-		finalIssue := issues.FinalizeIssue(rawIssue, parseCtx, nil)
-		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
-	}
-
 	return engine.ParsePrimitive[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -102,6 +80,34 @@ func (z *ZodIPv4[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 // MustParse is the variant that panics on error
 func (z *ZodIPv4[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodIPv4[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value string, checks []core.ZodCheck, c *core.ParseContext) (string, error) {
+		return engine.ApplyChecks[string](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeIPv4,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodIPv4[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -213,6 +219,7 @@ func (z *ZodIPv4[T]) Refine(fn func(T) bool, params ...any) *ZodIPv4[T] {
 			return false
 		case *string:
 			if v == nil {
+				// Call the refinement function with typed nil
 				return fn(any((*string)(nil)).(T))
 			}
 			if strVal, ok := v.(string); ok {
@@ -227,12 +234,12 @@ func (z *ZodIPv4[T]) Refine(fn func(T) bool, params ...any) *ZodIPv4[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -241,12 +248,12 @@ func (z *ZodIPv4[T]) Refine(fn func(T) bool, params ...any) *ZodIPv4[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodIPv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv4[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -427,6 +434,34 @@ func (z *ZodIPv6[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodIPv6[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value string, checks []core.ZodCheck, c *core.ParseContext) (string, error) {
+		return engine.ApplyChecks[string](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeIPv6,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodIPv6[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodIPv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
@@ -536,6 +571,7 @@ func (z *ZodIPv6[T]) Refine(fn func(T) bool, params ...any) *ZodIPv6[T] {
 			return false
 		case *string:
 			if v == nil {
+				// Call the refinement function with typed nil
 				return fn(any((*string)(nil)).(T))
 			}
 			if strVal, ok := v.(string); ok {
@@ -550,12 +586,12 @@ func (z *ZodIPv6[T]) Refine(fn func(T) bool, params ...any) *ZodIPv6[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -564,12 +600,12 @@ func (z *ZodIPv6[T]) Refine(fn func(T) bool, params ...any) *ZodIPv6[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodIPv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv6[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -735,6 +771,34 @@ func (z *ZodCIDRv4[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodCIDRv4[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value string, checks []core.ZodCheck, c *core.ParseContext) (string, error) {
+		return engine.ApplyChecks[string](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeCIDRv4,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodCIDRv4[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates the input and returns any type (for runtime interface)
 func (z *ZodCIDRv4[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
@@ -844,6 +908,7 @@ func (z *ZodCIDRv4[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv4[T] {
 			return false
 		case *string:
 			if v == nil {
+				// Call the refinement function with typed nil
 				return fn(any((*string)(nil)).(T))
 			}
 			if strVal, ok := v.(string); ok {
@@ -858,12 +923,12 @@ func (z *ZodCIDRv4[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv4[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -872,12 +937,12 @@ func (z *ZodCIDRv4[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv4[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodCIDRv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv4[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -1043,6 +1108,34 @@ func (z *ZodCIDRv6[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodCIDRv6[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value string, checks []core.ZodCheck, c *core.ParseContext) (string, error) {
+		return engine.ApplyChecks[string](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeCIDRv6,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodCIDRv6[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates the input and returns any type (for runtime interface)
 func (z *ZodCIDRv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
@@ -1148,6 +1241,7 @@ func (z *ZodCIDRv6[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv6[T] {
 			return false
 		case *string:
 			if v == nil {
+				// Call the refinement function with typed nil
 				return fn(any((*string)(nil)).(T))
 			}
 			if strVal, ok := v.(string); ok {
@@ -1162,12 +1256,12 @@ func (z *ZodCIDRv6[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv6[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -1176,12 +1270,12 @@ func (z *ZodCIDRv6[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv6[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodCIDRv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv6[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -1359,6 +1453,34 @@ func (z *ZodURL[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodURL[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Create validator that applies checks to the constraint type T
+	validator := func(value string, checks []core.ZodCheck, c *core.ParseContext) (string, error) {
+		return engine.ApplyChecks[string](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeURL,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+// Provides compile-time type safety with maximum performance.
+func (z *ZodURL[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodURL[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
@@ -1442,6 +1564,7 @@ func (z *ZodURL[T]) Refine(fn func(T) bool, params ...any) *ZodURL[T] {
 			return false
 		case *string:
 			if v == nil {
+				// Call the refinement function with typed nil
 				return fn(any((*string)(nil)).(T))
 			}
 			if strVal, ok := v.(string); ok {
@@ -1456,12 +1579,12 @@ func (z *ZodURL[T]) Refine(fn func(T) bool, params ...any) *ZodURL[T] {
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -1470,12 +1593,12 @@ func (z *ZodURL[T]) Refine(fn func(T) bool, params ...any) *ZodURL[T] {
 // RefineAny adds a custom refinement function for any type
 func (z *ZodURL[T]) RefineAny(fn func(any) bool, params ...any) *ZodURL[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)

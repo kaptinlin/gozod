@@ -6,6 +6,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -39,26 +40,41 @@ func (z *ZodLiteral[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error
 		if !z.Contains(value) {
 			// Re-use standardized invalid type error helper so error formatting
 			// matches other primitives. We treat a wrong literal as invalid type.
-			return value, engine.CreateInvalidTypeError(core.ZodTypeLiteral, value, c)
+			return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, c)
 		}
 		// Apply additional checks (Refine, Overwrite, etc.).
 		return engine.ApplyChecks[T](value, checks, c)
 	}
 
-	// Ensure validator is always executed (even for pointer inputs) by making
-	// sure there is at least one check present. We inject a noop custom check
-	// when the schema currently has none.
-	internalsCopy := z.internals.ZodTypeInternals.Clone()
-	if len(internalsCopy.Checks) == 0 {
-		internalsCopy.AddCheck(checks.NewCustom[any](func(v any) bool { return true }))
-	}
-
 	return engine.ParsePrimitive[T, R](
 		input,
-		internalsCopy,
+		&z.internals.ZodTypeInternals,
 		core.ZodTypeLiteral,
 		validator,
 		engine.ConvertToConstraintType[T, R],
+		ctx..., // pass-through context
+	)
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+func (z *ZodLiteral[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	// Validator ensures the value is one of the allowed literal values and then
+	// delegates to engine.ApplyChecks to run Refine / Check logic.
+	validator := func(value T, checks []core.ZodCheck, c *core.ParseContext) (T, error) {
+		if !z.Contains(value) {
+			// Re-use standardized invalid type error helper so error formatting
+			// matches other primitives. We treat a wrong literal as invalid type.
+			return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, c)
+		}
+		// Apply additional checks (Refine, Overwrite, etc.).
+		return engine.ApplyChecks[T](value, checks, c)
+	}
+
+	return engine.ParsePrimitiveStrict[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeLiteral,
+		validator,
 		ctx..., // pass-through context
 	)
 }
@@ -69,6 +85,15 @@ func (z *ZodLiteral[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 		panic(err)
 	}
 	return val
+}
+
+// MustStrictParse is the strict mode variant that panics on error.
+func (z *ZodLiteral[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 func (z *ZodLiteral[T, R]) MustParseAny(input any, ctx ...*core.ParseContext) any {
@@ -149,15 +174,34 @@ func (z *ZodLiteral[T, R]) PrefaultFunc(fn func() T) *ZodLiteral[T, R] {
 
 // Refine adds a custom validation check to the schema.
 func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T, R] {
-	check := checks.NewCustom[any](
-		func(data any) bool {
+	// Wrapper that handles both T and *T constraint types
+	wrapper := func(data any) bool {
+		var zero R
+
+		switch any(zero).(type) {
+		case *T:
+			// Schema output is *T – handle nil and convert to T for validation
+			if data == nil {
+				// For nil input with *T constraint, we need to decide:
+				// - If nilable, nil should pass validation (return true)
+				// - But the user's function expects T, so we can't call it with nil
+				// In Zod v4, refinements on nilable schemas should allow nil to pass
+				return true
+			}
 			if typed, ok := data.(T); ok {
 				return fn(typed)
 			}
 			return false
-		},
-		utils.NormalizeCustomParams(params...),
-	)
+		default:
+			// Schema output is T – direct validation
+			if typed, ok := data.(T); ok {
+				return fn(typed)
+			}
+			return false
+		}
+	}
+
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	in := z.internals.ZodTypeInternals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)

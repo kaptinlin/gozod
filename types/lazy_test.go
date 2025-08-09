@@ -490,72 +490,87 @@ func TestLazy_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestLazy_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with Lazy", func(t *testing.T) {
-		defaultValue := "default"
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
 		schema := LazyAny(func() any {
-			return String()
-		}).Default(defaultValue)
+			return String().Min(3)
+		}).Default("default_value").Prefault("prefault_value")
 
-		// Valid input should override default
-		result, err := schema.Parse("hello")
+		// When input is nil, Default should take precedence
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
+		assert.Equal(t, "default_value", result)
 	})
 
-	t.Run("type-safe default value", func(t *testing.T) {
-		defaultValue := "default"
-		schema := Lazy[*ZodString[string]](func() *ZodString[string] {
-			return String()
-		}).Default(defaultValue)
-
-		// Valid input should override default
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-	})
-
-	t.Run("prefault value", func(t *testing.T) {
-		prefaultValue := "prefault"
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
 		schema := LazyAny(func() any {
-			return String()
-		}).Prefault(prefaultValue)
+			return String().Min(10) // Require at least 10 characters
+		}).Default("short") // Default value violates constraint
 
-		// Valid input should override prefault
-		result, err := schema.Parse("hello")
+		// Default should bypass validation even if it violates constraints
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
+		assert.Equal(t, "short", result)
 	})
 
-	t.Run("defaultFunc", func(t *testing.T) {
-		counter := 0
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		schema := LazyAny(func() any {
+			return String().Min(10) // Require at least 10 characters
+		}).Prefault("short") // Prefault value violates constraint
+
+		// Prefault should fail validation if it violates constraints
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := LazyAny(func() any {
+			return String().Min(10) // Require at least 10 characters
+		}).Prefault("prefault_value")
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := schema.Parse("short") // This input is too short
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
 		schema := LazyAny(func() any {
 			return String().Min(3)
 		}).DefaultFunc(func() any {
-			counter++
-			return "default"
+			defaultCalled = true
+			return "default_func"
+		}).PrefaultFunc(func() any {
+			prefaultCalled = true
+			return "prefault_func"
 		})
 
-		// Valid input should not call function
-		result, err := schema.Parse("hello")
+		// DefaultFunc should be called and take precedence
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-		assert.Equal(t, 0, counter)
+		assert.Equal(t, "default_func", result)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
-	t.Run("prefaultFunc", func(t *testing.T) {
-		counter := 0
+	// Test 6: Error handling for Prefault validation failure
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
 		schema := LazyAny(func() any {
-			return String().Min(5) // Require at least 5 characters
-		}).PrefaultFunc(func() any {
-			counter++
-			return "prefault"
-		})
+			return String().Min(5)
+		}).Prefault("bad") // Too short
 
-		// Valid input should not call function
-		result, err := schema.Parse("hello")
-		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-		assert.Equal(t, 0, counter)
+		// Should return validation error, not attempt fallback
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
 	})
 }
 

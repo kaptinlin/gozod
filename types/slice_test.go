@@ -165,6 +165,83 @@ func TestSlice_ErrorHandling(t *testing.T) {
 }
 
 // =============================================================================
+// Default and Prefault tests
+// =============================================================================
+
+func TestSlice_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		schema := Slice[string](String()).Default([]string{"default_value"}).Prefault([]string{"prefault_value"}).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, []string{"default_value"}, *result)
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default should bypass validation and return immediately
+		schema := Slice[string](String().Min(10)).Default([]string{"short"}).Optional() // "short" < 10 chars
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, []string{"short"}, *result)
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass slice validation
+		validSlice := []string{"valid_prefault_element"}
+		schema := Slice[string](String().Min(5)).Prefault(validSlice).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validSlice, *result)
+	})
+
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Slice[string](String().Min(10)).Prefault([]string{"prefault_fallback"}).Optional()
+
+		// Invalid input should fail validation, not use Prefault
+		_, err := schema.Parse([]string{"short"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Slice[string](String()).DefaultFunc(func() []string {
+			defaultCalled = true
+			return []string{"default_func"}
+		}).PrefaultFunc(func() []string {
+			prefaultCalled = true
+			return []string{"prefault_func"}
+		}).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, []string{"default_func"}, *result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Prefault value that fails validation should return error
+		invalidPrefault := []string{"x"} // Too short
+		schema := Slice[string](String().Min(5)).Prefault(invalidPrefault).Optional()
+
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+}
+
+// =============================================================================
 // Overwrite functionality tests
 // =============================================================================
 
@@ -612,5 +689,113 @@ func TestSlice_Check(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		assert.Equal(t, 3, len(*res))
+	})
+}
+
+// TestSlice_MultipleErrorCollection tests that slice validation collects multiple errors
+// following TypeScript Zod v4 array behavior (unlike tuples which fail fast)
+func TestSlice_MultipleErrorCollection(t *testing.T) {
+	t.Run("collects multiple element validation errors", func(t *testing.T) {
+		// Create slice with elements requiring min value 10
+		schema := Slice[int](Int().Min(10))
+
+		// Input with multiple validation failures
+		input := []int{5, 8, 15, 3} // First, second, and fourth are < 10
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have multiple element issues
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 3 element validation errors
+		assert.Len(t, zodErr.Issues, 3)
+
+		// Verify each error has correct path and type
+		expectedIndices := []int{0, 1, 3} // Indices of elements that failed
+		for i, issue := range zodErr.Issues {
+			expectedIndex := expectedIndices[i]
+			assert.Equal(t, []any{expectedIndex}, issue.Path, "Issue %d should have path [%d]", i, expectedIndex)
+			assert.Equal(t, core.TooSmall, issue.Code, "Issue %d should preserve original too_small code", i)
+			assert.Contains(t, issue.Message, "Too small", "Issue %d should preserve original error message", i)
+		}
+	})
+
+	t.Run("continues parsing despite size errors (TypeScript Zod v4 array behavior)", func(t *testing.T) {
+		// Create slice requiring min 3 elements, each >= 10
+		schema := Slice[int](Int().Min(10)).Min(3)
+
+		// Input with size error AND element validation failures
+		input := []int{5, 8} // Only 2 elements (should be >= 3), both < 10
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have both size and element issues
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have: 1 size error + 2 element errors = 3 total
+		assert.Len(t, zodErr.Issues, 3)
+
+		// Count error types
+		sizeErrors := 0
+		elementErrors := 0
+		for _, issue := range zodErr.Issues {
+			if len(issue.Path) == 0 {
+				sizeErrors++
+				assert.Equal(t, core.TooSmall, issue.Code, "Size error should be too_small")
+				assert.Contains(t, issue.Message, "at least 3", "Size error message")
+			} else {
+				elementErrors++
+				assert.Equal(t, core.TooSmall, issue.Code, "Element error should preserve original too_small code")
+				assert.Contains(t, issue.Message, "Too small", "Element error should preserve original message")
+			}
+		}
+
+		assert.Equal(t, 1, sizeErrors, "Should have 1 size error")
+		assert.Equal(t, 2, elementErrors, "Should have 2 element errors")
+	})
+
+	t.Run("validates all elements even with mixed success/failure", func(t *testing.T) {
+		// Create slice with string elements requiring min length 5
+		schema := Slice[string](String().Min(5))
+
+		// Input with mixed validation results
+		input := []string{"hello", "hi", "world", "ok", "testing"} // "hi" and "ok" are too short
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have errors for the short strings only
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 2 element validation errors (indices 1 and 3)
+		assert.Len(t, zodErr.Issues, 2)
+
+		// Verify correct indices are reported as errors
+		expectedIndices := []int{1, 3} // "hi" and "ok" positions
+		for i, issue := range zodErr.Issues {
+			expectedIndex := expectedIndices[i]
+			assert.Equal(t, []any{expectedIndex}, issue.Path, "Issue %d should have path [%d]", i, expectedIndex)
+			assert.Equal(t, core.TooSmall, issue.Code, "Issue %d should preserve original too_small code", i)
+		}
+	})
+
+	t.Run("successful validation with no errors", func(t *testing.T) {
+		// Create slice requiring min 2 elements, each >= 10
+		schema := Slice[int](Int().Min(10)).Min(2)
+
+		// Valid input
+		input := []int{15, 20, 25}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{15, 20, 25}, result)
 	})
 }

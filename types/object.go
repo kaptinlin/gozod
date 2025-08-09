@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -77,45 +79,88 @@ func (z *ZodObject[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse validates input using object-specific parsing logic
+// Parse validates input using object-specific parsing logic with engine.ParseComplex
 func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+	result, err := engine.ParseComplex[map[string]any](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeObject,
+		z.extractObjectForEngine,
+		z.extractObjectPtrForEngine,
+		z.validateObjectForEngine,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
 	}
 
-	// Handle nil input for optional/nilable schemas
-	if input == nil {
-		var zero R
-		if z.internals.Optional || z.internals.Nilable {
+	// Convert result to constraint type R
+	if objectMap, ok := result.(map[string]any); ok {
+		return convertToObjectConstraintType[T, R](any(objectMap).(T)), nil
+	}
+
+	// Handle pointer to map[string]any
+	if objectMapPtr, ok := result.(*map[string]any); ok {
+		if objectMapPtr == nil {
+			var zero R
 			return zero, nil
 		}
-		return zero, fmt.Errorf("object value cannot be nil")
+		return convertToObjectConstraintType[T, R](any(*objectMapPtr).(T)), nil
 	}
 
-	// Extract object from input
-	objectValue, err := z.extractObject(input)
-	if err != nil {
+	// Handle nil result for optional/nilable schemas
+	if result == nil {
 		var zero R
-		return zero, err
+		return zero, nil
 	}
 
-	// Validate the object
-	transformedObject, err := z.validateObject(objectValue, z.internals.Checks, parseCtx)
-	if err != nil {
-		var zero R
-		return zero, err
-	}
-
-	// Convert to constraint type R
-	return convertToObjectConstraintType[T, R](any(transformedObject).(T)), nil
+	// This should not happen in well-formed schemas
+	var zero R
+	return zero, issues.CreateTypeConversionError(
+		fmt.Sprintf("%T", result),
+		fmt.Sprintf("%T", zero),
+		result,
+		&core.ParseContext{},
+	)
 }
 
 // MustParse validates the input value and panics on failure
 func (z *ZodObject[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse validates input with compile-time type safety and enhanced performance.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodObject[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput := convertToObjectConstraintType[T, R](input)
+
+	result, err := engine.ParseComplexStrict[map[string]any, R](
+		constraintInput,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeObject,
+		z.extractObjectForEngine,
+		z.extractObjectPtrForEngine,
+		z.validateObjectForEngine,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodObject[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -467,14 +512,16 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 			return true // Skip refinement for nil values
 		}
 		// Convert any to constraint type R for type-safe refinement
-		if constraintVal, ok := convertToConstraintValue[T, R](v); ok {
+		if constraintVal, ok := convertToObjectType[T, R](v); ok {
 			return fn(constraintVal)
 		}
 		return false
 	}
 
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](wrapper, checkParams)
+	// Use unified parameter handling
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
+	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -482,8 +529,10 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 
 // RefineAny provides flexible validation without type conversion
 func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject[T, R] {
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](fn, checkParams)
+	// Use unified parameter handling
+	param := utils.GetFirstParam(params...)
+	customParams := utils.NormalizeCustomParams(param)
+	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -688,89 +737,179 @@ func (z *ZodObject[T, R]) extractObject(value any) (map[string]any, error) {
 		return result, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T to map[string]any", value)
+	ctx := core.NewParseContext()
+	return nil, issues.CreateTypeConversionError(
+		fmt.Sprintf("%T", value),
+		"map[string]any",
+		value,
+		ctx,
+	)
 }
 
-// validateObject validates object fields using field schemas
+// validateObject validates object fields using field schemas with multiple error collection (TypeScript Zod v4 object behavior)
 func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.ZodCheck, ctx *core.ParseContext) (map[string]any, error) {
-	// Validate known fields first
+	var collectedIssues []core.ZodRawIssue
+	resultObject := make(map[string]any)
+
+	// Validate known fields and collect all errors (TypeScript Zod v4 behavior)
 	for fieldName, fieldSchema := range z.internals.Shape {
 		fieldValue, exists := value[fieldName]
 
 		if !exists {
 			if !z.isFieldOptional(fieldSchema, fieldName) {
-				return nil, fmt.Errorf("missing required field: %s", fieldName)
+				// Create missing required field issue
+				rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Missing required field: %s", fieldName), map[string]any{
+					"expected": "nonoptional",
+					"received": "undefined",
+				}, nil)
+				rawIssue.Path = []any{fieldName}
+				collectedIssues = append(collectedIssues, rawIssue)
 			}
 			continue
 		}
 
-		if err := z.validateField(fieldValue, fieldSchema, ctx, fieldName); err != nil {
-			return nil, err
-		}
-	}
-
-	// Separate Overwrite checks from other checks
-	var overwriteChecks []core.ZodCheck
-	var otherChecks []core.ZodCheck
-
-	for _, check := range checks {
-		// Check if this is an Overwrite check by checking the check name
-		if checkInternals := check.GetZod(); checkInternals != nil && checkInternals.Def != nil && checkInternals.Def.Check == "overwrite" {
-			overwriteChecks = append(overwriteChecks, check)
+		// Validate field directly to preserve original error codes
+		if err := z.validateField(fieldValue, fieldSchema, ctx); err != nil {
+			// Collect field validation errors with path prefix (TypeScript Zod v4 behavior)
+			var zodErr *issues.ZodError
+			if errors.As(err, &zodErr) {
+				// Propagate all issues from field validation with path prefix
+				for _, fieldIssue := range zodErr.Issues {
+					// Create raw issue preserving original code and essential properties
+					rawIssue := core.ZodRawIssue{
+						Code:       fieldIssue.Code,
+						Message:    fieldIssue.Message,
+						Input:      fieldIssue.Input,
+						Path:       append([]any{fieldName}, fieldIssue.Path...), // Prepend field name to path
+						Properties: make(map[string]any),
+					}
+					// Copy essential properties from ZodIssue to ZodRawIssue
+					if fieldIssue.Minimum != nil {
+						rawIssue.Properties["minimum"] = fieldIssue.Minimum
+					}
+					if fieldIssue.Maximum != nil {
+						rawIssue.Properties["maximum"] = fieldIssue.Maximum
+					}
+					if fieldIssue.Expected != "" {
+						rawIssue.Properties["expected"] = fieldIssue.Expected
+					}
+					if fieldIssue.Received != "" {
+						rawIssue.Properties["received"] = fieldIssue.Received
+					}
+					rawIssue.Properties["inclusive"] = fieldIssue.Inclusive
+					collectedIssues = append(collectedIssues, rawIssue)
+				}
+			} else {
+				// Handle non-ZodError by creating a raw issue with field path
+				rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, fieldValue)
+				rawIssue.Path = []any{fieldName}
+				collectedIssues = append(collectedIssues, rawIssue)
+			}
 		} else {
-			otherChecks = append(otherChecks, check)
+			// Field validation succeeded, add to result
+			resultObject[fieldName] = fieldValue
 		}
 	}
 
-	// Apply Overwrite transformations before unknown field handling (preserves added fields)
-	if len(overwriteChecks) > 0 {
-		transformedValue, err := engine.ApplyChecks[map[string]any](value, overwriteChecks, ctx)
-		if err != nil {
-			return nil, err
-		}
-		value = transformedValue
-	}
-
-	// Handle unknown fields based on mode
-	var fieldsToRemove []string
+	// Handle unknown fields and collect unrecognized_keys errors (TypeScript Zod v4 behavior)
+	var unrecognizedKeys []string
 	for fieldName, fieldValue := range value {
 		if _, isKnown := z.internals.Shape[fieldName]; !isKnown {
 			switch z.internals.UnknownKeys {
 			case ObjectModeStrict:
-				return nil, fmt.Errorf("unknown field not allowed in strict mode: %s", fieldName)
+				// Collect unrecognized keys for strict mode
+				unrecognizedKeys = append(unrecognizedKeys, fieldName)
 			case ObjectModeStrip:
-				fieldsToRemove = append(fieldsToRemove, fieldName)
+				// Strip mode - don't add unknown fields to result
+				continue
 			case ObjectModePassthrough:
 				if z.internals.Catchall != nil {
-					if err := z.validateField(fieldValue, z.internals.Catchall, ctx, fieldName); err != nil {
-						return nil, fmt.Errorf("catchall validation failed for field '%s': %w", fieldName, err)
+					// Validate unknown fields with catchall schema
+					if err := z.validateField(fieldValue, z.internals.Catchall, ctx); err != nil {
+						// Collect catchall validation errors
+						var zodErr *issues.ZodError
+						if errors.As(err, &zodErr) {
+							for _, catchallIssue := range zodErr.Issues {
+								rawIssue := core.ZodRawIssue{
+									Code:       catchallIssue.Code,
+									Message:    catchallIssue.Message,
+									Input:      catchallIssue.Input,
+									Path:       append([]any{fieldName}, catchallIssue.Path...),
+									Properties: make(map[string]any),
+								}
+								// Copy properties
+								if catchallIssue.Minimum != nil {
+									rawIssue.Properties["minimum"] = catchallIssue.Minimum
+								}
+								if catchallIssue.Maximum != nil {
+									rawIssue.Properties["maximum"] = catchallIssue.Maximum
+								}
+								if catchallIssue.Expected != "" {
+									rawIssue.Properties["expected"] = catchallIssue.Expected
+								}
+								if catchallIssue.Received != "" {
+									rawIssue.Properties["received"] = catchallIssue.Received
+								}
+								rawIssue.Properties["inclusive"] = catchallIssue.Inclusive
+								collectedIssues = append(collectedIssues, rawIssue)
+							}
+						} else {
+							rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, fieldValue)
+							rawIssue.Path = []any{fieldName}
+							collectedIssues = append(collectedIssues, rawIssue)
+						}
+					} else {
+						// Catchall validation succeeded, add to result
+						resultObject[fieldName] = fieldValue
 					}
+				} else {
+					// No catchall - passthrough unknown fields
+					resultObject[fieldName] = fieldValue
 				}
 			}
 		}
 	}
 
-	// Remove unknown fields for strip mode (except for Overwrite-added fields)
-	if len(overwriteChecks) == 0 {
-		for _, fieldName := range fieldsToRemove {
-			delete(value, fieldName)
+	// Add unrecognized_keys error for strict mode (TypeScript Zod v4 behavior)
+	if len(unrecognizedKeys) > 0 {
+		rawIssue := issues.CreateIssue(core.UnrecognizedKeys, "", map[string]any{
+			"keys": unrecognizedKeys,
+		}, value)
+		collectedIssues = append(collectedIssues, rawIssue)
+	}
+
+	// Apply object-level checks and collect any issues
+	if len(checks) > 0 {
+		payload := core.NewParsePayload(resultObject)
+		result := engine.RunChecksOnValue(resultObject, checks, payload, ctx)
+
+		// Collect any object-level issues
+		if result.HasIssues() {
+			objectIssues := result.GetIssues()
+			for _, issue := range objectIssues {
+				collectedIssues = append(collectedIssues, issue)
+			}
+		}
+
+		// Get the potentially transformed value
+		if result.GetValue() != nil {
+			if transformed, ok := result.GetValue().(map[string]any); ok {
+				resultObject = transformed
+			}
 		}
 	}
 
-	// Apply other checks (Size, Min, Max, etc.) after field processing
-	if len(otherChecks) > 0 {
-		finalValue, err := engine.ApplyChecks[map[string]any](value, otherChecks, ctx)
-		if err != nil {
-			return nil, err
-		}
-		return finalValue, nil
+	// If we collected any issues (field-level, unknown keys, or object-level), return them as a combined error
+	if len(collectedIssues) > 0 {
+		return nil, issues.CreateArrayValidationIssues(collectedIssues)
 	}
 
-	return value, nil
+	// Return the validated and potentially transformed object
+	return resultObject, nil
 }
 
-// validateField validates a single field using reflection (same as struct.go)
-func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.ParseContext, fieldName string) error {
+// validateField validates a single field using reflection (without wrapping)
+func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.ParseContext) error {
 	if schema == nil {
 		return nil
 	}
@@ -815,7 +954,7 @@ func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.Parse
 		// Check if there's an error (second return value)
 		if errInterface := results[1].Interface(); errInterface != nil {
 			if err, ok := errInterface.(error); ok {
-				return fmt.Errorf("%s: %w", fieldName, err)
+				return err // Return the error directly without wrapping
 			}
 		}
 	}
@@ -995,4 +1134,33 @@ func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// extractObjectForEngine extracts map[string]any from input for engine.ParseComplex
+func (z *ZodObject[T, R]) extractObjectForEngine(input any) (map[string]any, bool) {
+	result, err := z.extractObject(input)
+	if err != nil {
+		return nil, false
+	}
+	return result, true
+}
+
+// extractObjectPtrForEngine extracts pointer to map[string]any from input for engine.ParseComplex
+func (z *ZodObject[T, R]) extractObjectPtrForEngine(input any) (*map[string]any, bool) {
+	// Try direct pointer extraction
+	if ptr, ok := input.(*map[string]any); ok {
+		return ptr, true
+	}
+
+	// Try extracting object and return pointer to it
+	result, err := z.extractObject(input)
+	if err != nil {
+		return nil, false
+	}
+	return &result, true
+}
+
+// validateObjectForEngine validates map[string]any for engine.ParseComplex
+func (z *ZodObject[T, R]) validateObjectForEngine(value map[string]any, checks []core.ZodCheck, ctx *core.ParseContext) (map[string]any, error) {
+	return z.validateObject(value, checks, ctx)
 }

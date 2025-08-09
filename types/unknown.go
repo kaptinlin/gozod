@@ -48,72 +48,26 @@ func (z *ZodUnknown[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse returns the input value as-is with full modifier and validation support using direct validation
+// validateUnknownValue is the validator function for Unknown type
+// Unknown type accepts any value including nil
+func validateUnknownValue[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	// Unknown type accepts all values, just apply checks
+	return engine.ApplyChecks[T](value, checks, ctx)
+}
+
+// Parse returns the input value as-is with full modifier and validation support using unified engine parsing
 // Unknown type has special behavior: it accepts nil by default (unlike other types)
 func (z *ZodUnknown[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
-	}
-
-	// Handle nil input
-	if input == nil {
-		if z.internals.NonOptional {
-			return *new(R), engine.CreateNonOptionalError(parseCtx)
-		}
-		// Check if nil is allowed (optional/nilable)
-		if z.internals.Optional || z.internals.Nilable {
-			var zero R
-			return zero, nil
-		}
-
-		// Try default values
-		if z.internals.ZodTypeInternals.DefaultValue != nil {
-			return z.Parse(z.internals.ZodTypeInternals.DefaultValue, parseCtx)
-		}
-		if z.internals.ZodTypeInternals.DefaultFunc != nil {
-			defaultValue := z.internals.ZodTypeInternals.DefaultFunc()
-			return z.Parse(defaultValue, parseCtx)
-		}
-
-		// SPECIAL: Unknown type accepts nil by default (this is what makes it different)
-		var zero R
-		return zero, nil
-	}
-
-	// For non-nil values, use direct validation
-	if len(z.internals.ZodTypeInternals.Checks) > 0 {
-		transformedValue, err := engine.ApplyChecks(input, z.internals.ZodTypeInternals.Checks, parseCtx)
-		if err != nil {
-			// Try prefault on validation failure
-			if z.internals.ZodTypeInternals.PrefaultValue != nil {
-				return z.Parse(z.internals.ZodTypeInternals.PrefaultValue, parseCtx)
-			}
-			if z.internals.ZodTypeInternals.PrefaultFunc != nil {
-				prefaultValue := z.internals.ZodTypeInternals.PrefaultFunc()
-				return z.Parse(prefaultValue, parseCtx)
-			}
-
-			return *new(R), err
-		}
-		// Use the transformed value from ApplyChecks
-		input = transformedValue
-	}
-
-	// Apply transform if present
-	if z.internals.ZodTypeInternals.Transform != nil {
-		refCtx := &core.RefinementContext{ParseContext: parseCtx}
-		result, err := z.internals.ZodTypeInternals.Transform(input, refCtx)
-		if err != nil {
-			return *new(R), err
-		}
-		return convertToUnknownConstraintType[T, R](result), nil
-	}
-
-	// Convert result to constraint type R and return
-	return convertToUnknownConstraintType[T, R](input), nil
+	return engine.ParsePrimitive[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeUnknown,
+		validateUnknownValue[T],
+		func(result any, parseCtx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
+			return convertToUnknownConstraintType[T, R](result), nil
+		},
+		ctx...,
+	)
 }
 
 // MustParse is the variant that panics on error
@@ -128,6 +82,30 @@ func (z *ZodUnknown[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodUnknown[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type R.
+func (z *ZodUnknown[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitiveStrict[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeUnknown,
+		validateUnknownValue[T],
+		ctx...,
+	)
+}
+
+// MustStrictParse provides compile-time type safety and panics on validation failure.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type R.
+func (z *ZodUnknown[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // =============================================================================
@@ -244,12 +222,12 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 	param := utils.GetFirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
-	var checkParams any
+	var errorMessage any
 	if normalizedParams.Error != nil {
-		checkParams = normalizedParams
+		errorMessage = normalizedParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -261,12 +239,12 @@ func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown
 	param := utils.GetFirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
-	var checkParams any
+	var errorMessage any
 	if normalizedParams.Error != nil {
-		checkParams = normalizedParams
+		errorMessage = normalizedParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -335,6 +313,9 @@ func convertToUnknownConstraintType[T any, R any](value any) R {
 		return any((*any)(nil)).(R)
 	default:
 		// Return value directly as R
+		if value == nil {
+			return zero
+		}
 		return any(value).(R)
 	}
 }

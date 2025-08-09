@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/pkg/regexes"
 )
@@ -10,6 +11,20 @@ import (
 // =============================================================================
 
 type ZodCUID[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodCUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodCUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 func Cuid(params ...any) *ZodCUID[string] {
 	base := StringTyped[string](params...)
@@ -33,6 +48,20 @@ func CuidPtr(params ...any) *ZodCUID[*string] {
 
 type ZodCUID2[T StringConstraint] struct{ *ZodString[T] }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodCUID2[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodCUID2[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 func Cuid2(params ...any) *ZodCUID2[string] {
 	base := StringTyped[string](params...)
 	check := checks.CUID2(params...)
@@ -54,6 +83,20 @@ func Cuid2Ptr(params ...any) *ZodCUID2[*string] {
 // =============================================================================
 
 type ZodULID[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodULID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodULID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 func Ulid(params ...any) *ZodULID[string] {
 	base := StringTyped[string](params...)
@@ -77,6 +120,20 @@ func UlidPtr(params ...any) *ZodULID[*string] {
 
 type ZodXID[T StringConstraint] struct{ *ZodString[T] }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodXID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodXID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 func Xid(params ...any) *ZodXID[string] {
 	base := StringTyped[string](params...)
 	check := checks.XID(params...)
@@ -98,6 +155,20 @@ func XidPtr(params ...any) *ZodXID[*string] {
 // =============================================================================
 
 type ZodKSUID[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodKSUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodKSUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 func Ksuid(params ...any) *ZodKSUID[string] {
 	base := StringTyped[string](params...)
@@ -121,6 +192,20 @@ func KsuidPtr(params ...any) *ZodKSUID[*string] {
 
 type ZodNanoID[T StringConstraint] struct{ *ZodString[T] }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodNanoID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodNanoID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 func Nanoid(params ...any) *ZodNanoID[string] {
 	base := StringTyped[string](params...)
 	check := checks.NanoID(params...)
@@ -142,6 +227,20 @@ func NanoidPtr(params ...any) *ZodNanoID[*string] {
 // =============================================================================
 
 type ZodUUID[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodUUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodUUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 // Uuid supports optional version parameter: "v4", "v6", "v7".
 // Otherwise behaves like generic UUID validator.

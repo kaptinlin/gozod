@@ -310,6 +310,83 @@ func TestISO_Modifiers(t *testing.T) {
 }
 
 // =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestISO_DefaultAndPrefault(t *testing.T) {
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		schema := IsoDateTime().Default("2023-01-01T00:00:00Z").Prefault("2023-12-31T23:59:59Z")
+
+		// When input is nil, Default should take precedence
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "2023-01-01T00:00:00Z", result)
+	})
+
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		schema := IsoDateTime().Min("2023-06-01T00:00:00Z").Default("2023-01-01T00:00:00Z") // Default violates Min constraint
+
+		// Default should bypass validation even if it violates constraints
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "2023-01-01T00:00:00Z", result)
+	})
+
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		schema := IsoDateTime().Min("2023-06-01T00:00:00Z").Prefault("2023-01-01T00:00:00Z") // Prefault violates Min constraint
+
+		// Prefault should fail validation if it violates constraints
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := IsoDateTime().Min("2023-06-01T00:00:00Z").Prefault("2023-12-31T23:59:59Z")
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := schema.Parse("2023-01-01T00:00:00Z") // This input violates Min constraint
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := IsoDateTime().DefaultFunc(func() string {
+			defaultCalled = true
+			return "2023-01-01T00:00:00Z"
+		}).PrefaultFunc(func() string {
+			prefaultCalled = true
+			return "2023-12-31T23:59:59Z"
+		})
+
+		// DefaultFunc should be called and take precedence
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "2023-01-01T00:00:00Z", result)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
+	})
+
+	// Test 6: Error handling for Prefault validation failure
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		schema := IsoDate().Min("2023-06-01").Prefault("2023-01-01") // Prefault violates Min constraint
+
+		// Should return validation error, not attempt fallback
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+}
+
+// =============================================================================
 // RANGE VALIDATION TESTS
 // =============================================================================
 

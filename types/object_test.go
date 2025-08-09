@@ -304,10 +304,11 @@ func TestObject_Chaining(t *testing.T) {
 		// Chained with Optional returns pointer constraint type
 		assert.Equal(t, &input, result)
 
-		// Test nil handling
+		// Test nil handling - Default should short-circuit and return default value
 		result, err = schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		require.NotNil(t, result)
+		assert.Equal(t, &defaultValue, result)
 	})
 
 	t.Run("default and prefault chaining", func(t *testing.T) {
@@ -356,77 +357,89 @@ func TestObject_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestObject_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default with function", func(t *testing.T) {
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
 		schema := Object(core.ObjectSchema{
 			"name": String(),
-			"age":  Int(),
+		}).Default(map[string]any{"name": "default_value"}).Prefault(map[string]any{"name": "prefault_value"}).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "default_value"}, *result)
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default should bypass validation and return immediately
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(10), // Strict validation that default won't pass
+		}).Default(map[string]any{"name": "short"}).Optional() // "short" < 10 chars
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "short"}, *result)
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass object validation
+		validObject := map[string]any{"name": "valid_prefault_name"}
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(5),
+		}).Prefault(validObject).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validObject, *result)
+	})
+
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(10),
+		}).Prefault(map[string]any{"name": "prefault_fallback"}).Optional()
+
+		// Invalid input should fail validation, not use Prefault
+		_, err := schema.Parse(map[string]any{"name": "short"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Object(core.ObjectSchema{
+			"name": String(),
 		}).DefaultFunc(func() map[string]any {
-			return map[string]any{
-				"name": "function default",
-				"age":  0,
-			}
-		})
-
-		input := map[string]any{
-			"name": "input",
-			"age":  25,
-		}
-		result, err := schema.Parse(input)
-		require.NoError(t, err)
-		assert.Equal(t, input, result)
-	})
-
-	t.Run("Prefault with function", func(t *testing.T) {
-		schema := Object(core.ObjectSchema{
-			"name": String(),
-			"age":  Int(),
+			defaultCalled = true
+			return map[string]any{"name": "default_func"}
 		}).PrefaultFunc(func() map[string]any {
-			return map[string]any{
-				"name": "function prefault",
-				"age":  -1,
-			}
-		})
+			prefaultCalled = true
+			return map[string]any{"name": "prefault_func"}
+		}).Optional()
 
-		input := map[string]any{
-			"name": "valid",
-			"age":  25,
-		}
-		result, err := schema.Parse(input)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, input, result)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "default_func"}, *result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
 	})
 
-	t.Run("Default vs Prefault behavior", func(t *testing.T) {
-		defaultValue := map[string]any{
-			"name": "default",
-			"age":  0,
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Prefault value that fails validation should return error
+		invalidPrefault := map[string]any{"name": "x"} // Too short
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(5),
+		}).Prefault(invalidPrefault).Optional()
+
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		if err != nil {
+			assert.Contains(t, err.Error(), "Too small")
 		}
-		prefaultValue := map[string]any{
-			"name": "prefault",
-			"age":  -1,
-		}
-
-		// Default should be used when input is nil/undefined
-		defaultSchema := Object(core.ObjectSchema{
-			"name": String(),
-		}).Default(defaultValue)
-
-		// Prefault should be used when validation fails
-		prefaultSchema := Object(core.ObjectSchema{
-			"name": String(),
-		}).Prefault(prefaultValue)
-
-		// Test valid input (both should return the input)
-		validInput := map[string]any{
-			"name": "hello",
-		}
-		result1, err1 := defaultSchema.Parse(validInput)
-		require.NoError(t, err1)
-		assert.Equal(t, validInput, result1)
-
-		result2, err2 := prefaultSchema.Parse(validInput)
-		require.NoError(t, err2)
-		assert.Equal(t, validInput, result2)
 	})
 }
 
@@ -1641,4 +1654,173 @@ func TestObject_NonOptional(t *testing.T) {
 	require.NoError(t, err)
 	_, err = outer.Parse(map[string]any{"inner": nil})
 	assert.Error(t, err)
+}
+
+// =============================================================================
+// Multiple Error Collection tests (TypeScript Zod v4 object behavior)
+// =============================================================================
+
+func TestObject_MultipleErrorCollection(t *testing.T) {
+	t.Run("collects multiple field validation errors", func(t *testing.T) {
+		// Create object schema with multiple field constraints
+		schema := Object(core.ObjectSchema{
+			"name":  String().Min(3),
+			"age":   Int().Min(18),
+			"email": String().Email(),
+		})
+
+		// Input with multiple validation failures
+		input := map[string]any{
+			"name":  "Jo",            // Too short (< 3)
+			"age":   16,              // Too young (< 18)
+			"email": "invalid-email", // Invalid email format
+		}
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have all 3 field validation errors
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Len(t, zodErr.Issues, 3)
+
+		// Verify each error has correct path and preserves original error codes (TypeScript Zod v4 behavior)
+		// Note: Go map iteration order is not guaranteed, so we check by field name
+		fieldErrorMap := make(map[string]core.ZodIssue)
+		for _, issue := range zodErr.Issues {
+			if len(issue.Path) == 1 {
+				fieldName := issue.Path[0].(string)
+				fieldErrorMap[fieldName] = issue
+			}
+		}
+
+		// Verify name field error
+		nameIssue, hasName := fieldErrorMap["name"]
+		assert.True(t, hasName, "Should have name field error")
+		if hasName {
+			assert.Equal(t, core.TooSmall, nameIssue.Code, "Name error should preserve original too_small code")
+			assert.Contains(t, nameIssue.Message, "at least 3", "Name error should mention length requirement")
+		}
+
+		// Verify age field error
+		ageIssue, hasAge := fieldErrorMap["age"]
+		assert.True(t, hasAge, "Should have age field error")
+		if hasAge {
+			assert.Equal(t, core.TooSmall, ageIssue.Code, "Age error should preserve original too_small code")
+			assert.Contains(t, ageIssue.Message, "at least 18", "Age error should mention minimum requirement")
+		}
+
+		// Verify email field error
+		emailIssue, hasEmail := fieldErrorMap["email"]
+		assert.True(t, hasEmail, "Should have email field error")
+		if hasEmail {
+			assert.Equal(t, core.InvalidFormat, emailIssue.Code, "Email error should preserve original invalid_format code")
+			assert.Contains(t, emailIssue.Message, "email", "Email error should mention email validation")
+		}
+	})
+
+	t.Run("handles nested object multiple errors", func(t *testing.T) {
+		// Create nested object schema
+		schema := Object(core.ObjectSchema{
+			"user": Object(core.ObjectSchema{
+				"name": String().Min(3),
+				"age":  Int().Min(18),
+			}),
+			"items": Slice[int](Int().Min(10)), // Array of integers >= 10
+		})
+
+		// Input with multiple nested validation failures
+		input := map[string]any{
+			"user": map[string]any{
+				"name": "Jo", // Too short (< 3) - path should be ["user", "name"]
+				"age":  16,   // Too young (< 18) - path should be ["user", "age"]
+			},
+			"items": []int{5, 8, 15}, // First two are < 10 - path should be ["items", 0] and ["items", 1]
+		}
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have all 4 nested errors
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Len(t, zodErr.Issues, 4)
+
+		// Count errors by type and verify paths
+		userErrors := 0
+		itemErrors := 0
+		for _, issue := range zodErr.Issues {
+			if len(issue.Path) >= 2 && issue.Path[0] == "user" {
+				userErrors++
+				assert.Equal(t, core.TooSmall, issue.Code, "User field error should preserve original too_small code")
+				assert.True(t, issue.Path[1] == "name" || issue.Path[1] == "age", "User error should have correct field path")
+			} else if len(issue.Path) >= 2 && issue.Path[0] == "items" {
+				itemErrors++
+				assert.Equal(t, core.TooSmall, issue.Code, "Items error should preserve original too_small code")
+				assert.True(t, issue.Path[1] == 0 || issue.Path[1] == 1, "Items error should have correct index path")
+			}
+		}
+
+		assert.Equal(t, 2, userErrors, "Should have 2 user field errors")
+		assert.Equal(t, 2, itemErrors, "Should have 2 items validation errors")
+	})
+
+	t.Run("strict mode with unrecognized keys", func(t *testing.T) {
+		// Create strict object schema
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(3),
+		}).Strict()
+
+		// Input with field validation error AND unknown field
+		input := map[string]any{
+			"name":    "Jo",    // Too short (< 3)
+			"unknown": "value", // Unknown field in strict mode
+		}
+
+		result, err := schema.Parse(input)
+		require.Error(t, err)
+		assert.Nil(t, result)
+
+		// Check that we have both field error and unrecognized keys error
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Len(t, zodErr.Issues, 2)
+
+		// Count error types
+		fieldErrors := 0
+		unrecognizedErrors := 0
+		for _, issue := range zodErr.Issues {
+			if issue.Code == core.TooSmall {
+				fieldErrors++
+				assert.Equal(t, []any{"name"}, issue.Path, "Field error should have correct path")
+			} else if issue.Code == core.UnrecognizedKeys {
+				unrecognizedErrors++
+				assert.Equal(t, []any{}, issue.Path, "Unrecognized keys error should have empty path")
+			}
+		}
+
+		assert.Equal(t, 1, fieldErrors, "Should have 1 field validation error")
+		assert.Equal(t, 1, unrecognizedErrors, "Should have 1 unrecognized keys error")
+	})
+
+	t.Run("successful validation with no errors", func(t *testing.T) {
+		// Create object schema
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(3),
+			"age":  Int().Min(18),
+		})
+
+		// Valid input
+		input := map[string]any{
+			"name": "John",
+			"age":  25,
+		}
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 25, result["age"])
+	})
 }

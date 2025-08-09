@@ -9,59 +9,29 @@ package locales
 
 import (
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 // =============================================================================
-// LOCALE SYSTEM - UNIFIED MESSAGE FORMATTING WITH TYPESCRIPT ZOD V4 COMPATIBILITY
+// LOCALE SYSTEM - FUNCTIONAL APPROACH MATCHING TYPESCRIPT ZOD V4
 // =============================================================================
 
-// LocaleFormatter implements MessageFormatter for specific locales
-// Provides localized error messages following TypeScript Zod v4 patterns
-type LocaleFormatter struct {
-	locale     string                        // Locale identifier (e.g., "en", "zh-CN")
-	formatFunc func(core.ZodRawIssue) string // Locale-specific formatting function
-}
+// LocaleErrorMap maps locale names to their corresponding formatter functions
+// Following TypeScript Zod v4's functional approach instead of struct-based patterns
+type LocaleErrorMap map[string]func(core.ZodRawIssue) string
 
-// NewLocaleFormatter creates a new locale-specific formatter
-// This allows for easy registration of new locales with custom formatting logic
-func NewLocaleFormatter(locale string, formatFunc func(core.ZodRawIssue) string) *LocaleFormatter {
-	return &LocaleFormatter{
-		locale:     locale,
-		formatFunc: formatFunc,
-	}
-}
-
-// FormatMessage implements the MessageFormatter interface
-// Delegates to the locale-specific formatting function
-func (lf *LocaleFormatter) FormatMessage(raw core.ZodRawIssue) string {
-	return lf.formatFunc(raw)
-}
-
-// GetLocale returns the locale identifier for this formatter
-func (lf *LocaleFormatter) GetLocale() string {
-	return lf.locale
-}
-
-// =============================================================================
-// LOCALE REGISTRY AND MANAGEMENT
-// =============================================================================
-
-// LocaleMap maps locale names to their corresponding formatters
-type LocaleMap map[string]issues.MessageFormatter
-
-// DefaultLocales contains the default supported locales using the new formatter system
+// DefaultLocales contains the default supported locales using functional approach
 // Supports both full locale codes (zh-CN) and short codes (zh, en)
-var DefaultLocales = LocaleMap{
-	"en":    NewLocaleFormatter("en", formatEn),      // English
-	"zh-CN": NewLocaleFormatter("zh-CN", formatZhCN), // Simplified Chinese (China)
-	"zh":    NewLocaleFormatter("zh", formatZhCN),    // Chinese fallback
+// Following TypeScript Zod v4's pattern of mapping locales to formatter functions
+var DefaultLocales = LocaleErrorMap{
+	"en":    formatEn,   // English
+	"zh-CN": formatZhCN, // Simplified Chinese (China)
+	"zh":    formatZhCN, // Chinese fallback
 }
 
-// GetLocaleFormatter returns a formatter for the given locale
+// GetLocaleFormatter returns a formatter function for the given locale
 // Falls back to English if the locale is not found, ensuring robust operation
-func GetLocaleFormatter(locale string) issues.MessageFormatter {
+func GetLocaleFormatter(locale string) func(core.ZodRawIssue) string {
 	if formatter, exists := DefaultLocales[locale]; exists {
 		return formatter
 	}
@@ -82,13 +52,13 @@ func GetLocaleFormatter(locale string) issues.MessageFormatter {
 // This is a convenience function for backward compatibility and simple usage
 func GetLocalizedError(issue core.ZodRawIssue, locale string) string {
 	formatter := GetLocaleFormatter(locale)
-	return formatter.FormatMessage(issue)
+	return formatter(issue)
 }
 
 // RegisterLocale adds a new locale to the default locales map
 // Allows runtime registration of additional locales and custom formatters
 func RegisterLocale(locale string, formatFunc func(core.ZodRawIssue) string) {
-	DefaultLocales[locale] = NewLocaleFormatter(locale, formatFunc)
+	DefaultLocales[locale] = formatFunc
 }
 
 // GetAvailableLocales returns a list of all registered locale identifiers
@@ -124,7 +94,7 @@ func GetLocalizedErrors(issues []core.ZodRawIssue, locale string) ([]string, err
 	formatter := GetLocaleFormatter(locale)
 	messages, err := slicex.Map(issues, func(issue any) any {
 		if rawIssue, ok := issue.(core.ZodRawIssue); ok {
-			return formatter.FormatMessage(rawIssue)
+			return formatter(rawIssue)
 		}
 		return "Invalid input"
 	})

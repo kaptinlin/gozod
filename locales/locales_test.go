@@ -7,37 +7,17 @@ import (
 )
 
 // =============================================================================
-// LOCALE FORMATTER TESTS
+// LOCALE FORMATTER TESTS - UPDATED FOR FUNCTIONAL APPROACH
 // =============================================================================
 
-func TestNewLocaleFormatter(t *testing.T) {
-	t.Run("creates formatter with correct locale", func(t *testing.T) {
-		formatFunc := func(issue core.ZodRawIssue) string {
-			return "test message"
-		}
-
-		formatter := NewLocaleFormatter("test-locale", formatFunc)
-
-		if formatter.locale != "test-locale" {
-			t.Errorf("Expected locale 'test-locale', got '%s'", formatter.locale)
-		}
-
-		if formatter.GetLocale() != "test-locale" {
-			t.Errorf("Expected GetLocale() to return 'test-locale', got '%s'", formatter.GetLocale())
-		}
-	})
-}
-
-func TestLocaleFormatter_FormatMessage(t *testing.T) {
-	t.Run("formats message using provided function", func(t *testing.T) {
+func TestLocaleFormatterFunction(t *testing.T) {
+	t.Run("formats message using formatter function", func(t *testing.T) {
 		formatFunc := func(issue core.ZodRawIssue) string {
 			return "custom error: " + string(issue.Code)
 		}
 
-		formatter := NewLocaleFormatter("test", formatFunc)
 		issue := core.ZodRawIssue{Code: core.InvalidType}
-
-		result := formatter.FormatMessage(issue)
+		result := formatFunc(issue)
 		expected := "custom error: invalid_type"
 
 		if result != expected {
@@ -65,7 +45,7 @@ func TestGetLocaleFormatter(t *testing.T) {
 			Input:      123,
 		}
 
-		message := formatter.FormatMessage(issue)
+		message := formatter(issue)
 		if message == "" {
 			t.Error("Expected non-empty message")
 		}
@@ -82,7 +62,7 @@ func TestGetLocaleFormatter(t *testing.T) {
 		enFormatter := GetLocaleFormatter("en")
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
-		if formatter.FormatMessage(issue) != enFormatter.FormatMessage(issue) {
+		if formatter(issue) != enFormatter(issue) {
 			t.Error("Expected fallback to English formatter")
 		}
 	})
@@ -94,7 +74,7 @@ func TestGetLocaleFormatter(t *testing.T) {
 
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
-		if formatter.FormatMessage(issue) != zhFormatter.FormatMessage(issue) {
+		if formatter(issue) != zhFormatter(issue) {
 			t.Error("Expected language-only fallback to work")
 		}
 	})
@@ -137,7 +117,7 @@ func TestRegisterLocale(t *testing.T) {
 		formatter := GetLocaleFormatter("custom")
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
-		result := formatter.FormatMessage(issue)
+		result := formatter(issue)
 		expected := "CUSTOM: invalid_type"
 
 		if result != expected {

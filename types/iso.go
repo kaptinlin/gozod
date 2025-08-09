@@ -109,6 +109,20 @@ func (z *ZodIso[T]) Duration(params ...any) *ZodIso[T] {
 	return z.cloneWithCheck(checks.ISODuration(params...))
 }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodIso[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodIso[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // -----------------------------------------------------------------------------
 // constructors
 // -----------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
@@ -354,4 +355,111 @@ func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {
 	}
 
 	// Other parameters can be applied to def as needed
+}
+
+// =============================================================================
+// PATH UTILITIES FOR ERROR FORMATTING
+// =============================================================================
+
+// ToDotPath converts an error path to dot notation string
+// Compatible with TypeScript Zod v4 path formatting
+func ToDotPath(path []any) string {
+	if len(path) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for i, segment := range path {
+		switch v := segment.(type) {
+		case int:
+			parts = append(parts, fmt.Sprintf("[%d]", v))
+		case string:
+			if i == 0 {
+				parts = append(parts, v)
+			} else {
+				// Check if string contains special characters that need bracket notation
+				if needsBracketNotation(v) {
+					parts = append(parts, fmt.Sprintf(`["%s"]`, v))
+				} else {
+					parts = append(parts, "."+v)
+				}
+			}
+		default:
+			parts = append(parts, fmt.Sprintf("[%v]", v))
+		}
+	}
+
+	return strings.Join(parts, "")
+}
+
+// needsBracketNotation checks if a string needs bracket notation in path formatting
+func needsBracketNotation(s string) bool {
+	// Check for spaces, hyphens, dots, or non-alphanumeric characters
+	for _, char := range s {
+		if char == ' ' || char == '-' || char == '.' || !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_') {
+			return true
+		}
+	}
+	return false
+}
+
+// =============================================================================
+// ERROR FORMATTING UTILITIES
+// =============================================================================
+
+// FormatErrorPath formats an error path for display
+func FormatErrorPath(path []any, style string) string {
+	switch style {
+	case "dot":
+		return ToDotPath(path)
+	case "bracket":
+		return formatBracketPath(path)
+	default:
+		return ToDotPath(path) // Default to dot notation
+	}
+}
+
+// formatBracketPath formats path using bracket notation only
+func formatBracketPath(path []any) string {
+	if len(path) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, segment := range path {
+		switch v := segment.(type) {
+		case int:
+			parts = append(parts, fmt.Sprintf("[%d]", v))
+		case string:
+			parts = append(parts, fmt.Sprintf(`["%s"]`, v))
+		default:
+			parts = append(parts, fmt.Sprintf("[%v]", v))
+		}
+	}
+
+	return strings.Join(parts, "")
+}
+
+// =============================================================================
+// VALIDATION CONTEXT UTILITIES
+// =============================================================================
+
+// CreateErrorContext creates error context for formatting
+func CreateErrorContext(code core.IssueCode, path []any, input any) map[string]any {
+	return map[string]any{
+		"code":  code,
+		"path":  path,
+		"input": input,
+	}
+}
+
+// ExtractErrorInfo extracts error information from a raw issue
+func ExtractErrorInfo(issue core.ZodRawIssue) map[string]any {
+	return map[string]any{
+		"code":       issue.Code,
+		"path":       issue.Path,
+		"input":      issue.Input,
+		"message":    issue.Message,
+		"properties": issue.Properties,
+	}
 }

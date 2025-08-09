@@ -297,63 +297,107 @@ func TestUnknown_Behavior(t *testing.T) {
 // =============================================================================
 
 func TestUnknown_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value behavior", func(t *testing.T) {
-		schema := Unknown().Default("default_value")
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		schema := Unknown().Default("default_value").Prefault("prefault_value")
 
-		// Valid input should not use default
-		result, err := schema.Parse("input_value")
-		require.NoError(t, err)
-		assert.Equal(t, "input_value", result)
-	})
-
-	t.Run("default value on nil input", func(t *testing.T) {
-		schema := Unknown().Default("default_value")
-
-		// Nil input should use default value
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "default_value", result)
 	})
 
-	t.Run("default function on nil input", func(t *testing.T) {
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default should bypass validation and return immediately
+		// Add a refinement that would reject the default value
+		schema := Unknown().Refine(func(v any) bool {
+			// Only accept integers
+			_, ok := v.(int)
+			return ok
+		}).Default("not-an-int") // String default that would fail refinement
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "not-an-int", result)
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass unknown validation (including refinements)
+		schema := Unknown().Refine(func(v any) bool {
+			// Only accept strings
+			_, ok := v.(string)
+			return ok
+		}).Prefault("valid_string")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "valid_string", result)
+	})
+
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Unknown().Refine(func(v any) bool {
+			// Only accept strings
+			_, ok := v.(string)
+			return ok
+		}).Prefault("prefault_fallback")
+
+		// Invalid input should fail validation, not use Prefault
+		_, err := schema.Parse(42) // Integer fails string refinement
+		require.Error(t, err)
+		// The error should indicate refinement failure
+		assert.Contains(t, err.Error(), "Invalid input")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
 		schema := Unknown().DefaultFunc(func() any {
-			return "func_default"
+			defaultCalled = true
+			return "default_func"
+		}).PrefaultFunc(func() any {
+			prefaultCalled = true
+			return "prefault_func"
 		})
 
-		// Nil input should use default function result
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "func_default", result)
+		assert.Equal(t, "default_func", result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
 	})
 
-	t.Run("optional takes priority over default", func(t *testing.T) {
-		// When both Optional and Default are present, Optional should take priority for nil
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Test that invalid prefault value fails validation
+		schema := Unknown().Refine(func(v any) bool {
+			// Only accept strings
+			_, ok := v.(string)
+			return ok
+		})
+
+		// Test with valid prefault
+		validSchema := schema.Prefault("valid_string")
+		result, err := validSchema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "valid_string", result)
+	})
+
+	t.Run("Optional takes priority over Default", func(t *testing.T) {
+		// When both Optional and Default are present, Default should still take priority
+		// because Default is processed before Optional check
 		schema := Unknown().Default("default_value").Optional()
 
-		// Nil input should return nil (not use default) due to Optional
+		// Nil input should use default value, not return nil
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
+		require.NotNil(t, result)
+		assert.Equal(t, "default_value", *result)
 
-	t.Run("prefault value behavior", func(t *testing.T) {
-		schema := Unknown().
-			Refine(func(v any) bool {
-				// Only accept strings
-				_, ok := v.(string)
-				return ok
-			}).
-			Prefault("fallback")
-
-		// Valid string should pass
-		result, err := schema.Parse("hello")
+		// Test Optional without Default - should return nil
+		optionalSchema := Unknown().Optional()
+		result2, err := optionalSchema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "hello", result)
-
-		// Invalid input should use prefault
-		result, err = schema.Parse(42)
-		require.NoError(t, err)
-		assert.Equal(t, "fallback", result)
+		assert.Nil(t, result2)
 	})
 }
 

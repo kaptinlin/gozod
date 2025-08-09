@@ -102,7 +102,12 @@ func (z *ZodFunction[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) 
 		if fn, ok := result.(any); ok {
 			return any(fn).(T), nil //nolint:unconvert
 		}
-		return zero, fmt.Errorf("internal error: ParseComplex returned unexpected type %T", result)
+		return zero, issues.CreateTypeConversionError(
+			fmt.Sprintf("%T", result),
+			"function",
+			input,
+			ctx[0],
+		)
 	}
 }
 
@@ -118,6 +123,63 @@ func (z *ZodFunction[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodFunction[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
+}
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodFunction[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	result, err := engine.ParseComplexStrict[any](
+		any(input),
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeFunction,
+		z.extractFunction,
+		z.extractFunctionPtr,
+		z.validateFunction,
+		ctx...,
+	)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
+	// Handle both direct function and pointer to function based on constraint type T
+	var zero T
+
+	// Use reflection to determine the actual constraint type
+	zeroType := reflect.TypeOf((*T)(nil)).Elem()
+
+	// Check if T is *any (pointer type)
+	if zeroType.Kind() == reflect.Ptr && zeroType.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
+		// T is *any - return pointer to function
+		if result == nil {
+			return any((*any)(nil)).(T), nil
+		}
+		// Create pointer to the function
+		fnPtr := &result
+		return any(fnPtr).(T), nil //nolint:unconvert
+	} else {
+		// T is any - return the function directly
+		if result == nil {
+			return zero, nil
+		}
+		if fn, ok := result.(any); ok {
+			return any(fn).(T), nil //nolint:unconvert
+		}
+		return zero, issues.CreateTypeConversionError(
+			fmt.Sprintf("%T", result),
+			"function",
+			any(input),
+			ctx[0],
+		)
+	}
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodFunction[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // =============================================================================
@@ -237,12 +299,12 @@ func (z *ZodFunction[T]) Refine(fn func(T) bool, params ...any) *ZodFunction[T] 
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -251,12 +313,12 @@ func (z *ZodFunction[T]) Refine(fn func(T) bool, params ...any) *ZodFunction[T] 
 // RefineAny adds flexible custom validation logic
 func (z *ZodFunction[T]) RefineAny(fn func(any) bool, params ...any) *ZodFunction[T] {
 	schemaParams := utils.NormalizeParams(params...)
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -294,7 +356,7 @@ func (z *ZodFunction[T]) Output(outputSchema core.ZodType[any]) *ZodFunction[T] 
 func (z *ZodFunction[T]) Implement(fn any) (any, error) {
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeFunction, fn)
+		rawIssue := issues.NewRawIssue(core.InvalidType, fn, issues.WithExpected(string(core.ZodTypeFunction)))
 		finalIssue := issues.FinalizeIssue(rawIssue, &core.ParseContext{}, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
@@ -355,14 +417,14 @@ func (z *ZodFunction[T]) validateFunction(value any, checks []core.ZodCheck, ctx
 		if internals.Optional || internals.Nilable {
 			return value, nil
 		}
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeFunction, value)
+		rawIssue := issues.NewRawIssue(core.InvalidType, value, issues.WithExpected(string(core.ZodTypeFunction)))
 		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
 	fnValue := reflect.ValueOf(value)
 	if fnValue.Kind() != reflect.Func {
-		rawIssue := issues.CreateInvalidTypeIssue(core.ZodTypeFunction, value)
+		rawIssue := issues.NewRawIssue(core.InvalidType, value, issues.WithExpected(string(core.ZodTypeFunction)))
 		finalIssue := issues.FinalizeIssue(rawIssue, ctx, nil)
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}

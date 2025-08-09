@@ -3,6 +3,7 @@ package gozod
 import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/types"
 )
 
@@ -466,16 +467,35 @@ type (
 	MessageFormatter  = issues.MessageFormatter
 )
 
-// Re-export frequently used helper functions that operate on *ZodError so that
+// Re-export TypeScript Zod v4 compatible error formatting functions so that
 // callers can perform common error transformations without depending on the
-// internal package path.
+// internal package path. These functions match TypeScript Zod's API patterns:
+// z.treeifyError(), z.prettifyError(), z.flattenError()
 var (
-	PrettifyError              = issues.PrettifyError
+	TreeifyError  = issues.TreeifyError
+	PrettifyError = issues.PrettifyError
+	FlattenError  = issues.FlattenError
+	FormatError   = issues.FormatError
+)
+
+// Advanced error formatting functions with custom mappers - these provide
+// additional flexibility while maintaining TypeScript Zod v4 compatibility
+var (
+	TreeifyErrorWithMapper     = issues.TreeifyErrorWithMapper
 	PrettifyErrorWithFormatter = issues.PrettifyErrorWithFormatter
+	FlattenErrorWithMapper     = issues.FlattenErrorWithMapper
 	FlattenErrorWithFormatter  = issues.FlattenErrorWithFormatter
-	FlattenError               = issues.FlattenError
-	FormatError                = issues.FormatError
-	TreeifyError               = issues.TreeifyError
+)
+
+// -----------------------------------------------------------------------------
+// Path Utilities
+// -----------------------------------------------------------------------------
+// Error path formatting utilities for displaying validation error paths
+// in user-friendly formats
+
+var (
+	ToDotPath       = utils.ToDotPath
+	FormatErrorPath = utils.FormatErrorPath
 )
 
 // -----------------------------------------------------------------------------

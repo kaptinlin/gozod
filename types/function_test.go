@@ -263,26 +263,153 @@ func TestFunction_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestFunction_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with Function", func(t *testing.T) {
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
 		defaultFunc := func() string { return "default" }
-		schema := Function().Default(defaultFunc)
+		prefaultFunc := func() string { return "prefault" }
+		schema := Function().Default(defaultFunc).Prefault(prefaultFunc)
 
-		// Valid input should override default
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		// Should be default function, not prefault
+		if fn, ok := result.(func() string); ok {
+			assert.Equal(t, "default", fn())
+		} else {
+			t.Errorf("Expected function type, got %T", result)
+		}
+	})
+
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default value violates refinement but should still work
+		defaultFunc := "not-a-function" // Invalid type
+		schema := Function().Refine(func(f any) bool {
+			return false // Always fail refinement
+		}, "Should never pass").Default(defaultFunc)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "not-a-function", result) // Default bypasses validation
+	})
+
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value passes validation
+		prefaultFunc := func() int { return 42 }
+		schema := Function().Refine(func(f any) bool {
+			// Only allow functions that return int
+			if fn, ok := f.(func() int); ok {
+				return fn() > 0
+			}
+			return false
+		}, "Function must return positive int").Prefault(prefaultFunc)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		if fn, ok := result.(func() int); ok {
+			assert.Equal(t, 42, fn())
+		} else {
+			t.Errorf("Expected function type, got %T", result)
+		}
+	})
+
+	// Test 4: Prefault only triggered by nil input
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		prefaultFunc := func() string { return "prefault" }
+		schema := Function().Prefault(prefaultFunc)
+
+		// Valid input should override prefault
 		testFunc := func() string { return "test" }
 		result, err := schema.Parse(testFunc)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
+		if fn, ok := result.(func() string); ok {
+			assert.Equal(t, "test", fn()) // Should be input, not prefault
+		} else {
+			t.Errorf("Expected function type, got %T", result)
+		}
+
+		// Invalid input should NOT trigger prefault (should return error)
+		_, err = schema.Parse("not-a-function")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected function")
 	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		prefaultFunc := func() bool { return true }
-		schema := Function().Prefault(prefaultFunc)
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
 
-		// Valid input should override prefault
-		testFunc := func() bool { return false }
-		result, err := schema.Parse(testFunc)
+		defaultFuncProvider := func() any {
+			defaultCalled = true
+			return func() string { return "default" }
+		}
+
+		prefaultFuncProvider := func() any {
+			prefaultCalled = true
+			return func() string { return "prefault" }
+		}
+
+		// Test DefaultFunc priority over PrefaultFunc
+		schema1 := Function().DefaultFunc(defaultFuncProvider).PrefaultFunc(prefaultFuncProvider)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // Should not be called due to default priority
+		assert.NotNil(t, result1)
+		if fn, ok := result1.(func() string); ok {
+			assert.Equal(t, "default", fn())
+		} else {
+			t.Errorf("Expected function type, got %T", result1)
+		}
+
+		// Reset flags
+		defaultCalled = false
+		prefaultCalled = false
+
+		// Test PrefaultFunc alone
+		schema2 := Function().PrefaultFunc(prefaultFuncProvider)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, prefaultCalled)
+		assert.NotNil(t, result2)
+		if fn, ok := result2.(func() string); ok {
+			assert.Equal(t, "prefault", fn())
+		} else {
+			t.Errorf("Expected function type, got %T", result2)
+		}
+	})
+
+	// Test 6: Prefault validation failure
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// Prefault value violates refinement
+		invalidFunc := func() int { return -1 } // Negative value
+		schema := Function().Refine(func(f any) bool {
+			if fn, ok := f.(func() int); ok {
+				return fn() > 0 // Only allow positive returns
+			}
+			return false
+		}, "Function must return positive int").Prefault(invalidFunc)
+		_, err := schema.Parse(nil)
+		require.Error(t, err) // Prefault should fail validation
+		assert.Contains(t, err.Error(), "Function must return positive int")
+	})
+
+	// Test 7: FunctionPtr type with Default and Prefault
+	t.Run("FunctionPtr type with Default and Prefault", func(t *testing.T) {
+		defaultFunc := func() string { return "default" }
+		prefaultFunc := func() string { return "prefault" }
+		schema := FunctionPtr().Default(defaultFunc).Prefault(prefaultFunc)
+
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
+		require.NotNil(t, result)
+		// Should be default function, not prefault
+		if fn, ok := (*result).(func() string); ok {
+			assert.Equal(t, "default", fn())
+		} else {
+			t.Errorf("Expected function type, got %T", *result)
+		}
 	})
 }
 

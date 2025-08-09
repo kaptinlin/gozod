@@ -185,6 +185,91 @@ func TestZodEmail_Modifiers(t *testing.T) {
 }
 
 // =============================================================================
+// Email Default and Prefault Tests
+// =============================================================================
+
+func TestEmail_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence for nil input
+		schema := Email().Default("default@example.com").Prefault("prefault@example.com")
+
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "default@example.com", result)
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default value should bypass email validation constraints
+		schema := Email().Refine(func(s string) bool {
+			return false // Always fail refinement
+		}, "Should never pass").Default("default@example.com")
+
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "default@example.com", result)
+	})
+
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// Prefault value must pass all email validation including refinements
+		schema := Email().Refine(func(s string) bool {
+			return s == "valid@example.com"
+		}, "Must be valid@example.com").Prefault("valid@example.com")
+
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "valid@example.com", result)
+	})
+
+	t.Run("Prefault only triggers for nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Email().Prefault("prefault@example.com")
+
+		// Invalid email should fail without triggering Prefault
+		_, err := schema.Parse("invalid-email")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid email")
+
+		// Valid email should pass normally
+		result, err := schema.Parse("test@example.com")
+		assert.NoError(t, err)
+		assert.Equal(t, "test@example.com", result)
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		// Test function call behavior and priority
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Email().
+			DefaultFunc(func() string {
+				defaultCalled = true
+				return "default@example.com"
+			}).
+			PrefaultFunc(func() string {
+				prefaultCalled = true
+				return "prefault@example.com"
+			})
+
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "default@example.com", result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// When Prefault value fails validation, should return error
+		schema := Email().Refine(func(s string) bool {
+			return false // Always fail
+		}, "Refinement failed").Prefault("prefault@example.com")
+
+		_, err := schema.Parse(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Refinement")
+	})
+}
+
+// =============================================================================
 // Email Type Safety Tests
 // =============================================================================
 
@@ -474,13 +559,13 @@ func TestEmail_Integration(t *testing.T) {
 			t.Errorf("Expected 'test@example.com', got %v", result)
 		}
 
-		// Test with nil (Optional takes precedence over Default)
+		// Test with nil (Default should short-circuit)
 		result, err = schema.Parse(nil)
 		if err != nil {
-			t.Errorf("Expected nil to be allowed for optional: %v", err)
+			t.Errorf("Expected default to be used: %v", err)
 		}
-		if result != nil {
-			t.Errorf("Expected nil (Optional precedence), got %v", result)
+		if result == nil || *result != "default@example.com" {
+			t.Errorf("Expected 'default@example.com' (Default short-circuit), got %v", result)
 		}
 	})
 }

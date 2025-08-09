@@ -1,21 +1,23 @@
 # GoZod Schema Test Implementation Guide
 
-A concise and practical guide for building GoZod Schema test files, updated with the latest practices from `bool_test.go`.
+A concise and practical guide for building GoZod Schema test files, updated with the latest practices from `string_test.go`, `object_test.go`, and `complex_test.go`.
 
 ---
 
 ## 🎯 Core Principles
 
-- **Generic Type Safety**: All tests must verify compile-time type safety.
-- **Modifier Behavior**: Modifiers must be tested for immutability and correct type transformations (e.g., `bool` to `*bool`).
+- **Complete Strict Type Semantics**: Test both `Parse(any)` and `StrictParse(T)` methods thoroughly.
+- **Generic Type Safety**: All tests must verify compile-time type safety and proper constraint handling.
+- **Modifier Behavior**: Test immutability, correct type transformations, and Default/Prefault semantics.
 - **Comprehensive & Organized**: Follow the unified section structure for clarity. Test boundaries and edge cases thoroughly.
-- **Real-World Patterns**: Tests should reflect actual API usage, including modifier chaining.
+- **Real-World Patterns**: Tests should reflect actual API usage, including modifier chaining and error handling.
+- **Default vs Prefault**: Verify Default short-circuits validation while Prefault goes through full parsing pipeline.
 
 ---
 
 ## 🏗️ Test File Architecture
 
-Each test file for a schema type should follow this consolidated 7-section architecture:
+Each test file for a schema type should follow this consolidated architecture based on latest implementations:
 
 ```go
 package types
@@ -23,39 +25,73 @@ package types
 // ... imports
 
 // =============================================================================
-// Basic Functionality
+// Basic functionality tests
 // =============================================================================
-func Test<Type>_BasicFunctionality(t *testing.T) { /* ... */ }
+func Test<Type>_BasicFunctionality(t *testing.T) {
+    t.Run("valid <type> inputs", func(t *testing.T) { /* ... */ })
+    t.Run("invalid type inputs", func(t *testing.T) { /* ... */ })
+    t.Run("Parse and MustParse methods", func(t *testing.T) { /* ... */ })
+    t.Run("custom error message", func(t *testing.T) { /* ... */ })
+}
 
 // =============================================================================
-// Type Safety
+// StrictParse and MustStrictParse tests
+// =============================================================================
+func Test<Type>_StrictParse(t *testing.T) {
+    t.Run("basic functionality", func(t *testing.T) { /* ... */ })
+    t.Run("with validation constraints", func(t *testing.T) { /* ... */ })
+    t.Run("with pointer types", func(t *testing.T) { /* ... */ })
+    t.Run("with default values", func(t *testing.T) { /* ... */ })
+    t.Run("with prefault values", func(t *testing.T) { /* ... */ })
+}
+
+func Test<Type>_MustStrictParse(t *testing.T) { /* ... */ }
+
+// =============================================================================
+// Type safety tests
 // =============================================================================
 func Test<Type>_TypeSafety(t *testing.T) { /* ... */ }
 
 // =============================================================================
-// Modifier Methods
+// Modifier methods tests
 // =============================================================================
 func Test<Type>_Modifiers(t *testing.T) { /* ... */ }
 
 // =============================================================================
-// Chaining
+// Chaining tests
 // =============================================================================
 func Test<Type>_Chaining(t *testing.T) { /* ... */ }
 
 // =============================================================================
-// Coercion (Primitives only)
+// Default and prefault tests
+// =============================================================================
+func Test<Type>_DefaultAndPrefault(t *testing.T) {
+    t.Run("Default has higher priority than Prefault", func(t *testing.T) { /* ... */ })
+    t.Run("Default short-circuits validation", func(t *testing.T) { /* ... */ })
+    t.Run("Prefault goes through full validation", func(t *testing.T) { /* ... */ })
+    t.Run("Prefault only triggers for nil input", func(t *testing.T) { /* ... */ })
+}
+
+// =============================================================================
+// Refine tests
+// =============================================================================
+func Test<Type>_Refine(t *testing.T) { /* ... */ }
+func Test<Type>_RefineAny(t *testing.T) { /* ... */ }
+
+// =============================================================================
+// Coercion tests (Primitives only)
 // =============================================================================
 func Test<Type>_Coercion(t *testing.T) { /* ... */ }
 
 // =============================================================================
-// Edge Cases
+// Error handling and edge case tests
 // =============================================================================
-func Test<Type>_EdgeCases(t *testing.T) { /* ... */ }
+func Test<Type>_ErrorHandling(t *testing.T) { /* ... */ }
 
 // =============================================================================
-// Type-Specific Methods (Complex types only)
+// OVERWRITE TESTS (Transform/Pipe operations)
 // =============================================================================
-func Test<Type>_TypeSpecificMethods(t *testing.T) { /* ... */ }
+func Test<Type>_Overwrite(t *testing.T) { /* ... */ }
 ```
 
 ### Section Responsibilities
@@ -63,12 +99,15 @@ func Test<Type>_TypeSpecificMethods(t *testing.T) { /* ... */ }
 | Section | Primary Focus | Key Test Patterns |
 |---|---|---|
 | **Basic functionality** | Core `Parse`/`MustParse`, valid/invalid inputs, basic errors. | `require.NoError`, `assert.Error`, `assert.Panics` |
-| **Type safety** | Generic constraints, return types, type inference. | `assert.IsType`, compile-time `var _ *Zod...` checks. |
-| **Modifier methods** | Behavior of all modifiers (`Optional`, `Default`, `Refine`, etc.). | One test function with `t.Run` for each modifier. Test immutability and type evolution. |
-| **Chaining** | Complex modifier combinations. | Verify final type and behavior of chained calls. |
-| **Coercion** | Type coercion behavior (e.g., string to bool). | For primitive types only. |
-| **Edge cases** | `nil` handling, empty context, pointer identity. | Nil handling matrix, pointer preservation checks. |
-| **Type-specific methods** | Specialized methods for complex types. | `Enum()`, `Options()`, `Extract()`, `Exclude()` for Enums. |
+| **StrictParse** | `StrictParse`/`MustStrictParse` with exact type matching. | Test exact type safety, constraints, default/prefault behavior |
+| **Type safety** | Generic constraints, return types, type inference. | `assert.IsType`, compile-time `var _ *Zod...` checks |
+| **Modifier methods** | Behavior of all modifiers (`Optional`, `Default`, etc.). | Test immutability, type evolution, Copy-on-Write |
+| **Chaining** | Complex modifier combinations and type evolution. | Verify final type and behavior of chained calls |
+| **Default and prefault** | Default vs Prefault semantics and behavior. | Test short-circuit vs full validation, nil handling |
+| **Refine** | Custom validation logic and refinement. | Test both `Refine` and `RefineAny` patterns |
+| **Coercion** | Type coercion behavior (primitives only). | Test valid/invalid coercible inputs |
+| **Error handling** | Error scenarios, edge cases, special values. | Nil handling, pointer identity, boundary conditions |
+| **Overwrite** | Transform/Pipe operations and value mutations. | Test transformations, chaining, type preservation |
 
 ---
 
@@ -78,74 +117,229 @@ func Test<Type>_TypeSpecificMethods(t *testing.T) { /* ... */ }
 Test core parsing, including valid inputs, obviously invalid types, and `MustParse` panic behavior.
 
 ```go
-func TestBool_BasicFunctionality(t *testing.T) {
-    t.Run("valid boolean inputs", func(t *testing.T) {
-        schema := Bool()
-        result, err := schema.Parse(true)
+func TestString_BasicFunctionality(t *testing.T) {
+    t.Run("valid string inputs", func(t *testing.T) {
+        schema := String()
+        
+        // Test string value
+        result, err := schema.Parse("hello")
         require.NoError(t, err)
-        assert.True(t, result)
+        assert.Equal(t, "hello", result)
+        
+        // Test empty string
+        result, err = schema.Parse("")
+        require.NoError(t, err)
+        assert.Equal(t, "", result)
     })
 
     t.Run("invalid type inputs", func(t *testing.T) {
-        schema := Bool()
-        _, err := schema.Parse("not a boolean")
-        assert.Error(t, err)
+        schema := String()
+        
+        invalidInputs := []any{
+            123, 3.14, true, []string{"hello"}, nil,
+        }
+
+        for _, input := range invalidInputs {
+            _, err := schema.Parse(input)
+            assert.Error(t, err, "Expected error for input: %v", input)
+        }
     })
 
-    t.Run("MustParse panics on error", func(t *testing.T) {
-        schema := Bool()
+    t.Run("Parse and MustParse methods", func(t *testing.T) {
+        schema := String()
+
+        // Test Parse method
+        result, err := schema.Parse("test")
+        require.NoError(t, err)
+        assert.Equal(t, "test", result)
+
+        // Test MustParse method
+        mustResult := schema.MustParse("hello")
+        assert.Equal(t, "hello", mustResult)
+
+        // Test panic on invalid input
         assert.Panics(t, func() {
-            schema.MustParse("invalid")
+            schema.MustParse(123)
         })
+    })
+
+    t.Run("custom error message", func(t *testing.T) {
+        customError := "Expected a string value"
+        schema := String(core.SchemaParams{Error: customError})
+
+        require.NotNil(t, schema)
+        assert.Equal(t, core.ZodTypeString, schema.internals.Def.Type)
+
+        _, err := schema.Parse(123)
+        assert.Error(t, err)
     })
 }
 ```
 
-### Modifier Methods
-Group all modifier tests under a single function using `t.Run`. This improves organization and reflects the consolidated structure from `bool_test.go`.
+### StrictParse Testing
+Test the complete strict type semantics with both `StrictParse` and `MustStrictParse`.
 
 ```go
-func TestBool_Modifiers(t *testing.T) {
-    t.Run("Optional makes type nullable and preserves pointer identity", func(t *testing.T) {
-        schema := Bool().Optional() // bool -> *bool
-        var _ *ZodBool[*bool] = schema // Compile-time check
+func TestString_StrictParse(t *testing.T) {
+    t.Run("basic functionality", func(t *testing.T) {
+        schema := String()
 
-        // Test nil is accepted
-        res, err := schema.Parse(nil)
+        // Test StrictParse with exact type match
+        result, err := schema.StrictParse("test")
         require.NoError(t, err)
-        assert.Nil(t, res)
+        assert.Equal(t, "test", result)
+        assert.IsType(t, "", result)
 
-        // Test pointer identity preservation
-        original := true
-        ptr := &original
-        res, err = schema.Parse(ptr)
+        // Test StrictParse with empty string
+        emptyResult, err := schema.StrictParse("")
         require.NoError(t, err)
-        assert.True(t, res == ptr, "Pointer identity should be preserved")
+        assert.Equal(t, "", emptyResult)
     })
 
-    t.Run("Default provides a fallback but does not change type", func(t *testing.T) {
-        schema := Bool().Default(true)
-        var _ *ZodBool[bool] = schema // Type is still bool
+    t.Run("with validation constraints", func(t *testing.T) {
+        schema := String().Min(5)
 
-        // Default value is not used for valid input
-        res, err := schema.Parse(false)
+        // Valid case
+        result, err := schema.StrictParse("hello world")
         require.NoError(t, err)
-        assert.False(t, res)
-    })
+        assert.Equal(t, "hello world", result)
 
-    t.Run("Refine adds a custom validation", func(t *testing.T) {
-        schema := Bool().Refine(func(b bool) bool {
-            return b // only `true` is valid
-        })
-        
-        _, err := schema.Parse(false)
+        // Invalid case - too short
+        _, err = schema.StrictParse("hi")
         assert.Error(t, err)
-        
-        _, err = schema.Parse(true)
-        assert.NoError(t, err)
+        assert.Contains(t, err.Error(), "Too small")
     })
 
-    // ... other modifiers like Overwrite, Check, etc. as t.Run sub-tests
+    t.Run("with pointer types", func(t *testing.T) {
+        schema := StringPtr()
+        str := "hello"
+
+        // Test with valid pointer input
+        result, err := schema.StrictParse(&str)
+        require.NoError(t, err)
+        require.NotNil(t, result)
+        assert.Equal(t, "hello", *result)
+        assert.IsType(t, (*string)(nil), result)
+    })
+
+    t.Run("with default values", func(t *testing.T) {
+        schema := StringPtr().Default("default_value")
+        var nilPtr *string = nil
+
+        // Test with nil input (should use default)
+        result, err := schema.StrictParse(nilPtr)
+        require.NoError(t, err)
+        require.NotNil(t, result)
+        assert.Equal(t, "default_value", *result)
+    })
+
+    t.Run("with prefault values", func(t *testing.T) {
+        schema := StringPtr().Min(10).Prefault("prefault_value")
+        shortStr := "hi" // Too short for Min(10)
+
+        // Test with validation failure (should NOT use prefault, should return error)
+        _, err := schema.StrictParse(&shortStr)
+        require.Error(t, err)
+        assert.Contains(t, err.Error(), "at least 10")
+
+        // Test with nil input (should use prefault)
+        result, err := schema.StrictParse(nil)
+        require.NoError(t, err)
+        require.NotNil(t, result)
+        assert.Equal(t, "prefault_value", *result)
+    })
+}
+```
+
+### Default and Prefault Testing
+Test the critical difference between Default (short-circuit) and Prefault (full parsing) semantics.
+
+```go
+func TestComplex_DefaultAndPrefault(t *testing.T) {
+    t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+        // When both Default and Prefault are set, Default should take precedence for nil input
+        schema := Complex128().Default(complex(1.0, 2.0)).Prefault(complex(3.0, 4.0))
+
+        result, err := schema.Parse(nil)
+        require.NoError(t, err)
+        assert.Equal(t, complex(1.0, 2.0), result) // Should be default, not prefault
+    })
+
+    t.Run("Default short-circuits validation", func(t *testing.T) {
+        // Default value should bypass complex validation constraints
+        schema := Complex128().Refine(func(c complex128) bool {
+            return false // Always fail refinement
+        }, "Should never pass").Default(complex(1.0, 2.0))
+
+        result, err := schema.Parse(nil)
+        require.NoError(t, err)
+        assert.Equal(t, complex(1.0, 2.0), result) // Default bypasses validation
+    })
+
+    t.Run("Prefault goes through full validation", func(t *testing.T) {
+        // Prefault value must pass all complex validation including refinements
+        schema := Complex128().Refine(func(c complex128) bool {
+            return cmplx.Abs(c) >= 5.0 // Magnitude must be at least 5
+        }, "Magnitude must be at least 5").Prefault(complex(3.0, 4.0)) // |3+4i| = 5
+
+        // Nil input triggers prefault, goes through validation and succeeds
+        result, err := schema.Parse(nil)
+        require.NoError(t, err)
+        assert.Equal(t, complex(3.0, 4.0), result)
+
+        // Non-nil input that fails validation should not trigger prefault
+        _, err = schema.Parse(complex(1.0, 1.0)) // |1+1i| < 5
+        require.Error(t, err)
+        assert.Contains(t, err.Error(), "Magnitude must be at least 5")
+    })
+
+    t.Run("Prefault only triggers for nil input", func(t *testing.T) {
+        // Non-nil input that fails validation should not trigger Prefault
+        schema := Complex128().Prefault(complex(3.0, 4.0))
+
+        // Invalid complex should fail without triggering Prefault
+        _, err := schema.Parse("invalid-complex")
+        require.Error(t, err)
+        assert.Contains(t, err.Error(), "Invalid input: expected number, received string")
+
+        // Valid complex should pass normally
+        result, err := schema.Parse(complex(5.0, 6.0))
+        require.NoError(t, err)
+        assert.Equal(t, complex(5.0, 6.0), result)
+    })
+
+    t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+        // Test function call behavior and priority
+        defaultCalled := false
+        prefaultCalled := false
+
+        schema := Complex128().
+            DefaultFunc(func() complex128 {
+                defaultCalled = true
+                return complex(1.0, 2.0)
+            }).
+            PrefaultFunc(func() complex128 {
+                prefaultCalled = true
+                return complex(3.0, 4.0)
+            })
+
+        result, err := schema.Parse(nil)
+        require.NoError(t, err)
+        assert.Equal(t, complex(1.0, 2.0), result)
+        assert.True(t, defaultCalled, "DefaultFunc should be called")
+        assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+    })
+
+    t.Run("Prefault validation failure", func(t *testing.T) {
+        // When Prefault value fails validation, should return error
+        schema := Complex128().Refine(func(c complex128) bool {
+            return false // Always fail
+        }, "Custom validation failed").Prefault(complex(1.0, 2.0))
+
+        _, err := schema.Parse(nil)
+        require.Error(t, err)
+        assert.Contains(t, err.Error(), "Custom validation failed")
+    })
 }
 ```
 
@@ -187,50 +381,69 @@ func TestBool_EdgeCases(t *testing.T) {
 This checklist is simplified to match the new 7-section structure.
 
 #### Basic Functionality
-- [ ] Test valid inputs of the correct type.
-- [ ] Test invalid inputs of other types (string, int, nil, etc.).
+- [ ] Test valid inputs of the correct type (including edge values like empty strings, zero values).
+- [ ] Test invalid inputs of other types using input arrays for comprehensive coverage.
+- [ ] Test both `Parse` and `MustParse` methods with success/failure cases.
 - [ ] Test `MustParse` panics on invalid input.
-- [ ] Test custom error messages.
+- [ ] Test custom error messages via `core.SchemaParams{Error: "..."}`.
+- [ ] Verify schema internals are set correctly (`assert.Equal(t, core.ZodTypeX, schema.internals.Def.Type)`).
+
+#### StrictParse and MustStrictParse
+- [ ] Test `StrictParse` with exact type matches and proper return types.
+- [ ] Test `StrictParse` with validation constraints (both success and failure).
+- [ ] Test pointer type handling in `StrictParse` (e.g., `StringPtr().StrictParse(&str)`).
+- [ ] Test `StrictParse` with default values (nil input should use default).
+- [ ] Test `StrictParse` with prefault values (nil uses prefault, invalid input returns error).
+- [ ] Test `MustStrictParse` success cases and panic behavior.
+- [ ] Verify proper type assertions and return type safety.
 
 #### Type Safety
-- [ ] Verify `Parse` return types with `assert.IsType`.
-- [ ] Use compile-time `var _ *Zod...` assignments to verify schema types.
-- [ ] Test type evolution (e.g., `T` -> `*T` after `.Optional()`).
+- [ ] Use compile-time `var _ *ZodType[T]` assignments to verify schema types.
+- [ ] Verify `Parse` and `StrictParse` return types with `assert.IsType`.
+- [ ] Test type evolution through modifiers (e.g., `T` -> `*T` after `.Optional()`).
+- [ ] Test that Default/Prefault preserve base schema type (`T` remains `T`).
+- [ ] Include commented examples showing compile errors for incorrect usage.
 
 #### Modifier Methods
-- [ ] **Immutability**: For every modifier, confirm the original schema remains unchanged by creating a new variable for the modified schema.
-- [ ] **`Optional`, `Nilable`, `Nullish`**:
-    - [ ] Verify they accept `nil` input.
-    - [ ] Confirm they convert a value schema `T` to a pointer schema `*T`.
-- [ ] **`Default`, `Prefault`**:
-    - [ ] Verify they provide fallback values correctly.
-    - [ ] Confirm they preserve the schema's type (`T` remains `T`, `*T` remains `*T`).
-    - [ ] Test both value (e.g., `Default`) and function (e.g., `DefaultFunc`) variants.
-- [ ] **`Refine`, `Check`**:
-    - [ ] Verify custom validation logic is executed for both passing and failing cases.
-    - [ ] Test with custom error messages.
-- [ ] **`Overwrite`**:
-    - [ ] Verify it transforms the value as expected and preserves the type.
-- [ ] **`Transform`, `Pipe`**:
-    - [ ] `Transform`: Verify it changes the output value and type correctly.
-    - [ ] `Pipe`: Verify the output of the first schema is correctly passed to the second.
-- [ ] **`NonOptional`**:
-    - [ ] Verify it correctly rejects `nil`.
-    - [ ] Confirm it converts a pointer schema `*T` back to a value schema `T`.
-- [ ] **`IsOptional`, `IsNilable`**:
-    - [ ] Verify status is reported correctly across all schema variations (base, `.Optional()`, `.Nilable()`, `.Nullish()`, `.NonOptional()`).
+- [ ] **Immutability**: Verify original schema remains unchanged after calling modifiers.
+- [ ] **`Optional`, `Nilable`**: Convert value schema `T` to pointer schema `*T`, accept `nil`.
+- [ ] **`Default`, `Prefault`**: Preserve schema type, accept value types (compile-time safety).
+- [ ] **`Overwrite`**: Test value transformation while preserving type.
+- [ ] **`Refine`, `RefineAny`**: Test custom validation with success/failure cases.
 
 #### Chaining
-- [ ] Test chains of 2-3 modifiers.
-- [ ] Verify the final type and behavior of the chain.
+- [ ] Test complex chains of 2-3 modifiers with type evolution.
+- [ ] Verify final type and behavior match expectations.
+- [ ] Test real-world chaining patterns (e.g., `.Optional().Default().Refine()`).
+
+#### Default and Prefault
+- [ ] Test Default has higher priority than Prefault when both are set.
+- [ ] Verify Default short-circuits validation (bypasses refinements).
+- [ ] Verify Prefault goes through full validation pipeline.
+- [ ] Test Prefault only triggers on nil input, not validation failures.
+- [ ] Test both value and function variants (`Default`/`DefaultFunc`, `Prefault`/`PrefaultFunc`).
+- [ ] Test Prefault validation failures return appropriate errors.
+
+#### Refine
+- [ ] Test `Refine` with custom validation functions.
+- [ ] Test `RefineAny` for input-agnostic validation.
+- [ ] Test custom error messages in refinement.
+- [ ] Test refinement with pointer types and nil handling.
 
 #### Coercion (Primitives only)
-- [ ] Test valid coercible inputs (e.g., `"true"` for `CoercedBool`).
-- [ ] Test invalid, non-coercible inputs.
+- [ ] Test valid coercible inputs with expected transformations.
+- [ ] Test invalid, non-coercible inputs produce errors.
+- [ ] Test coercion combined with validation constraints.
 
-#### Edge Cases
-- [ ] Test `nil` input against all relevant schema variations (base, optional, nilable, etc.).
-- [ ] For schemas returning pointers, verify that passing a pointer preserves its identity.
+#### Error Handling
+- [ ] Test error scenarios with appropriate error message validation.
+- [ ] Test edge cases: `nil` handling, special values (NaN, Infinity for numbers).
+- [ ] Test pointer identity preservation where applicable.
+- [ ] Test very large/small values, Unicode strings, complex data structures.
 
-#### Type-Specific Methods (e.g., Enum, Slice)
-- [ ] Test methods unique to the complex type (e.g., `Enum().Options()`, `Slice().Min()`).
+#### Overwrite (Transform/Pipe operations)
+- [ ] Test basic transformations with expected input/output.
+- [ ] Test chaining multiple transformations.
+- [ ] Test transformations with different output types.
+- [ ] Test transformation error handling.
+- [ ] Test interaction with default values and validation.

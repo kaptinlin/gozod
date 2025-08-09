@@ -6,7 +6,121 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// =============================================================================
+// Default and prefault tests with Transform interaction
+// =============================================================================
+
+func TestTransform_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default skips transform", func(t *testing.T) {
+		// Default should bypass transform and return immediately
+		transformCalled := false
+		schema := String().Default("default_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_value", result)
+		assert.False(t, transformCalled, "Transform should not be called when Default is used")
+	})
+
+	t.Run("Prefault goes through transform", func(t *testing.T) {
+		// Prefault should go through the full validation and transform pipeline
+		transformCalled := false
+		schema := String().Prefault("prefault_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "PREFAULT_VALUE", result)
+		assert.True(t, transformCalled, "Transform should be called when Prefault is used")
+	})
+
+	t.Run("Default has higher priority than Prefault with transform", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence and skip transform
+		transformCalled := false
+		schema := String().Default("default_value").Prefault("prefault_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_value", result)
+		assert.False(t, transformCalled, "Transform should not be called when Default is used")
+	})
+
+	t.Run("Valid input goes through transform", func(t *testing.T) {
+		// Valid input should go through transform, ignoring Default and Prefault
+		transformCalled := false
+		schema := String().Default("default_value").Prefault("prefault_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse("input_value")
+		require.NoError(t, err)
+		assert.Equal(t, "INPUT_VALUE", result)
+		assert.True(t, transformCalled, "Transform should be called for valid input")
+	})
+
+	t.Run("Transform error with Prefault fallback", func(t *testing.T) {
+		// When transform fails, it should not fall back to Prefault
+		schema := String().Prefault("prefault_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			return nil, fmt.Errorf("transform error")
+		})
+
+		// Transform error should be returned, not fall back to Prefault
+		_, err := schema.Parse("input_value")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "transform error")
+	})
+
+	t.Run("DefaultFunc skips transform", func(t *testing.T) {
+		// DefaultFunc should also bypass transform
+		defaultCalled := false
+		transformCalled := false
+		schema := String().DefaultFunc(func() string {
+			defaultCalled = true
+			return "func_default"
+		}).Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "func_default", result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, transformCalled, "Transform should not be called when DefaultFunc is used")
+	})
+
+	t.Run("PrefaultFunc goes through transform", func(t *testing.T) {
+		// PrefaultFunc should go through transform
+		prefaultCalled := false
+		transformCalled := false
+		schema := String().PrefaultFunc(func() string {
+			prefaultCalled = true
+			return "func_prefault"
+		}).Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "FUNC_PREFAULT", result)
+		assert.True(t, prefaultCalled, "PrefaultFunc should be called")
+		assert.True(t, transformCalled, "Transform should be called when PrefaultFunc is used")
+	})
+}
 
 func TestBool_Transform(t *testing.T) {
 	tests := []struct {

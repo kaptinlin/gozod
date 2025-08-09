@@ -85,6 +85,35 @@ func (z *ZodTime[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodTime[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	// Use the internally recorded type code by default, fall back to time if not set
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeTime
+	}
+
+	return engine.ParsePrimitiveStrict[time.Time, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		expectedType,
+		engine.ApplyChecks[time.Time],
+		ctx...,
+	)
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodTime[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodTime[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)

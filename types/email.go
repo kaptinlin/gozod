@@ -114,5 +114,19 @@ func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 	return &ZodEmail[T]{base.withInternals(newInternals)}
 }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodEmail[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodEmail[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // GetInternals proxies to the embedded string schema.
 func (z *ZodEmail[T]) GetInternals() *core.ZodTypeInternals { return z.ZodString.GetInternals() }

@@ -107,16 +107,12 @@ You can provide custom error messages for better user experience:
 
 ```go
 // Static error message
-schema := gozod.String().Min(5, gozod.SchemaParams{
-    Error: "Username must be at least 5 characters",
-})
+schema := gozod.String().Min(5, "Username must be at least 5 characters")
 
-// Dynamic error message
-dynamicSchema := gozod.String().Min(5, gozod.SchemaParams{
-    Error: func(issue gozod.ZodRawIssue) string {
-        return fmt.Sprintf("String must be at least %d characters, got %d",
-            issue.GetMinimum(), len(issue.Input.(string)))
-    },
+// Dynamic error message with custom error function
+dynamicSchema := gozod.String().Min(5, func(issue gozod.ZodRawIssue) string {
+    return fmt.Sprintf("String must be at least %d characters, got %d",
+        issue.GetMinimum(), len(issue.Input.(string)))
 })
 ```
 
@@ -133,8 +129,8 @@ if err != nil {
         pretty := gozod.PrettifyError(zodErr)
         fmt.Println(pretty)
         
-        // Nested structure format
-        formatted := gozod.FormatError(zodErr)
+        // Nested tree structure format
+        tree := gozod.TreeifyError(zodErr)
         
         // Flat structure for forms
         flattened := gozod.FlattenError(zodErr)
@@ -149,18 +145,31 @@ if err != nil {
 
 GoZod preserves Go's type system and provides intelligent type inference:
 
-### Pointer Identity Preservation
+### Strict Type Requirements and Pointer Identity
 
 ```go
+// GoZod uses complete strict type semantics
+value := "hello"
+
+// Value schemas: strict value input only
 stringSchema := gozod.String()
+result1, _ := stringSchema.Parse("hello")      // ✅ string → string
+// result1, _ := stringSchema.Parse(&value)    // ❌ Error: requires string, got *string
 
-// Basic type inference
-result1, _ := stringSchema.Parse("hello")      // result1: "hello" (string)
+// Pointer schemas: strict pointer input only  
+ptrSchema := gozod.StringPtr()
+result2, _ := ptrSchema.Parse(&value)          // ✅ *string → *string (preserves identity)
+// result2, _ := ptrSchema.Parse("hello")      // ❌ Error: requires *string, got string
 
-// Pointer identity preservation
-input := "world"
-result2, _ := stringSchema.Parse(&input)       // result2: &input (same memory address)
-fmt.Println(result2 == &input)                // true - same memory address
+// Optional/Nilable: flexible input with pointer output
+optionalSchema := gozod.String().Optional()   // Returns *string, flexible input
+result3, _ := optionalSchema.Parse("hello")    // ✅ string → *string (new pointer)
+result4, _ := optionalSchema.Parse(&value)     // ✅ *string → *string (preserves identity)
+fmt.Println(result4 == &value)                // true - same memory address
+
+// Helper functions for convenience
+func Ptr[T any](v T) *T { return &v }
+result5, _ := ptrSchema.Parse(Ptr("test"))     // Create pointer inline
 ```
 
 ### Optional vs Nilable Distinction
@@ -179,15 +188,19 @@ result, _ = nilableSchema.Parse(nil)          // result: (*string)(nil)
 
 ### Working with Pointer Schemas
 
-Schemas like `gozod.StringPtr()` and `gozod.IntPtr()` are useful when you need to distinguish between a field that was not provided versus a field that was explicitly set to its zero value (e.g., `""` or `0`). A common use case is handling partial data updates, for example, from a JSON API into a struct.
+Schemas like `gozod.StringPtr()` and `gozod.IntPtr()` are useful when you need to distinguish between a field that was not provided versus a field that was explicitly set to its zero value (e.g., `""` or `0`). These schemas require strict pointer input and preserve pointer identity, making them ideal for handling partial data updates.
 
-The schema will parse the input into a pointer. You can then check if the pointer is `nil` to determine if a value was provided.
+**Important**: ALL GoZod schemas now use strict type requirements:
+- `gozod.String()` only accepts `string` input
+- `gozod.StringPtr()` only accepts `*string` input  
+- `gozod.Struct[T]()` only accepts `T` input
+- `gozod.StructPtr[T]()` only accepts `*T` input
 
 ```go
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-zod/gozod"
+	"github.com/kaptinlin/gozod"
 )
 
 // First, define the Go struct you intend to populate.
@@ -230,6 +243,24 @@ if validatedPayload.Age != nil {
 // Output:
 // Nickname was provided: gopher
 // Age was not provided.
+
+// Strict type requirements in action:
+valueSchema := gozod.String().Min(2)
+ptrSchema := gozod.StringPtr().Min(2)
+name := "Alice"
+
+// Value schema requires value input
+result1, err := valueSchema.Parse("Alice")  // ✅ string → string
+// result1, err := valueSchema.Parse(&name) // ❌ Error: requires string, got *string
+
+// Pointer schema requires pointer input  
+result2, err := ptrSchema.Parse(&name)      // ✅ *string → *string
+// result2, err := ptrSchema.Parse("Alice") // ❌ Error: requires *string, got string
+
+if err == nil {
+    fmt.Printf("Validated: %s\n", *result2)
+    fmt.Printf("Same pointer: %v\n", result2 == &name)  // true - identity preserved
+}
 ```
 
 ## Common Patterns
@@ -277,9 +308,9 @@ timestampDefault := gozod.String().DefaultFunc(func() string {
     return time.Now().Format(time.RFC3339)
 })
 
-// Prefault provides fallback for ANY validation failure
-safeValue := gozod.String().Min(5).Prefault("fallback")
-result, err := safeValue.Parse("hi")  // "fallback" (too short, uses fallback)
+// Prefault provides pre-parse default for nil input (goes through full parsing)
+safeValue := gozod.String().Transform(func(s string) string { return strings.ToUpper(s) }).Prefault("fallback")
+result, err := safeValue.Parse(nil)  // "FALLBACK" (nil input uses prefault, then transforms)
 ```
 
 ### Type Coercion
@@ -287,22 +318,20 @@ result, err := safeValue.Parse("hi")  // "fallback" (too short, uses fallback)
 **Note**: In alignment with TypeScript Zod v4, coercion is now limited to primitive types only.
 
 ```go
+import "github.com/kaptinlin/gozod/coerce"
+
 // Basic primitive type coercion
-stringSchema := gozod.Coerce.String()
+stringSchema := coerce.String()
 result, _ := stringSchema.Parse(123)     // "123"
 
-numberSchema := gozod.Coerce.Number()
+numberSchema := coerce.Number()
 result, _ = numberSchema.Parse("42")     // 42.0
 
-boolSchema := gozod.Coerce.Bool()
+boolSchema := coerce.Bool()
 result, _ = boolSchema.Parse("true")     // true
 
-bigintSchema := gozod.Coerce.BigInt()
+bigintSchema := coerce.BigInt()
 result, _ = bigintSchema.Parse("123")    // *big.Int(123)
-
-// Schema-level coercion for primitives
-coerceSchema := gozod.String(gozod.SchemaParams{Coerce: true})
-result, _ := coerceSchema.Parse(123)  // "123"
 
 // Collection types (object, map, record, slice) no longer support coercion
 ```
@@ -313,9 +342,7 @@ result, _ := coerceSchema.Parse(123)  // "123"
 // Custom validation logic using Refine
 passwordSchema := gozod.String().Min(8).Refine(func(s string) bool {
     return strings.ContainsAny(s, "!@#$%^&*()")
-}, gozod.SchemaParams{
-    Error: "Password must contain at least one special character",
-})
+}, "Password must contain at least one special character")
 
 // Same idea with the lightweight Check helper
 passwordSchema := gozod.String().Check(func(v string, p *gozod.ParsePayload) {
@@ -327,6 +354,11 @@ passwordSchema := gozod.String().Check(func(v string, p *gozod.ParsePayload) {
     }
 })
 
+// Or using Min method with custom error message
+passwordSchema2 := gozod.String().Min(8, "Password too short").Refine(func(s string) bool {
+    return strings.ContainsAny(s, "!@#$%^&*()")
+}, "Password must contain at least one special character")
+
 // .Check gives you full access to the accumulating ParsePayload so you can
 // push multiple issues in one pass without defining separate refinements.
 ```
@@ -335,13 +367,10 @@ passwordSchema := gozod.String().Check(func(v string, p *gozod.ParsePayload) {
 
 ```go
 // Union types (OR logic)
-stringOrNumber := gozod.Union([]gozod.ZodType[any, any]{
-    gozod.String(),
-    gozod.Int(),
-})
+stringOrNumber := gozod.Union(gozod.String(), gozod.Int())
 
 // Discriminated union for better performance
-apiResponse := gozod.DiscriminatedUnion("status", []gozod.ZodType[any, any]{
+apiResponse := gozod.DiscriminatedUnion("status", 
     gozod.Object(gozod.ObjectSchema{
         "status": gozod.Literal("success"),
         "data":   gozod.String(),
@@ -350,7 +379,7 @@ apiResponse := gozod.DiscriminatedUnion("status", []gozod.ZodType[any, any]{
         "status": gozod.Literal("error"),
         "error":  gozod.String(),
     }),
-})
+)
 ```
 
 ## Working with JSON APIs

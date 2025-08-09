@@ -308,58 +308,153 @@ func TestTime_DefaultAndPrefault(t *testing.T) {
 	defaultTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	prefaultTime := time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC)
 
-	t.Run("Default value behavior", func(t *testing.T) {
-		schema := Time().Default(defaultTime)
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// Time type
+		schema1 := Time().Default(defaultTime).Prefault(prefaultTime)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, result1.Equal(defaultTime)) // Should be default, not prefault
 
-		// Valid input should override default
-		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
-		result, err := schema.Parse(testTime)
-		require.NoError(t, err)
-		assert.True(t, result.Equal(testTime))
-		assert.IsType(t, time.Time{}, result) // Should still be time.Time, not pointer
+		// TimePtr type
+		schema2 := TimePtr().Default(defaultTime).Prefault(prefaultTime)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.True(t, result2.Equal(defaultTime)) // Should be default, not prefault
 	})
 
-	t.Run("DefaultFunc with function", func(t *testing.T) {
-		schema := Time().DefaultFunc(func() time.Time {
-			return defaultTime
-		})
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default value violates time constraint but should still work
+		minTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		oldTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC) // Before min
+		schema1 := Time().Refine(func(t time.Time) bool {
+			return t.After(minTime) || t.Equal(minTime) // Only allow times >= 2024
+		}, "Time must be after 2024").Default(oldTime)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, result1.Equal(oldTime)) // Default bypasses validation
 
-		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
-		result, err := schema.Parse(testTime)
-		require.NoError(t, err)
-		assert.True(t, result.Equal(testTime))
+		// Default value violates refinement but should still work
+		schema2 := Time().Refine(func(t time.Time) bool {
+			return false // Always fail refinement
+		}, "Should never pass").Default(defaultTime)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, result2.Equal(defaultTime)) // Default bypasses validation
 	})
 
-	t.Run("Prefault fallback behavior", func(t *testing.T) {
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value passes validation
+		minTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		validTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC) // After min
+		schema1 := Time().Refine(func(t time.Time) bool {
+			return t.After(minTime) || t.Equal(minTime) // Only allow times >= 2023
+		}, "Time must be after 2023").Prefault(validTime)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, result1.Equal(validTime))
+
+		// Prefault value passes refinement
+		schema2 := Time().Refine(func(t time.Time) bool {
+			return t.Year() == 2023 // Only allow 2023 times
+		}, "Must be in 2023").Prefault(prefaultTime)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, result2.Equal(prefaultTime))
+	})
+
+	// Test 4: Prefault only triggered by nil input
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
 		schema := Time().Prefault(prefaultTime)
 
+		// Valid input should override prefault
 		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
 		result, err := schema.Parse(testTime)
 		require.NoError(t, err)
-		assert.True(t, result.Equal(testTime))
+		assert.True(t, result.Equal(testTime)) // Should be input, not prefault
+
+		// Invalid input should NOT trigger prefault (should return error)
+		_, err = schema.Parse("invalid-time")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected time, received string")
 	})
 
-	t.Run("PrefaultFunc with function", func(t *testing.T) {
-		schema := Time().PrefaultFunc(func() time.Time {
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		defaultFunc := func() time.Time {
+			defaultCalled = true
+			return defaultTime
+		}
+
+		prefaultFunc := func() time.Time {
+			prefaultCalled = true
 			return prefaultTime
-		})
+		}
 
-		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
-		result, err := schema.Parse(testTime)
-		require.NoError(t, err)
-		assert.True(t, result.Equal(testTime))
+		// Test DefaultFunc priority over PrefaultFunc
+		schema1 := Time().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // Should not be called due to default priority
+		assert.True(t, result1.Equal(defaultTime))
+
+		// Reset flags
+		defaultCalled = false
+		prefaultCalled = false
+
+		// Test PrefaultFunc alone
+		schema2 := Time().PrefaultFunc(prefaultFunc)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, prefaultCalled)
+		assert.True(t, result2.Equal(prefaultTime))
 	})
 
-	t.Run("type preservation in Default", func(t *testing.T) {
+	// Test 6: Prefault validation failure
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// Prefault value violates time constraint
+		minTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		oldTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC) // Before min
+		schema1 := Time().Refine(func(t time.Time) bool {
+			return t.After(minTime) || t.Equal(minTime) // Only allow times >= 2024
+		}, "Time must be after 2024").Prefault(oldTime)
+		_, err1 := schema1.Parse(nil)
+		require.Error(t, err1) // Prefault should fail validation
+		assert.Contains(t, err1.Error(), "Time must be after 2024")
+
+		// Prefault value violates refinement
+		schema2 := Time().Refine(func(t time.Time) bool {
+			return t.Year() == 2024 // Only allow 2024 times
+		}, "Must be in 2024").Prefault(prefaultTime) // 2023 time
+		_, err2 := schema2.Parse(nil)
+		require.Error(t, err2) // Prefault should fail validation
+		assert.Contains(t, err2.Error(), "Must be in 2024")
+	})
+
+	// Test 7: Type preservation in Default and Prefault
+	t.Run("Type preservation in Default and Prefault", func(t *testing.T) {
 		// time.Time maintains time.Time
 		timeSchema := Time()
 		defaultTimeSchema := timeSchema.Default(defaultTime)
 		var _ *ZodTime[time.Time] = defaultTimeSchema
 
+		prefaultTimeSchema := timeSchema.Prefault(prefaultTime)
+		var _ *ZodTime[time.Time] = prefaultTimeSchema
+
 		// *time.Time maintains *time.Time
 		ptrSchema := TimePtr()
 		defaultPtrSchema := ptrSchema.Default(defaultTime)
 		var _ *ZodTime[*time.Time] = defaultPtrSchema
+
+		prefaultPtrSchema := ptrSchema.Prefault(prefaultTime)
+		var _ *ZodTime[*time.Time] = prefaultPtrSchema
 	})
 }
 

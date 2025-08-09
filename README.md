@@ -9,9 +9,10 @@
 ## ✨ Key Features
 
 - **TypeScript Zod v4 Compatible API** - Familiar syntax with Go-native optimizations
-- **Intelligent Type Inference** - Input types preserved in output with smart pointer handling
+- **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
+- **Native Go Struct Support** - First-class struct validation with field-level validation and JSON tag mapping
+- **Maximum Performance** - Zero-overhead validation with optimal execution paths
 - **Zero Dependencies** - Pure Go implementation, no external libraries
-- **Optimized Performance** - Efficient discriminated unions, optimized validation algorithms
 - **Rich Validation Methods** - Comprehensive built-in validators for all Go types
 - **Type-Safe Method Chaining** - Fluent API with compile-time type safety
 
@@ -48,11 +49,43 @@ func main() {
 }
 ```
 
+### Struct Schema Validation
+
+```go
+// Define Go struct
+type User struct {
+    Name  string `json:"name"`
+    Age   int    `json:"age"`
+    Email string `json:"email"`
+}
+
+// Basic struct validation
+basicSchema := gozod.Struct[User]()
+user := User{Name: "Alice", Age: 25, Email: "alice@example.com"}
+result, err := basicSchema.Parse(user)
+if err == nil {
+    fmt.Printf("Valid user: %+v\n", result)
+}
+
+// Struct with field validation
+userSchema := gozod.Struct[User](gozod.StructSchema{
+    "name":  gozod.String().Min(2).Max(50),
+    "age":   gozod.Int().Min(0).Max(120),
+    "email": gozod.String().Email().Optional(),
+})
+
+validUser := User{Name: "Bob", Age: 30, Email: "bob@example.com"}
+result, err = userSchema.Parse(validUser)
+if err == nil {
+    fmt.Printf("Validated struct: %+v\n", result)
+}
+```
+
 ### Object Schema Validation
 
 ```go
-// Define schema for structured data
-userSchema := gozod.Object(gozod.ObjectSchema{
+// For JSON-like data (map[string]any)
+userObjectSchema := gozod.Object(gozod.ObjectSchema{
     "name":  gozod.String().Min(2).Max(50),
     "age":   gozod.Int().Min(0).Max(120),
     "email": gozod.String().Email().Optional(),
@@ -65,29 +98,76 @@ userData := map[string]any{
     "email": "alice@example.com",
 }
 
-result, err := userSchema.Parse(userData)
+result, err := userObjectSchema.Parse(userData)
 if err != nil {
     fmt.Printf("Validation failed: %v\n", err)
     return
 }
 
-fmt.Printf("Valid user: %+v\n", result)
+fmt.Printf("Valid user data: %+v\n", result)
+```
+
+### Advanced Struct Usage
+
+```go
+// Struct with pointer fields and validation
+type Profile struct {
+    ID       int     `json:"id"`
+    Username string  `json:"username"`
+    Email    *string `json:"email,omitempty"` // Optional field
+    Active   bool    `json:"active"`
+}
+
+// Schema with field-level validation
+profileSchema := gozod.Struct[Profile](gozod.StructSchema{
+    "id":       gozod.Int().Min(1),
+    "username": gozod.String().Min(3).Max(20),
+    "email":    gozod.String().Email().Optional(), // Handles pointer fields
+    "active":   gozod.Bool(),
+})
+
+// Validate struct with optional field
+email := "john@example.com"
+profile := Profile{
+    ID:       123,
+    Username: "john_doe",
+    Email:    &email, // Pointer to string
+    Active:   true,
+}
+
+result, err := profileSchema.Parse(profile)
+if err == nil {
+    fmt.Printf("Valid profile: %+v\n", result)
+}
+
+// Struct modifiers
+optionalSchema := gozod.Struct[Profile]().Optional()    // Returns *Profile
+defaultProfile := Profile{ID: 1, Username: "guest", Active: false}
+withDefault := gozod.Struct[Profile]().Default(defaultProfile)
+
+// Partial validation (skip zero values)
+partialSchema := profileSchema.Partial() // Makes all fields optional
+partialProfile := Profile{Username: "partial_user"} // Only username set
+result, err = partialSchema.Parse(partialProfile) // Valid - other fields skipped
 ```
 
 ### Type Coercion
 
 ```go
+import "github.com/kaptinlin/gozod/coerce"
+
 // Automatic type conversion
-stringSchema := gozod.Coerce.String()
+stringSchema := coerce.String()
 result, _ := stringSchema.Parse(123)    // "123"
 
-numberSchema := gozod.Coerce.Number()
+numberSchema := coerce.Number()
 result, _ = numberSchema.Parse("42")    // 42.0
 
-// Schema-level coercion
-coerceSchema := gozod.Int(gozod.SchemaParams{Coerce: true})
+// Use Coerce constructors
+coerceSchema := coerce.Int()
 result, _ = coerceSchema.Parse("25")    // 25
 ```
+
 
 ### Error Handling
 
@@ -115,27 +195,92 @@ gozod.String().Min(3).Max(100).Email().StartsWith("user")
 // Number validation  
 gozod.Int().Min(0).Max(120).Positive()
 
+// Struct validation
+type Person struct {
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+}
+gozod.Struct[Person](gozod.StructSchema{
+    "name": gozod.String().Min(2),
+    "age":  gozod.Int().Min(0).Max(120),
+})
+
 // Array validation
-gozod.Slice(gozod.String()).Min(1).Max(10).NonEmpty()
+gozod.Slice[string](gozod.String()).Min(1).Max(10).NonEmpty()
 ```
 
-### Modifiers and Wrappers
+### Strict Type Semantics and Modifiers
 ```go
-// Optional (allows nil/missing)
-gozod.String().Email().Optional()
+// Value schemas: strict value input only
+gozod.String().Email()       // Requires string input, returns string
+gozod.Int().Min(0)          // Requires int input, returns int
 
-// Nilable (handles explicit null values)
-gozod.String().Nilable()  // Returns a typed nil (*string)(nil) for nil input
+// Pointer schemas: strict pointer input only  
+gozod.StringPtr().Email()   // Requires *string input, returns *string
+gozod.IntPtr().Min(0)       // Requires *int input, returns *int
 
-// Default values
-gozod.String().Default("anonymous")
+// Optional/Nilable: flexible input, pointer output
+gozod.String().Optional()   // Flexible input (string/*string), returns *string
+gozod.String().Nilable()    // Flexible input, returns *string or typed nil
 
-// Fallback on validation failure
-gozod.String().Min(5).Prefault("fallback")
+// Default values and prefaults
+gozod.String().Default("anonymous")  // Short-circuits on nil input
+gozod.String().Transform(strings.ToUpper).Prefault("fallback")  // Pre-parse default for nil
+```
+
+### Complete Strict Type Semantics
+```go
+// ALL schemas require exact input types - no automatic conversions
+stringSchema := gozod.String()     // Requires string, returns string  
+stringPtrSchema := gozod.StringPtr() // Requires *string, returns *string
+
+value := "hello"
+
+// Value schema: only accepts values
+result1, _ := stringSchema.Parse("hello")    // ✅ string → string
+// result1, _ := stringSchema.Parse(&value)  // ❌ Error: requires string, got *string
+
+// Pointer schema: only accepts pointers
+result2, _ := stringPtrSchema.Parse(&value)  // ✅ *string → *string (preserves identity)
+// result2, _ := stringPtrSchema.Parse("hello") // ❌ Error: requires *string, got string
+
+// For flexible input handling, use Optional/Nilable modifiers
+optionalSchema := gozod.String().Optional()  // Returns *string, flexible input
+result3, _ := optionalSchema.Parse("hello")  // ✅ string → *string (new pointer)
+result4, _ := optionalSchema.Parse(&value)   // ✅ *string → *string (preserves identity)
+
+// Helper functions for strict mode convenience
+func Ptr[T any](v T) *T { return &v }
+func Deref[T any](ptr *T) T { return *ptr }
+
+// Usage with helpers
+result5, _ := stringPtrSchema.Parse(Ptr("hello"))   // Create pointer
+result6, _ := stringSchema.Parse(Deref(&value))     // Dereference pointer
 ```
 
 ### Advanced Types
 ```go
+// Struct with nested validation
+type Address struct {
+    Street string `json:"street"`
+    City   string `json:"city"`
+}
+
+type Customer struct {
+    Name    string  `json:"name"`
+    Address Address `json:"address"`
+    Tags    []string `json:"tags"`
+}
+
+customerSchema := gozod.Struct[Customer](gozod.StructSchema{
+    "name": gozod.String().Min(2),
+    "address": gozod.Struct[Address](gozod.StructSchema{
+        "street": gozod.String().Min(5),
+        "city":   gozod.String().Min(2),
+    }),
+    "tags": gozod.Slice[string](gozod.String()).Optional(),
+})
+
 // Enum types
 colorEnum := gozod.Enum("red", "green", "blue")
 statusMap := gozod.EnumMap(map[string]string{
@@ -152,25 +297,26 @@ const (
 statusEnum := gozod.Enum(Active, Inactive)
 
 // Union types (OR logic)
-gozod.Union([]gozod.ZodType[any, any]{gozod.String(), gozod.Int()})
+gozod.Union(gozod.String(), gozod.Int())
 
 // Discriminated unions (efficient lookup)
-gozod.DiscriminatedUnion("type", schemas)
+gozod.DiscriminatedUnion("type", schema1, schema2, schema3)
 
 // Recursive types
-var TreeNode gozod.ZodType[any, any]
-TreeNode = gozod.Lazy(func() gozod.ZodType[any, any] {
+var TreeNode = gozod.LazyAny(func() any {
     return gozod.Object(gozod.ObjectSchema{
         "value":    gozod.String(),
-        "children": gozod.Slice(TreeNode),
+        "children": gozod.Slice[any](TreeNode),
     })
 })
+
 ```
 
 ## 📚 Documentation
 
 - **[Getting Started Guide](docs/basics.md)** - Fundamental usage patterns and core concepts
 - **[Complete API Reference](docs/api.md)** - Comprehensive type interface documentation
+- **[Complete Strict Mode Refactor](refactor.md)** - Breaking changes to all method behaviors and comprehensive migration guide
 - **[Error Handling & Customization](docs/error-customization.md)** - Custom error messages and internationalization
 - **[Error Formatting](docs/error-formatting.md)** - Different error output formats for various use cases
 - **[JSON Schema Integration](docs/json-schema.md)** - Generate and work with JSON schemas
@@ -188,9 +334,12 @@ GoZod provides comprehensive compatibility with TypeScript Zod v4 while adding G
 - **Modifiers**: `optional`, `nilable`, `default` with Go semantics
 
 ### Key Enhancements
-- **Pointer Identity Preservation**: Input pointer addresses maintained in output
+- **Complete Strict Type Semantics**: All methods require exact input types with zero automatic conversions
+- **Native Go Struct Validation**: Type-safe struct validation with field schemas, JSON tag mapping, and partial validation support
+- **Maximum Performance**: Optimized validation paths with minimal overhead and memory allocations
 - **Go-Specific Types**: Support for all Go numeric types (`int8`-`int64`, `uint8`-`uint64`, `float32/64`, `complex64/128`)
 - **Smart Nil Handling**: Distinction between "missing field" (Optional) and "null value" (Nilable) semantics with simplified zero-value returns
+- **Pointer Identity Preservation**: Optional/Nilable modifiers maintain input pointer addresses when appropriate
 - **Enhanced Error System**: Structured error handling with custom formatting and internationalization
 
 ### Compatibility Status

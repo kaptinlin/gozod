@@ -20,7 +20,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 	t.Run("generates appropriate default messages for different issue types", func(t *testing.T) {
 		testCases := []struct {
 			name     string
-			rawIssue ZodRawIssue
+			rawIssue core.ZodRawIssue
 			expected string
 		}{
 			{
@@ -29,7 +29,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 					WithMinimum(5),
 					WithOrigin("string"),
 				),
-				expected: "Too small: expected string to have >=5 characters",
+				expected: "Too small: expected string to have at least 5 characters",
 			},
 			{
 				name: "too_big message",
@@ -37,7 +37,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 					WithMaximum(100),
 					WithOrigin("number"),
 				),
-				expected: "Too big: expected number to be <=100",
+				expected: "Too big: expected number to be at most 100",
 			},
 			{
 				name: "invalid_format message",
@@ -115,7 +115,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 		)
 		message := GenerateDefaultMessage(rawIssue)
 		assert.Contains(t, message, "string")
-		assert.Contains(t, message, ">=")
+		assert.Contains(t, message, "at least")
 	})
 
 	t.Run("handles inclusive/exclusive bounds", func(t *testing.T) {
@@ -126,7 +126,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 			WithOrigin("number"),
 		)
 		message := GenerateDefaultMessage(rawIssue)
-		assert.Contains(t, message, ">=")
+		assert.Contains(t, message, "at least")
 
 		// Exclusive bounds
 		rawIssue = NewRawIssue(core.TooSmall, 4,
@@ -135,7 +135,7 @@ func TestGenerateDefaultMessage(t *testing.T) {
 			WithOrigin("number"),
 		)
 		message = GenerateDefaultMessage(rawIssue)
-		assert.Contains(t, message, ">")
+		assert.Contains(t, message, "more than")
 	})
 }
 
@@ -155,12 +155,12 @@ func TestParsedTypeToString(t *testing.T) {
 		}{
 			{"string type", "hello", "string"},
 			{"number type", 42, "number"},
-			{"boolean type", true, "boolean"},
-			{"null type", nil, "null"},
-			{"array type", []int{1, 2, 3}, "array"},
-			{"slice type", []string{"a", "b"}, "array"}, // Go slices map to array
-			{"object type", map[string]any{"key": "value"}, "object"},
-			{"map type", map[int]string{1: "one"}, "object"}, // Go maps map to object
+			{"boolean type", true, "bool"},
+			{"null type", nil, "nil"},
+			{"array type", []int{1, 2, 3}, "slice"},
+			{"slice type", []string{"a", "b"}, "slice"}, // Go slices map to slice
+			{"object type", map[string]any{"key": "value"}, "map"},
+			{"map type", map[int]string{1: "one"}, "map"}, // Go maps map to map
 			{"float64 type", 3.14, "number"},
 			{"float32 type", float32(2.71), "number"},
 			{"NaN value", math.NaN(), "NaN"},
@@ -256,7 +256,7 @@ func TestSizeConstraintFormatting(t *testing.T) {
 			WithInclusive(true),
 		)
 		message := formatter.formatSizeConstraint(rawIssue, true)
-		assert.Equal(t, "Too small: expected string to have >=5 characters", message)
+		assert.Equal(t, "Too small: expected string to have at least 5 characters", message)
 
 		// Too big string
 		rawIssue = NewRawIssue("too_big", "hello world",
@@ -265,7 +265,7 @@ func TestSizeConstraintFormatting(t *testing.T) {
 			WithInclusive(true),
 		)
 		message = formatter.formatSizeConstraint(rawIssue, false)
-		assert.Equal(t, "Too big: expected string to have <=5 characters", message)
+		assert.Equal(t, "Too big: expected string to have at most 5 characters", message)
 	})
 
 	t.Run("formats array length constraints", func(t *testing.T) {
@@ -278,7 +278,7 @@ func TestSizeConstraintFormatting(t *testing.T) {
 			WithInclusive(true),
 		)
 		message := formatter.formatSizeConstraint(rawIssue, true)
-		assert.Equal(t, "Too small: expected array to have >=3 items", message)
+		assert.Equal(t, "Too small: expected array to have at least 3 items", message)
 	})
 
 	t.Run("handles exclusive bounds", func(t *testing.T) {
@@ -291,7 +291,7 @@ func TestSizeConstraintFormatting(t *testing.T) {
 			WithInclusive(false),
 		)
 		message := formatter.formatSizeConstraint(rawIssue, true)
-		assert.Equal(t, "Too small: expected number to be >5", message)
+		assert.Equal(t, "Too small: expected number to be more than 5", message)
 	})
 }
 
@@ -307,7 +307,7 @@ func TestGetFormatNoun(t *testing.T) {
 		}{
 			{"email", "email address"},
 			{"url", "URL"},
-			{"uuid", "UUID"},
+			{"uuid", "uuid"},
 			{"datetime", "ISO datetime"},
 			{"ipv4", "IPv4 address"},
 			{"base64", "base64-encoded string"},
@@ -608,10 +608,10 @@ func TestReferenceCompatibility(t *testing.T) {
 		}{
 			{"string to number", 42, "string", "Invalid input: expected string, received number"},
 			{"number to string", "hello", "number", "Invalid input: expected number, received string"},
-			{"boolean to string", true, "string", "Invalid input: expected string, received boolean"},
-			{"null to string", nil, "string", "Invalid input: expected string, received null"},
-			{"array to string", []int{1, 2}, "string", "Invalid input: expected string, received array"},
-			{"object to string", map[string]int{"key": 1}, "string", "Invalid input: expected string, received object"},
+			{"boolean to string", true, "string", "Invalid input: expected string, received bool"},
+			{"null to string", nil, "string", "Invalid input: expected string, received nil"},
+			{"array to string", []int{1, 2}, "string", "Invalid input: expected string, received slice"},
+			{"object to string", map[string]int{"key": 1}, "string", "Invalid input: expected string, received map"},
 		}
 
 		for _, tc := range testCases {
@@ -649,7 +649,7 @@ func TestReferenceCompatibility(t *testing.T) {
 			WithInclusive(true),
 		)
 		message := GenerateDefaultMessage(rawIssue)
-		assert.Equal(t, "Too small: expected array to have >=3 items", message)
+		assert.Equal(t, "Too small: expected array to have at least 3 items", message)
 
 		// Array too big
 		rawIssue = NewRawIssue("too_big", []string{"a", "b", "c", "d"},
@@ -658,7 +658,7 @@ func TestReferenceCompatibility(t *testing.T) {
 			WithInclusive(true),
 		)
 		message = GenerateDefaultMessage(rawIssue)
-		assert.Equal(t, "Too big: expected array to have <=2 items", message)
+		assert.Equal(t, "Too big: expected array to have at most 2 items", message)
 	})
 
 	t.Run("unrecognized_keys message variations", func(t *testing.T) {

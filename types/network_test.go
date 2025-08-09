@@ -258,46 +258,77 @@ func TestIPv4_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestIPv4_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value behavior", func(t *testing.T) {
-		defaultIP := "192.168.1.1"
-		schema := IPv4().Default(defaultIP)
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		schema := IPv4().Default("192.168.1.1").Prefault("10.0.0.1")
 
-		// Valid input should override default
-		result, err := schema.Parse("10.0.0.1")
+		// When input is nil, Default should take precedence
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "10.0.0.1", result)
+		assert.Equal(t, "192.168.1.1", result)
 	})
 
-	t.Run("default function behavior", func(t *testing.T) {
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// Create a schema where default value is invalid IPv4
+		schema := IPv4().Default("invalid_ip")
+
+		// Default should bypass validation even if it's not a valid IPv4
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid_ip", result)
+	})
+
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// Create a schema where prefault value is invalid IPv4
+		schema := IPv4().Prefault("invalid_ip")
+
+		// Prefault should fail validation if it's not a valid IPv4
+		_, err := schema.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		schema := IPv4().Prefault("192.168.1.1")
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := schema.ParseAny("invalid_ip")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
 		schema := IPv4().DefaultFunc(func() string {
-			return "192.168.1.100"
+			defaultCalled = true
+			return "192.168.1.1"
+		}).PrefaultFunc(func() string {
+			prefaultCalled = true
+			return "10.0.0.1"
 		})
 
-		// Valid input should override default
-		result, err := schema.Parse("172.16.0.1")
-		require.NoError(t, err)
-		assert.Equal(t, "172.16.0.1", result)
-	})
-
-	t.Run("prefault value behavior", func(t *testing.T) {
-		prefaultIP := "0.0.0.0"
-		schema := IPv4().Prefault(prefaultIP)
-
-		// Valid input should work normally
-		result, err := schema.Parse("192.168.1.1")
+		// DefaultFunc should be called and take precedence
+		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "192.168.1.1", result)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
-	t.Run("prefault function behavior", func(t *testing.T) {
-		schema := IPv4().PrefaultFunc(func() string {
-			return "127.0.0.1"
-		})
+	// Test 6: Error handling for Prefault validation failure
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		schema := IPv4().Prefault("999.999.999.999") // Invalid IPv4 address
 
-		// Valid input should work normally
-		result, err := schema.Parse("192.168.1.1")
-		require.NoError(t, err)
-		assert.Equal(t, "192.168.1.1", result)
+		// Should return validation error, not attempt fallback
+		_, err := schema.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid")
 	})
 }
 
@@ -445,7 +476,7 @@ func TestIPv4_ErrorHandling(t *testing.T) {
 			{"IPv4Ptr rejects nil", func() any { return IPv4Ptr() }, true, (*string)(nil)},
 			{"Optional allows nil", func() any { return IPv4().Optional() }, false, (*string)(nil)},
 			{"Nilable allows nil", func() any { return IPv4().Nilable() }, false, (*string)(nil)},
-			{"Default disallows nil", func() any { return IPv4().Default("1.1.1.1") }, true, ""},
+			{"Default allows nil and returns default", func() any { return IPv4().Default("1.1.1.1") }, false, ""},
 		}
 
 		for _, tc := range testCases {

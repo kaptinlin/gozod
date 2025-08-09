@@ -528,9 +528,9 @@ func TestFinalizationIntegration(t *testing.T) {
 		assert.Equal(t, ".*@.*\\..*", issue.Pattern)
 	})
 
-	t.Run("finalization with creation helpers", func(t *testing.T) {
-		// Test that creation helpers work well with finalization
-		rawIssue := CreateInvalidTypeIssue(core.ZodTypeString, "123")
+	t.Run("finalization with raw issues", func(t *testing.T) {
+		// Test that raw issues work well with finalization
+		rawIssue := NewRawIssue(core.InvalidType, "123", WithExpected("string"), WithReceived("number"))
 		rawIssue.Path = []any{"data", "field"}
 
 		ctx := &core.ParseContext{ReportInput: false}
@@ -546,7 +546,10 @@ func TestFinalizationIntegration(t *testing.T) {
 
 	t.Run("finalization preserves all property types", func(t *testing.T) {
 		// Test with all possible property types
-		rawIssue := CreateCustomIssue("", nil, "test")
+		rawIssue := NewRawIssue(core.Custom, "test")
+		if rawIssue.Properties == nil {
+			rawIssue.Properties = make(map[string]any)
+		}
 		rawIssue.Properties["expected"] = "string"
 		rawIssue.Properties["received"] = "number"
 		rawIssue.Properties["minimum"] = 0

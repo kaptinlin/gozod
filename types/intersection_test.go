@@ -198,38 +198,83 @@ func TestIntersection_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestIntersection_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value behavior", func(t *testing.T) {
-		intersection := Intersection(String(), String()).Default("default")
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		schema := Intersection(String(), String()).Default("default-value").Prefault("prefault-value").Optional()
 
-		// Valid input should override default
-		result, err := intersection.Parse("test")
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "test", result)
-
-		// Test default function
-		intersectionFunc := Intersection(String(), String()).DefaultFunc(func() any {
-			return "func-default"
-		})
-		result2, err := intersectionFunc.Parse("test")
-		require.NoError(t, err)
-		assert.Equal(t, "test", result2)
+		require.NotNil(t, result)
+		// For Optional intersection, result is a pointer to the actual value
+		assert.Equal(t, "default-value", *result)
 	})
 
-	t.Run("prefault value behavior", func(t *testing.T) {
-		intersection := Intersection(String(), String()).Prefault("prefault")
+	t.Run("Default bypasses validation (short-circuit)", func(t *testing.T) {
+		// Default should bypass intersection validation constraints
+		schema := Intersection(String(), String()).Default(123).Optional() // 123 is not a string
 
-		// Valid input should work normally
-		result, err := intersection.Parse("test")
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "test", result)
+		require.NotNil(t, result)
+		// For Optional intersection, result is a pointer to the actual value
+		assert.Equal(t, 123, *result)
+	})
 
-		// Test prefault function
-		intersectionFunc := Intersection(String(), String()).PrefaultFunc(func() any {
-			return "func-prefault"
-		})
-		result2, err := intersectionFunc.Parse("test")
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// When both Prefault and Optional are set, Prefault takes precedence (fixed priority)
+		schema := Intersection(String(), String()).Prefault("valid-string").Optional()
+
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "test", result2)
+		// Prefault takes precedence over Optional, so result should be the prefault value
+		assert.NotNil(t, result)
+		assert.Equal(t, "valid-string", *result)
+	})
+
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		// Non-nil input should not trigger prefault even if validation fails
+		schema := Intersection(String(), String()).Prefault("prefault-value")
+
+		// Invalid input should fail validation, not use prefault
+		_, err := schema.Parse(123) // 123 is not a string
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected string")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Intersection(String(), String()).
+			DefaultFunc(func() any {
+				defaultCalled = true
+				return "default-func"
+			}).
+			PrefaultFunc(func() any {
+				prefaultCalled = true
+				return "prefault-func"
+			}).
+			Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		// For Optional intersection, result is a pointer to the actual value
+		assert.Equal(t, "default-func", *result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// When both Prefault and Optional are set, Prefault takes precedence (fixed priority)
+		schema := Intersection(String(), String()).Prefault(123).Optional() // 123 is not a string
+
+		result, err := schema.Parse(nil)
+		require.Error(t, err)
+		// Prefault takes precedence over Optional, so invalid prefault value should cause error
+		assert.Contains(t, err.Error(), "expected string, received number")
+		var zero *interface{}
+		assert.Equal(t, zero, result)
 	})
 }
 

@@ -1,12 +1,14 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
@@ -99,6 +101,40 @@ func (z *ZodSlice[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 // MustParse validates the input value and panics on failure
 func (z *ZodSlice[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type T.
+func (z *ZodSlice[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	// Convert T to R for ParseComplexStrict
+	constraintInput := convertToSliceConstraintType[T, R](input)
+
+	result, err := engine.ParseComplexStrict[[]T, R](
+		constraintInput,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeSlice,
+		z.extractSlice,
+		z.extractSlicePtr,
+		z.validateSlice,
+		ctx...,
+	)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+
+	return result, nil
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodSlice[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -400,32 +436,93 @@ func (z *ZodSlice[T, R]) extractSlicePtr(value any) (*[]T, bool) {
 	return nil, false
 }
 
-// validateSlice validates slice elements using element schema
+// validateSlice validates slice elements using element schema with multiple error collection (TypeScript Zod v4 array behavior)
 func (z *ZodSlice[T, R]) validateSlice(value []T, checks []core.ZodCheck, ctx *core.ParseContext) ([]T, error) {
-	// First validate the slice itself using standard checks (including Overwrite transformations)
-	validatedValue, err := engine.ApplyChecks[[]T](value, checks, ctx)
-	if err != nil {
-		var zero []T
-		return zero, err
+	var collectedIssues []core.ZodRawIssue
+
+	// Apply slice-level checks (length, size, Overwrite, etc.) and collect any issues
+	// Unlike tuples, arrays continue validation even with size constraint errors
+	payload := core.NewParsePayload(value)
+	result := engine.RunChecksOnValue(value, checks, payload, ctx)
+
+	// Collect any slice-level issues (length, size, etc.)
+	if result.HasIssues() {
+		sliceIssues := result.GetIssues()
+		for _, issue := range sliceIssues {
+			collectedIssues = append(collectedIssues, issue)
+		}
 	}
 
-	// Use the validated (potentially transformed) value for element validation
+	// Get the potentially transformed value for element validation
+	var validatedValue []T
+	if result.GetValue() != nil {
+		if converted, ok := result.GetValue().([]T); ok {
+			validatedValue = converted
+		} else {
+			// Type conversion failed, but continue with original value for element validation
+			validatedValue = value
+		}
+	} else {
+		validatedValue = value
+	}
+
+	// Collect all element validation errors (TypeScript Zod v4 array behavior)
 	// Always validate each element if element schema is provided - this is what makes Slice different from []any
 	if z.internals.Element != nil {
 		for i, element := range validatedValue {
-			if err := z.validateElement(element, z.internals.Element, ctx, i); err != nil {
-				var zero []T
-				return zero, err
+			// Directly validate element schema without wrapping in CreateInvalidElementError
+			if err := z.validateElement(element, z.internals.Element, ctx); err != nil {
+				// Convert element error to raw issue and add path prefix (TypeScript Zod v4 array behavior)
+				var zodErr *issues.ZodError
+				if errors.As(err, &zodErr) {
+					// Propagate all issues from element validation with path prefix
+					for _, elementIssue := range zodErr.Issues {
+						// Create raw issue preserving original code and essential properties
+						rawIssue := core.ZodRawIssue{
+							Code:       elementIssue.Code,
+							Message:    elementIssue.Message,
+							Input:      elementIssue.Input,
+							Path:       []any{i}, // Set path to array index only
+							Properties: make(map[string]any),
+						}
+						// Copy essential properties from ZodIssue to ZodRawIssue
+						if elementIssue.Minimum != nil {
+							rawIssue.Properties["minimum"] = elementIssue.Minimum
+						}
+						if elementIssue.Maximum != nil {
+							rawIssue.Properties["maximum"] = elementIssue.Maximum
+						}
+						if elementIssue.Expected != "" {
+							rawIssue.Properties["expected"] = elementIssue.Expected
+						}
+						if elementIssue.Received != "" {
+							rawIssue.Properties["received"] = elementIssue.Received
+						}
+						rawIssue.Properties["inclusive"] = elementIssue.Inclusive
+						collectedIssues = append(collectedIssues, rawIssue)
+					}
+				} else {
+					// Handle non-ZodError by creating a raw issue with path
+					rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, element)
+					rawIssue.Path = []any{i}
+					collectedIssues = append(collectedIssues, rawIssue)
+				}
 			}
 		}
+	}
+
+	// If we collected any issues (slice-level or element-level), return them as a combined error
+	if len(collectedIssues) > 0 {
+		var zero []T
+		return zero, issues.CreateArrayValidationIssues(collectedIssues)
 	}
 
 	// Return the validated and potentially transformed value
 	return validatedValue, nil
 }
 
-// validateElement validates a single element using the provided schema
-func (z *ZodSlice[T, R]) validateElement(element T, schema any, ctx *core.ParseContext, index int) error {
+// validateElement validates a single element using the provided schema (without wrapping)
+func (z *ZodSlice[T, R]) validateElement(element T, schema any, ctx *core.ParseContext) error {
 	if schema == nil {
 		return nil
 	}
@@ -459,7 +556,7 @@ func (z *ZodSlice[T, R]) validateElement(element T, schema any, ctx *core.ParseC
 		// Check if there's an error (second return value)
 		if errInterface := results[1].Interface(); errInterface != nil {
 			if err, ok := errInterface.(error); ok {
-				return fmt.Errorf("element %d validation failed: %w", index, err)
+				return err // Return the error directly without wrapping
 			}
 		}
 	}

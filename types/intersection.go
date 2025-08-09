@@ -56,7 +56,7 @@ func (z *ZodIntersection[T, R]) IsNilable() bool {
 	return z.internals.ZodTypeInternals.IsNilable()
 }
 
-// Parse validates the input using direct validation approach with intersection logic
+// Parse validates input using engine.ParseComplex for unified Default/Prefault handling
 func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var parseCtx *core.ParseContext
 	if len(ctx) > 0 && ctx[0] != nil {
@@ -65,29 +65,42 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		parseCtx = &core.ParseContext{}
 	}
 
-	// Handle nil values for optional/nilable cases
-	if input == nil {
-		if z.internals.Nilable || z.internals.Optional {
-			var zero R
-			return zero, nil
-		}
-		if z.internals.DefaultValue != nil {
-			return z.Parse(z.internals.DefaultValue, parseCtx)
-		}
-		if z.internals.DefaultFunc != nil {
-			return z.Parse(z.internals.DefaultFunc(), parseCtx)
-		}
-		// No default, create error
-		issue := issues.CreateInvalidTypeIssue(core.ZodTypeIntersection, input)
-		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.GetConfig())
-		return *new(R), issues.NewZodError([]core.ZodIssue{finalIssue})
+	// Use engine.ParseComplex for unified Default/Prefault handling
+	result, err := engine.ParseComplex[any](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeIntersection,
+		z.extractIntersectionType,
+		z.extractIntersectionPtr,
+		z.validateIntersectionValue,
+		parseCtx,
+	)
+	if err != nil {
+		return *new(R), err
 	}
+	return convertToIntersectionConstraintType[T, R](result), nil
+}
 
+// extractIntersectionType extracts the intersection type from input
+func (z *ZodIntersection[T, R]) extractIntersectionType(input any) (any, bool) {
+	return input, true
+}
+
+// extractIntersectionPtr extracts pointer type from input
+func (z *ZodIntersection[T, R]) extractIntersectionPtr(input any) (*any, bool) {
+	if input == nil {
+		return nil, true
+	}
+	return &input, true
+}
+
+// validateIntersectionValue validates value using intersection logic
+func (z *ZodIntersection[T, R]) validateIntersectionValue(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	// Parse with left schema using ParseAny
-	leftResult, leftErr := z.internals.Left.ParseAny(input, parseCtx)
+	leftResult, leftErr := z.internals.Left.ParseAny(value, ctx)
 
 	// Parse with right schema using ParseAny
-	rightResult, rightErr := z.internals.Right.ParseAny(input, parseCtx)
+	rightResult, rightErr := z.internals.Right.ParseAny(value, ctx)
 
 	// Collect all errors
 	var allErrors []core.ZodIssue
@@ -96,8 +109,8 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		if issues.IsZodError(leftErr, &zErr) {
 			allErrors = append(allErrors, zErr.Issues...)
 		} else {
-			issue := issues.CreateCustomIssue(leftErr.Error(), nil, input)
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(leftErr.Error()))
+			allErrors = append(allErrors, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
 		}
 	}
 	if rightErr != nil {
@@ -105,35 +118,30 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		if issues.IsZodError(rightErr, &zErr) {
 			allErrors = append(allErrors, zErr.Issues...)
 		} else {
-			issue := issues.CreateCustomIssue(rightErr.Error(), nil, input)
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(rightErr.Error()))
+			allErrors = append(allErrors, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
 		}
 	}
 
 	// If either side failed, return all errors
 	if len(allErrors) > 0 {
-		return *new(R), issues.NewZodError(allErrors)
+		return nil, issues.NewZodError(allErrors)
 	}
 
 	// Both sides succeeded, attempt to merge results
 	merged, mergeErr := mergeValues(leftResult, rightResult)
 	if mergeErr != nil {
-		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, input)
-		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.GetConfig())
-		return *new(R), issues.NewZodError([]core.ZodIssue{finalIssue})
+		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, value)
+		finalIssue := issues.FinalizeIssue(issue, ctx, core.GetConfig())
+		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
-	// Run additional checks if any
-	if len(z.internals.Checks) > 0 {
-		transformedMerged, err := engine.ApplyChecks[any](merged, z.internals.Checks, parseCtx)
-		if err != nil {
-			return *new(R), err
-		}
-		merged = transformedMerged
+	// Apply additional checks if any
+	if len(checks) > 0 {
+		return engine.ApplyChecks[any](merged, checks, ctx)
 	}
 
-	// Convert result to constraint type R
-	return convertToIntersectionConstraintType[T, R](merged), nil
+	return merged, nil
 }
 
 // MustParse validates the input value and panics on failure
@@ -148,6 +156,83 @@ func (z *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) 
 // ParseAny validates the input value and returns any type (for runtime interface)
 func (z *ZodIntersection[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
+}
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 && ctx[0] != nil {
+		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
+	}
+
+	// Convert input T to any for validation
+	convertedInput := convertToIntersectionConstraintType[T, R](input)
+
+	// Parse with left schema using ParseAny
+	leftResult, leftErr := z.internals.Left.ParseAny(convertedInput, parseCtx)
+
+	// Parse with right schema using ParseAny
+	rightResult, rightErr := z.internals.Right.ParseAny(convertedInput, parseCtx)
+
+	// Collect all errors
+	var allErrors []core.ZodIssue
+	if leftErr != nil {
+		var zErr *issues.ZodError
+		if issues.IsZodError(leftErr, &zErr) {
+			allErrors = append(allErrors, zErr.Issues...)
+		} else {
+			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(leftErr.Error()))
+			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+		}
+	}
+	if rightErr != nil {
+		var zErr *issues.ZodError
+		if issues.IsZodError(rightErr, &zErr) {
+			allErrors = append(allErrors, zErr.Issues...)
+		} else {
+			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(rightErr.Error()))
+			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+		}
+	}
+
+	// If either side failed, return all errors
+	if len(allErrors) > 0 {
+		var zero R
+		return zero, issues.NewZodError(allErrors)
+	}
+
+	// Both sides succeeded, attempt to merge results
+	merged, mergeErr := mergeValues(leftResult, rightResult)
+	if mergeErr != nil {
+		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, convertedInput)
+		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.GetConfig())
+		var zero R
+		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
+	}
+
+	// Run additional checks if any
+	if len(z.internals.Checks) > 0 {
+		transformedMerged, err := engine.ApplyChecks[any](merged, z.internals.Checks, parseCtx)
+		if err != nil {
+			var zero R
+			return zero, err
+		}
+		merged = transformedMerged
+	}
+
+	// Convert result to constraint type R
+	return convertToIntersectionConstraintType[T, R](merged), nil
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // =============================================================================
@@ -286,12 +371,12 @@ func (z *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodInter
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -302,12 +387,12 @@ func (z *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *Zod
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -348,17 +433,44 @@ func (z *ZodIntersection[T, R]) CloneFrom(source any) {
 
 // convertToIntersectionConstraintType converts a base type T to constraint type R
 func convertToIntersectionConstraintType[T any, R any](value any) R {
-	var zero R
-	switch any(zero).(type) {
-	case *any:
-		// Need to return *any from any
-		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R)
+	// Handle nil value
+	if value == nil {
+		// Get the type of R to determine if it's a pointer type
+		rType := reflect.TypeOf((*R)(nil)).Elem()
+		if rType.Kind() == reflect.Ptr {
+			// R is a pointer type, return nil pointer
+			return any((*any)(nil)).(R)
 		}
-		return any((*any)(nil)).(R)
-	default:
-		// Return value directly as R
+		return *new(R)
+	}
+
+	// Get the type of R to determine if it's a pointer type
+	rType := reflect.TypeOf((*R)(nil)).Elem()
+
+	// Check if R is *any (pointer to interface{})
+	if rType.Kind() == reflect.Ptr {
+		// R is some kind of pointer type
+		// Check if value is already a pointer
+		if reflect.TypeOf(value).Kind() == reflect.Ptr {
+			return any(value).(R)
+		}
+		// Convert value to pointer
+		valueCopy := value
+		return any(&valueCopy).(R)
+	} else {
+		// R is not a pointer type (like any, string, int, etc.)
+		// Check if value is a pointer and R is not a pointer type
+		// This handles values that come as *any but need to be converted to any
+		if reflect.TypeOf(value).Kind() == reflect.Ptr {
+			// Dereference the pointer
+			valueReflect := reflect.ValueOf(value)
+			if !valueReflect.IsNil() {
+				dereferencedValue := valueReflect.Elem().Interface()
+				return any(dereferencedValue).(R)
+			}
+			return *new(R)
+		}
+		// Direct conversion
 		return any(value).(R)
 	}
 }
@@ -428,7 +540,7 @@ func mergeValues(a, b any) (any, error) {
 	// Allow merging of different struct types by converting to map; otherwise types must match
 	if aVal.Type() != bVal.Type() {
 		if aVal.Kind() != reflect.Struct || bVal.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("cannot merge incompatible types: %v and %v", aVal.Type(), bVal.Type())
+			return nil, issues.CreateIncompatibleTypesError("incompatible types", a, b, nil, &core.ParseContext{})
 		}
 		// Continue to struct merging logic below
 	}
@@ -447,7 +559,7 @@ func mergeValues(a, b any) (any, error) {
 		return mergeMaps(aMap, bMap)
 	default:
 		// For basic types, values must be identical
-		return nil, fmt.Errorf("cannot merge different values of type %v: %v != %v", aVal.Type(), a, b)
+		return nil, issues.CreateIncompatibleTypesError("different values", a, b, nil, &core.ParseContext{})
 	}
 }
 
@@ -457,7 +569,7 @@ func mergeMaps(a, b any) (any, error) {
 	bVal := reflect.ValueOf(b)
 
 	if aVal.Kind() != reflect.Map || bVal.Kind() != reflect.Map {
-		return nil, fmt.Errorf("both values must be maps")
+		return nil, issues.CreateIncompatibleTypesError("both values must be maps", a, b, nil, &core.ParseContext{})
 	}
 
 	// Create new map of the same type
@@ -475,8 +587,7 @@ func mergeMaps(a, b any) (any, error) {
 		if aValue := aVal.MapIndex(key); aValue.IsValid() {
 			// Key exists in both maps - they must have the same value
 			if !reflect.DeepEqual(aValue.Interface(), bValue.Interface()) {
-				return nil, fmt.Errorf("conflicting values for key %v: %v != %v",
-					key.Interface(), aValue.Interface(), bValue.Interface())
+				return nil, issues.CreateIncompatibleTypesError(fmt.Sprintf("conflicting values for key %v", key.Interface()), aValue.Interface(), bValue.Interface(), nil, &core.ParseContext{})
 			}
 		} else {
 			// Key only exists in b, add it
@@ -493,15 +604,15 @@ func mergeSlices(a, b any) (any, error) {
 	bVal := reflect.ValueOf(b)
 
 	if aVal.Kind() != reflect.Slice && aVal.Kind() != reflect.Array {
-		return nil, fmt.Errorf("first value must be slice or array")
+		return nil, issues.CreateIncompatibleTypesError("first value must be slice or array", a, b, nil, &core.ParseContext{})
 	}
 	if bVal.Kind() != reflect.Slice && bVal.Kind() != reflect.Array {
-		return nil, fmt.Errorf("second value must be slice or array")
+		return nil, issues.CreateIncompatibleTypesError("second value must be slice or array", a, b, nil, &core.ParseContext{})
 	}
 
 	// For arrays/slices, they must be identical for intersection
 	if !reflect.DeepEqual(a, b) {
-		return nil, fmt.Errorf("slice/array values must be identical for intersection")
+		return nil, issues.CreateIncompatibleTypesError("slice/array values must be identical for intersection", a, b, nil, &core.ParseContext{})
 	}
 
 	return a, nil

@@ -342,57 +342,142 @@ func TestInt_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestInt_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with Int64", func(t *testing.T) {
-		schema := Int64().Default(42)
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// Int64 type
+		schema1 := Int64().Default(100).Prefault(200)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, int64(100), result1) // Should be default, not prefault
 
-		// Valid input should override default
-		result, err := schema.Parse(int64(100))
-		require.NoError(t, err)
-		assert.Equal(t, int64(100), result)
+		// Int64Ptr type
+		schema2 := Int64Ptr().Default(100).Prefault(200)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, int64(100), *result2) // Should be default, not prefault
 	})
 
-	t.Run("default value with Int64Ptr", func(t *testing.T) {
-		schema := Int64Ptr().Default(42)
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Int64 type - default value violates Min(50) but should still work
+		schema1 := Int64().Min(50).Default(10)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, int64(10), result1) // Default bypasses validation
 
-		// Valid input should override default
-		result, err := schema.Parse(int64(100))
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, int64(100), *result)
+		// Int64Ptr type - default value violates Min(50) but should still work
+		schema2 := Int64Ptr().Min(50).Default(10)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		require.NotNil(t, result2)
+		assert.Equal(t, int64(10), *result2) // Default bypasses validation
 	})
 
-	t.Run("default function", func(t *testing.T) {
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Int64 type - prefault value passes validation
+		schema1 := Int64().Min(50).Prefault(100)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, int64(100), result1) // Prefault passes validation
+
+		// Int64 type - prefault value fails validation
+		schema2 := Int64().Min(50).Prefault(10)
+		_, err2 := schema2.Parse(nil)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "Too small") // Prefault fails validation
+
+		// Int64Ptr type - prefault value passes validation
+		schema3 := Int64Ptr().Min(50).Prefault(100)
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, int64(100), *result3) // Prefault passes validation
+
+		// Int64Ptr type - prefault value fails validation
+		schema4 := Int64Ptr().Min(50).Prefault(10)
+		_, err4 := schema4.Parse(nil)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small") // Prefault fails validation
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		// Int64 type
+		schema1 := Int64().Min(50).Prefault(100)
+
+		// Nil input triggers prefault
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, int64(100), result1)
+
+		// Non-nil input validation failure should not trigger prefault
+		_, err2 := schema1.Parse(int64(10)) // Less than Min(50)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "Too small")
+
+		// Int64Ptr type
+		schema2 := Int64Ptr().Min(50).Prefault(100)
+
+		// Nil input triggers prefault
+		result3, err3 := schema2.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, int64(100), *result3)
+
+		// Non-nil input validation failure should not trigger prefault
+		_, err4 := schema2.Parse(int64(10)) // Less than Min(50)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		// DefaultFunc should not be called for non-nil input
 		callCount := 0
-		schema := Int64().DefaultFunc(func() int64 {
+		schema1 := Int64().DefaultFunc(func() int64 {
 			callCount++
-			return 42
+			return 100
 		})
 
-		// Valid input should not call default function
-		result, err := schema.Parse(int64(100))
-		require.NoError(t, err)
-		assert.Equal(t, int64(100), result)
+		// Non-nil input should not call DefaultFunc
+		result1, err1 := schema1.Parse(int64(50))
+		require.NoError(t, err1)
+		assert.Equal(t, int64(50), result1)
 		assert.Equal(t, 0, callCount)
-	})
 
-	t.Run("prefault value", func(t *testing.T) {
-		schema := Int64().Prefault(42)
+		// Nil input should call DefaultFunc
+		result2, err2 := schema1.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, int64(100), result2)
+		assert.Equal(t, 1, callCount)
 
-		// Valid input should override prefault
-		result, err := schema.Parse(int64(100))
-		require.NoError(t, err)
-		assert.Equal(t, int64(100), result)
-	})
-
-	t.Run("prefault function", func(t *testing.T) {
-		schema := Int64().PrefaultFunc(func() int64 {
-			return 42
+		// PrefaultFunc should go through validation
+		schema2 := Int64().Min(50).PrefaultFunc(func() int64 {
+			return 100 // Valid value
 		})
+		result3, err3 := schema2.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, int64(100), result3)
 
-		// Valid input should override prefault
-		result, err := schema.Parse(int64(100))
-		require.NoError(t, err)
-		assert.Equal(t, int64(100), result)
+		// PrefaultFunc with invalid value should fail
+		schema3 := Int64().Min(50).PrefaultFunc(func() int64 {
+			return 10 // Invalid value
+		})
+		_, err4 := schema3.Parse(nil)
+		require.Error(t, err4)
+		assert.Contains(t, err4.Error(), "Too small")
+	})
+
+	// Test 6: Error handling - prefault validation failure
+	t.Run("Error handling - prefault validation failure", func(t *testing.T) {
+		// Prefault value fails validation, should return error directly
+		schema := Int64().Min(100).Prefault(50)
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small")
+		// Should not try any other fallback
 	})
 }
 
@@ -1720,10 +1805,11 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, int32(100), *result)
 
-		// Test with nil (should work for optional)
+		// Test with nil - Default should always win (Zod v4 behavior)
 		resultNil, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, resultNil)
+		require.NotNil(t, resultNil) // Default takes precedence over Optional
+		assert.Equal(t, int32(42), *resultNil)
 	})
 
 	t.Run("complex validation chaining with type conversion", func(t *testing.T) {
@@ -2299,5 +2385,215 @@ func TestInt_IsOptionalAndIsNilable(t *testing.T) {
 			"NonOptional schema: IsOptional() should match GetInternals().IsOptional()")
 		assert.Equal(t, nonoptionalSchema.GetInternals().IsNilable(), nonoptionalSchema.IsNilable(),
 			"NonOptional schema: IsNilable() should match GetInternals().IsNilable()")
+	})
+}
+
+// =============================================================================
+// StrictParse and MustStrictParse tests
+// =============================================================================
+
+func TestInt_StrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		// Test different integer types
+		schemaInt := Int()
+		result, err := schemaInt.StrictParse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+		assert.IsType(t, 0, result)
+
+		schemaInt64 := Int64()
+		result64, err := schemaInt64.StrictParse(int64(123))
+		require.NoError(t, err)
+		assert.Equal(t, int64(123), result64)
+		assert.IsType(t, int64(0), result64)
+
+		schemaUint32 := Uint32()
+		resultUint32, err := schemaUint32.StrictParse(uint32(456))
+		require.NoError(t, err)
+		assert.Equal(t, uint32(456), resultUint32)
+		assert.IsType(t, uint32(0), resultUint32)
+	})
+
+	t.Run("with validation constraints", func(t *testing.T) {
+		schema := Int().Min(10).Max(100)
+
+		// Valid case
+		result, err := schema.StrictParse(50)
+		require.NoError(t, err)
+		assert.Equal(t, 50, result)
+
+		// Invalid case - below minimum
+		_, err = schema.StrictParse(5)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too small: expected integer to be at least 10")
+
+		// Invalid case - above maximum
+		_, err = schema.StrictParse(150)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Too big: expected integer to be at most 100")
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := IntPtr()
+		value := 789
+
+		// Test with valid pointer input
+		result, err := schema.StrictParse(&value)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 789, *result)
+		assert.IsType(t, (*int)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := IntPtr().Default(999)
+		var nilPtr *int = nil
+
+		// Test with nil input (should use default)
+		result, err := schema.StrictParse(nilPtr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 999, *result)
+	})
+
+	t.Run("with prefault values", func(t *testing.T) {
+		// Test case 1: Valid prefault value passes validation
+		schema1 := IntPtr().Refine(func(i int) bool {
+			return i > 0 // Only allow positive values
+		}, "Must be positive").Prefault(10)
+		negativeValue := -5
+
+		// Test with validation failure (should NOT use prefault, should return error)
+		_, err := schema1.StrictParse(&negativeValue)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Must be positive")
+
+		// Test with nil input (should use valid prefault)
+		result1, err := schema1.StrictParse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result1)
+		assert.Equal(t, 10, *result1) // Valid prefault value
+
+		// Test case 2: Invalid prefault value fails validation
+		schema2 := IntPtr().Refine(func(i int) bool {
+			return i > 0 // Only allow positive values
+		}, "Must be positive").Prefault(-1)
+
+		// Test with nil input (should fail prefault validation)
+		_, err2 := schema2.StrictParse(nil)
+		require.Error(t, err2)
+		assert.Contains(t, err2.Error(), "Must be positive") // Prefault fails validation
+	})
+
+	t.Run("all integer types", func(t *testing.T) {
+		// Test int8
+		schemaInt8 := Int8()
+		resultInt8, err := schemaInt8.StrictParse(int8(127))
+		require.NoError(t, err)
+		assert.Equal(t, int8(127), resultInt8)
+
+		// Test int16
+		schemaInt16 := Int16()
+		resultInt16, err := schemaInt16.StrictParse(int16(32767))
+		require.NoError(t, err)
+		assert.Equal(t, int16(32767), resultInt16)
+
+		// Test uint8
+		schemaUint8 := Uint8()
+		resultUint8, err := schemaUint8.StrictParse(uint8(255))
+		require.NoError(t, err)
+		assert.Equal(t, uint8(255), resultUint8)
+
+		// Test uint16
+		schemaUint16 := Uint16()
+		resultUint16, err := schemaUint16.StrictParse(uint16(65535))
+		require.NoError(t, err)
+		assert.Equal(t, uint16(65535), resultUint16)
+
+		// Test uint64
+		schemaUint64 := Uint64()
+		resultUint64, err := schemaUint64.StrictParse(uint64(18446744073709551615))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(18446744073709551615), resultUint64)
+	})
+}
+
+func TestInt_MustStrictParse(t *testing.T) {
+	t.Run("basic functionality", func(t *testing.T) {
+		// Test different integer types
+		schemaInt := Int()
+		result := schemaInt.MustStrictParse(42)
+		assert.Equal(t, 42, result)
+		assert.IsType(t, 0, result)
+
+		schemaInt64 := Int64()
+		result64 := schemaInt64.MustStrictParse(int64(123))
+		assert.Equal(t, int64(123), result64)
+		assert.IsType(t, int64(0), result64)
+
+		schemaUint32 := Uint32()
+		resultUint32 := schemaUint32.MustStrictParse(uint32(456))
+		assert.Equal(t, uint32(456), resultUint32)
+		assert.IsType(t, uint32(0), resultUint32)
+	})
+
+	t.Run("panic behavior", func(t *testing.T) {
+		schema := Int().Min(10).Max(100)
+
+		// Test panic with validation failure
+		assert.Panics(t, func() {
+			schema.MustStrictParse(5) // Below minimum, should panic
+		})
+
+		assert.Panics(t, func() {
+			schema.MustStrictParse(150) // Above maximum, should panic
+		})
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := IntPtr()
+		value := 789
+
+		// Test with valid pointer input
+		result := schema.MustStrictParse(&value)
+		require.NotNil(t, result)
+		assert.Equal(t, 789, *result)
+		assert.IsType(t, (*int)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := IntPtr().Default(999)
+		var nilPtr *int = nil
+
+		// Test with nil input (should use default)
+		result := schema.MustStrictParse(nilPtr)
+		require.NotNil(t, result)
+		assert.Equal(t, 999, *result)
+	})
+
+	t.Run("all integer types", func(t *testing.T) {
+		// Test various integer types
+		assert.Equal(t, int8(-128), Int8().MustStrictParse(int8(-128)))
+		assert.Equal(t, int16(-32768), Int16().MustStrictParse(int16(-32768)))
+		assert.Equal(t, int32(-2147483648), Int32().MustStrictParse(int32(-2147483648)))
+		assert.Equal(t, int64(-9223372036854775808), Int64().MustStrictParse(int64(-9223372036854775808)))
+		assert.Equal(t, uint(0), Uint().MustStrictParse(uint(0)))
+		assert.Equal(t, uint8(0), Uint8().MustStrictParse(uint8(0)))
+		assert.Equal(t, uint16(0), Uint16().MustStrictParse(uint16(0)))
+		assert.Equal(t, uint32(0), Uint32().MustStrictParse(uint32(0)))
+		assert.Equal(t, uint64(0), Uint64().MustStrictParse(uint64(0)))
+	})
+
+	t.Run("edge values", func(t *testing.T) {
+		// Test boundary values for different types
+		assert.Equal(t, int8(127), Int8().MustStrictParse(int8(127)))
+		assert.Equal(t, int8(-128), Int8().MustStrictParse(int8(-128)))
+		assert.Equal(t, uint8(255), Uint8().MustStrictParse(uint8(255)))
+		assert.Equal(t, uint8(0), Uint8().MustStrictParse(uint8(0)))
+
+		assert.Equal(t, int16(32767), Int16().MustStrictParse(int16(32767)))
+		assert.Equal(t, int16(-32768), Int16().MustStrictParse(int16(-32768)))
+		assert.Equal(t, uint16(65535), Uint16().MustStrictParse(uint16(65535)))
+		assert.Equal(t, uint16(0), Uint16().MustStrictParse(uint16(0)))
 	})
 }

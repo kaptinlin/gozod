@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -472,10 +473,11 @@ func TestEnum_Chaining(t *testing.T) {
 		assert.IsType(t, (*string)(nil), result)
 		assert.Equal(t, "blue", *result)
 
-		// Test nil handling - should return nil pointer
+		// Test nil handling - should return default value as pointer
 		result, err = enum.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result) // nil pointer for optional nil
+		require.NotNil(t, result)       // default value takes precedence over optional
+		assert.Equal(t, "red", *result) // should return default value
 	})
 
 	t.Run("complex chaining", func(t *testing.T) {
@@ -604,34 +606,77 @@ func TestEnum_EnumSpecificMethods(t *testing.T) {
 // =============================================================================
 
 func TestEnum_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value behavior", func(t *testing.T) {
-		enum := Enum("a", "b", "c").Default("a")
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default priority over Prefault", func(t *testing.T) {
+		enum := Enum("a", "b", "c").Default("a").Prefault("b")
 
-		// Valid input should override default
-		result, err := enum.Parse("b")
+		// When input is nil, Default should take precedence
+		result, err := enum.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "b", result)
-
-		// Test default function
-		enumFunc := Enum(1, 2, 3).DefaultFunc(func() int { return 1 })
-		result2, err := enumFunc.Parse(2)
-		require.NoError(t, err)
-		assert.Equal(t, 2, result2)
+		assert.Equal(t, "a", result)
 	})
 
-	t.Run("prefault value behavior", func(t *testing.T) {
-		enum := Enum("a", "b", "c").Prefault("a")
+	// Test 2: Default short-circuit mechanism
+	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
+		// Create an enum where default value is not in the allowed values
+		enum := Enum("valid1", "valid2").Default("invalid_default")
 
-		// Valid input should work normally
-		result, err := enum.Parse("b")
+		// Default should bypass validation even if it's not in the enum
+		result, err := enum.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "b", result)
+		assert.Equal(t, "invalid_default", result)
+	})
 
-		// Test prefault function
-		enumFunc := Enum(1, 2, 3).PrefaultFunc(func() int { return 1 })
-		result2, err := enumFunc.Parse(2)
+	// Test 3: Prefault requires full validation
+	t.Run("Prefault requires full validation", func(t *testing.T) {
+		// Create an enum where prefault value is not in the allowed values
+		enum := Enum("valid1", "valid2").Prefault("invalid_prefault")
+
+		// Prefault should fail validation if it's not in the enum
+		_, err := enum.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid enum value")
+	})
+
+	// Test 4: Prefault only triggers on nil input
+	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
+		enum := Enum("valid1", "valid2").Prefault("valid1")
+
+		// Non-nil input that fails validation should not trigger Prefault
+		_, err := enum.ParseAny("invalid_input")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid enum value")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		enum := Enum("a", "b", "c").DefaultFunc(func() string {
+			defaultCalled = true
+			return "a"
+		}).PrefaultFunc(func() string {
+			prefaultCalled = true
+			return "b"
+		})
+
+		// DefaultFunc should be called and take precedence
+		result, err := enum.ParseAny(nil)
 		require.NoError(t, err)
-		assert.Equal(t, 2, result2)
+		assert.Equal(t, "a", result)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
+	})
+
+	// Test 6: Error handling for Prefault validation failure
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		enum := Enum(1, 2, 3).Prefault(999) // Prefault value not in enum
+
+		// Should return validation error, not attempt fallback
+		_, err := enum.ParseAny(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid enum value")
 	})
 }
 
@@ -822,5 +867,135 @@ func TestEnum_EdgeCases(t *testing.T) {
 		result, err := enum.Parse("a")
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)
+	})
+}
+
+// =============================================================================
+// Multi-error collection tests (TypeScript Zod v4 behavior)
+// =============================================================================
+
+func TestEnum_MultiErrorCollection(t *testing.T) {
+	t.Run("collect enum value and refinement errors", func(t *testing.T) {
+		// Create an enum with refinement that will fail
+		colorEnum := Enum("red", "green", "blue").Refine(func(value string) bool {
+			return len(value) > 5 // All enum values are too short, so this will always fail
+		}, "Color name must be longer than 5 characters")
+
+		// Test with invalid enum value
+		_, err := colorEnum.Parse("yellow") // Invalid enum value
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 1 error for invalid enum value (refinement won't run for invalid values)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode("invalid_value"), zodErr.Issues[0].Code)
+		assert.Contains(t, zodErr.Issues[0].Message, "Invalid enum value")
+
+		// Test with valid enum value that fails refinement
+		_, err = colorEnum.Parse("red") // Valid enum value but fails refinement
+		require.Error(t, err)
+
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 1 error for failed refinement (enum validation passes)
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode("custom"), zodErr.Issues[0].Code)
+		assert.Contains(t, zodErr.Issues[0].Message, "Color name must be longer than 5 characters")
+	})
+
+	t.Run("multiple refinements on enum", func(t *testing.T) {
+		// Create enum with multiple refinements that will fail
+		numberEnum := Enum(1, 2, 3, 4, 5).
+			Refine(func(value int) bool {
+				return value%2 == 0 // Must be even
+			}, "Number must be even").
+			Refine(func(value int) bool {
+				return value > 10 // Must be greater than 10
+			}, "Number must be greater than 10")
+
+		// Test with valid enum value that fails both refinements
+		_, err := numberEnum.Parse(3) // Valid enum, but odd and not > 10
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should collect both refinement errors
+		assert.Len(t, zodErr.Issues, 2)
+
+		// Verify both refinement error messages are present
+		errorMessages := make([]string, len(zodErr.Issues))
+		for i, issue := range zodErr.Issues {
+			errorMessages[i] = issue.Message
+			assert.Equal(t, core.IssueCode("custom"), issue.Code)
+		}
+
+		assert.Contains(t, errorMessages, "Number must be even")
+		assert.Contains(t, errorMessages, "Number must be greater than 10")
+	})
+
+	t.Run("enum value validation only", func(t *testing.T) {
+		// Simple enum without additional checks
+		statusEnum := Enum("active", "inactive", "pending")
+
+		// Test with invalid enum value
+		_, err := statusEnum.Parse("unknown")
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 1 error for invalid enum value
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode("invalid_value"), zodErr.Issues[0].Code)
+		assert.Contains(t, zodErr.Issues[0].Message, "Invalid enum value")
+	})
+
+	t.Run("enum with passing refinements", func(t *testing.T) {
+		// Create enum with refinements that will pass
+		colorEnum := Enum("red", "green", "blue").
+			Refine(func(value string) bool {
+				return len(value) >= 3 // All colors have at least 3 characters
+			}, "Color name must be at least 3 characters").
+			Refine(func(value string) bool {
+				return value != "yellow" // None of our colors are yellow
+			}, "Color cannot be yellow")
+
+		// Test with valid enum value that passes all refinements
+		result, err := colorEnum.Parse("red")
+		require.NoError(t, err)
+		assert.Equal(t, "red", result)
+
+		// Test with valid enum value that passes all refinements
+		result, err = colorEnum.Parse("blue")
+		require.NoError(t, err)
+		assert.Equal(t, "blue", result)
+	})
+
+	t.Run("numeric enum with refinements", func(t *testing.T) {
+		// Create numeric enum with validation
+		scoreEnum := Enum(0, 1, 2, 3, 4, 5).
+			Refine(func(value int) bool {
+				return value >= 2 // Minimum score of 2
+			}, "Score must be at least 2")
+
+		// Test with valid enum but failing refinement
+		_, err := scoreEnum.Parse(1) // Valid enum value but score < 2
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have 1 refinement error
+		assert.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.IssueCode("custom"), zodErr.Issues[0].Code)
+		assert.Contains(t, zodErr.Issues[0].Message, "Score must be at least 2")
+
+		// Test with valid enum and passing refinement
+		result, err := scoreEnum.Parse(3)
+		require.NoError(t, err)
+		assert.Equal(t, 3, result)
 	})
 }

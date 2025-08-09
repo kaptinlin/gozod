@@ -415,52 +415,98 @@ func TestRecord_ValidationMethods(t *testing.T) {
 // =============================================================================
 
 func TestRecord_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default function", func(t *testing.T) {
-		defaultRecord := map[string]any{"default_key": 42}
-		recordSchema := Record(String(), Int())
-		defaultSchema := recordSchema.Default(defaultRecord)
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence
+		defaultRecord := map[string]any{"default": "value"}
+		prefaultRecord := map[string]any{"prefault": "value"}
+		schema := Record(String(), String()).Default(defaultRecord).Prefault(prefaultRecord).Optional()
 
-		// Valid input overrides default
-		testRecord := map[string]any{"test_key": 1}
-		result, err := defaultSchema.Parse(testRecord)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, testRecord, result)
+		require.NotNil(t, result)
+		assert.Equal(t, defaultRecord, *result)
 	})
 
-	t.Run("DefaultFunc function", func(t *testing.T) {
-		recordSchema := Record(String(), String()).DefaultFunc(func() map[string]any {
-			return map[string]any{"generated": "default"}
-		})
+	t.Run("Default bypasses validation (short-circuit)", func(t *testing.T) {
+		// Default should bypass record validation constraints
+		// Use DefaultFunc to provide invalid type that bypasses validation
+		schema := Record(String(), Int()).DefaultFunc(func() map[string]any {
+			// This will be converted to map[string]any but contains invalid data
+			return map[string]any{"invalid": "not-an-int"}
+		}).Optional()
 
-		// Valid input overrides default function
-		testRecord := map[string]any{"test": "value"}
-		result, err := recordSchema.Parse(testRecord)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, testRecord, result)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"invalid": "not-an-int"}, *result)
 	})
 
-	t.Run("Prefault function", func(t *testing.T) {
-		prefaultRecord := map[string]any{"prefault_key": 42}
-		recordSchema := Record(String(), Int())
-		prefaultSchema := recordSchema.Prefault(prefaultRecord)
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass record validation
+		validRecord := map[string]any{"key": "value"}
+		schema := Record(String(), String()).Prefault(validRecord).Optional()
 
-		// Valid input overrides prefault
-		testRecord := map[string]any{"test_key": 1}
-		result, err := prefaultSchema.Parse(testRecord)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, testRecord, result)
+		require.NotNil(t, result)
+		assert.Equal(t, validRecord, *result)
 	})
 
-	t.Run("PrefaultFunc function", func(t *testing.T) {
-		recordSchema := Record(String(), String()).PrefaultFunc(func() map[string]any {
-			return map[string]any{"generated": "prefault"}
-		})
+	t.Run("nil input triggers Default, not Prefault", func(t *testing.T) {
+		// When input is nil, only Default should be triggered
+		defaultRecord := map[string]any{"default": "value"}
+		prefaultRecord := map[string]any{"prefault": "value"}
+		schema := Record(String(), String()).Default(defaultRecord).Prefault(prefaultRecord).Optional()
 
-		// Valid input overrides prefault function
-		testRecord := map[string]any{"test": "value"}
-		result, err := recordSchema.Parse(testRecord)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, testRecord, result)
+		require.NotNil(t, result)
+		assert.Equal(t, defaultRecord, *result)
+
+		// Test with only Prefault - should trigger on nil
+		schemaOnlyPrefault := Record(String(), String()).Prefault(prefaultRecord).Optional()
+		result2, err := schemaOnlyPrefault.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result2)
+		assert.Equal(t, prefaultRecord, *result2)
+
+		// Non-nil input should not trigger prefault even if validation fails
+		_, err = schemaOnlyPrefault.Parse("not-a-record")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected record")
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Record(String(), String()).
+			DefaultFunc(func() map[string]any {
+				defaultCalled = true
+				return map[string]any{"default": "func"}
+			}).
+			PrefaultFunc(func() map[string]any {
+				prefaultCalled = true
+				return map[string]any{"prefault": "func"}
+			}).Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"default": "func"}, *result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure returns error", func(t *testing.T) {
+		// Prefault value that fails validation should return error
+		// Use invalid record that will fail value validation
+		invalidRecord := map[string]any{"key": 123} // 123 is not a string
+		schema := Record(String(), String()).Prefault(invalidRecord).Optional()
+
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected string")
 	})
 }
 

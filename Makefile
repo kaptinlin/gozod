@@ -2,7 +2,7 @@
 PROJECT_ROOT = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 export GOBIN = $(PROJECT_ROOT)/bin
 
-GOLANGCI_LINT_VERSION := $(shell $(GOBIN)/golangci-lint version --format short 2>/dev/null)
+GOLANGCI_LINT_VERSION := $(shell $(GOBIN)/golangci-lint version --format short 2>/dev/null || $(GOBIN)/golangci-lint version --short 2>/dev/null)
 REQUIRED_GOLANGCI_LINT_VERSION := $(shell cat .golangci.version)
 
 # Directories containing independent Go modules.
@@ -25,13 +25,18 @@ lint: golangci-lint tidy-lint
 # Install golangci-lint with the required version in GOBIN if it is not already installed.
 .PHONY: install-golangci-lint
 install-golangci-lint:
-    ifneq ($(GOLANGCI_LINT_VERSION),$(REQUIRED_GOLANGCI_LINT_VERSION))
-		@echo "[lint] installing golangci-lint v$(REQUIRED_GOLANGCI_LINT_VERSION) since current version is \"$(GOLANGCI_LINT_VERSION)\""
-		@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v$(REQUIRED_GOLANGCI_LINT_VERSION)
-    endif
+	@# Ensure $(GOBIN) exists
+	@mkdir -p $(GOBIN)
+	@# Install only when version mismatch to avoid unnecessary downloads
+	@if [ "$(GOLANGCI_LINT_VERSION)" != "$(REQUIRED_GOLANGCI_LINT_VERSION)" ]; then \
+			echo "[lint] installing golangci-lint v$(REQUIRED_GOLANGCI_LINT_VERSION) (current: $(GOLANGCI_LINT_VERSION))"; \
+			curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v$(REQUIRED_GOLANGCI_LINT_VERSION); \
+	else \
+			echo "[lint] golangci-lint v$(REQUIRED_GOLANGCI_LINT_VERSION) already installed"; \
+		fi
 
 .PHONY: golangci-lint
-golangci-lint: install-golangci-lint
+golangci-lint: install-golangci-lint ## Run golangci-lint
 	@echo "[lint] $(shell $(GOBIN)/golangci-lint version)"
 	@$(foreach mod,$(MODULE_DIRS), \
 		(cd $(mod) && \

@@ -1,23 +1,21 @@
-# GoZod Schema Implementation
+# GoZod Schema Implementation Guide
 
 A practical reference for building **new schema types** inside the GoZod code-base.  
 It targets **Cursor AI** and human contributors alike: every rule here exists to keep
 implementations consistent, type-safe and performant.
 
+This guide is based on the latest patterns from `string.go`, `object.go`, and their test counterparts.
+
 ---
 
 ## 1  Core Principles
 
-1. **Compile-time safety** – all APIs are generic; no `interface{}` assertions inside
-   schema code.  
-2. **Zero-overhead abstractions** – primitives allocate nothing, composites allocate
-   lazily.  
-3. **Unified architecture** – every file follows the same 8-section layout so Cursor
-   can pattern-match and extend it.  
-4. **Copy-on-Write modifiers** – modifiers clone internals; the original instance is
-   immutable.  
-5. **Mandatory helper packages** – *never* roll your own validation, parsing,
-   coercion or error logic.
+1. **Complete Strict Type Semantics** – All methods require exact input types, zero automatic conversions. Both `Parse(any)` and `StrictParse(T)` must be implemented.
+2. **Zero-overhead abstractions** – primitives allocate nothing, composites allocate lazily.  
+3. **Unified architecture** – every file follows the same 8-section layout so Cursor can pattern-match and extend it.  
+4. **Copy-on-Write modifiers** – modifiers clone internals; the original instance is immutable.  
+5. **Engine-first architecture** – All parsing must go through `engine.ParsePrimitive` or `engine.ParseComplex`.
+6. **Mandatory helper packages** – *never* roll your own validation, parsing, coercion or error logic.
 
 ---
 
@@ -38,14 +36,14 @@ Decision flow  `▶`  Native? → Comparable? → Composite.
 Every schema file *must* keep sections in this exact order so automated tooling can
 inject code safely:
 
-1. **TYPE CONSTRAINTS**   – union constraints (`bool | *bool`, etc.)
-2. **TYPE DEFINITIONS**   – `Def`, `Internals`, public type.
-3. **CORE METHODS**       – `Parse`, `Coerce`, `MustParse`, `GetInternals`.
-4. **MODIFIER METHODS**   – `Optional`, `Default`, `Overwrite`, …
-5. **VALIDATION METHODS** – thin wrappers over `checks.*`.
-6. **TRANSFORM & PIPE**   – WrapFn pattern, no converter structs.
-7. **REFINEMENT METHODS** – `Refine`, `RefineAny`, custom `Check`.
-8. **CONSTRUCTORS**       – `Type()`, `TypePtr()`, `TypeTyped[T]`.
+1. **TYPE CONSTRAINTS**   – union constraints (`StringConstraint interface { string | *string }`)
+2. **TYPE DEFINITIONS**   – `ZodTypeDef`, `ZodTypeInternals`, public `ZodType[T]`
+3. **CORE METHODS**       – `GetInternals`, `IsOptional`, `IsNilable`, `Parse`, `MustParse`, `StrictParse`, `MustStrictParse`, `Coerce`
+4. **MODIFIER METHODS**   – `Optional`, `Nilable`, `Default`, `Prefault`, `Overwrite`, etc.
+5. **VALIDATION METHODS** – Type-specific validations (`Min`, `Max`, `Email`, etc.)
+6. **TRANSFORM & PIPE**   – `Transform`, `Pipe`, `Overwrite`
+7. **REFINEMENT METHODS** – `Refine`, `RefineAny`, `Check`
+8. **CONSTRUCTORS**       – `Type()`, `TypePtr()`, `CoercedType()`, constructor helpers
 
 > Keep the section banners – Cursor relies on them when autofilling code.
 
@@ -76,33 +74,74 @@ No custom check structs, no manual error creation.
 
 ## 5  Engine Integration Patterns
 
-### 5.1  Primitives
+### 5.1  Primitives - ParsePrimitive Pattern
 ```go
-return engine.ParsePrimitive[base, constraint](
-    input,
-    &z.internals.ZodTypeInternals,
-    core.ZodTypeXYZ,          // type code
-    engine.ApplyChecks[base], // validator
-    engine.ConvertToConstraintType[base, constraint],
-    ctx...,
-)
+func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+    // Use internally recorded type code, fallback to default
+    expectedType := z.internals.Type
+    if expectedType == "" {
+        expectedType = core.ZodTypeString
+    }
+
+    return engine.ParsePrimitive[string, T](
+        input,
+        &z.internals.ZodTypeInternals,
+        expectedType,                                   // type code from internals
+        engine.ApplyChecks[string],                     // validator function
+        engine.ConvertToConstraintType[string, T],      // constraint converter
+        ctx...,
+    )
+}
+
+func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+    expectedType := z.internals.Type
+    if expectedType == "" {
+        expectedType = core.ZodTypeString
+    }
+
+    return engine.ParsePrimitiveStrict[string, T](
+        input,
+        &z.internals.ZodTypeInternals,
+        expectedType,
+        engine.ApplyChecks[string],
+        engine.ConvertToConstraintType[string, T],
+        ctx...,
+    )
+}
 ```
 
-*   **`base`** – concrete Go type stored internally (`bool`, `string`, `int64`…).
-*   **`constraint`** – user-visible generic type (`T` or `*T`).
-
-### 5.2  Composites
+### 5.2  Composites - ParseComplex Pattern
 ```go
-return engine.ParseType[R](
-    input,
-    &z.internals.ZodTypeInternals,
-    core.ZodTypeObject, // or Slice / Map …
-    extractFn,          // unwrap raw value
-    validateFn,         // run checks + nested schemas
-    ctx...,
-)
+func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+    result, err := engine.ParseComplex[map[string]any](
+        input,
+        &z.internals.ZodTypeInternals,
+        core.ZodTypeObject,
+        z.extractObjectForEngine,      // extract function
+        z.extractObjectPtrForEngine,   // extract pointer function
+        z.validateObjectForEngine,     // validation function
+        ctx...,
+    )
+    if err != nil {
+        var zero R
+        return zero, err
+    }
+
+    // Convert result to constraint type R
+    if objectMap, ok := result.(map[string]any); ok {
+        return convertToObjectConstraintType[T, R](any(objectMap).(T)), nil
+    }
+    
+    var zero R
+    return zero, fmt.Errorf("failed to convert object result")
+}
 ```
-Provide *fast paths* in `extractFn` before falling back to reflection.
+
+**Key Points:**
+- **`base`** – concrete Go type stored internally (`string`, `map[string]any`, etc.)
+- **`constraint`** – user-visible generic type (`T` or `*T`)
+- Always provide both `Parse` and `StrictParse` implementations
+- Use type-specific extract and validate functions for complex types
 
 ---
 
@@ -111,64 +150,163 @@ Provide *fast paths* in `extractFn` before falling back to reflection.
 1. Modifiers **never** mutate `z.internals` – always `Clone()` first.
 2. Pointer-returning modifiers (`Optional`, `Nilable`, `Nullish`) switch **only**
    the **constraint** type, not the base type.
-3. `Default`, `Prefault`, `Transform` keep the original generic `T`.
-4. `withInternals` / `withPtrInternals` must preserve `Def` to share immutable
+3. `Default`, `Prefault` keep the original generic `T` and accept value types for compile-time safety.
+4. `Transform` changes the output type to the transformed type.
+5. `withInternals` / `withPtrInternals` must preserve `Def` to share immutable
    data.
 
 ---
 
 ## 7  Primitive Type – Full Template
 
-Below is a condensed but complete pattern; replicate it for any new primitive.
+Below is the complete pattern based on current String implementation:
 
 ```go
-// SECTION 1 – TYPE CONSTRAINTS
-// Supports bool and *bool
-type BoolConstraint interface { bool | *bool }
-
-// SECTION 2 – TYPE DEFINITIONS
-
-type ZodBoolDef struct{ core.ZodTypeDef }
-
-type ZodBoolInternals struct{
-    core.ZodTypeInternals
-    Def *ZodBoolDef
+// TYPE CONSTRAINTS
+type StringConstraint interface {
+    string | *string
 }
 
-type ZodBool[T BoolConstraint] struct{ internals *ZodBoolInternals }
+// TYPE DEFINITIONS
+type ZodStringDef struct {
+    core.ZodTypeDef
+}
 
-// SECTION 3 – CORE METHODS
+type ZodStringInternals struct {
+    core.ZodTypeInternals
+    Def *ZodStringDef // Schema definition
+}
 
-func (z *ZodBool[T]) Parse(in any, ctx ...*core.ParseContext)(T,error){
-    return engine.ParsePrimitive[bool,T](
-        in, &z.internals.ZodTypeInternals,
-        core.ZodTypeBool,
-        engine.ApplyChecks[bool],
-        engine.ConvertToConstraintType[bool,T],
+type ZodString[T StringConstraint] struct {
+    internals *ZodStringInternals
+}
+
+// CORE METHODS
+func (z *ZodString[T]) GetInternals() *core.ZodTypeInternals {
+    return &z.internals.ZodTypeInternals
+}
+
+func (z *ZodString[T]) IsOptional() bool {
+    return z.internals.ZodTypeInternals.IsOptional()
+}
+
+func (z *ZodString[T]) IsNilable() bool {
+    return z.internals.ZodTypeInternals.IsNilable()
+}
+
+func (z *ZodString[T]) Coerce(input any) (any, bool) {
+    result, err := coerce.ToString(input)
+    return result, err == nil
+}
+
+func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+    expectedType := z.internals.Type
+    if expectedType == "" {
+        expectedType = core.ZodTypeString
+    }
+
+    return engine.ParsePrimitive[string, T](
+        input,
+        &z.internals.ZodTypeInternals,
+        expectedType,
+        engine.ApplyChecks[string],
+        engine.ConvertToConstraintType[string, T],
         ctx...,
     )
 }
 
-func (z *ZodBool[T]) Coerce(in any)(any,bool){
-    v,err := coerce.ToBool(in)
-    return v, err==nil
+func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+    result, err := z.Parse(input, ctx...)
+    if err != nil {
+        panic(err)
+    }
+    return result
 }
 
-// SECTION 4 – MODIFIERS
-func (z *ZodBool[T]) Optional() *ZodBool[*bool]{
-    ni := z.internals.Clone(); ni.SetOptional(true)
+func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+    expectedType := z.internals.Type
+    if expectedType == "" {
+        expectedType = core.ZodTypeString
+    }
+
+    return engine.ParsePrimitiveStrict[string, T](
+        input,
+        &z.internals.ZodTypeInternals,
+        expectedType,
+        engine.ApplyChecks[string],
+        engine.ConvertToConstraintType[string, T],
+        ctx...,
+    )
+}
+
+func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+    result, err := z.StrictParse(input, ctx...)
+    if err != nil {
+        panic(err)
+    }
+    return result
+}
+
+// MODIFIER METHODS
+func (z *ZodString[T]) Optional() *ZodString[*string] {
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetOptional(true)
     return z.withPtrInternals(ni)
 }
 
-// SECTION 6 – TRANSFORM
-func (z *ZodBool[T]) Transform(fn func(bool,*core.RefinementContext)(any,error)) *core.ZodTransform[T,any]{
-    wrap := func(v T, c *core.RefinementContext)(any,error){ return fn(extractBool(v),c) }
-    return core.NewZodTransform(z, wrap)
+func (z *ZodString[T]) Default(defaultValue string) *ZodString[T] {
+    // Default accepts value type, not pointer
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetDefault(defaultValue)
+    return z.withInternals(ni)
+}
+
+func (z *ZodString[T]) Prefault(prefaultValue string) *ZodString[T] {
+    // Prefault accepts value type, not pointer  
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetPrefault(prefaultValue)
+    return z.withInternals(ni)
+}
+
+// VALIDATION METHODS
+func (z *ZodString[T]) Min(min int, params ...any) *ZodString[T] {
+    check := checks.MinLength(min, params...)
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.AddCheck(check)
+    return z.withInternals(ni)
+}
+
+// TRANSFORM & PIPE
+func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
+    wrapper := func(input T, ctx *core.RefinementContext) (any, error) {
+        return fn(extractString(input), ctx)
+    }
+    return core.NewZodTransform[T, any](z, wrapper)
+}
+
+// REFINEMENT METHODS
+func (z *ZodString[T]) Refine(fn func(string) bool, params ...any) *ZodString[T] {
+    check := checks.NewRefine[string](fn, params...)
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.AddCheck(check)
+    return z.withInternals(ni)
+}
+
+// CONSTRUCTORS
+func String(params ...core.SchemaParams) *ZodString[string] {
+    return createStringSchema[string](core.ZodTypeString, params...)
+}
+
+func StringPtr(params ...core.SchemaParams) *ZodString[*string] {
+    return createStringSchema[*string](core.ZodTypeString, params...)
 }
 ```
 
-> **Cursor tip**: Keep each section comment intact; Cursor can append new methods
-> into the right area without misplacing code.
+**Key Requirements:**
+- Both `Parse` and `StrictParse` must be implemented
+- `Default` and `Prefault` accept value types, not pointers
+- All modifier methods must clone internals (Copy-on-Write)
+- Use engine integration patterns consistently
 
 ---
 
@@ -262,23 +400,34 @@ No direct `fmt.Errorf` inside parsing/validation code.
 
 ## 13  Common Pitfalls
 
-* Mis-ordering the 8 sections – Cursor inserts code in wrong spot.  
-* `Default(v R)` instead of `Default(v T)` – breaks API consistency.  
-* Direct reflection / `.(type)` – violates principle #1.  
-* Forgetting `ni := internals.Clone()` – leads to shared-state bugs.  
-* Adding validation without `checks` – linter will fail.
+* **Missing StrictParse Implementation** – All schemas must implement both `Parse(any)` and `StrictParse(T)` for complete strict type semantics.
+* **Mis-ordering the 8 sections** – Cursor inserts code in wrong spot.  
+* **`Default(v R)` instead of `Default(v T)`** – breaks API consistency.  
+* **Default/Prefault Type Safety** – `Default(value T)` and `Prefault(value T)` must accept value types (string), not pointer types (*string), for compile-time safety.
+* **Engine Integration Bypass** – All parsing must go through `engine.ParsePrimitive` or `engine.ParseComplex`.
+* **Direct Type Assertions** – Direct reflection / `.(type)` violates principle #1.  
+* **Shared State Bugs** – Forgetting `ni := internals.Clone()` leads to shared-state bugs.  
+* **Missing Helper Usage** – Adding validation without `checks.*` package breaks consistency.
+* **Type Code Handling** – Not using `z.internals.Type` with proper fallbacks breaks type detection.
+* **Default/Prefault Semantics** – Misunderstanding that Default short-circuits validation while Prefault goes through full parsing.
 
 ---
 
 ## 14  Implementation → PR Checklist
 
-- [ ] File respects section order & headings.  
-- [ ] All helper packages imported.  
-- [ ] `Parse` delegates to engine helpers.  
-- [ ] Modifiers follow CoW + pointer rules.  
-- [ ] Unit tests added.  
+- [ ] File respects 8-section order & headings.  
+- [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).  
+- [ ] Both `Parse(any)` and `StrictParse(T)` implemented using engine helpers.
+- [ ] Both `MustParse` and `MustStrictParse` implemented.
+- [ ] `GetInternals`, `IsOptional`, `IsNilable` methods implemented.
+- [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.  
+- [ ] Default/Prefault accept value types, not pointers (compile-time safety).
+- [ ] Coerce method implemented for primitive types.
+- [ ] Type constraints defined correctly (`T | *T` pattern).
+- [ ] Comprehensive unit tests added following test guide structure.  
 - [ ] Public constructors exported in `gozod.go`.  
-- [ ] Docs updated if public API changes.
+- [ ] JSON Schema support added if applicable.
+- [ ] Documentation updated for public API changes.
 
 ---
 

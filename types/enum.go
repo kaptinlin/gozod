@@ -8,6 +8,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
+	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
@@ -61,43 +62,12 @@ func (z *ZodEnum[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeEnum,
-		// Validator function
+		// Validator function with multiple error collection (TypeScript Zod v4 behavior adapted for enum)
 		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-			// First check if value is in enum
-			if _, exists := z.internals.Values[value]; !exists {
-				var zero T
-				return zero, fmt.Errorf("invalid enum value: %v", value)
-			}
-			// Then run additional checks
-			return engine.ApplyChecks[T](value, checks, ctx)
+			return z.validateEnumWithIssues(value, checks, ctx)
 		},
-		// Converter function
-		func(result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
-			var zero R
-
-			// Handle nil input
-			if result == nil {
-				// For optional/nilable schemas, return zero value
-				internals := z.GetInternals()
-				if internals.Optional || internals.Nilable {
-					return zero, nil
-				}
-				return zero, fmt.Errorf("enum value cannot be nil")
-			}
-
-			// Try to convert input to T first
-			if value, ok := result.(T); ok {
-				// Check if value is in enum
-				if _, exists := z.internals.Values[value]; !exists {
-					return zero, fmt.Errorf("invalid enum value: %v", value)
-				}
-
-				// Convert to constraint type R
-				return convertToEnumConstraintType[T, R](value), nil
-			}
-
-			return zero, fmt.Errorf("type conversion failed: expected %T but got %T", *new(T), result)
-		},
+		// Use standard converter function
+		engine.ConvertToConstraintType[T, R],
 		ctx...,
 	)
 }
@@ -105,6 +75,34 @@ func (z *ZodEnum[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 // MustParse validates the input value and panics on failure
 func (z *ZodEnum[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety by requiring exact type matching.
+// This eliminates runtime type checking overhead for maximum performance.
+// The input must exactly match the schema's constraint type R.
+func (z *ZodEnum[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	// Validator function with multiple error collection (TypeScript Zod v4 behavior adapted for enum)
+	validator := func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+		return z.validateEnumWithIssues(value, checks, ctx)
+	}
+
+	return engine.ParsePrimitiveStrict[T, R](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeEnum,
+		validator,
+		ctx...,
+	)
+}
+
+// MustStrictParse validates input with compile-time type safety and panics on failure.
+// This method provides zero-overhead abstraction with strict type constraints.
+func (z *ZodEnum[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -297,12 +295,12 @@ func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 	schemaParams := utils.NormalizeParams(params...)
 
 	// Convert back to the format expected by checks.NewCustom
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](wrapper, checkParams)
+	check := checks.NewCustom[any](wrapper, errorMessage)
 
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
@@ -314,15 +312,67 @@ func (z *ZodEnum[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodEnum[T, 
 	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	var checkParams any
+	var errorMessage any
 	if schemaParams.Error != nil {
-		checkParams = schemaParams
+		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 
-	check := checks.NewCustom[any](fn, checkParams)
+	check := checks.NewCustom[any](fn, errorMessage)
 	newInternals := z.internals.ZodTypeInternals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// VALIDATION METHODS
+// =============================================================================
+
+// validateEnumWithIssues validates enum value and applies checks with multiple error collection (TypeScript Zod v4 behavior adapted for enum)
+func (z *ZodEnum[T, R]) validateEnumWithIssues(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	var collectedIssues []core.ZodRawIssue
+
+	// First check if value is in enum and collect any enum validation issues
+	if _, exists := z.internals.Values[value]; !exists {
+		// Create list of valid values for error message
+		validValues := make([]any, 0, len(z.internals.Values))
+		for v := range z.internals.Values {
+			validValues = append(validValues, v)
+		}
+		rawIssue := issues.CreateIssue(core.InvalidValue, fmt.Sprintf("Invalid enum value"), map[string]any{
+			"received": fmt.Sprintf("%v", value),
+			"options":  validValues,
+		}, value)
+		collectedIssues = append(collectedIssues, rawIssue)
+	}
+
+	// Apply additional checks and collect their issues (TypeScript Zod v4 behavior)
+	if len(checks) > 0 {
+		// Use RunChecksOnValue to collect issues instead of ApplyChecks which fails fast
+		payload := core.NewParsePayload(value)
+		result := engine.RunChecksOnValue(value, checks, payload, ctx)
+
+		if result.HasIssues() {
+			checkIssues := result.GetIssues()
+			for _, issue := range checkIssues {
+				collectedIssues = append(collectedIssues, issue)
+			}
+		}
+
+		// Get the potentially transformed value for return
+		if result.GetValue() != nil {
+			if transformedValue, ok := result.GetValue().(T); ok {
+				value = transformedValue
+			}
+		}
+	}
+
+	// If we collected any issues, return them as a combined error
+	if len(collectedIssues) > 0 {
+		var zero T
+		return zero, issues.CreateArrayValidationIssues(collectedIssues)
+	}
+
+	return value, nil
 }
 
 // =============================================================================
@@ -364,20 +414,6 @@ func (z *ZodEnum[T, R]) CloneFrom(source any) {
 
 		// Restore the original checks that were set by the constructor
 		z.internals.ZodTypeInternals.Checks = originalChecks
-	}
-}
-
-// convertToEnumConstraintType converts enum value T to constraint type R
-func convertToEnumConstraintType[T comparable, R any](value T) R {
-	var zero R
-	switch any(zero).(type) {
-	case *T:
-		// Need to return *T
-		vCopy := value
-		return any(&vCopy).(R)
-	default:
-		// Return T directly
-		return any(value).(R)
 	}
 }
 

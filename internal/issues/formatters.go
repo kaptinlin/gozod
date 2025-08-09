@@ -17,6 +17,14 @@ import (
 // =============================================================================
 
 // MessageFormatter provides a unified interface for formatting validation error messages
+// Compatible with TypeScript Zod v4 error formatting patterns
+//
+// Note: Error structure formatting (tree, flat, pretty) is handled by standalone functions
+// in the errors.go file, following TypeScript Zod v4's functional approach:
+// - TreeifyError() / TreeifyErrorWithMapper()
+// - FlattenError() / FlattenErrorWithMapper()
+// - PrettifyError() / PrettifyErrorWithFormatter()
+// - FormatError() / FormatErrorWithMapper()
 type MessageFormatter interface {
 	FormatMessage(raw core.ZodRawIssue) string
 }
@@ -130,27 +138,30 @@ func JoinValuesWithSeparator(values []any, separator string) string {
 
 // ParsedTypeToString converts input to parsed type string
 // Enhanced with better float handling for NaN and Infinity
+// Matches TypeScript Zod v4 reference implementation behavior
 func ParsedTypeToString(input any) string {
 	parsedType := reflectx.ParsedType(input)
 
-	// Handle special cases to match TypeScript patterns
+	// Handle special cases to match Go language semantics
 	switch parsedType {
 	case core.ParsedTypeNaN:
 		return "NaN"
 	case core.ParsedTypeNil:
-		return "null"
+		return "nil" // Go language null value representation
 	case core.ParsedTypeSlice:
-		return "array" // TypeScript doesn't differentiate slice/array
+		return "slice" // Go language slice type
 	case core.ParsedTypeArray:
 		return "array"
-	case core.ParsedTypeMap, core.ParsedTypeObject:
+	case core.ParsedTypeMap:
+		return "map" // Go language map type
+	case core.ParsedTypeObject:
 		return "object"
 	case core.ParsedTypeStruct:
-		return "object" // Structs are object-like in error messages
+		return "struct" // Go language struct type
 	case core.ParsedTypeComplex:
-		return "complex" // Complex number type
+		return "complex" // Complex number type in Go
 	case core.ParsedTypeEnum:
-		return "enum" // Enumeration type
+		return "enum" // Enumeration type maps to enum in Go semantic types
 	case core.ParsedTypeFloat:
 		// Check for special float values
 		switch v := input.(type) {
@@ -176,7 +187,7 @@ func ParsedTypeToString(input any) string {
 	case core.ParsedTypeBigint:
 		return "bigint"
 	case core.ParsedTypeBool:
-		return "boolean"
+		return "bool" // Go language boolean type
 	case core.ParsedTypeString:
 		return "string"
 	case core.ParsedTypeFunction:
@@ -232,6 +243,21 @@ func GetComparisonOperator(isInclusive bool, isGreaterThan bool) string {
 	}
 }
 
+// GetFriendlyComparisonText returns user-friendly comparison text instead of mathematical operators
+func GetFriendlyComparisonText(isInclusive bool, isTooSmall bool) string {
+	if isTooSmall {
+		if isInclusive {
+			return "at least "
+		}
+		return "more than "
+	} else {
+		if isInclusive {
+			return "at most "
+		}
+		return "less than "
+	}
+}
+
 // =============================================================================
 // FORMAT NAME MAPPINGS - Enhanced with mapx
 // =============================================================================
@@ -244,14 +270,14 @@ var FormatNouns = func() map[string]string {
 		"email":            "email address",
 		"url":              "URL",
 		"emoji":            "emoji",
-		"uuid":             "UUID",
-		"uuidv4":           "UUIDv4",
-		"uuidv6":           "UUIDv6",
+		"uuid":             "uuid",
+		"uuidv4":           "uuid",
+		"uuidv6":           "uuid",
 		"nanoid":           "nanoid",
-		"guid":             "GUID",
+		"guid":             "guid",
 		"cuid":             "cuid",
 		"cuid2":            "cuid2",
-		"ulid":             "ULID",
+		"ulid":             "ulid",
 		"xid":              "XID",
 		"ksuid":            "KSUID",
 		"datetime":         "ISO datetime",
@@ -309,7 +335,21 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 	switch code {
 	case core.InvalidType:
 		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		// Special handling for StringBool type to display "boolean" instead of "stringbool"
+		if expected == "stringbool" {
+			expected = "boolean"
+		}
+		// Special handling for complex types to display "complex" instead of specific types
+		if expected == "complex64" || expected == "complex128" {
+			expected = "complex"
+		}
 		received := ParsedTypeToString(raw.Input)
+
+		// Special handling for object type conversion errors
+		if expected == "object" && (received == "string" || received == "map") {
+			return fmt.Sprintf("Type conversion failed: cannot convert %s to %s", received, expected)
+		}
+
 		return fmt.Sprintf("Invalid input: expected %s, received %s", expected, received)
 
 	case core.InvalidValue:
@@ -363,14 +403,70 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 		return fmt.Sprintf("Invalid key in %s", origin)
 
 	case core.InvalidUnion:
-		return "Invalid input"
+		return "Invalid input: no union member matched"
 
 	case core.InvalidElement:
+		// Get origin and index information first
 		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		index := mapx.GetAnyDefault(raw.Properties, "index", nil)
+
+		// Try to extract the original element error message
+		if elementError, exists := raw.Properties["element_error"]; exists {
+			if elementRaw, ok := elementError.(core.ZodRawIssue); ok {
+				// Format the original element error and add index information
+				elementMessage := f.FormatMessage(elementRaw)
+				if index != nil {
+					if origin == "array rest" {
+						return fmt.Sprintf("%s (rest element at index %v)", elementMessage, index)
+					}
+					return fmt.Sprintf("%s (element at index %v)", elementMessage, index)
+				}
+				return elementMessage
+			}
+		}
+		// Fallback to generic message if element_error is not available
 		if origin == "" {
 			return "Invalid element"
 		}
+		if index != nil {
+			if origin == "array rest" {
+				return fmt.Sprintf("Invalid value in %s: rest element at index %v", origin, index)
+			}
+			return fmt.Sprintf("Invalid value in %s: element at index %v", origin, index)
+		}
 		return fmt.Sprintf("Invalid value in %s", origin)
+
+	case core.MissingRequired:
+		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
+		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "field")
+		if fieldName == "" {
+			return fmt.Sprintf("Missing required %s", fieldType)
+		}
+		return fmt.Sprintf("Missing required %s: %s", fieldType, fieldName)
+
+	case core.TypeConversion:
+		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "unknown")
+		toType := mapx.GetStringDefault(raw.Properties, "to_type", "unknown")
+		return fmt.Sprintf("Type conversion failed: cannot convert %s to %s", fromType, toType)
+
+	case core.InvalidSchema:
+		// Prefer reason from properties if provided
+		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		if reason != "" {
+			return fmt.Sprintf("Invalid schema: %s", reason)
+		}
+		return "Invalid schema definition"
+
+	case core.InvalidDiscriminator:
+		field := mapx.GetStringDefault(raw.Properties, "field", "discriminator")
+		return fmt.Sprintf("Invalid or missing discriminator field: %s", field)
+
+	case core.IncompatibleTypes:
+		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "values")
+		return fmt.Sprintf("Cannot merge %s: incompatible types", conflictType)
+
+	case core.NilPointer:
+		return "Nil pointer encountered"
 
 	case core.Custom:
 		// Prefer explicit message field if provided
@@ -390,6 +486,7 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 }
 
 // formatSizeConstraint formats size constraint messages using enhanced utilities
+// Provides user-friendly messages that match TypeScript Zod v4 format
 func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isTooSmall bool) string {
 	origin := mapx.GetStringDefault(raw.Properties, "origin", "value")
 
@@ -407,23 +504,57 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 		return "Too big"
 	}
 
+	// Special handling for arrays
+	if origin == "array" {
+		minimum := mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		maximum := mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+
+		// Check if this is a rest parameter array
+		if isRestParam, ok := raw.Properties["is_rest_param"].(bool); ok && isRestParam {
+			return fmt.Sprintf("expected at least %s", FormatThreshold(minimum))
+		}
+
+		// Fixed-length arrays: when both minimum and maximum are present and equal
+		if minimum != nil && maximum != nil {
+			// Check if minimum and maximum are equal (fixed length)
+			minStr := FormatThreshold(minimum)
+			maxStr := FormatThreshold(maximum)
+			if minStr == maxStr {
+				return fmt.Sprintf("expected exactly %s", minStr)
+			}
+		}
+	}
+
 	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	adj := GetComparisonOperator(inclusive, isTooSmall)
 	sizing := GetSizing(origin)
 	thresholdStr := FormatThreshold(threshold)
 
+	// Special handling for file size validation to match expected format
+	if origin == "file" {
+		if isTooSmall {
+			return fmt.Sprintf("File size must be at least %s bytes", thresholdStr)
+		} else {
+			return fmt.Sprintf("File size must be at most %s bytes", thresholdStr)
+		}
+	}
+
+	// Use consistent "Too small/Too big: expected X to be/have Y" format for other types
 	if sizing != nil {
+		// For sized types (strings, arrays, etc.), use "have" with sizing info
+		adj := GetFriendlyComparisonText(inclusive, isTooSmall)
 		if isTooSmall {
 			return fmt.Sprintf("Too small: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
 		} else {
 			return fmt.Sprintf("Too big: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
 		}
-	}
-
-	if isTooSmall {
-		return fmt.Sprintf("Too small: expected %s to be %s%s", origin, adj, thresholdStr)
 	} else {
-		return fmt.Sprintf("Too big: expected %s to be %s%s", origin, adj, thresholdStr)
+		// For numeric and other types, use "be" format
+		adj := GetFriendlyComparisonText(inclusive, isTooSmall)
+		if isTooSmall {
+			return fmt.Sprintf("Too small: expected %s to be %s%s", origin, adj, thresholdStr)
+		} else {
+			return fmt.Sprintf("Too big: expected %s to be %s%s", origin, adj, thresholdStr)
+		}
 	}
 }
 

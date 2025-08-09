@@ -311,3 +311,173 @@ func TestUUID(t *testing.T) {
 		assert.Equal(t, defaultValue, result)
 	})
 }
+
+// =============================================================================
+// Default and prefault tests
+// =============================================================================
+
+func TestIds_DefaultAndPrefault(t *testing.T) {
+	// Test 1: Default has higher priority than Prefault
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// CUID type
+		schema1 := Cuid().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr")
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1) // Should be default, not prefault
+
+		// UUID type
+		schema2 := Uuid().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7")
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", result2) // Should be default, not prefault
+
+		// CuidPtr type
+		schema3 := CuidPtr().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr")
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		require.NotNil(t, result3)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", *result3) // Should be default, not prefault
+	})
+
+	// Test 2: Default short-circuits validation
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// CUID type - default value violates Min(30) but should still work
+		schema1 := Cuid().Min(30).Default("short") // "short" is too short for Min(30)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, "short", result1) // Default bypasses validation
+
+		// UUID type - default value violates refinement but should still work
+		schema2 := Uuid().Refine(func(s string) bool {
+			return false // Always fail refinement
+		}, "Should never pass").Default("invalid-uuid-format")
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, "invalid-uuid-format", result2) // Default bypasses validation
+
+		// ULID type - default value violates format but should still work
+		schema3 := Ulid().Default("not-a-ulid")
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, "not-a-ulid", result3) // Default bypasses validation
+	})
+
+	// Test 3: Prefault goes through full validation
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// CUID type - prefault value passes validation
+		schema1 := Cuid().Min(25).Prefault("ck7q2g3ak0001psr9pbfgx83z") // Valid CUID with 25 chars
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1)
+
+		// UUID type - prefault value passes validation
+		schema2 := Uuidv4().Prefault("d9428888-122b-469b-84de-d6e0a77858b7") // Valid v4 UUID
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, "d9428888-122b-469b-84de-d6e0a77858b7", result2)
+
+		// ULID type - prefault value passes validation
+		schema3 := Ulid().Prefault("01H8XGJWBWBAQ2XF7JGRB4B4B4") // Valid ULID
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, "01H8XGJWBWBAQ2XF7JGRB4B4B4", result3)
+	})
+
+	// Test 4: Prefault only triggered by nil input
+	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
+		schema := Cuid().Prefault("ck7q2g3ak0001psr9pbfgx83z")
+
+		// Valid input should override prefault
+		result, err := schema.Parse("clegxv4h2000008ld9bs2a2vr")
+		require.NoError(t, err)
+		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", result) // Should be input, not prefault
+
+		// Invalid input should NOT trigger prefault (should return error)
+		_, err = schema.Parse("invalid-cuid")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid cuid")
+	})
+
+	// Test 5: DefaultFunc and PrefaultFunc behavior
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		defaultCalled := false
+		prefaultCalled := false
+
+		defaultFunc := func() string {
+			defaultCalled = true
+			return "ck7q2g3ak0001psr9pbfgx83z"
+		}
+
+		prefaultFunc := func() string {
+			prefaultCalled = true
+			return "clegxv4h2000008ld9bs2a2vr"
+		}
+
+		// Test DefaultFunc priority over PrefaultFunc
+		schema1 := Cuid().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.True(t, defaultCalled)
+		assert.False(t, prefaultCalled) // Should not be called due to default priority
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1)
+
+		// Reset flags
+		defaultCalled = false
+		prefaultCalled = false
+
+		// Test PrefaultFunc alone
+		schema2 := Cuid().PrefaultFunc(prefaultFunc)
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.True(t, prefaultCalled)
+		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", result2)
+	})
+
+	// Test 6: Prefault validation failure
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// CUID with invalid prefault value
+		schema1 := Cuid().Prefault("invalid-cuid")
+		_, err1 := schema1.Parse(nil)
+		require.Error(t, err1) // Prefault should fail validation
+		assert.Contains(t, err1.Error(), "Invalid cuid")
+
+		// UUID v4 with invalid prefault value (wrong version)
+		schema2 := Uuidv4().Prefault("01890de4-7f13-7d5a-a439-c5f10a8a71d1") // v7 UUID, not v4
+		_, err2 := schema2.Parse(nil)
+		require.Error(t, err2) // Prefault should fail validation
+		assert.Contains(t, err2.Error(), "Invalid uuid")
+
+		// ULID with invalid prefault value
+		schema3 := Ulid().Prefault("invalid-ulid")
+		_, err3 := schema3.Parse(nil)
+		require.Error(t, err3) // Prefault should fail validation
+		assert.Contains(t, err3.Error(), "Invalid ulid")
+	})
+
+	// Test 7: Different ID types with Default and Prefault
+	t.Run("Different ID types with Default and Prefault", func(t *testing.T) {
+		// CUID2
+		schema1 := Cuid2().Default("ahkiaa2j7k63ufbpq688f3id").Prefault("b3his4na8s72mb275evbr83d")
+		result1, err1 := schema1.Parse(nil)
+		require.NoError(t, err1)
+		assert.Equal(t, "ahkiaa2j7k63ufbpq688f3id", result1) // Should be default
+
+		// XID
+		schema2 := Xid().Default("chc2vbt2mcc0000abs80").Prefault("chc2vbt2mcc0000abs8g")
+		result2, err2 := schema2.Parse(nil)
+		require.NoError(t, err2)
+		assert.Equal(t, "chc2vbt2mcc0000abs80", result2) // Should be default
+
+		// KSUID
+		schema3 := Ksuid().Default("24Stb6wH3k7W5PpkBN24q4jCnsa").Prefault("24Stb6wH3k7W5PpkBN24q4jCnsb")
+		result3, err3 := schema3.Parse(nil)
+		require.NoError(t, err3)
+		assert.Equal(t, "24Stb6wH3k7W5PpkBN24q4jCnsa", result3) // Should be default
+
+		// NanoID
+		schema4 := Nanoid().Default("J_ATaM-qZ8-Qk3Y-bY5c2").Prefault("c_U1bA-qZ8-Qk3Y-bY5c2")
+		result4, err4 := schema4.Parse(nil)
+		require.NoError(t, err4)
+		assert.Equal(t, "J_ATaM-qZ8-Qk3Y-bY5c2", result4) // Should be default
+	})
+}

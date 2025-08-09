@@ -240,7 +240,7 @@ func TestExecuteChecks(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
 		// Pre-allocate some capacity
-		payload.AddIssue(issues.CreateInvalidTypeIssue("string", "test"))
+		payload.AddIssue(issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string")))
 		payload.SetIssues(make([]core.ZodRawIssue, 1, 10)) // Capacity 10
 
 		// Create multiple checks to test memory allocation
@@ -300,7 +300,7 @@ func TestCheckAborted(t *testing.T) {
 
 	t.Run("start index out of bounds", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
-		issue := issues.CreateInvalidTypeIssue("string", "test")
+		issue := issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string"))
 		payload.AddIssue(issue)
 
 		aborted := CheckAborted(*payload, 10)
@@ -311,7 +311,7 @@ func TestCheckAborted(t *testing.T) {
 
 	t.Run("issues with continue flag", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
-		issue := issues.CreateInvalidTypeIssue("string", "test")
+		issue := issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string"))
 		issue.Continue = true
 		payload.AddIssue(issue)
 
@@ -323,7 +323,7 @@ func TestCheckAborted(t *testing.T) {
 
 	t.Run("issues with abort flag", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
-		issue := issues.CreateInvalidTypeIssue("string", "test")
+		issue := issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string"))
 		issue.Continue = false
 		payload.AddIssue(issue)
 

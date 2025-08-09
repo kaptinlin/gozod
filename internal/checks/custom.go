@@ -1,8 +1,6 @@
 package checks
 
 import (
-	"reflect"
-
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
@@ -171,7 +169,8 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 		mapx.Set(properties, "params", internals.Def.Params)
 	}
 
-	// Use CreateCustomIssue directly
+	// Use low-level CreateCustomIssue directly since ParseContext is not available at this level
+	// The high-level error creation pattern will be applied at the engine level
 	issue := issues.CreateCustomIssue(errorMessage, properties, input)
 
 	// Set the Input and Inst for downstream processing
@@ -247,24 +246,7 @@ func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInt
 			result := fn(value)
 			handleRefineResult(result, payload, value, internals)
 		default:
-			// Fallback: attempt to invoke arbitrary func via reflection if it
-			// matches signature func(T) bool where T is assignable from the
-			// actual payload.GetValue() type. This provides support for additional
-			// composite types without enumerating each one.
-			fv := reflect.ValueOf(internals.Def.Fn)
-			if fv.Kind() == reflect.Func && fv.Type().NumIn() == 1 && fv.Type().NumOut() == 1 && fv.Type().Out(0).Kind() == reflect.Bool {
-				// Ensure the input parameter is compatible.
-				argType := fv.Type().In(0)
-				value := payload.GetValue()
-				val := reflect.ValueOf(value)
-				if val.IsValid() && val.Type().AssignableTo(argType) {
-					resultVals := fv.Call([]reflect.Value{val})
-					result := resultVals[0].Bool()
-					handleRefineResult(result, payload, value, internals)
-					break
-				}
-			}
-			// Unknown refine function type or incompatible value: treat as validation failure
+			// Unknown refine function type: treat as validation failure
 			value := payload.GetValue()
 			handleRefineResult(false, payload, value, internals)
 		}

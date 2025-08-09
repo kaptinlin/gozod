@@ -12,6 +12,20 @@ import (
 
 type ZodEmoji[T StringConstraint] struct{ *ZodString[T] }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodEmoji[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodEmoji[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 func Emoji(params ...any) *ZodEmoji[string] {
 	base := StringTyped[string](params...).Regex(regexes.Emoji)
 	return &ZodEmoji[string]{base}
@@ -34,6 +48,20 @@ type JWTOptions struct {
 }
 
 type ZodJWT[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodJWT[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodJWT[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 // JWT creates a JWT token validation schema
 // Supports various parameter combinations:
@@ -91,6 +119,20 @@ func JWTTyped[T StringConstraint](params ...any) *ZodJWT[T] {
 // ZodBase64 defines a schema for Base64 encoded strings.
 type ZodBase64[T StringConstraint] struct{ *ZodString[T] }
 
+// StrictParse validates the input using strict parsing rules
+func (z *ZodBase64[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodBase64[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // Base64 creates a Base64 encoded string validation schema.
 // Supports custom error messages and schema parameters.
 //
@@ -127,6 +169,20 @@ func Base64Typed[T StringConstraint](params ...any) *ZodBase64[T] {
 
 // ZodBase64URL defines a schema for Base64URL encoded strings.
 type ZodBase64URL[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodBase64URL[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodBase64URL[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
 // Base64URL creates a Base64URL encoded string validation schema.
 // Supports custom error messages and schema parameters.

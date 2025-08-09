@@ -27,6 +27,21 @@ const (
 
 	// Custom validation issues
 	Custom IssueCode = "custom" // Custom validation failure
+
+	// Schema validation issues
+	InvalidSchema IssueCode = "invalid_schema" // Schema definition is invalid
+
+	// Discriminator validation issues
+	InvalidDiscriminator IssueCode = "invalid_discriminator" // Discriminator field missing/invalid
+
+	// Intersection validation issues
+	IncompatibleTypes IssueCode = "incompatible_types" // Types cannot be merged (intersection)
+
+	// New validation issues
+	MissingRequired IssueCode = "missing_required" // Required field is missing
+	TypeConversion  IssueCode = "type_conversion"  // Type conversion failed
+	NilPointer      IssueCode = "nil_pointer"      // Nil pointer encountered
+
 )
 
 // =============================================================================

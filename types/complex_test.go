@@ -302,57 +302,106 @@ func TestComplex_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestComplex_DefaultAndPrefault(t *testing.T) {
-	t.Run("default value with Complex128", func(t *testing.T) {
-		schema := Complex128().Default(complex(1.0, 2.0))
+	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, Default should take precedence for nil input
+		schema := Complex128().Default(complex(1.0, 2.0)).Prefault(complex(3.0, 4.0))
 
-		// Valid input should override default
-		result, err := schema.Parse(complex(3.0, 4.0))
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
+		assert.Equal(t, complex(1.0, 2.0), result) // Should be default, not prefault
 	})
 
-	t.Run("default value with Complex128Ptr", func(t *testing.T) {
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		// Default value should bypass complex validation constraints
+		schema := Complex128().Refine(func(c complex128) bool {
+			return false // Always fail refinement
+		}, "Should never pass").Default(complex(1.0, 2.0))
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, complex(1.0, 2.0), result) // Default bypasses validation
+	})
+
+	t.Run("Prefault goes through full validation", func(t *testing.T) {
+		// Prefault value must pass all complex validation including refinements
+		schema := Complex128().Refine(func(c complex128) bool {
+			return cmplx.Abs(c) >= 5.0 // Magnitude must be at least 5
+		}, "Magnitude must be at least 5").Prefault(complex(3.0, 4.0)) // |3+4i| = 5
+
+		// Nil input triggers prefault, goes through validation and succeeds
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, complex(3.0, 4.0), result)
+
+		// Non-nil input that fails validation should not trigger prefault
+		_, err = schema.Parse(complex(1.0, 1.0)) // |1+1i| < 5
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Magnitude must be at least 5")
+	})
+
+	t.Run("Prefault only triggers for nil input", func(t *testing.T) {
+		// Non-nil input that fails validation should not trigger Prefault
+		schema := Complex128().Prefault(complex(3.0, 4.0))
+
+		// Invalid complex should fail without triggering Prefault
+		_, err := schema.Parse("invalid-complex")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid input: expected complex, received string")
+
+		// Valid complex should pass normally
+		result, err := schema.Parse(complex(5.0, 6.0))
+		require.NoError(t, err)
+		assert.Equal(t, complex(5.0, 6.0), result)
+	})
+
+	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+		// Test function call behavior and priority
+		defaultCalled := false
+		prefaultCalled := false
+
+		schema := Complex128().
+			DefaultFunc(func() complex128 {
+				defaultCalled = true
+				return complex(1.0, 2.0)
+			}).
+			PrefaultFunc(func() complex128 {
+				prefaultCalled = true
+				return complex(3.0, 4.0)
+			})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, complex(1.0, 2.0), result)
+		assert.True(t, defaultCalled, "DefaultFunc should be called")
+		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+	})
+
+	t.Run("Prefault validation failure", func(t *testing.T) {
+		// When Prefault value fails validation, should return error
+		schema := Complex128().Refine(func(c complex128) bool {
+			return false // Always fail
+		}, "Custom validation failed").Prefault(complex(1.0, 2.0))
+
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Custom validation failed")
+	})
+
+	t.Run("Complex128Ptr with Default and Prefault", func(t *testing.T) {
+		// Test pointer types with default and prefault
 		schema := Complex128Ptr().Default(complex(1.0, 2.0))
 
+		// Nil input should use default
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex(1.0, 2.0), *result)
+
 		// Valid input should override default
-		result, err := schema.Parse(complex(3.0, 4.0))
+		result, err = schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, complex(3.0, 4.0), *result)
-	})
-
-	t.Run("default function", func(t *testing.T) {
-		callCount := 0
-		schema := Complex128().DefaultFunc(func() complex128 {
-			callCount++
-			return complex(1.0, 2.0)
-		})
-
-		// Valid input should not call default function
-		result, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
-		assert.Equal(t, 0, callCount)
-	})
-
-	t.Run("prefault value", func(t *testing.T) {
-		schema := Complex128().Prefault(complex(1.0, 2.0))
-
-		// Valid input should override prefault
-		result, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
-	})
-
-	t.Run("prefault function", func(t *testing.T) {
-		schema := Complex128().PrefaultFunc(func() complex128 {
-			return complex(1.0, 2.0)
-		})
-
-		// Valid input should override prefault
-		result, err := schema.Parse(complex(3.0, 4.0))
-		require.NoError(t, err)
-		assert.Equal(t, complex(3.0, 4.0), result)
 	})
 }
 
@@ -960,5 +1009,202 @@ func TestComplex_Overwrite(t *testing.T) {
 		require.NoError(t, err)
 		expected2 := complex128(0 + 2i) // (1+1i)² = 1 + 2i - 1 = 2i
 		assert.Equal(t, expected2, result2)
+	})
+}
+
+// =============================================================================
+// StrictParse and MustStrictParse tests
+// =============================================================================
+
+func TestComplex_StrictParse(t *testing.T) {
+	t.Run("basic functionality complex64", func(t *testing.T) {
+		schema := Complex64()
+
+		// Test StrictParse with exact type match
+		result, err := schema.StrictParse(complex64(3 + 4i))
+		require.NoError(t, err)
+		assert.Equal(t, complex64(3+4i), result)
+		assert.IsType(t, complex64(0), result)
+
+		// Test StrictParse with negative values
+		negResult, err := schema.StrictParse(complex64(-2 - 1i))
+		require.NoError(t, err)
+		assert.Equal(t, complex64(-2-1i), negResult)
+	})
+
+	t.Run("basic functionality complex128", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test StrictParse with exact type match
+		result, err := schema.StrictParse(complex128(5 + 6i))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(5+6i), result)
+		assert.IsType(t, complex128(0), result)
+
+		// Test StrictParse with zero
+		zeroResult, err := schema.StrictParse(complex128(0 + 0i))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(0+0i), zeroResult)
+	})
+
+	t.Run("with validation constraints", func(t *testing.T) {
+		schema := Complex128().Refine(func(c complex128) bool {
+			return cmplx.Abs(c) >= 5.0 // Magnitude must be at least 5
+		}, "Magnitude must be at least 5")
+
+		// Valid case
+		result, err := schema.StrictParse(complex128(3 + 4i)) // |3+4i| = 5
+		require.NoError(t, err)
+		assert.Equal(t, complex128(3+4i), result)
+
+		// Invalid case - magnitude too small
+		_, err = schema.StrictParse(complex128(1 + 1i)) // |1+1i| ≈ 1.414
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Magnitude must be at least 5")
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := Complex128Ptr()
+		complexVal := complex128(7 + 8i)
+
+		// Test with valid pointer input
+		result, err := schema.StrictParse(&complexVal)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(7+8i), *result)
+		assert.IsType(t, (*complex128)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := Complex64Ptr().Default(complex(1, 2))
+		var nilPtr *complex64 = nil
+
+		// Test with nil input (should use default)
+		result, err := schema.StrictParse(nilPtr)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex64(1+2i), *result)
+	})
+
+	t.Run("with prefault values", func(t *testing.T) {
+		schema := Complex128Ptr().Refine(func(c *complex128) bool {
+			return c != nil && cmplx.Abs(*c) >= 10.0
+		}, "Magnitude must be at least 10").Prefault(complex128(10 + 0i))
+		smallVal := complex128(2 + 2i) // Magnitude too small
+
+		// Test with validation failure (should NOT use prefault, should return error)
+		_, err := schema.StrictParse(&smallVal)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Magnitude must be at least 10")
+
+		// Test with nil input (should use prefault and pass validation)
+		result, err := schema.StrictParse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(10+0i), *result)
+	})
+
+	t.Run("special complex values", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test with infinity
+		infResult, err := schema.StrictParse(complex(math.Inf(1), 0))
+		require.NoError(t, err)
+		assert.True(t, math.IsInf(real(infResult), 1))
+
+		// Test with NaN
+		nanResult, err := schema.StrictParse(complex(math.NaN(), 0))
+		require.NoError(t, err)
+		assert.True(t, math.IsNaN(real(nanResult)))
+
+		// Test purely real number
+		realResult, err := schema.StrictParse(complex128(42 + 0i))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(42+0i), realResult)
+
+		// Test purely imaginary number
+		imagResult, err := schema.StrictParse(complex128(0 + 42i))
+		require.NoError(t, err)
+		assert.Equal(t, complex128(0+42i), imagResult)
+	})
+}
+
+func TestComplex_MustStrictParse(t *testing.T) {
+	t.Run("basic functionality complex64", func(t *testing.T) {
+		schema := Complex64()
+
+		// Test MustStrictParse with valid input
+		result := schema.MustStrictParse(complex64(9 + 10i))
+		assert.Equal(t, complex64(9+10i), result)
+		assert.IsType(t, complex64(0), result)
+
+		// Test MustStrictParse with zero
+		zeroResult := schema.MustStrictParse(complex64(0 + 0i))
+		assert.Equal(t, complex64(0+0i), zeroResult)
+	})
+
+	t.Run("basic functionality complex128", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test MustStrictParse with valid input
+		result := schema.MustStrictParse(complex128(11 + 12i))
+		assert.Equal(t, complex128(11+12i), result)
+		assert.IsType(t, complex128(0), result)
+
+		// Test MustStrictParse with negative values
+		negResult := schema.MustStrictParse(complex128(-5 - 6i))
+		assert.Equal(t, complex128(-5-6i), negResult)
+	})
+
+	t.Run("panic behavior", func(t *testing.T) {
+		schema := Complex128().Refine(func(c complex128) bool {
+			return cmplx.Abs(c) >= 10.0 // Magnitude must be at least 10
+		}, "Magnitude must be at least 10")
+
+		// Test panic with validation failure
+		assert.Panics(t, func() {
+			schema.MustStrictParse(complex128(1 + 1i)) // Too small, should panic
+		})
+	})
+
+	t.Run("with pointer types", func(t *testing.T) {
+		schema := Complex64Ptr()
+		complexVal := complex64(13 + 14i)
+
+		// Test with valid pointer input
+		result := schema.MustStrictParse(&complexVal)
+		require.NotNil(t, result)
+		assert.Equal(t, complex64(13+14i), *result)
+		assert.IsType(t, (*complex64)(nil), result)
+	})
+
+	t.Run("with default values", func(t *testing.T) {
+		schema := Complex128Ptr().Default(complex128(15 + 16i))
+		var nilPtr *complex128 = nil
+
+		// Test with nil input (should use default)
+		result := schema.MustStrictParse(nilPtr)
+		require.NotNil(t, result)
+		assert.Equal(t, complex128(15+16i), *result)
+	})
+
+	t.Run("special complex values", func(t *testing.T) {
+		schema := Complex128()
+
+		// Test with infinity
+		infResult := schema.MustStrictParse(complex(math.Inf(1), 0))
+		assert.True(t, math.IsInf(real(infResult), 1))
+
+		// Test with NaN
+		nanResult := schema.MustStrictParse(complex(math.NaN(), 0))
+		assert.True(t, math.IsNaN(real(nanResult)))
+
+		// Test purely real number
+		realResult := schema.MustStrictParse(complex128(100 + 0i))
+		assert.Equal(t, complex128(100+0i), realResult)
+
+		// Test purely imaginary number
+		imagResult := schema.MustStrictParse(complex128(0 + 100i))
+		assert.Equal(t, complex128(0+100i), imagResult)
 	})
 }
