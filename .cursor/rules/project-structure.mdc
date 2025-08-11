@@ -24,14 +24,15 @@ GoZod follows a *type-safe, layered* architecture that mirrors the API surface o
 ```
 go module gozod
 ├── bin/         # Build outputs and tools
-├── coerce/      # Root-level coercion utilities  
+├── coerce/      # Root-level coercion utilities
 ├── core/        # Foundation contracts (no concrete logic)
 ├── docs/        # Documentation and guides
 ├── examples/    # Example implementations and usage
 ├── internal/    # Private runtime engine (generic parser, checks, issues)
 ├── locales/     # Built-in i18n bundles
-├── pkg/         # Re-usable, reflection-free helpers (zero deps)  
-└── types/       # Public schema implementations (String, Array, …)
+├── pkg/         # Re-usable, reflection-free helpers (zero deps)
+├── types/       # Public schema implementations (String, Array, …)
+└─  validators/  # Custom validator system (registry, interfaces, converters)
 ```
 
 ### 2.1 One-Way Dependency Rule
@@ -98,11 +99,12 @@ High-level coercion utilities that bridge between `pkg/coerce` and the schema sy
 
 | File | Purpose |
 |------|---------|
-| `api.md` | Public API reference and examples |
+| `api.md` | Complete API documentation with all methods and examples |
 | `basics.md` | Basic usage and getting started guide |
+| `tags.md` | Comprehensive struct tag syntax and custom validator integration |
+| `feature-mapping.md` | Complete TypeScript Zod v4 to GoZod mapping reference |
 | `error-customization.md` | Guide for customizing error messages |
 | `error-formatting.md` | Error formatting and localization |
-| `feature-mapping.md` | Mapping between TypeScript Zod and GoZod features |
 | `json-schema.md` | JSON Schema generation documentation |
 | `metadata.md` | Schema metadata system documentation |
 
@@ -112,17 +114,15 @@ Comprehensive examples showcasing different GoZod features:
 
 | Directory | Focus |
 |-----------|-------|
-| `quickstart/` | Basic usage patterns |
-| `primitive/` | Primitive type validation |
-| `object/` | Object schema examples |
+| `code_generation/` | Code generation for performance |
+| `custom_validators/` | Custom validator implementation and usage |
+| `circular_references/` | Handling circular references automatically |
+| `advanced_lazy/` | Lazy evaluation and recursive structures |
+| `struct_tags/` | Struct tag validation examples |
 | `union/` | Union type validation |
 | `intersection/` | Intersection types |
-| `advanced_lazy/` | Lazy evaluation and circular references |
-| `coerce/` | Type coercion examples |
-| `config/` | Configuration and customization |
 | `error_handling/` | Error handling patterns |
-| `format/` | Format validation examples |
-| `i18n/` | Internationalization examples |
+| `coerce/` | Type coercion examples |
 
 ### 3.7 `pkg/` – Utilities Layer
 
@@ -137,6 +137,8 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `slicex`    | Generic slice helpers (merge, unique, map) |
 | `structx`   | Struct ⇄ map conversion without `encoding/json` |
 | `regexes`   | Pre-compiled, namespaced regex library |
+| `validators` | Custom validator system (registry, interfaces, converters) |
+| `tagparser` | Struct tag parsing and schema generation |
 
 ### 3.8 `internal/` – Runtime Engine (🤫 private)
 
@@ -227,7 +229,7 @@ New languages implement the `Locale` interface and register themselves in `local
 ### 6.1 Build System (`Makefile`)
 ```make
 test:     # Run all tests with race detection
-lint:     # Run golangci-lint and mod tidy checks  
+lint:     # Run golangci-lint and mod tidy checks
 build:    # Build all packages
 clean:    # Clean build artifacts
 ```

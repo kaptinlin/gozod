@@ -257,6 +257,19 @@ func (z *ZodString[T]) Optional() *ZodString[*string] {
     return z.withPtrInternals(ni)
 }
 
+func (z *ZodString[T]) Nilable() *ZodString[*string] {
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetNilable(true)
+    return z.withPtrInternals(ni)
+}
+
+func (z *ZodString[T]) Nullish() *ZodString[*string] {
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetOptional(true)
+    ni.SetNilable(true)
+    return z.withPtrInternals(ni)
+}
+
 func (z *ZodString[T]) Default(defaultValue string) *ZodString[T] {
     // Default accepts value type, not pointer
     ni := z.internals.ZodTypeInternals.Clone()

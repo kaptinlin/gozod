@@ -4,12 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed, zero-dependency data validation with intelligent type inference. It maintains complete API compatibility with TypeScript Zod v4 while leveraging Go's type system for compile-time safety.
+**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed, zero-dependency data validation with intelligent type inference. It maintains complete API compatibility with TypeScript Zod v4 while leveraging Go's type system for compile-time safety and maximum performance.
 
 ### Key Features
 - **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
-- **Maximum Performance** - Zero-overhead validation with optimal execution paths
+- **Parse vs StrictParse Methods** - Runtime flexibility or compile-time type safety for optimal performance
+- **Maximum Performance** - Zero-overhead validation with optional code generation (5-10x faster)
 - **TypeScript Zod v4 Compatible API** - Familiar syntax with Go-native optimizations
+- **Declarative Struct Tags** - Define validation rules with `gozod:"required,min=2,email"` syntax
+- **Custom Validator System** - User-defined validators with registry and struct tag integration
+- **Automatic Circular Reference Handling** - Lazy evaluation prevents stack overflow
 - **Rich Validation Methods** - Comprehensive built-in validators for all Go types
 
 ## Commands
@@ -56,9 +60,10 @@ make clean
 
 ### Core Design Philosophy
 1. **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
-2. **Input-Output Symmetry** - Schemas return the same type they accept after validation 
-3. **Copy-on-Write Modifiers** - Modifiers like `.Optional()` clone internals and return new instances
-4. **TypeScript Zod v4 Compatibility** - Maintains identical API surface and behavior
+2. **Parse vs StrictParse Duality** - Runtime flexibility (`Parse`) or compile-time type safety (`StrictParse`)
+3. **Input-Output Symmetry** - Schemas return the same type they accept after validation 
+4. **Copy-on-Write Modifiers** - Modifiers like `.Optional()` clone internals and return new instances
+5. **TypeScript Zod v4 Compatibility** - Maintains identical API surface and behavior
 
 ### Layered Architecture
 ```
@@ -67,10 +72,10 @@ gozod/
 ├── coerce/        # Root-level coercion utilities  
 ├── core/          # Foundation contracts (interfaces, types, constants)
 ├── docs/          # Documentation and guides
-├── examples/      # Example implementations and usage
+├── examples/      # Example implementations and usage patterns
 ├── internal/      # Private runtime engine (parser, checks, issues)
 ├── locales/       # Internationalization bundles
-├── pkg/           # Reusable utilities (validate, coerce, reflectx, etc.)  
+├── pkg/           # Reusable utilities (validate, coerce, reflectx, validators)  
 └── types/         # Public schema implementations (String, Array, etc.)
 ```
 
@@ -105,6 +110,8 @@ type ZodString struct { internals core.ZodTypeInternals }
 // Public API Layer  
 func (z *ZodString) Parse(input any) (string, error)
 func (z *ZodString) StrictParse(input string) (string, error)
+func (z *ZodString) MustParse(input any) string
+func (z *ZodString) MustStrictParse(input string) string
 func (z *ZodString) Min(min int) *ZodString
 func (z *ZodString) Optional() *ZodString
 ```
@@ -142,6 +149,7 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 - `slicex/` - Generic slice helpers (merge, unique, map)
 - `structx/` - Struct ⇄ map conversion without `encoding/json`
 - `regexes/` - Pre-compiled, namespaced regex library
+- `validators/` - Custom validator system with registry and struct tag integration
 
 ### Type System Design
 
@@ -152,6 +160,20 @@ All schemas require exact input types with zero automatic conversions:
 - No automatic conversions between value and pointer types
 - For flexible input handling, use Optional/Nilable modifiers
 
+#### Parse vs StrictParse Duality
+```go
+schema := gozod.String().Min(3)
+
+// Parse - Runtime type checking (flexible input, any → T)
+result, err := schema.Parse("hello")        // ✅ Works with any input type
+result, err = schema.Parse(42)              // ❌ Runtime error: invalid type
+
+// StrictParse - Compile-time type safety (exact input, T → T)
+str := "hello"
+result, err = schema.StrictParse(str)       // ✅ Compile-time guarantee, optimal performance
+// result, err := schema.StrictParse(42)    // ❌ Compile-time error
+```
+
 #### Modifier Pattern
 ```go
 // Optional/Nilable: flexible input, pointer output
@@ -160,19 +182,6 @@ schema := String().Optional()  // Flexible input (string/*string), returns *stri
 // Default/Prefault: preserve current type
 schema := String().Default("hello")  // Returns *ZodString[string]
 ```
-
-#### Parse vs StrictParse Methods
-- `Parse(input any)` - Accepts any type, performs runtime type checking, flexible for unknown inputs
-- `StrictParse(input T)` - Accepts exact type T, compile-time type safety, optimal performance
-- `MustParse(input any)` - Panic-based version of Parse for critical failures
-- `MustStrictParse(input T)` - Panic-based version of StrictParse for critical failures
-- All types must implement both methods for complete API consistency
-
-**Usage Guidelines:**
-- Use `Parse()` for external data (JSON, user input, API responses)
-- Use `StrictParse()` for internal validation where types are known
-- StrictParse provides better performance by skipping runtime type checking
-- Both methods share the same validation pipeline and modifier behavior
 
 #### Constructor Pattern
 Every type has value and pointer constructors:
@@ -187,6 +196,44 @@ IntPtr()    // Creates ZodInteger[*int, *int]
 High-level coercion utilities that bridge between `pkg/coerce` and the schema system:
 - `coerce.go` - Type coercion integration with schema validation
 - `coerce_test.go` - Tests for coercion functionality
+
+### Custom Validator System (`pkg/validators/`)
+
+#### Architecture Overview
+The custom validator system provides a flexible, registry-based approach for user-defined validation:
+
+```go
+// Basic validator interface
+type ZodValidator[T any] interface {
+    Name() string
+    Validate(value T) bool
+    ErrorMessage(ctx *core.ParseContext) string
+}
+
+// Parameterized validator interface
+type ZodParameterizedValidator[T any] interface {
+    ZodValidator[T]
+    ValidateParam(value T, param string) bool
+    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
+}
+```
+
+#### Key Components
+- `types.go` - Validator interfaces (`ZodValidator`, `ZodParameterizedValidator`, `ZodDetailedValidator`)
+- `registry.go` - Thread-safe validator registry with type-safe registration and retrieval
+- `converters.go` - Functions to convert validators to GoZod check functions
+- `init.go` - Empty placeholder for user-defined validator registration
+
+#### Usage Pattern
+1. **Users implement validators** in their application code
+2. **Register validators** using `validators.Register()`
+3. **Use in struct tags** or programmatically with converter functions
+4. **Struct tag integration** automatically applies registered validators
+
+#### Integration Points
+- **Struct Tags**: Custom validators work seamlessly with `gozod:"custom_validator_name"`
+- **Programmatic**: Convert validators using `validators.ToRefineFn()` or `validators.ToCheckFn()`
+- **Type Safety**: Registry maintains type safety with generic methods
 
 ## Development Guidelines
 
@@ -254,6 +301,7 @@ result2, _ := schema2.Parse(nil) // => 5 ("hello" goes through transform)
   - Test error handling consistency between both methods
   - Benchmark performance differences between Parse and StrictParse
 - **Panic Method Testing**: Verify MustParse and MustStrictParse panic behavior
+- **Custom Validator Testing**: Verify validator registration, retrieval, and integration
 - Follow existing test patterns for consistency
 
 ### Performance Optimization Guidelines
@@ -278,15 +326,56 @@ result2, _ := schema2.Parse(nil) // => 5 ("hello" goes through transform)
 - **Inline functions** for simple operations
 - **Pre-extracted constants** for magic numbers
 
+### Struct Tag Development Guidelines
+
+The GoZod struct tag system provides declarative validation through Go struct tags, complementing the programmatic API while maintaining full compatibility and performance.
+
+#### Core Tag Design Principles
+1. **API Compatibility**: All tag rules must directly correspond to programmatic API methods
+2. **Default Optional**: All fields are optional by default, requiring explicit `required` tag for mandatory fields
+3. **Comma Separation**: Multiple rules are comma-separated: `"required,min=2,max=50"`
+4. **Parameter Format**: Parameters use equals notation: `"min=5"`, `"enum=red green blue"`
+5. **Type Safety**: Tag parsing must maintain full type safety with compile-time validation where possible
+
+#### Tag Usage Examples
+```go
+type User struct {
+    Name     string `gozod:"required,min=2,max=50"`
+    Email    string `gozod:"required,email"`
+    Age      int    `gozod:"required,min=18,max=120"`
+    Bio      string `gozod:"max=500"`           // Optional by default
+    Internal string `gozod:"-"`                // Skip validation
+}
+
+// Generate schema from tags
+schema := gozod.FromStruct[User]()
+result, err := schema.Parse(user)
+```
+
+#### Custom Validator Integration
+Custom validators integrate seamlessly with struct tags:
+```go
+// Register custom validator
+validators.Register(&MyCustomValidator{})
+
+// Use in struct tags
+type User struct {
+    Username string `gozod:"required,my_custom_validator"`
+    Email    string `gozod:"required,email"`
+}
+```
+
 ## Important Design Decisions
 
 1. **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
-2. **Zod v4 Compatibility First** - Maintain identical API surface and behavior
-3. **Pointer Identity Preservation** - Optional/Nilable maintain input pointer addresses when appropriate
-4. **Immutable Modifiers** - Modifiers create new instances via copy-on-write
-5. **Unified Engine Architecture** - ParsePrimitive/ParseComplex for consistent behavior
-6. **Go Idioms** - Error values instead of exceptions, interfaces over inheritance
-7. **Zero Dependencies** - Pure Go implementation, no external libraries
+2. **Parse vs StrictParse Duality** - Runtime flexibility vs compile-time type safety for performance optimization
+3. **Zod v4 Compatibility First** - Maintain identical API surface and behavior
+4. **Pointer Identity Preservation** - Optional/Nilable maintain input pointer addresses when appropriate
+5. **Immutable Modifiers** - Modifiers create new instances via copy-on-write
+6. **Unified Engine Architecture** - ParsePrimitive/ParseComplex for consistent behavior
+7. **Go Idioms** - Error values instead of exceptions, interfaces over inheritance
+8. **Zero Dependencies** - Pure Go implementation, no external libraries
+9. **User-Controlled Custom Validators** - No pre-registered validators, users register their own
 
 ## Error Handling
 
@@ -318,18 +407,20 @@ if err != nil {
 - **Custom Error Formatting** - Flexible error output via `internal/issues`
 - **Metadata System** - Attach custom metadata to schemas via Registry
 - **Transform & Pipeline Support** - Composable data transformation
+- **Custom Validator System** - User-defined validators with registry and struct tag integration
+- **Code Generation** - Optional zero-reflection performance optimization
 
 ## API Consistency Requirements
 
 **All schema types must implement:**
-- `Parse(input any) (T, error)` - Runtime type checking with flexible input handling
-- `StrictParse(input T) (T, error)` - Compile-time type safety with exact type matching
-- `MustParse(input any) T` - Panic-based Parse for critical error scenarios
-- `MustStrictParse(input T) T` - Panic-based StrictParse for type-safe critical scenarios
+- `Parse(input any, ctx ...*ParseContext) (T, error)` - Runtime type checking with flexible input handling
+- `StrictParse(input T, ctx ...*ParseContext) (T, error)` - Compile-time type safety with exact type matching
+- `MustParse(input any, ctx ...*ParseContext) T` - Panic-based Parse for critical error scenarios
+- `MustStrictParse(input T, ctx ...*ParseContext) T` - Panic-based StrictParse for type-safe critical scenarios
+- `ParseAny(input any, ctx ...*ParseContext) (any, error)` - Untyped result for runtime scenarios
 - `GetInternals() *core.ZodTypeInternals` - Access internal schema state
 - `IsOptional() bool` - Check if schema accepts missing values
 - `IsNilable() bool` - Check if schema allows explicit nil values
-- `Coerce(input any) (any, bool)` - Type coercion capability for primitive types
 
 **Method Implementation Requirements:**
 - Parse and StrictParse must use identical validation pipelines

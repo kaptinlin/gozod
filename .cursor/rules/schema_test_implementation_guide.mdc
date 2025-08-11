@@ -7,11 +7,13 @@ A concise and practical guide for building GoZod Schema test files, updated with
 ## 🎯 Core Principles
 
 - **Complete Strict Type Semantics**: Test both `Parse(any)` and `StrictParse(T)` methods thoroughly.
+- **Parse vs StrictParse Duality**: Verify Parse provides runtime flexibility while StrictParse provides compile-time type safety.
 - **Generic Type Safety**: All tests must verify compile-time type safety and proper constraint handling.
 - **Modifier Behavior**: Test immutability, correct type transformations, and Default/Prefault semantics.
 - **Comprehensive & Organized**: Follow the unified section structure for clarity. Test boundaries and edge cases thoroughly.
 - **Real-World Patterns**: Tests should reflect actual API usage, including modifier chaining and error handling.
 - **Default vs Prefault**: Verify Default short-circuits validation while Prefault goes through full parsing pipeline.
+- **Custom Validator Integration**: Test custom validator registry and struct tag integration where applicable.
 
 ---
 
@@ -242,11 +244,14 @@ func TestString_StrictParse(t *testing.T) {
         require.Error(t, err)
         assert.Contains(t, err.Error(), "at least 10")
 
-        // Test with nil input (should use prefault)
+        // Test with nil input (should use prefault and go through validation)
         result, err := schema.StrictParse(nil)
         require.NoError(t, err)
         require.NotNil(t, result)
         assert.Equal(t, "prefault_value", *result)
+        
+        // Verify prefault went through validation (length >= 10)
+        assert.True(t, len(*result) >= 10, "Prefault value should pass Min(10) validation")
     })
 }
 ```
@@ -286,6 +291,10 @@ func TestComplex_DefaultAndPrefault(t *testing.T) {
         result, err := schema.Parse(nil)
         require.NoError(t, err)
         assert.Equal(t, complex(3.0, 4.0), result)
+        
+        // Verify prefault went through refinement validation
+        magnitude := cmplx.Abs(result)
+        assert.GreaterOrEqual(t, magnitude, 5.0, "Prefault should pass refinement validation")
 
         // Non-nil input that fails validation should not trigger prefault
         _, err = schema.Parse(complex(1.0, 1.0)) // |1+1i| < 5
@@ -362,6 +371,10 @@ func TestBool_EdgeCases(t *testing.T) {
         result, err := schema.Parse(originalPtr)
         require.NoError(t, err)
         assert.True(t, result == originalPtr, "Pointer identity should be preserved")
+        
+        // Verify the value is correct
+        require.NotNil(t, result)
+        assert.Equal(t, true, *result)
     })
     
     t.Run("API compatibility patterns", func(t *testing.T) {
@@ -396,6 +409,7 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Test `StrictParse` with prefault values (nil uses prefault, invalid input returns error).
 - [ ] Test `MustStrictParse` success cases and panic behavior.
 - [ ] Verify proper type assertions and return type safety.
+- [ ] Performance test: verify `StrictParse` is 3-5x faster than `Parse` for known types.
 
 #### Type Safety
 - [ ] Use compile-time `var _ *ZodType[T]` assignments to verify schema types.
@@ -406,8 +420,9 @@ This checklist is simplified to match the new 7-section structure.
 
 #### Modifier Methods
 - [ ] **Immutability**: Verify original schema remains unchanged after calling modifiers.
-- [ ] **`Optional`, `Nilable`**: Convert value schema `T` to pointer schema `*T`, accept `nil`.
+- [ ] **`Optional`, `Nilable`, `Nullish`**: Convert value schema `T` to pointer schema `*T`, accept `nil`.
 - [ ] **`Default`, `Prefault`**: Preserve schema type, accept value types (compile-time safety).
+- [ ] **`DefaultFunc`, `PrefaultFunc`**: Test function-based default/prefault generation.
 - [ ] **`Overwrite`**: Test value transformation while preserving type.
 - [ ] **`Refine`, `RefineAny`**: Test custom validation with success/failure cases.
 
@@ -422,6 +437,7 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Verify Prefault goes through full validation pipeline.
 - [ ] Test Prefault only triggers on nil input, not validation failures.
 - [ ] Test both value and function variants (`Default`/`DefaultFunc`, `Prefault`/`PrefaultFunc`).
+- [ ] Test performance difference: Default should be faster (no validation) vs Prefault (full validation).
 - [ ] Test Prefault validation failures return appropriate errors.
 
 #### Refine
@@ -434,12 +450,15 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Test valid coercible inputs with expected transformations.
 - [ ] Test invalid, non-coercible inputs produce errors.
 - [ ] Test coercion combined with validation constraints.
+- [ ] Test `CoercedType()` constructors (e.g., `CoercedString()`, `CoercedBool()`).
 
 #### Error Handling
 - [ ] Test error scenarios with appropriate error message validation.
 - [ ] Test edge cases: `nil` handling, special values (NaN, Infinity for numbers).
 - [ ] Test pointer identity preservation where applicable.
 - [ ] Test very large/small values, Unicode strings, complex data structures.
+- [ ] Test custom validator error messages and integration.
+- [ ] Test struct tag validation error paths where applicable.
 
 #### Overwrite (Transform/Pipe operations)
 - [ ] Test basic transformations with expected input/output.
@@ -447,3 +466,10 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Test transformations with different output types.
 - [ ] Test transformation error handling.
 - [ ] Test interaction with default values and validation.
+
+#### Custom Validator Integration (where applicable)
+- [ ] Test custom validator registration and usage.
+- [ ] Test parameterized validators with different parameter values.
+- [ ] Test struct tag generation with custom validators.
+- [ ] Test custom validator error messages and localization.
+- [ ] Test validator registry isolation in tests.

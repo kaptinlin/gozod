@@ -527,6 +527,10 @@ func (z *ZodSlice[T, R]) validateElement(element T, schema any, ctx *core.ParseC
 		return nil
 	}
 
+	// Special handling for Lazy schemas - DON'T unwrap, let Parse handle it
+	// The Lazy Parse method will properly evaluate the inner schema
+	// This ensures validation messages are correct and lazy evaluation works properly
+
 	// Try using reflection to call Parse method - this handles all schema types
 	schemaValue := reflect.ValueOf(schema)
 	if !schemaValue.IsValid() || schemaValue.IsNil() {

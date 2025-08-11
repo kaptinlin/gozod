@@ -60,32 +60,54 @@ This document defines comprehensive coding standards and best practices for the 
 
 | TypeScript Zod v4 | Go Type | GoZod Constructor | Description |
 |-------------------|---------|----------------|-------------|
-| `z.string()` | `string` | `gozod.String()` | String validation |
-| `z.number()` | `float64` | `gozod.Number()` | Number validation (default float64) |
+| `z.string()` | `string` | `gozod.String()` | String validation with Parse/StrictParse |
+| `z.number()` | `float64` | `gozod.Number()`, `gozod.Float64()` | Number validation (default float64) |
 | `z.boolean()` | `bool` | `gozod.Bool()` | Boolean validation |
-| `z.array(T)` | `[]T` | `gozod.Slice(T)` | Dynamic array |
-| `z.object({})` | `struct` | `gozod.Object({})` | Object validation |
-| `z.union([])` | `any` | `gozod.Union([])` | Union type |
+| `z.array(T)` | `[]T` | `gozod.Slice(T)`, `gozod.Array(T)` | Dynamic array/slice validation |
+| `z.object({})` | `struct` | `gozod.Object({})`, `gozod.Struct[T]()` | Object/struct validation |
+| `z.union([])` | `any` | `gozod.Union([])` | Union type validation |
+| `z.coerce.string()` | `string` | `gozod.CoercedString()`, `coerce.String()` | Type coercion validation |
+
+### Parse Method Duality
+
+| TypeScript Zod v4 | GoZod Method | Input Type | Performance | Use Case |
+|-------------------|-------------|------------|-------------|----------|
+| `.parse(data)` | `.Parse(data)` | `any` | Standard | Unknown input types, API validation |
+| `.safeParse(data)` | `.Parse(data)` | `any` | Standard | Go uses (T, error) pattern |
+| - | `.StrictParse(data)` | `T` | 3-5x faster | Known types, internal validation |
+| - | `.MustParse(data)` | `any` | Standard + panic | Critical failures |
+| - | `.MustStrictParse(data)` | `T` | 3-5x faster + panic | Type-safe critical failures |
 
 ### Modifier Mapping
 
 | TypeScript Zod v4 | GoZod | Semantic Differences |
-|-------------------|-------|---------------------|
-| `.optional()` | `.Optional()` | Missing field handling |
-| `.nullable()` | `.Nilable()` | Null value handling, preserve type inference |
-| `.nullish()` | `.Nullish()` | Combines optional and nullable |
-| `.default(value)` | `.Default(value)` | Default value with value type parameter |
-| `.catch(value)` | `.Prefault(value)` | Pre-parse default for nil input |
+|-------------------|-------|--------------------- |
+| `.optional()` | `.Optional()` | Missing field handling, returns `*T` |
+| `.nullable()` | `.Nilable()` | Null value handling, returns `*T` |
+| `.nullish()` | `.Nullish()` | Combines optional and nullable, returns `*T` |
+| `.default(value)` | `.Default(value)` | Short-circuits validation for nil input |
+| `.catch(value)` | `.Prefault(value)` | Goes through full validation pipeline |
+| - | `.DefaultFunc(func)` | **Go enhancement**: Function-based defaults |
+| - | `.PrefaultFunc(func)` | **Go enhancement**: Function-based prefaults |
 
 ### Validation Method Mapping
 
-| TypeScript Zod v4 | GoZod | Return Type |
-|-------------------|-------|-------------|
-| `.min(n)` | `.Min(n)` | Same type, supports method chaining |
-| `.max(n)` | `.Max(n)` | Same type, supports method chaining |
-| `.refine(fn)` | `.Refine(fn)` | Same type, type-safe |
-| `.transform(fn)` | `.Transform(fn)` | `ZodType[any, any]`, supports type conversion |
-| `.pipe(schema)` | `.Pipe(schema)` | Pipeline connection |
+| TypeScript Zod v4 | GoZod | Return Type | Go-Specific Features |
+|-------------------|-------|-------------|---------------------|
+| `.min(n)` | `.Min(n)` | Same type, supports method chaining | Works with all Go numeric types |
+| `.max(n)` | `.Max(n)` | Same type, supports method chaining | Works with all Go numeric types |
+| `.refine(fn)` | `.Refine(fn)` | Same type, type-safe | Go error handling pattern |
+| `.transform(fn)` | `.Transform(fn)` | `ZodType[T, any]`, supports type conversion | Go error handling |
+| `.pipe(schema)` | `.Pipe(schema)` | Pipeline connection | Full pipeline support |
+
+### Custom Validator System
+
+| Feature | TypeScript Zod v4 | GoZod | Status |
+|---------|-------------------|-------|--------|
+| **Custom refinements** | `.refine(fn)` | `.Refine(fn)` + `validators.Register()` | ✅ Enhanced |
+| **Registry system** | Not available | `validators.Register(&CustomValidator{})` | ✅ Go enhancement |
+| **Struct tag integration** | Not available | `gozod:"required,custom_validator"` | ✅ Go enhancement |
+| **Parameterized validators** | Custom logic | `ZodParameterizedValidator` interface | ✅ Go enhancement |
 
 ## 🔧 Go Language Idiom Guidelines
 
@@ -214,51 +236,119 @@ var emailRegex = ...  // Package-level variables should be capitalized
 | Union types | `T \| U` | `any` + type assertion | Runtime type checking |
 | Literal types | `"literal"` | Constants + validation | Enum validation |
 | Generic constraints | `T extends U` | `T interface{ ... }` | Interface constraints |
+| Custom validation | `.refine()` only | Registry + struct tags | Enhanced validation |
 
 ### 2. Runtime Behavior Differences
 - **undefined vs nil**: TypeScript's `undefined` corresponds to Go's `nil`
-- **Type Coercion**: TypeScript's implicit conversion vs Go's explicit conversion
+- **Type Coercion**: TypeScript's implicit conversion vs Go's explicit conversion  
 - **Error Handling**: TypeScript's exceptions vs Go's error values
 - **Async Processing**: TypeScript's Promise vs Go's synchronous processing
+- **Validation Flexibility**: Parse vs StrictParse for different use cases
 
 ### 3. API Design Differences
 ```go
 // TypeScript: Method chaining
 // z.string().min(5).max(10).email()
 
-// Go: Maintain same chaining
-gozod.String().Min(5).Max(10).Email()
+// Go: Maintain same chaining with Parse/StrictParse duality
+schema := gozod.String().Min(5).Max(10).Email()
+result, err := schema.Parse(unknownInput)      // Runtime type checking
+result, err = schema.StrictParse(knownString) // Compile-time type safety
 
 // TypeScript: Optional parameters
 // z.string().min(5, { message: "Too short" })
 
 // Go: Use struct parameters
-gozod.String().Min(5, gozod.SchemaParams{Error: "Too short"})
+gozod.String().Min(5, core.SchemaParams{Error: "Too short"})
+
+// Go enhancement: Declarative struct tags
+type User struct {
+    Name string `gozod:"required,min=5,max=10"`
+}
+schema := gozod.FromStruct[User]()
+```
+
+## 🏷️ Struct Tag Validation System
+
+### Core Tag Rules
+
+| Struct Tag Rule | Programmatic API Equivalent | Example | Status |
+|-----------------|----------------------------|---------|--------|
+| `gozod:"required"` | Field without `.Optional()` | `Name string \`gozod:"required"\`` | ✅ Implemented |
+| `gozod:"min=N"` | `.Min(N)` | `Name string \`gozod:"min=2"\`` | ✅ Implemented |
+| `gozod:"max=N"` | `.Max(N)` | `Name string \`gozod:"max=50"\`` | ✅ Implemented |
+| `gozod:"email"` | `.Email()` | `Email string \`gozod:"email"\`` | ✅ Implemented |
+| `gozod:"custom_validator"` | Custom validator | `Username string \`gozod:"required,unique_username"\`` | ✅ Implemented |
+
+### Custom Validator Integration
+
+```go
+// Register custom validator
+validators.Register(&UniqueUsernameValidator{})
+
+// Use in struct tags
+type User struct {
+    Username string `gozod:"required,unique_username"`        // Basic validator
+    Age      int    `gozod:"required,min_age=21"`           // Parameterized validator
+    Email    string `gozod:"required,email"`                // Built-in validator
+}
+
+// Generate schema from tags
+schema := gozod.FromStruct[User]()
+result, err := schema.Parse(user)
+```
+
+### Validator Interfaces
+
+```go
+// Basic validator
+type ZodValidator[T any] interface {
+    Name() string
+    Validate(value T) bool
+    ErrorMessage(ctx *core.ParseContext) string
+}
+
+// Parameterized validator
+type ZodParameterizedValidator[T any] interface {
+    ZodValidator[T]
+    ValidateParam(value T, param string) bool
+    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
+}
 ```
 
 ## 🔄 Unified Design Patterns
 
-### 1. Hybrid Method Pattern
-Every schema type provides both type-safe and flexible method versions:
+### 1. Parse vs StrictParse Pattern
+Every schema type provides both flexible and type-safe parsing:
 
 ```go
-// Type-safe version - only accepts the specific type
-func (z *ZodString) Refine(fn func(string) bool, params ...SchemaParams) *ZodString
+// Flexible parsing - accepts any type, runtime type checking
+func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error)
 
-// Flexible version - accepts any type
-func (z *ZodString) RefineAny(fn func(any) bool, params ...SchemaParams) ZodType[any, any]
+// Type-safe parsing - compile-time type safety, optimal performance
+func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error)
+
+// Panic-based variants for critical error scenarios
+func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T
+func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T
 ```
 
-### 2. Smart Type Inference Pattern
-All Parse methods preserve input type characteristics:
+### 2. Complete Strict Type Semantics Pattern
+All schemas enforce strict type requirements with no automatic conversions:
 
 ```go
-func (z *ZodString) Parse(input any, ctx ...*ParseContext) (any, error) {
-    // Type validation logic...
+// Value schemas - require exact value types
+stringSchema := gozod.String()      // Only accepts string
+intSchema := gozod.Int()            // Only accepts int
+structSchema := gozod.Struct[T]()   // Only accepts T
 
-    // Return original input to preserve type characteristics
-    return input, nil  // Instead of always returning extracted value
-}
+// Pointer schemas - require exact pointer types  
+stringPtrSchema := gozod.StringPtr()    // Only accepts *string
+intPtrSchema := gozod.IntPtr()          // Only accepts *int
+structPtrSchema := gozod.StructPtr[T]() // Only accepts *T
+
+// Use Optional/Nilable for flexible input
+optionalSchema := gozod.String().Optional()  // Flexible input, *string output
 ```
 
 ### 3. Copy-on-Write Modifier Pattern

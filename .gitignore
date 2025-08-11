@@ -30,6 +30,10 @@ bin/
 # Local build folder for storing build artifacts
 build/
 
+# Generated binaries (exclude binary but keep source directory)
+/gozodgen
+cmd/gozodgen/gozodgen
+
 # Mac OS files
 **/.DS_Store
 

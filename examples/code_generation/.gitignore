@@ -1,0 +1,7 @@
+# Ignore generated GoZod schema files
+*_schema.go
+*_gen.go
+*_validators.go
+*_models.go
+*_generated.go
+*_zod.go

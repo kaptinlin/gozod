@@ -396,11 +396,11 @@ func LiteralPtr[T comparable](value T, params ...any) *ZodLiteral[T, *T] {
 }
 
 func LiteralOf[T comparable](values []T, params ...any) *ZodLiteral[T, T] {
-	return types.LiteralOf[T](values, params...)
+	return types.LiteralOf(values, params...)
 }
 
 func LiteralPtrOf[T comparable](values []T, params ...any) *ZodLiteral[T, *T] {
-	return types.LiteralPtrOf[T](values, params...)
+	return types.LiteralPtrOf(values, params...)
 }
 
 func Enum[T comparable](values ...T) *ZodEnum[T, T] {
@@ -529,3 +529,28 @@ func NewRegistry[M any]() *Registry[M] {
 // it to store shared metadata that should be accessible throughout your
 // application.
 var GlobalRegistry = core.GlobalRegistry
+
+// =============================================================================
+// STRUCT TAG SUPPORT
+// =============================================================================
+
+// FromStruct creates a ZodStruct schema from struct tags
+// This provides convenient tag-based validation for Go structs
+//
+// Example:
+//
+//	type User struct {
+//	    Name  string `gozod:"required,min=2,max=50"`
+//	    Email string `gozod:"required,email"`
+//	}
+//
+//	schema := gozod.FromStruct[User]()
+func FromStruct[T any]() *types.ZodStruct[T, T] {
+	return types.FromStruct[T]()
+}
+
+// FromStructPtr creates a ZodStruct schema for pointer types from struct tags
+// This is useful for handling optional/nullable struct inputs
+func FromStructPtr[T any]() *types.ZodStruct[T, *T] {
+	return types.FromStructPtr[T]()
+}

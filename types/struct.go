@@ -1,16 +1,23 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/tagparser"
+	"github.com/kaptinlin/gozod/pkg/validators"
 )
 
 // =============================================================================
@@ -696,60 +703,69 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 
 // validateStructForEngine validates struct value using schema checks
 func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-	// Validate struct fields if schema is defined
+	// Apply field defaults and validate struct fields if schema is defined
+	transformedValue := value
 	if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
-		if err := z.validateStructFields(any(value), ctx); err != nil {
+		if transformed, err := z.parseStructWithDefaults(any(value), ctx); err != nil {
 			return value, err
+		} else if convertedValue, ok := transformed.(T); ok {
+			transformedValue = convertedValue
 		}
 	}
 
 	// Apply validation checks
 	if len(checks) > 0 {
-		transformedValue, err := engine.ApplyChecks(value, checks, ctx)
+		finalValue, err := engine.ApplyChecks(transformedValue, checks, ctx)
 		if err != nil {
-			return value, err
+			return transformedValue, err
 		}
 
 		// Use reflection to check if transformed value can be converted to T
-		transformedVal := reflect.ValueOf(transformedValue)
+		transformedVal := reflect.ValueOf(finalValue)
 		if transformedVal.IsValid() && !transformedVal.IsZero() {
-			if transformedVal.Type().AssignableTo(reflect.TypeOf(value)) {
+			if transformedVal.Type().AssignableTo(reflect.TypeOf(transformedValue)) {
 				return transformedVal.Interface().(T), nil
 			}
 		}
 	}
 
-	return value, nil
+	return transformedValue, nil
 }
 
 // =============================================================================
 // VALIDATION LOGIC
 // =============================================================================
 
-// validateStructFields validates struct fields against the defined schema with multiple error collection (TypeScript Zod v4 behavior adapted for Go structs)
-func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext) error {
+// parseStructWithDefaults parses struct fields with field schemas, applying defaults and transformations
+func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseContext) (any, error) {
 	if z.internals.Shape == nil || len(z.internals.Shape) == 0 {
-		return nil // No field schemas defined
+		return input, nil // No field schemas defined, return input as-is
 	}
-
-	var collectedIssues []core.ZodRawIssue
 
 	// Use reflection to access struct fields
 	val := reflect.ValueOf(input)
 	if val.Kind() == reflect.Ptr {
 		if val.IsNil() {
-			return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
+			return nil, issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 		}
 		val = val.Elem()
 	}
 
 	if val.Kind() != reflect.Struct {
-		return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
+		return nil, issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 	}
 
 	structType := val.Type()
 
-	// Validate each field defined in the schema and collect all errors (TypeScript Zod v4 behavior)
+	// Create a new struct instance to hold transformed values
+	newStruct := reflect.New(structType).Elem()
+
+	// Copy original values first
+	newStruct.Set(val)
+
+	var collectedIssues []core.ZodRawIssue
+
+	// Process each field defined in the schema
 	for fieldName, fieldSchema := range z.internals.Shape {
 		if fieldSchema == nil {
 			continue // Skip nil schemas
@@ -758,9 +774,8 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 		// Find the struct field (check both field name and json tag)
 		fieldValue, found := z.getStructFieldValue(val, structType, fieldName)
 		if !found {
-			// Field not found in struct
+			// Field not found in struct - handle missing required fields
 			if !z.isFieldOptional(fieldSchema, fieldName) {
-				// Create missing required field issue
 				rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Missing required struct field: %s", fieldName), map[string]any{
 					"expected": "nonoptional",
 					"received": "undefined",
@@ -776,22 +791,21 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 			continue
 		}
 
-		// Validate field directly to preserve original error codes
-		if err := z.validateFieldDirect(fieldValue.Interface(), fieldSchema, ctx); err != nil {
-			// Collect field validation errors with path prefix (TypeScript Zod v4 behavior adapted for Go structs)
+		// Parse the field value with its schema (this applies defaults and transformations)
+		parsedFieldValue, err := z.parseFieldWithSchema(fieldValue.Interface(), fieldSchema, ctx)
+		if err != nil {
+			// Collect field validation errors with path prefix
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
-				// Propagate all issues from field validation with path prefix
 				for _, fieldIssue := range zodErr.Issues {
-					// Create raw issue preserving original code and essential properties
 					rawIssue := core.ZodRawIssue{
 						Code:       fieldIssue.Code,
 						Message:    fieldIssue.Message,
 						Input:      fieldIssue.Input,
-						Path:       append([]any{fieldName}, fieldIssue.Path...), // Prepend field name to path
+						Path:       append([]any{fieldName}, fieldIssue.Path...),
 						Properties: make(map[string]any),
 					}
-					// Copy essential properties from ZodIssue to ZodRawIssue
+					// Copy essential properties
 					if fieldIssue.Minimum != nil {
 						rawIssue.Properties["minimum"] = fieldIssue.Minimum
 					}
@@ -808,8 +822,15 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 					collectedIssues = append(collectedIssues, rawIssue)
 				}
 			} else {
-				// Handle non-ZodError by creating a raw issue with field path
 				rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, fieldValue.Interface())
+				rawIssue.Path = []any{fieldName}
+				collectedIssues = append(collectedIssues, rawIssue)
+			}
+		} else {
+			// Set the parsed (potentially transformed) value back to the new struct
+			if err := z.setStructFieldValue(newStruct, structType, fieldName, parsedFieldValue); err != nil {
+				// Failed to set field value
+				rawIssue := issues.CreateIssue(core.Custom, fmt.Sprintf("Failed to set field %s: %v", fieldName, err), nil, parsedFieldValue)
 				rawIssue.Path = []any{fieldName}
 				collectedIssues = append(collectedIssues, rawIssue)
 			}
@@ -818,10 +839,377 @@ func (z *ZodStruct[T, R]) validateStructFields(input any, ctx *core.ParseContext
 
 	// If we collected any issues, return them as a combined error
 	if len(collectedIssues) > 0 {
-		return issues.CreateArrayValidationIssues(collectedIssues)
+		return nil, issues.CreateArrayValidationIssues(collectedIssues)
+	}
+
+	return newStruct.Interface(), nil
+}
+
+// parseFieldWithSchema parses a field value using its associated schema
+func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, ctx *core.ParseContext) (any, error) {
+	if fieldSchema == nil {
+		return fieldValue, nil
+	}
+
+	// Ensure we have a valid context
+	if ctx == nil {
+		ctx = core.NewParseContext()
+	}
+
+	// Use reflection to call Parse method - this handles all schema types
+	schemaVal := reflect.ValueOf(fieldSchema)
+	parseMethod := schemaVal.MethodByName("Parse")
+
+	if !parseMethod.IsValid() {
+		return fieldValue, nil // Schema doesn't have Parse method, return original value
+	}
+
+	// Call Parse(fieldValue, ctx)
+	args := []reflect.Value{
+		reflect.ValueOf(fieldValue),
+		reflect.ValueOf(ctx),
+	}
+
+	results := parseMethod.Call(args)
+	if len(results) != 2 {
+		return fieldValue, nil // Unexpected return signature
+	}
+
+	// Check for error (second return value)
+	if !results[1].IsNil() {
+		if err, ok := results[1].Interface().(error); ok {
+			return nil, err
+		}
+	}
+
+	// Return the parsed value (first return value)
+	return results[0].Interface(), nil
+}
+
+// setStructFieldValue sets a field value in a struct by name or json tag
+func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structType reflect.Type, fieldName string, value any) error {
+	// First try to find by field name
+	fieldVal := structVal.FieldByName(fieldName)
+	if fieldVal.IsValid() && fieldVal.CanSet() {
+		return z.setReflectFieldValue(fieldVal, value)
+	}
+
+	// Then try to find by json tag
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		jsonTag := field.Tag.Get("json")
+		if jsonTag != "" {
+			// Parse json tag (handle omitempty, etc.)
+			jsonName := strings.Split(jsonTag, ",")[0]
+			if jsonName == fieldName {
+				fieldVal := structVal.Field(i)
+				if fieldVal.CanSet() {
+					return z.setReflectFieldValue(fieldVal, value)
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("field %s not found or not settable", fieldName)
+}
+
+// setReflectFieldValue sets a reflect.Value field to the given value with proper type conversion
+func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any) error {
+	if value == nil {
+		// Set to zero value if nil
+		fieldVal.Set(reflect.Zero(fieldVal.Type()))
+		return nil
+	}
+
+	valueVal := reflect.ValueOf(value)
+	if valueVal.Type().AssignableTo(fieldVal.Type()) {
+		fieldVal.Set(valueVal)
+		return nil
+	}
+
+	// Handle map type conversions (e.g., map[any]any to map[string]string)
+	if fieldVal.Type().Kind() == reflect.Map && valueVal.Type().Kind() == reflect.Map {
+		if convertedMap := z.convertMapTypes(value, fieldVal.Type()); convertedMap != nil {
+			fieldVal.Set(reflect.ValueOf(convertedMap))
+			return nil
+		}
+	}
+
+	// Handle pointer type conversions
+	if fieldVal.Type().Kind() == reflect.Ptr && valueVal.Type().Kind() != reflect.Ptr {
+		// Field is pointer, value is not - create pointer to value
+		if valueVal.Type().AssignableTo(fieldVal.Type().Elem()) {
+			ptrVal := reflect.New(fieldVal.Type().Elem())
+			ptrVal.Elem().Set(valueVal)
+			fieldVal.Set(ptrVal)
+			return nil
+		}
+		// Handle pointer to map with conversion
+		if fieldVal.Type().Elem().Kind() == reflect.Map && valueVal.Type().Kind() == reflect.Map {
+			if convertedMap := z.convertMapTypes(value, fieldVal.Type().Elem()); convertedMap != nil {
+				ptrVal := reflect.New(fieldVal.Type().Elem())
+				ptrVal.Elem().Set(reflect.ValueOf(convertedMap))
+				fieldVal.Set(ptrVal)
+				return nil
+			}
+		}
+		// Handle generic type conversions for pointer fields
+		if converted := z.convertValue(value, fieldVal.Type().Elem()); converted != nil {
+			ptrVal := reflect.New(fieldVal.Type().Elem())
+			ptrVal.Elem().Set(reflect.ValueOf(converted))
+			fieldVal.Set(ptrVal)
+			return nil
+		}
+	} else if fieldVal.Type().Kind() != reflect.Ptr && valueVal.Type().Kind() == reflect.Ptr {
+		// Field is not pointer, value is pointer - dereference value
+		if !valueVal.IsNil() && valueVal.Elem().Type().AssignableTo(fieldVal.Type()) {
+			fieldVal.Set(valueVal.Elem())
+			return nil
+		}
+		// Handle dereferenced pointer to map with conversion
+		if !valueVal.IsNil() && fieldVal.Type().Kind() == reflect.Map && valueVal.Elem().Type().Kind() == reflect.Map {
+			if convertedMap := z.convertMapTypes(valueVal.Elem().Interface(), fieldVal.Type()); convertedMap != nil {
+				fieldVal.Set(reflect.ValueOf(convertedMap))
+				return nil
+			}
+		}
+		// Handle generic type conversions for dereferenced pointer values
+		if !valueVal.IsNil() {
+			if converted := z.convertValue(valueVal.Elem().Interface(), fieldVal.Type()); converted != nil {
+				fieldVal.Set(reflect.ValueOf(converted))
+				return nil
+			}
+		}
+	}
+
+	// Last resort: try generic conversion
+	if converted := z.convertValue(value, fieldVal.Type()); converted != nil {
+		fieldVal.Set(reflect.ValueOf(converted))
+		return nil
+	}
+
+	return fmt.Errorf("cannot assign %v (%T) to field of type %v", value, value, fieldVal.Type())
+}
+
+// convertMapTypes converts between different map types (e.g., map[any]any to map[string]string)
+func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue interface{}, targetType reflect.Type) interface{} {
+	sourceVal := reflect.ValueOf(sourceValue)
+	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Map {
+		return nil
+	}
+
+	targetKeyType := targetType.Key()
+	targetValueType := targetType.Elem()
+
+	// Create new map of target type
+	newMap := reflect.MakeMap(targetType)
+
+	// Convert each key-value pair
+	for _, key := range sourceVal.MapKeys() {
+		sourceKey := key.Interface()
+		sourceMapValue := sourceVal.MapIndex(key).Interface()
+
+		// Convert key to target key type
+		convertedKey := z.convertValue(sourceKey, targetKeyType)
+		if convertedKey == nil {
+			return nil // Failed to convert key
+		}
+
+		// Convert value to target value type
+		convertedValue := z.convertValue(sourceMapValue, targetValueType)
+		if convertedValue == nil {
+			return nil // Failed to convert value
+		}
+
+		newMap.SetMapIndex(reflect.ValueOf(convertedKey), reflect.ValueOf(convertedValue))
+	}
+
+	return newMap.Interface()
+}
+
+// convertValue attempts to convert a value to the target type
+func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType reflect.Type) interface{} {
+	if value == nil {
+		return reflect.Zero(targetType).Interface()
+	}
+
+	valueVal := reflect.ValueOf(value)
+	valueType := valueVal.Type()
+
+	// Direct assignment if types match
+	if valueType.AssignableTo(targetType) {
+		return value
+	}
+
+	// Handle conversions between compatible types
+	switch targetType.Kind() {
+	case reflect.String:
+		if valueType.Kind() == reflect.String {
+			return value.(string)
+		}
+		// Convert interface{} to string if it contains a string
+		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+			if str, ok := value.(string); ok {
+				return str
+			}
+		}
+	case reflect.Int:
+		//nolint:exhaustive // Only handling specific conversion cases
+		switch valueType.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return int(valueVal.Int())
+		case reflect.Float32, reflect.Float64:
+			return int(valueVal.Float())
+		default:
+			// For other types, no conversion available
+			break
+		}
+		// Convert interface{} to int if it contains a number
+		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+			if intVal, ok := value.(int); ok {
+				return intVal
+			}
+			if floatVal, ok := value.(float64); ok {
+				return int(floatVal)
+			}
+		}
+	case reflect.Float64:
+		//nolint:exhaustive // Only handling specific conversion cases
+		switch valueType.Kind() {
+		case reflect.Float32, reflect.Float64:
+			return valueVal.Float()
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return float64(valueVal.Int())
+		default:
+			// For other types, no conversion available
+			break
+		}
+		// Convert interface{} to float64 if it contains a number
+		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+			if floatVal, ok := value.(float64); ok {
+				return floatVal
+			}
+			if intVal, ok := value.(int); ok {
+				return float64(intVal)
+			}
+		}
+	case reflect.Interface:
+		// interface{} can accept any value
+		if targetType == reflect.TypeOf((*interface{})(nil)).Elem() {
+			return value
+		}
+	case reflect.Slice:
+		// Handle slice conversions (e.g., []interface{} to []SpecificType)
+		if valueVal.Type().Kind() == reflect.Slice {
+			return z.convertSliceTypes(value, targetType)
+		}
+	case reflect.Struct:
+		// Handle struct conversions from maps
+		if valueVal.Type().Kind() == reflect.Map {
+			return z.convertMapToStruct(value, targetType)
+		}
+		// Handle interface{} containing map that should become struct
+		if valueVal.Type() == reflect.TypeOf((*interface{})(nil)).Elem() {
+			if actualMap, ok := value.(map[string]interface{}); ok {
+				return z.convertMapToStruct(actualMap, targetType)
+			}
+		}
+	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Func, reflect.Map, reflect.Pointer, reflect.UnsafePointer:
+		// For other types, no specific conversion logic
+		break
+	}
+
+	// Attempt direct conversion if possible
+	if valueVal.Type().ConvertibleTo(targetType) {
+		return valueVal.Convert(targetType).Interface()
 	}
 
 	return nil
+}
+
+// convertSliceTypes converts between different slice types (e.g., []interface{} to []SpecificType)
+func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue interface{}, targetType reflect.Type) interface{} {
+	sourceVal := reflect.ValueOf(sourceValue)
+	if sourceVal.Kind() != reflect.Slice || targetType.Kind() != reflect.Slice {
+		return nil
+	}
+
+	targetElemType := targetType.Elem()
+	newSlice := reflect.MakeSlice(targetType, sourceVal.Len(), sourceVal.Len())
+
+	for i := 0; i < sourceVal.Len(); i++ {
+		sourceElem := sourceVal.Index(i).Interface()
+		convertedElem := z.convertValue(sourceElem, targetElemType)
+		if convertedElem == nil {
+			return nil // Failed to convert element
+		}
+		newSlice.Index(i).Set(reflect.ValueOf(convertedElem))
+	}
+
+	return newSlice.Interface()
+}
+
+// convertMapToStruct converts a map to a struct using field matching
+func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue interface{}, targetType reflect.Type) interface{} {
+	sourceVal := reflect.ValueOf(sourceValue)
+	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Struct {
+		return nil
+	}
+
+	// Create new struct instance
+	newStruct := reflect.New(targetType).Elem()
+
+	// Convert map to struct by matching field names
+	for i := 0; i < targetType.NumField(); i++ {
+		field := targetType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		// Get field name, check json tag first, then field name
+		fieldName := field.Name
+		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
+			if tagName := strings.Split(jsonTag, ",")[0]; tagName != "" && tagName != "-" {
+				fieldName = tagName
+			}
+		}
+
+		// Look for value in map by exact field name match
+		var mapValue interface{}
+		var found bool
+
+		for _, key := range sourceVal.MapKeys() {
+			keyStr := fmt.Sprintf("%v", key.Interface())
+			if keyStr == fieldName || keyStr == field.Name {
+				mapValue = sourceVal.MapIndex(key).Interface()
+				found = true
+				break
+			}
+		}
+
+		if found && mapValue != nil {
+			// Try direct assignment first
+			mapValueVal := reflect.ValueOf(mapValue)
+			if mapValueVal.Type().AssignableTo(field.Type) {
+				newStruct.Field(i).Set(mapValueVal)
+			} else {
+				// Try type conversion
+				convertedValue := z.convertValue(mapValue, field.Type)
+				if convertedValue != nil {
+					newStruct.Field(i).Set(reflect.ValueOf(convertedValue))
+				}
+			}
+		}
+	}
+
+	return newStruct.Interface()
 }
 
 // getStructFieldValue gets the value of a struct field by name or json tag
@@ -851,54 +1239,6 @@ func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType refl
 	}
 
 	return reflect.Value{}, false
-}
-
-// validateFieldDirect validates a single field using its schema without wrapping errors (preserves original error codes)
-func (z *ZodStruct[T, R]) validateFieldDirect(element any, schema any, ctx *core.ParseContext) error {
-	if schema == nil {
-		return nil
-	}
-
-	// Ensure we have a valid context
-	if ctx == nil {
-		ctx = core.NewParseContext()
-	}
-
-	// Try using reflection to call Parse method - this handles all schema types
-	schemaValue := reflect.ValueOf(schema)
-	if !schemaValue.IsValid() || schemaValue.IsNil() {
-		return nil
-	}
-
-	parseMethod := schemaValue.MethodByName("Parse")
-	if !parseMethod.IsValid() {
-		return nil
-	}
-
-	methodType := parseMethod.Type()
-	if methodType.NumIn() < 1 {
-		return nil
-	}
-
-	// Build arguments for Parse call
-	args := []reflect.Value{reflect.ValueOf(element)}
-	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
-		// Add context parameter if expected
-		args = append(args, reflect.ValueOf(ctx))
-	}
-
-	// Call Parse method
-	results := parseMethod.Call(args)
-	if len(results) >= 2 {
-		// Check if there's an error (second return value)
-		if errInterface := results[1].Interface(); errInterface != nil {
-			if err, ok := errInterface.(error); ok {
-				return err // Return the error directly without wrapping
-			}
-		}
-	}
-
-	return nil
 }
 
 // shouldSkipFieldInPartialMode checks if a field should be skipped in partial mode
@@ -1188,4 +1528,1984 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 	}
 
 	return v.Interface().(T), true
+}
+
+// =============================================================================
+// STRUCT TAG SUPPORT
+// =============================================================================
+
+// FromStruct creates a ZodStruct schema from struct tags
+// This is a convenience function that uses the tag parsing infrastructure
+func FromStruct[T any]() *ZodStruct[T, T] {
+	// For now, create basic struct with minimal tag parsing
+	var zero T
+	structType := reflect.TypeOf(zero)
+
+	// Check if struct has any gozod tags
+	if !hasGozodTags(structType) {
+		return Struct[T]()
+	}
+
+	// Parse struct tags and create schema with field validation
+	fieldSchemas := parseStructTagsToSchemas(structType)
+	if len(fieldSchemas) == 0 {
+		return Struct[T]()
+	}
+
+	return Struct[T](fieldSchemas)
+}
+
+// FromStructPtr creates a ZodStruct schema for pointer types from struct tags
+func FromStructPtr[T any]() *ZodStruct[T, *T] {
+	var zero T
+	structType := reflect.TypeOf(zero)
+
+	// Check if struct has any gozod tags
+	if !hasGozodTags(structType) {
+		return StructPtr[T]()
+	}
+
+	// Parse struct tags and create schema with field validation
+	fieldSchemas := parseStructTagsToSchemas(structType)
+	if len(fieldSchemas) == 0 {
+		return StructPtr[T]()
+	}
+
+	return StructPtr[T](fieldSchemas)
+}
+
+// hasGozodTags checks if a struct type has any gozod tags
+func hasGozodTags(structType reflect.Type) bool {
+	if structType.Kind() == reflect.Ptr {
+		structType = structType.Elem()
+	}
+
+	if structType.Kind() != reflect.Struct {
+		return false
+	}
+
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if _, exists := field.Tag.Lookup("gozod"); exists {
+			return true
+		}
+	}
+
+	return false
+}
+
+// parseStructTagsToSchemas converts struct tags to field schemas
+func parseStructTagsToSchemas(structType reflect.Type) core.StructSchema {
+	// Initialize cycle detection context
+	visited := make(map[reflect.Type]bool)
+	return parseStructTagsToSchemasWithCycleDetection(structType, visited)
+}
+
+// parseStructTagsToSchemasWithCycleDetection parses struct tags with cycle detection
+func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited map[reflect.Type]bool) core.StructSchema {
+	schemas := make(core.StructSchema)
+
+	// Use tagparser to parse struct tags
+	parser := tagparser.New()
+	fields, err := parser.ParseStructTags(structType)
+	if err != nil {
+		return schemas
+	}
+
+	// Mark this type as visited to detect cycles
+	visited[structType] = true
+	defer func() {
+		// Clean up after processing
+		delete(visited, structType)
+	}()
+
+	// Convert parsed fields to schemas
+	for _, field := range fields {
+		// Skip fields without gozod tags
+		if len(field.Rules) == 0 && !field.Required {
+			continue
+		}
+
+		// Create basic schema based on field type
+		// Pass the field info and visited map for cycle detection
+		schema := createSchemaFromTypeWithCycleDetection(field.Type, field, visited)
+		if schema != nil {
+			// Apply parsed tag rules
+			schema = applyParsedTagRules(schema, field)
+			schemas[field.JsonName] = schema
+		}
+	}
+
+	return schemas
+}
+
+// createSchemaFromTypeWithCycleDetection creates a schema with cycle detection
+func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, visited map[reflect.Type]bool) core.ZodSchema {
+	// Check for circular reference
+	actualType := fieldType
+	isPointer := actualType.Kind() == reflect.Ptr
+	if isPointer {
+		actualType = actualType.Elem()
+	}
+
+	isSlice := actualType.Kind() == reflect.Slice || actualType.Kind() == reflect.Array
+	if isSlice {
+		actualType = actualType.Elem()
+		if actualType.Kind() == reflect.Ptr {
+			actualType = actualType.Elem()
+		}
+	}
+
+	// If this is a struct type that we're already visiting, it's a circular reference
+	if actualType.Kind() == reflect.Struct && visited[actualType] {
+		// Create a lazy schema for circular reference
+		return createLazySchemaForType(fieldType, fieldInfo)
+	}
+
+	// For nested structs (not circular), create schema with cycle detection
+	if actualType.Kind() == reflect.Struct && actualType != reflect.TypeOf(time.Time{}) {
+		// Check if coercion is enabled
+		hasCoerce := false
+		for _, rule := range fieldInfo.Rules {
+			if rule.Name == "coerce" {
+				hasCoerce = true
+				break
+			}
+		}
+
+		if hasCoerce && actualType == reflect.TypeOf(time.Time{}) {
+			// Handle time.Time with coercion
+			if isPointer {
+				return CoercedTimePtr()
+			}
+			return CoercedTime()
+		}
+
+		// Create nested struct schema with cycle detection
+		var schema core.ZodSchema
+		if hasGozodTags(actualType) {
+			// Parse nested struct tags recursively with cycle detection
+			fieldSchemas := parseStructTagsToSchemasWithCycleDetection(actualType, visited)
+			if len(fieldSchemas) > 0 {
+				schema = Object(fieldSchemas)
+			} else {
+				schema = Any()
+			}
+		} else {
+			schema = Any()
+		}
+
+		// Handle pointer/slice wrappers
+		if isSlice {
+			// For slices, we need to wrap the schema in a slice validator
+			// Use Slice[any] for dynamic types
+			sliceSchema := Slice[any](schema)
+			schema = sliceSchema
+		}
+		if isPointer && schema != nil {
+			// Make nested struct nilable if it's a pointer and not required
+			if !fieldInfo.Required {
+				if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
+					schema = nilableSchema.Nilable()
+				}
+			}
+		}
+
+		// Apply parsed tag rules
+		return applyParsedTagRules(schema, fieldInfo)
+	}
+
+	// Otherwise, create schema normally for non-struct types
+	return createSchemaFromTypeWithInfo(fieldType, fieldInfo)
+}
+
+// createLazySchemaForType creates a lazy schema for circular reference types
+func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldInfo) core.ZodSchema {
+	// Store the original type for later reference
+	capturedType := fieldType
+	capturedInfo := fieldInfo
+
+	// Check if this is a slice/array of circular types
+	actualType := capturedType
+	isPointer := actualType.Kind() == reflect.Ptr
+	if isPointer {
+		actualType = actualType.Elem()
+	}
+
+	isSlice := actualType.Kind() == reflect.Slice || actualType.Kind() == reflect.Array
+	if isSlice {
+		// For slices, we need to create a slice of lazy schemas
+		elementType := actualType.Elem()
+		isElementPointer := elementType.Kind() == reflect.Ptr
+		if isElementPointer {
+			elementType = elementType.Elem()
+		}
+
+		// Create lazy schema for the element
+		lazyElementSchema := Lazy(func() core.ZodSchema {
+			// Create the nested struct schema
+			// The cache in parseStructTagsToSchemas will prevent infinite recursion
+			var schema core.ZodSchema
+			if hasGozodTags(elementType) {
+				// This will use cached schemas on subsequent calls
+				fieldSchemas := parseStructTagsToSchemas(elementType)
+				if len(fieldSchemas) > 0 {
+					schema = Object(fieldSchemas)
+				} else {
+					schema = Any()
+				}
+			} else {
+				schema = Any()
+			}
+
+			// If slice element is a pointer, handle that
+			if isElementPointer {
+				if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
+					schema = nilableSchema.Nilable()
+				}
+			}
+
+			return schema
+		})
+
+		// Create slice of lazy elements
+		sliceSchema := Slice[any](lazyElementSchema)
+
+		// Apply parsed tag rules
+		return applyParsedTagRules(sliceSchema, capturedInfo)
+	}
+
+	// For non-slice types, create a single lazy schema
+	lazySchema := Lazy(func() core.ZodSchema {
+		// Create the nested struct schema
+		// The cache in parseStructTagsToSchemas will prevent infinite recursion
+		var schema core.ZodSchema
+		if hasGozodTags(actualType) {
+			// This will use cached schemas on subsequent calls
+			fieldSchemas := parseStructTagsToSchemas(actualType)
+			if len(fieldSchemas) > 0 {
+				schema = Object(fieldSchemas)
+			} else {
+				schema = Any()
+			}
+		} else {
+			schema = Any()
+		}
+
+		// Handle pointer wrapper if needed
+		if isPointer && !capturedInfo.Required {
+			if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
+				schema = nilableSchema.Nilable()
+			}
+		}
+
+		// Apply parsed tag rules
+		return applyParsedTagRules(schema, capturedInfo)
+	})
+
+	return lazySchema
+}
+
+// createSchemaFromTypeWithInfo creates a basic schema based on Go type with field info
+func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.FieldInfo) core.ZodSchema {
+	// Check if coercion is enabled
+	hasCoerce := false
+	for _, rule := range fieldInfo.Rules {
+		if rule.Name == "coerce" {
+			hasCoerce = true
+			break
+		}
+	}
+
+	// Handle pointer types
+	isPointer := fieldType.Kind() == reflect.Ptr
+	if isPointer {
+		fieldType = fieldType.Elem()
+	}
+
+	var schema core.ZodSchema
+	switch fieldType.Kind() {
+	case reflect.String:
+		if hasCoerce {
+			// Use coerced constructors when coerce tag is present
+			if isPointer {
+				schema = CoercedStringPtr()
+			} else {
+				schema = CoercedString()
+			}
+		} else {
+			if isPointer {
+				schema = StringPtr()
+			} else {
+				schema = String()
+			}
+		}
+	case reflect.Int:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedIntPtr()
+			} else {
+				schema = CoercedInt()
+			}
+		} else {
+			if isPointer {
+				// Use pointer constructor for pointer fields
+				// IntPtr() already handles nil values appropriately
+				schema = IntPtr()
+			} else {
+				schema = Int()
+			}
+		}
+	case reflect.Int8:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedInt8Ptr()
+			} else {
+				schema = CoercedInt8()
+			}
+		} else {
+			if isPointer {
+				schema = Int8Ptr()
+			} else {
+				schema = Int8()
+			}
+		}
+	case reflect.Int16:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedInt16Ptr()
+			} else {
+				schema = CoercedInt16()
+			}
+		} else {
+			if isPointer {
+				schema = Int16Ptr()
+			} else {
+				schema = Int16()
+			}
+		}
+	case reflect.Int32:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedInt32Ptr()
+			} else {
+				schema = CoercedInt32()
+			}
+		} else {
+			if isPointer {
+				schema = Int32Ptr()
+			} else {
+				schema = Int32()
+			}
+		}
+	case reflect.Int64:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedInt64Ptr()
+			} else {
+				schema = CoercedInt64()
+			}
+		} else {
+			if isPointer {
+				schema = Int64Ptr()
+			} else {
+				schema = Int64()
+			}
+		}
+	case reflect.Uint:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedUintPtr()
+			} else {
+				schema = CoercedUint()
+			}
+		} else {
+			if isPointer {
+				schema = UintPtr()
+			} else {
+				schema = Uint()
+			}
+		}
+	case reflect.Uint8:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedUint8Ptr()
+			} else {
+				schema = CoercedUint8()
+			}
+		} else {
+			if isPointer {
+				schema = Uint8Ptr()
+			} else {
+				schema = Uint8()
+			}
+		}
+	case reflect.Uint16:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedUint16Ptr()
+			} else {
+				schema = CoercedUint16()
+			}
+		} else {
+			if isPointer {
+				schema = Uint16Ptr()
+			} else {
+				schema = Uint16()
+			}
+		}
+	case reflect.Uint32:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedUint32Ptr()
+			} else {
+				schema = CoercedUint32()
+			}
+		} else {
+			if isPointer {
+				schema = Uint32Ptr()
+			} else {
+				schema = Uint32()
+			}
+		}
+	case reflect.Uint64:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedUint64Ptr()
+			} else {
+				schema = CoercedUint64()
+			}
+		} else {
+			if isPointer {
+				schema = Uint64Ptr()
+			} else {
+				schema = Uint64()
+			}
+		}
+	case reflect.Float32:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedFloat32Ptr()
+			} else {
+				schema = CoercedFloat32()
+			}
+		} else {
+			if isPointer {
+				schema = Float32Ptr()
+			} else {
+				schema = Float32()
+			}
+		}
+	case reflect.Float64:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedFloat64Ptr()
+			} else {
+				schema = CoercedFloat64()
+			}
+		} else {
+			if isPointer {
+				schema = Float64Ptr()
+			} else {
+				schema = Float64()
+			}
+		}
+	case reflect.Bool:
+		if hasCoerce {
+			if isPointer {
+				schema = CoercedBoolPtr()
+			} else {
+				schema = CoercedBool()
+			}
+		} else {
+			if isPointer {
+				schema = BoolPtr()
+			} else {
+				schema = Bool()
+			}
+		}
+	case reflect.Interface:
+		schema = Any()
+	case reflect.Slice, reflect.Array:
+		// Handle slices and arrays
+		elemType := fieldType.Elem()
+		elemSchema := createSchemaFromType(elemType)
+		if elemSchema != nil {
+			if isPointer {
+				// For pointer to slice (*[]T), use SlicePtr
+				schema = createSlicePtrSchema(elemSchema, elemType)
+			} else {
+				// For regular slice ([]T), use Slice
+				schema = createSliceSchema(elemSchema, elemType)
+			}
+		} else {
+			schema = SlicePtr[any](Any())
+		}
+	case reflect.Map:
+		// Handle maps
+		valueType := fieldType.Elem()
+		valueSchema := createSchemaFromType(valueType)
+		if valueSchema != nil {
+			if isPointer {
+				// For pointer to map (*map[K]V), use MapPtr
+				schema = createMapPtrSchema(valueSchema, valueType)
+			} else {
+				// For regular map (map[K]V), use Map
+				schema = createMapSchema(valueSchema, valueType)
+			}
+		} else {
+			schema = MapPtr(String(), Any())
+		}
+	case reflect.Struct:
+		// Handle nested structs (including time.Time)
+		if fieldType == reflect.TypeOf(time.Time{}) {
+			if hasCoerce {
+				if isPointer {
+					schema = CoercedTimePtr()
+				} else {
+					schema = CoercedTime()
+				}
+			} else {
+				if isPointer {
+					if fieldInfo.Required {
+						schema = TimePtr()
+					} else {
+						schema = Time().Nilable()
+					}
+				} else {
+					schema = Time()
+				}
+			}
+		} else {
+			// For other structs, create a nested schema
+			// This should never be reached in the cycle detection path
+			// as createSchemaFromTypeWithCycleDetection handles it
+			schema = createNestedStructSchema(fieldType)
+			if isPointer && schema != nil {
+				// Make nested struct nilable if it's a pointer and not required
+				if !fieldInfo.Required {
+					if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
+						schema = nilableSchema.Nilable()
+					}
+				}
+			}
+		}
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Pointer, reflect.UnsafePointer:
+		// Unsupported types - fallback to Any()
+		schema = Any()
+	default:
+		schema = Any()
+	}
+
+	return schema
+}
+
+// createSchemaFromType creates a basic schema based on Go type
+func createSchemaFromType(fieldType reflect.Type) core.ZodSchema {
+	// This is the original function used by other places
+	// Create a dummy field info that doesn't have required flag
+	dummyFieldInfo := tagparser.FieldInfo{
+		Required: false,
+		Optional: true,
+	}
+	return createSchemaFromTypeWithInfo(fieldType, dummyFieldInfo)
+}
+
+// applyParsedTagRules applies validation rules from parsed tagparser.FieldInfo
+func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) core.ZodSchema {
+	// We'll apply optional at the end, after all other rules
+
+	// Apply each parsed rule
+	for _, rule := range fieldInfo.Rules {
+		// Handle simple rules without parameters
+		switch rule.Name {
+		case "required":
+			// Already handled above
+		case "optional":
+			// Optional is handled at struct level, not individual field level
+		case "coerce":
+			// Coercion is already handled in createSchemaFromTypeWithInfo
+		case "nilable":
+			schema = applyNilableModifier(schema)
+		case "email":
+			// Replace string schema with email schema
+			// But preserve pointer type if it's a pointer schema
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = Email()
+			case *ZodString[*string]:
+				schema = EmailPtr()
+			}
+		case "url":
+			// Replace string schema with URL schema
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = URL()
+			case *ZodString[*string]:
+				schema = URLPtr()
+			}
+		case "uuid":
+			// Replace string schema with UUID schema
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = Uuid()
+			case *ZodString[*string]:
+				schema = UuidPtr()
+			}
+		case "ipv4":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IPv4()
+			case *ZodString[*string]:
+				schema = IPv4Ptr()
+			}
+		case "ipv6":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IPv6()
+			case *ZodString[*string]:
+				schema = IPv6Ptr()
+			}
+		case "cidrv4":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = CIDRv4()
+			case *ZodString[*string]:
+				schema = CIDRv4Ptr()
+			}
+		case "cidrv6":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = CIDRv6()
+			case *ZodString[*string]:
+				schema = CIDRv6Ptr()
+			}
+		case "cuid":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = Cuid()
+			case *ZodString[*string]:
+				schema = CuidPtr()
+			}
+		case "cuid2":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = Cuid2()
+			case *ZodString[*string]:
+				schema = Cuid2Ptr()
+			}
+		case "jwt":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = JWT()
+			case *ZodString[*string]:
+				schema = JWTPtr()
+			}
+		case "iso_datetime":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IsoDateTime()
+			case *ZodString[*string]:
+				schema = IsoDateTimePtr()
+			}
+		case "iso_date":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IsoDate()
+			case *ZodString[*string]:
+				schema = IsoDatePtr()
+			}
+		case "iso_time":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IsoTime()
+			case *ZodString[*string]:
+				schema = IsoTimePtr()
+			}
+		case "iso_duration":
+			switch schema.(type) {
+			case *ZodString[string]:
+				schema = IsoDuration()
+			case *ZodString[*string]:
+				schema = IsoDurationPtr()
+			}
+		case "time":
+			// Special handling for time.Time fields
+			schema = Time()
+		case "positive":
+			schema = applyPositiveModifier(schema)
+		case "negative":
+			schema = applyNegativeModifier(schema)
+		case "finite":
+			if floatSchema, ok := schema.(*ZodFloatTyped[float64, float64]); ok {
+				schema = floatSchema.Finite()
+			}
+			if float32Schema, ok := schema.(*ZodFloatTyped[float32, float32]); ok {
+				schema = float32Schema.Finite()
+			}
+		case "nonempty":
+			if stringSchema, ok := schema.(*ZodString[string]); ok {
+				schema = stringSchema.Min(1)
+			} else if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
+				schema = sliceSchema.Min(1)
+			} else if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
+				schema = sliceIntSchema.Min(1)
+			} else if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
+				schema = sliceAnySchema.Min(1)
+			} else if mapStrSchema, ok := schema.(*ZodMap[map[string]string, map[string]string]); ok {
+				schema = mapStrSchema.Min(1)
+			} else if mapIntSchema, ok := schema.(*ZodMap[map[string]int, map[string]int]); ok {
+				schema = mapIntSchema.Min(1)
+			} else if mapAnySchema, ok := schema.(*ZodMap[map[string]any, map[string]any]); ok {
+				schema = mapAnySchema.Min(1)
+			}
+		case "enum":
+			// Handle enum with all parameters
+			if len(rule.Params) > 0 {
+				schema = applyEnumConstraint(schema, rule.Params)
+			}
+		case "literal":
+			// Handle literal with single parameter
+			if len(rule.Params) > 0 {
+				schema = applyLiteralConstraint(schema, rule.Params[0])
+			}
+		case "default":
+			// Handle default values
+			if len(rule.Params) > 0 {
+				schema = applyDefaultValue(schema, rule.Params[0])
+			}
+		case "prefault":
+			// Handle prefault values
+			if len(rule.Params) > 0 {
+				schema = applyPrefaultValue(schema, rule.Params[0])
+			}
+		default:
+			// Try to handle as custom validator first
+			if customSchema := tryApplyCustomValidator(schema, rule.Name, rule.Params); customSchema != nil {
+				schema = customSchema
+			} else if len(rule.Params) > 0 && rule.Name != "enum" && rule.Name != "literal" {
+				// Handle parameterized rules (pass only first parameter)
+				schema = applyParameterizedRule(schema, rule.Name, rule.Params[0])
+			}
+		}
+	}
+
+	// Apply optional/required for pointer fields AFTER all other rules
+	if fieldInfo.Type.Kind() == reflect.Ptr {
+		if !fieldInfo.Required {
+			// Make pointer fields optional (accept nil) unless marked as required
+			// Use type switch to handle each schema type's Optional() method
+			schema = applyOptionalToSchema(schema)
+		}
+		// If required, leave as is - pointer constructors by default don't accept nil for Parse
+	}
+
+	return schema
+}
+
+// applyNilableModifier applies nilable modifier to compatible schema types
+func applyNilableModifier(schema core.ZodSchema) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Nilable()
+	case *ZodIntegerTyped[int, int]:
+		return s.Nilable()
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Nilable()
+	case *ZodFloatTyped[float64, float64]:
+		return s.Nilable()
+	case *ZodFloatTyped[float32, float32]:
+		return s.Nilable()
+	case *ZodBool[bool]:
+		return s.Nilable()
+	default:
+		// Try generic interface approach
+		if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
+			return nilableSchema.Nilable()
+		}
+	}
+	return schema
+}
+
+// applyPositiveModifier applies positive constraint to numeric types
+func applyPositiveModifier(schema core.ZodSchema) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Positive()
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Positive()
+	case *ZodFloatTyped[float64, float64]:
+		return s.Positive()
+	case *ZodFloatTyped[float32, float32]:
+		return s.Positive()
+	}
+	return schema
+}
+
+// applyNegativeModifier applies negative constraint to numeric types
+func applyNegativeModifier(schema core.ZodSchema) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Negative()
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Negative()
+	case *ZodFloatTyped[float64, float64]:
+		return s.Negative()
+	case *ZodFloatTyped[float32, float32]:
+		return s.Negative()
+	}
+	return schema
+}
+
+// applyParameterizedRule applies rules that have parameters
+func applyParameterizedRule(schema core.ZodSchema, ruleName, param string) core.ZodSchema {
+	switch ruleName {
+	case "min":
+		if value, err := strconv.Atoi(param); err == nil {
+			schema = applyMinConstraint(schema, value)
+		}
+	case "max":
+		if value, err := strconv.Atoi(param); err == nil {
+			schema = applyMaxConstraint(schema, value)
+		}
+	case "length":
+		if value, err := strconv.Atoi(param); err == nil {
+			if stringSchema, ok := schema.(*ZodString[string]); ok {
+				schema = stringSchema.Length(value)
+			} else if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
+				schema = sliceSchema.Length(value)
+			} else if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
+				schema = sliceIntSchema.Length(value)
+			} else if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
+				schema = sliceAnySchema.Length(value)
+			}
+		}
+	case "gt":
+		if value, err := strconv.ParseFloat(param, 64); err == nil {
+			schema = applyGtConstraint(schema, value)
+		}
+	case "gte":
+		if value, err := strconv.ParseFloat(param, 64); err == nil {
+			schema = applyGteConstraint(schema, value)
+		}
+	case "lt":
+		if value, err := strconv.ParseFloat(param, 64); err == nil {
+			schema = applyLtConstraint(schema, value)
+		}
+	case "lte":
+		if value, err := strconv.ParseFloat(param, 64); err == nil {
+			schema = applyLteConstraint(schema, value)
+		}
+	case "regex":
+		if stringSchema, ok := schema.(*ZodString[string]); ok {
+			schema = stringSchema.RegexString(param)
+		}
+	case "includes":
+		if stringSchema, ok := schema.(*ZodString[string]); ok {
+			schema = stringSchema.Includes(param)
+		}
+	case "startswith":
+		if stringSchema, ok := schema.(*ZodString[string]); ok {
+			schema = stringSchema.StartsWith(param)
+		}
+	case "endswith":
+		if stringSchema, ok := schema.(*ZodString[string]); ok {
+			schema = stringSchema.EndsWith(param)
+		}
+	case "default":
+		schema = applyDefaultValue(schema, param)
+	case "prefault":
+		schema = applyPrefaultValue(schema, param)
+	case "multipleof":
+		if value, err := strconv.ParseFloat(param, 64); err == nil {
+			schema = applyMultipleOfConstraint(schema, value)
+		}
+	}
+
+	return schema
+}
+
+// Helper functions for applying constraints
+func applyMinConstraint(schema core.ZodSchema, value int) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Min(value)
+	case *ZodIntegerTyped[int, int]:
+		return s.Min(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Min(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Min(float64(value))
+	case *ZodFloatTyped[float32, float32]:
+		return s.Min(float64(value))
+	case *ZodSlice[string, []string]:
+		return s.Min(value)
+	case *ZodSlice[int, []int]:
+		return s.Min(value)
+	case *ZodSlice[any, []any]:
+		return s.Min(value)
+	case *ZodMap[map[string]string, map[string]string]:
+		return s.Min(value)
+	case *ZodMap[map[string]int, map[string]int]:
+		return s.Min(value)
+	case *ZodMap[map[string]any, map[string]any]:
+		return s.Min(value)
+	}
+	return schema
+}
+
+func applyMaxConstraint(schema core.ZodSchema, value int) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Max(value)
+	case *ZodIntegerTyped[int, int]:
+		return s.Max(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Max(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Max(float64(value))
+	case *ZodFloatTyped[float32, float32]:
+		return s.Max(float64(value))
+	case *ZodSlice[string, []string]:
+		return s.Max(value)
+	case *ZodSlice[int, []int]:
+		return s.Max(value)
+	case *ZodSlice[any, []any]:
+		return s.Max(value)
+	case *ZodMap[map[string]string, map[string]string]:
+		return s.Max(value)
+	case *ZodMap[map[string]int, map[string]int]:
+		return s.Max(value)
+	case *ZodMap[map[string]any, map[string]any]:
+		return s.Max(value)
+	}
+	return schema
+}
+
+func applyGtConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Gt(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Gt(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Gt(value)
+	case *ZodFloatTyped[float32, float32]:
+		return s.Gt(value)
+	}
+	return schema
+}
+
+func applyGteConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Gte(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Gte(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Gte(value)
+	case *ZodFloatTyped[float32, float32]:
+		return s.Gte(value)
+	}
+	return schema
+}
+
+func applyLtConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Lt(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Lt(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Lt(value)
+	case *ZodFloatTyped[float32, float32]:
+		return s.Lt(value)
+	}
+	return schema
+}
+
+func applyLteConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.Lte(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Lte(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.Lte(value)
+	case *ZodFloatTyped[float32, float32]:
+		return s.Lte(value)
+	}
+	return schema
+}
+
+func applyEnumConstraint(schema core.ZodSchema, values []string) core.ZodSchema {
+	// For enums, we need to replace the schema with an enum schema
+	switch schema.(type) {
+	case *ZodString[string]:
+		return EnumSlice(values)
+	case *ZodIntegerTyped[int, int]:
+		// Try to parse as integers
+		intValues := make([]int, 0, len(values))
+		for _, v := range values {
+			if intVal, err := strconv.Atoi(v); err == nil {
+				intValues = append(intValues, intVal)
+			}
+		}
+		if len(intValues) > 0 {
+			return EnumSlice(intValues)
+		}
+	}
+	return schema
+}
+
+func applyLiteralConstraint(schema core.ZodSchema, value string) core.ZodSchema {
+	// For literals, replace with a literal schema
+	switch schema.(type) {
+	case *ZodString[string]:
+		return Literal(value)
+	case *ZodIntegerTyped[int, int]:
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return Literal(intVal)
+		}
+	case *ZodBool[bool]:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return Literal(boolVal)
+		}
+	}
+	return schema
+}
+
+func applyMultipleOfConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodIntegerTyped[int, int]:
+		return s.MultipleOf(int64(value))
+	case *ZodIntegerTyped[int64, int64]:
+		return s.MultipleOf(int64(value))
+	case *ZodFloatTyped[float64, float64]:
+		return s.MultipleOf(value)
+	case *ZodFloatTyped[float32, float32]:
+		return s.MultipleOf(value)
+	}
+	return schema
+}
+
+func applyDefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Default(value)
+	case *ZodString[*string]:
+		return s.Default(value)
+	case *ZodIntegerTyped[int, int]:
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[int, *int]:
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[int8, int8]:
+		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int8, *int8]:
+		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int16, int16]:
+		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int16, *int16]:
+		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int32, int32]:
+		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int32, *int32]:
+		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int64, int64]:
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[int64, *int64]:
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return s.Default(intVal)
+		}
+	case *ZodIntegerTyped[uint, uint]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Default(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint, *uint]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Default(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint8, uint8]:
+		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint8, *uint8]:
+		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint16, uint16]:
+		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint16, *uint16]:
+		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint32, uint32]:
+		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint32, *uint32]:
+		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
+			return s.Default(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint64, uint64]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Default(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint64, *uint64]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Default(int64(intVal))
+			}
+		}
+	case *ZodFloatTyped[float64, float64]:
+		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+			return s.Default(floatVal)
+		}
+	case *ZodFloatTyped[float64, *float64]:
+		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+			return s.Default(floatVal)
+		}
+	case *ZodFloatTyped[float32, float32]:
+		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
+			return s.Default(floatVal)
+		}
+	case *ZodFloatTyped[float32, *float32]:
+		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
+			return s.Default(floatVal)
+		}
+	case *ZodBool[bool]:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return s.Default(boolVal)
+		}
+	case *ZodBool[*bool]:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return s.Default(boolVal)
+		}
+	case *ZodSlice[string, []string]:
+		// Parse array-like default value: ['val1','val2'] or ["val1","val2"]
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			// Convert interface{} slice to string slice
+			stringArray := make([]string, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				if str, ok := item.(string); ok {
+					stringArray = append(stringArray, str)
+				}
+			}
+			if len(stringArray) > 0 {
+				return s.Default(stringArray)
+			}
+		}
+	case *ZodSlice[int, []int]:
+		// Parse array of integers
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			intArray := make([]int, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case float64: // JSON numbers are float64
+					intArray = append(intArray, int(v))
+				case int:
+					intArray = append(intArray, v)
+				case string:
+					if intVal, err := strconv.Atoi(v); err == nil {
+						intArray = append(intArray, intVal)
+					}
+				}
+			}
+			if len(intArray) > 0 {
+				return s.Default(intArray)
+			}
+		}
+	case *ZodSlice[float64, []float64]:
+		// Parse array of floats
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			floatArray := make([]float64, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case float64:
+					floatArray = append(floatArray, v)
+				case int:
+					floatArray = append(floatArray, float64(v))
+				case string:
+					if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
+						floatArray = append(floatArray, floatVal)
+					}
+				}
+			}
+			if len(floatArray) > 0 {
+				return s.Default(floatArray)
+			}
+		}
+	case *ZodSlice[bool, []bool]:
+		// Parse array of booleans
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			boolArray := make([]bool, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case bool:
+					boolArray = append(boolArray, v)
+				case string:
+					if boolVal, err := strconv.ParseBool(v); err == nil {
+						boolArray = append(boolArray, boolVal)
+					}
+				}
+			}
+			if len(boolArray) > 0 {
+				return s.Default(boolArray)
+			}
+		}
+	case *ZodMap[map[string]string, map[string]string]:
+		// Parse map-like default value: {"key":"val"}
+		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
+			// Convert interface{} map to string map
+			stringMap := make(map[string]string)
+			for k, v := range defaultMap {
+				if str, ok := v.(string); ok {
+					stringMap[k] = str
+				}
+			}
+			if len(stringMap) > 0 {
+				return s.Default(stringMap)
+			}
+		}
+	case *ZodMap[map[string]interface{}, map[string]interface{}]:
+		// Parse map with any values: {"key":"val", "count":42}
+		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
+			return s.Default(defaultMap)
+		}
+
+	// Pointer slice types
+	case *ZodSlice[string, *[]string]:
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			stringArray := make([]string, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				if str, ok := item.(string); ok {
+					stringArray = append(stringArray, str)
+				}
+			}
+			if len(stringArray) > 0 {
+				return s.Default(stringArray)
+			}
+		}
+	case *ZodSlice[int, *[]int]:
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			intArray := make([]int, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case float64:
+					intArray = append(intArray, int(v))
+				case int:
+					intArray = append(intArray, v)
+				case string:
+					if intVal, err := strconv.Atoi(v); err == nil {
+						intArray = append(intArray, intVal)
+					}
+				}
+			}
+			if len(intArray) > 0 {
+				return s.Default(intArray)
+			}
+		}
+	case *ZodSlice[float64, *[]float64]:
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			floatArray := make([]float64, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case float64:
+					floatArray = append(floatArray, v)
+				case int:
+					floatArray = append(floatArray, float64(v))
+				case string:
+					if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
+						floatArray = append(floatArray, floatVal)
+					}
+				}
+			}
+			if len(floatArray) > 0 {
+				return s.Default(floatArray)
+			}
+		}
+	case *ZodSlice[bool, *[]bool]:
+		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
+			boolArray := make([]bool, 0, len(defaultArray))
+			for _, item := range defaultArray {
+				switch v := item.(type) {
+				case bool:
+					boolArray = append(boolArray, v)
+				case string:
+					if boolVal, err := strconv.ParseBool(v); err == nil {
+						boolArray = append(boolArray, boolVal)
+					}
+				}
+			}
+			if len(boolArray) > 0 {
+				return s.Default(boolArray)
+			}
+		}
+
+	// Pointer map types
+	case *ZodMap[map[string]string, *map[string]string]:
+		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
+			stringMap := make(map[string]string)
+			for k, v := range defaultMap {
+				if str, ok := v.(string); ok {
+					stringMap[k] = str
+				}
+			}
+			if len(stringMap) > 0 {
+				return s.Default(stringMap)
+			}
+		}
+	case *ZodMap[map[string]interface{}, *map[string]interface{}]:
+		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
+			return s.Default(defaultMap)
+		}
+
+	// Record types for map[string]interface{} fields
+	case *ZodRecord[map[string]interface{}, *map[string]interface{}]:
+		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
+			return s.Default(defaultMap)
+		}
+	}
+	return schema
+}
+
+// Helper function to parse array-like default values
+func parseArrayDefault(value string) []interface{} {
+	// Handle both ['val1','val2'] and JSON array format
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
+		return nil
+	}
+
+	// Try JSON parsing first for complex arrays
+	var jsonResult []interface{}
+	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
+		return jsonResult
+	}
+
+	// Fallback to simple parsing for backward compatibility
+	value = value[1 : len(value)-1] // Remove brackets
+	if value == "" {
+		return []interface{}{}
+	}
+
+	// Parse comma-separated values
+	var result []interface{}
+	var current strings.Builder
+	inQuote := false
+	quoteChar := rune(0)
+
+	for _, char := range value {
+		switch {
+		case char == '\'' || char == '"':
+			if !inQuote {
+				inQuote = true
+				quoteChar = char
+			} else if char == quoteChar {
+				inQuote = false
+				quoteChar = 0
+			} else {
+				current.WriteRune(char)
+			}
+		case char == ',' && !inQuote:
+			if str := strings.TrimSpace(current.String()); str != "" {
+				result = append(result, str)
+			}
+			current.Reset()
+		default:
+			if inQuote || !unicode.IsSpace(char) {
+				current.WriteRune(char)
+			}
+		}
+	}
+
+	// Add final value
+	if str := strings.TrimSpace(current.String()); str != "" {
+		result = append(result, str)
+	}
+
+	return result
+}
+
+// Helper function to parse map-like default values
+func parseMapDefault(value string) map[string]interface{} {
+	// Handle JSON object format: {"key":"value","count":42}
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
+		return nil
+	}
+
+	// Try to parse as JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(value), &result); err != nil {
+		// If JSON parsing fails, return empty map
+		return make(map[string]interface{})
+	}
+
+	return result
+}
+
+// Helper function to create slice schema based on element type
+func createSliceSchema(elemSchema core.ZodSchema, elemType reflect.Type) core.ZodSchema {
+	// Create appropriate slice schema based on element type
+	switch elemType.Kind() {
+	case reflect.String:
+		return Slice[string](elemSchema)
+	case reflect.Int:
+		return Slice[int](elemSchema)
+	case reflect.Int64:
+		return Slice[int64](elemSchema)
+	case reflect.Float64:
+		return Slice[float64](elemSchema)
+	case reflect.Bool:
+		return Slice[bool](elemSchema)
+	case reflect.Invalid, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
+		reflect.Struct, reflect.UnsafePointer:
+		return SlicePtr[any](elemSchema)
+	}
+	return SlicePtr[any](elemSchema) // Default fallback
+}
+
+// Helper function to create pointer slice schema based on element type
+func createSlicePtrSchema(elemSchema core.ZodSchema, elemType reflect.Type) core.ZodSchema {
+	// Create appropriate slice pointer schema based on element type
+	switch elemType.Kind() {
+	case reflect.String:
+		return SlicePtr[string](elemSchema)
+	case reflect.Int:
+		return SlicePtr[int](elemSchema)
+	case reflect.Int64:
+		return SlicePtr[int64](elemSchema)
+	case reflect.Float64:
+		return SlicePtr[float64](elemSchema)
+	case reflect.Bool:
+		return SlicePtr[bool](elemSchema)
+	case reflect.Invalid, reflect.Int8, reflect.Int16, reflect.Int32,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
+		reflect.Struct, reflect.UnsafePointer:
+		return SlicePtr[any](elemSchema)
+	}
+	return SlicePtr[any](elemSchema) // Default fallback
+}
+
+// Helper function to create map schema based on value type
+func createMapSchema(valueSchema core.ZodSchema, valueType reflect.Type) core.ZodSchema {
+	// Maps in Go always have string keys for JSON unmarshaling
+	switch valueType.Kind() {
+	case reflect.String:
+		return Map(String(), valueSchema)
+	case reflect.Int:
+		return Map(String(), valueSchema)
+	case reflect.Interface:
+		return Map(String(), Any())
+	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
+		reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
+		reflect.Struct, reflect.UnsafePointer:
+		return Map(String(), valueSchema)
+	}
+	return Map(String(), valueSchema) // Default fallback
+}
+
+// Helper function to create pointer map schema based on value type
+func createMapPtrSchema(valueSchema core.ZodSchema, valueType reflect.Type) core.ZodSchema {
+	// Maps in Go always have string keys for JSON unmarshaling
+	switch valueType.Kind() {
+	case reflect.String:
+		return MapPtr(String(), valueSchema)
+	case reflect.Int:
+		return MapPtr(String(), valueSchema)
+	case reflect.Interface:
+		// For interface{} values, use Record instead of Map for better type compatibility
+		// Record uses map[string]any internally which matches Go's map[string]interface{}
+		return RecordTyped[map[string]interface{}, *map[string]interface{}](String(), Any())
+	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
+		reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
+		reflect.Struct, reflect.UnsafePointer:
+		return MapPtr(String(), valueSchema)
+	}
+	return MapPtr(String(), valueSchema) // Default fallback
+}
+
+// Helper function to create nested struct schema
+func createNestedStructSchema(structType reflect.Type) core.ZodSchema {
+	// Check if struct has any gozod tags
+	if hasGozodTags(structType) {
+		// Parse nested struct tags recursively
+		fieldSchemas := parseStructTagsToSchemas(structType)
+		if len(fieldSchemas) > 0 {
+			return Object(fieldSchemas)
+		}
+	}
+	// For structs without tags, use Any() for now
+	return Any()
+}
+
+// tryApplyCustomValidator attempts to apply a custom validator from the registry
+func tryApplyCustomValidator(schema core.ZodSchema, ruleName string, params []string) core.ZodSchema {
+	// Try different type-specific validator lookups based on schema type
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		// Look for string validators
+		if validator, exists := validators.Get[string](ruleName); exists {
+			if len(params) > 0 {
+				// Check if it's a parameterized validator
+				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[string]); ok {
+					// Create a refined schema with parameterized validation
+					return s.Refine(func(val string) bool {
+						return paramValidator.ValidateParam(val, params[0])
+					})
+				}
+			}
+			// Apply basic validator without parameters
+			return s.Refine(validators.ToRefineFn(validator))
+		}
+
+	case *ZodIntegerTyped[int, int]:
+		// Look for int validators
+		if validator, exists := validators.Get[int](ruleName); exists {
+			if len(params) > 0 {
+				// Check if it's a parameterized validator
+				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[int]); ok {
+					// Create a refined schema with parameterized validation
+					return s.Refine(func(val int) bool {
+						return paramValidator.ValidateParam(val, params[0])
+					})
+				}
+			}
+			// Apply basic validator without parameters
+			return s.Refine(validators.ToRefineFn(validator))
+		}
+
+	case *ZodIntegerTyped[int64, int64]:
+		// Look for int64 validators by trying int validators
+		if validator, exists := validators.Get[int](ruleName); exists {
+			if len(params) > 0 {
+				// Check if it's a parameterized validator
+				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[int]); ok {
+					// Create a refined schema with parameterized validation
+					return s.Refine(func(val int64) bool {
+						return paramValidator.ValidateParam(int(val), params[0])
+					})
+				}
+			}
+			// Apply basic validator without parameters
+			return s.Refine(func(val int64) bool {
+				return validator.Validate(int(val))
+			})
+		}
+	}
+
+	// Custom validator not found or not applicable
+	return nil
+}
+
+// applyOptionalToSchema applies the Optional() method to the schema using a type switch
+// This handles the type compatibility issue where each schema's Optional() method returns its specific type
+// Optional() makes schemas accept nil values - it doesn't change the output type for pointer schemas
+func applyOptionalToSchema(schema core.ZodSchema) core.ZodSchema {
+	switch s := schema.(type) {
+	// String types
+	case *ZodString[string]:
+		return s.Optional() // Converts to *ZodString[*string] that accepts nil
+	case *ZodString[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodString[*string]
+	case *ZodEmail[string]:
+		return s.Optional() // Converts to *ZodEmail[*string] that accepts nil
+	case *ZodEmail[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodEmail[*string]
+	case *ZodURL[string]:
+		return s.Optional() // Converts to *ZodURL[*string] that accepts nil
+	case *ZodURL[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodURL[*string]
+	case *ZodIPv4[string]:
+		return s.Optional() // Converts to *ZodIPv4[*string] that accepts nil
+	case *ZodIPv4[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodIPv4[*string]
+	case *ZodIPv6[string]:
+		return s.Optional() // Converts to *ZodIPv6[*string] that accepts nil
+	case *ZodIPv6[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodIPv6[*string]
+	case *ZodCIDRv4[string]:
+		return s.Optional() // Converts to *ZodCIDRv4[*string] that accepts nil
+	case *ZodCIDRv4[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodCIDRv4[*string]
+	case *ZodCIDRv6[string]:
+		return s.Optional() // Converts to *ZodCIDRv6[*string] that accepts nil
+	case *ZodCIDRv6[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodCIDRv6[*string]
+	case *ZodIso[string]:
+		return s.Optional() // Converts to *ZodIso[*string] that accepts nil
+	case *ZodIso[*string]:
+		return s.Optional() // Makes it accept nil, still returns *ZodIso[*string]
+
+	// Numeric types
+	case *ZodIntegerTyped[int, int]:
+		return s.Optional()
+	case *ZodIntegerTyped[int, *int]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[int8, int8]:
+		return s.Optional()
+	case *ZodIntegerTyped[int8, *int8]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[int16, int16]:
+		return s.Optional()
+	case *ZodIntegerTyped[int16, *int16]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[int32, int32]:
+		return s.Optional()
+	case *ZodIntegerTyped[int32, *int32]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[int64, int64]:
+		return s.Optional()
+	case *ZodIntegerTyped[int64, *int64]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[uint, uint]:
+		return s.Optional()
+	case *ZodIntegerTyped[uint, *uint]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[uint8, uint8]:
+		return s.Optional()
+	case *ZodIntegerTyped[uint8, *uint8]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[uint16, uint16]:
+		return s.Optional()
+	case *ZodIntegerTyped[uint16, *uint16]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[uint32, uint32]:
+		return s.Optional()
+	case *ZodIntegerTyped[uint32, *uint32]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntegerTyped[uint64, uint64]:
+		return s.Optional()
+	case *ZodIntegerTyped[uint64, *uint64]:
+		return s.Optional() // Makes it accept nil
+
+	// Float types
+	case *ZodFloatTyped[float32, float32]:
+		return s.Optional()
+	case *ZodFloatTyped[float32, *float32]:
+		return s.Optional() // Makes it accept nil
+	case *ZodFloatTyped[float64, float64]:
+		return s.Optional()
+	case *ZodFloatTyped[float64, *float64]:
+		return s.Optional() // Makes it accept nil
+
+	// Other primitive types
+	case *ZodBool[bool]:
+		return s.Optional()
+	case *ZodBool[*bool]:
+		return s.Optional() // Makes it accept nil
+	case *ZodTime[time.Time]:
+		return s.Optional()
+	case *ZodTime[*time.Time]:
+		return s.Optional() // Makes it accept nil
+	case *ZodBigInt[*big.Int]:
+		return s.Optional()
+	case *ZodBigInt[**big.Int]:
+		return s.Optional() // Makes it accept nil
+	case *ZodComplex[complex64]:
+		return s.Optional()
+	case *ZodComplex[complex128]:
+		return s.Optional()
+	case *ZodComplex[*complex64]:
+		return s.Optional() // Makes it accept nil
+	case *ZodComplex[*complex128]:
+		return s.Optional() // Makes it accept nil
+	case *ZodStringBool[bool]:
+		return s.Optional()
+	case *ZodStringBool[*bool]:
+		return s.Optional() // Makes it accept nil
+
+	// Collection types
+	case *ZodSlice[any, []any]:
+		return s.Optional()
+	case *ZodSlice[any, *[]any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodArray[any, any]:
+		return s.Optional()
+	case *ZodArray[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodMap[any, any]:
+		return s.Optional()
+	case *ZodMap[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodRecord[any, any]:
+		return s.Optional()
+	case *ZodRecord[any, *any]:
+		return s.Optional() // Makes it accept nil
+
+	// Object/Struct types
+	case *ZodObject[any, any]:
+		return s.Optional()
+	case *ZodObject[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodStruct[any, any]:
+		return s.Optional()
+	case *ZodStruct[any, *any]:
+		return s.Optional() // Makes it accept nil
+
+	// Composite types
+	case *ZodUnion[any, any]:
+		return s.Optional()
+	case *ZodUnion[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodIntersection[any, any]:
+		return s.Optional()
+	case *ZodIntersection[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodDiscriminatedUnion[any, any]:
+		return s.Optional()
+	case *ZodDiscriminatedUnion[any, *any]:
+		return s.Optional() // Makes it accept nil
+
+	// Other types
+	case *ZodEnum[any, any]:
+		return s.Optional()
+	case *ZodEnum[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodLiteral[any, any]:
+		return s.Optional()
+	case *ZodLiteral[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodAny[any, any]:
+		return s.Optional()
+	case *ZodAny[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodUnknown[any, any]:
+		return s.Optional()
+	case *ZodUnknown[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodNever[any, any]:
+		return s.Optional()
+	case *ZodNever[any, *any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodNil[any]:
+		return s.Optional()
+	case *ZodNil[*any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodLazy[any]:
+		return s.Optional()
+	case *ZodLazy[*any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodFunction[any]:
+		return s.Optional()
+	case *ZodFunction[*any]:
+		return s.Optional() // Makes it accept nil
+	case *ZodFile[any, any]:
+		return s.Optional()
+	case *ZodFile[any, *any]:
+		return s.Optional() // Makes it accept nil
+
+	default:
+		// For any unknown types, return as-is
+		// This ensures we don't break on custom schemas
+		return s
+	}
+}
+
+// applyPrefaultValue applies prefault values to schema types (pre-parse default with full validation)
+func applyPrefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Prefault(value)
+	case *ZodString[*string]:
+		return s.Prefault(value)
+	case *ZodIntegerTyped[int, int]:
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[int, *int]:
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[int8, int8]:
+		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int8, *int8]:
+		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int16, int16]:
+		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int16, *int16]:
+		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int32, int32]:
+		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int32, *int32]:
+		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int64, int64]:
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[int64, *int64]:
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return s.Prefault(intVal)
+		}
+	case *ZodIntegerTyped[uint, uint]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Prefault(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint, *uint]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Prefault(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint8, uint8]:
+		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint8, *uint8]:
+		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint16, uint16]:
+		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint16, *uint16]:
+		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint32, uint32]:
+		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint32, *uint32]:
+		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
+			return s.Prefault(int64(intVal))
+		}
+	case *ZodIntegerTyped[uint64, uint64]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Prefault(int64(intVal))
+			}
+		}
+	case *ZodIntegerTyped[uint64, *uint64]:
+		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if intVal <= 9223372036854775807 { // max int64 value
+				return s.Prefault(int64(intVal))
+			}
+		}
+	case *ZodFloatTyped[float64, float64]:
+		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+			return s.Prefault(floatVal)
+		}
+	case *ZodFloatTyped[float64, *float64]:
+		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
+			return s.Prefault(floatVal)
+		}
+	case *ZodFloatTyped[float32, float32]:
+		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
+			return s.Prefault(floatVal)
+		}
+	case *ZodFloatTyped[float32, *float32]:
+		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
+			return s.Prefault(floatVal)
+		}
+	case *ZodBool[bool]:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return s.Prefault(boolVal)
+		}
+	case *ZodBool[*bool]:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return s.Prefault(boolVal)
+		}
+	case *ZodSlice[string, []string]:
+		// Parse array-like prefault value: ['val1','val2'] or ["val1","val2"]
+		if prefaultArray := parseArrayDefault(value); len(prefaultArray) > 0 {
+			// Convert interface{} slice to string slice
+			stringArray := make([]string, 0, len(prefaultArray))
+			for _, item := range prefaultArray {
+				if str, ok := item.(string); ok {
+					stringArray = append(stringArray, str)
+				}
+			}
+			if len(stringArray) > 0 {
+				return s.Prefault(stringArray)
+			}
+		}
+	case *ZodSlice[int, []int]:
+		// Parse array of integers
+		if prefaultArray := parseArrayDefault(value); len(prefaultArray) > 0 {
+			intArray := make([]int, 0, len(prefaultArray))
+			for _, item := range prefaultArray {
+				switch v := item.(type) {
+				case float64: // JSON numbers are float64
+					intArray = append(intArray, int(v))
+				case int:
+					intArray = append(intArray, v)
+				case string:
+					if intVal, err := strconv.Atoi(v); err == nil {
+						intArray = append(intArray, intVal)
+					}
+				}
+			}
+			if len(intArray) > 0 {
+				return s.Prefault(intArray)
+			}
+		}
+	case *ZodMap[map[string]string, map[string]string]:
+		// Parse map-like prefault value: {"key":"val"}
+		if prefaultMap := parseMapDefault(value); len(prefaultMap) > 0 {
+			// Convert interface{} map to string map
+			stringMap := make(map[string]string)
+			for k, v := range prefaultMap {
+				if str, ok := v.(string); ok {
+					stringMap[k] = str
+				}
+			}
+			if len(stringMap) > 0 {
+				return s.Prefault(stringMap)
+			}
+		}
+	}
+	return schema
 }
