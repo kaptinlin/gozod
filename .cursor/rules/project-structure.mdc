@@ -32,7 +32,7 @@ go module gozod
 ├── locales/     # Built-in i18n bundles
 ├── pkg/         # Re-usable, reflection-free helpers (zero deps)
 ├── types/       # Public schema implementations (String, Array, …)
-└─  validators/  # Custom validator system (registry, interfaces, converters)
+└── validators/  # Custom validator system (registry, interfaces, converters)
 ```
 
 ### 2.1 One-Way Dependency Rule
@@ -48,6 +48,8 @@ graph TD;
   types --> locales;
   coerce --> types;
   coerce --> internal;
+  validators --> core;
+  validators --> internal;
 ```
 
 *`types`* never import each other; all cross-type logic lives in *internal*, *pkg*, or *coerce*.
@@ -137,7 +139,6 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `slicex`    | Generic slice helpers (merge, unique, map) |
 | `structx`   | Struct ⇄ map conversion without `encoding/json` |
 | `regexes`   | Pre-compiled, namespaced regex library |
-| `validators` | Custom validator system (registry, interfaces, converters) |
 | `tagparser` | Struct tag parsing and schema generation |
 
 ### 3.8 `internal/` – Runtime Engine (🤫 private)
@@ -191,6 +192,44 @@ Tiny, zero-dep bundles of translated error messages:
 | `zh_cn.go` | Simplified Chinese error messages |
 
 New languages implement the `Locale` interface and register themselves in `locales.go`.
+
+### 3.11 `validators/` – Custom Validator System
+
+Thread-safe registry-based custom validator system for user-defined validation:
+
+| File | Purpose |
+|------|---------|
+| `types.go` | Validator interfaces (`ZodValidator`, `ZodParameterizedValidator`, `ZodDetailedValidator`) |
+| `registry.go` | Thread-safe validator registry with type-safe registration and retrieval |
+| `converters.go` | Functions to convert validators to GoZod check functions |
+| `init.go` | Empty placeholder for user-defined validator registration |
+
+#### Key Features
+
+- **Type-Safe Registry**: Generic methods maintain type safety during registration and retrieval
+- **Multiple Validator Types**: Basic, parameterized, and detailed validators for different complexity levels
+- **Seamless Integration**: Works with both struct tags (`gozod:"custom_validator"`) and programmatic APIs
+- **Thread-Safe Operations**: Concurrent validator registration and usage supported
+- **Converter Functions**: Transform validators into GoZod-compatible check functions
+
+#### Usage Pattern
+
+```go
+// 1. Users implement validators in their application code
+type UniqueUsernameValidator struct{}
+func (v *UniqueUsernameValidator) Name() string { return "unique_username" }
+func (v *UniqueUsernameValidator) Validate(value string) bool { /* logic */ }
+func (v *UniqueUsernameValidator) ErrorMessage(ctx *core.ParseContext) string { /* message */ }
+
+// 2. Register validators using the registry
+validators.Register(&UniqueUsernameValidator{})
+
+// 3. Use in struct tags or programmatically
+type User struct {
+    Username string `gozod:"required,unique_username"`
+}
+schema := gozod.String().Check("unique_username", validators.ToCheckFn(validator))
+```
 
 ---
 

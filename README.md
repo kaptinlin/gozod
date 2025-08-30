@@ -139,7 +139,7 @@ func main() {
     }
 
     // Struct with field validation
-    userSchema := gozod.Struct[User](gozod.Fields{
+    userSchema := gozod.Struct[User](gozod.StructSchema{
         "name":  gozod.String().Min(2).Max(50),
         "age":   gozod.Int().Min(0).Max(120),
         "email": gozod.String().Email(),
@@ -342,7 +342,7 @@ gozod.Map(gozod.String()) // map[string]string
 gozod.Map(gozod.Struct[User]()) // map[string]User
 
 // Objects (map[string]any)
-gozod.Object(gozod.Fields{
+gozod.Object(gozod.ObjectSchema{
     "name": gozod.String().Min(2),
     "age":  gozod.Int().Min(0),
 })
@@ -361,7 +361,7 @@ stringToInt := gozod.String().Regex(`^\d+$`).Transform(
 // Lazy types for recursive structures
 var nodeSchema gozod.ZodType[Node]
 nodeSchema = gozod.Lazy(func() gozod.ZodType[Node] {
-    return gozod.Struct[Node](gozod.Fields{
+    return gozod.Struct[Node](gozod.StructSchema{
         "value":    gozod.String(),
         "children": gozod.Array(nodeSchema), // Self-reference
     })

@@ -89,6 +89,7 @@ This document defines comprehensive coding standards and best practices for the 
 | `.catch(value)` | `.Prefault(value)` | Goes through full validation pipeline |
 | - | `.DefaultFunc(func)` | **Go enhancement**: Function-based defaults |
 | - | `.PrefaultFunc(func)` | **Go enhancement**: Function-based prefaults |
+| - | `.Meta(metadata)` | **Go enhancement**: Schema metadata attachment |
 
 ### Validation Method Mapping
 
@@ -351,7 +352,7 @@ structPtrSchema := gozod.StructPtr[T]() // Only accepts *T
 optionalSchema := gozod.String().Optional()  // Flexible input, *string output
 ```
 
-### 3. Copy-on-Write Modifier Pattern
+### 3. Enhanced Copy-on-Write Modifier Pattern
 
 Each modifier clones the schema's internal state and returns a **new instance**, ensuring immutability and type-safe chaining without auxiliary wrapper structs:
 
@@ -376,6 +377,27 @@ func (z *ZodBool[T]) Default(v bool) *ZodBool[T] {
     in.SetDefaultValue(v)
     return z.withInternals(in)
 }
+
+// DefaultFunc() – function-based defaults (Go enhancement)
+func (z *ZodBool[T]) DefaultFunc(fn func() bool) *ZodBool[T] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetDefaultFunc(fn)
+    return z.withInternals(in)
+}
+
+// PrefaultFunc() – function-based prefaults (Go enhancement)
+func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetPrefaultFunc(fn)
+    return z.withInternals(in)
+}
+
+// Meta() – metadata attachment (Go enhancement)
+func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
+    in := z.internals.ZodTypeInternals.Clone()
+    in.SetMeta(meta)
+    return z.withInternals(in)
+}
 ```
 
 **Usage Examples:**
@@ -390,6 +412,15 @@ schema := String().Min(1).Max(100).Optional()
 
 // ✅ Correct: Default accepts value type, compile-time type safety
 schema := String().Default("hello") // Accepts string, not *string
+
+// ✅ Correct: Function-based defaults (Go enhancement)
+schema := String().DefaultFunc(func() string { return getDefaultName() })
+
+// ✅ Correct: Function-based prefaults (Go enhancement) 
+schema := String().PrefaultFunc(func() string { return getFallbackName() })
+
+// ✅ Correct: Metadata attachment (Go enhancement)
+schema := String().Meta(core.GlobalMeta{"description": "User name field"})
 
 // ❌ Wrong: Modifying original instance
 schema.internals.isOptional = true // Direct state modification

@@ -250,6 +250,16 @@ func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
     return result
 }
 
+func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+    result, err := z.Parse(input, ctx...)
+    return any(result), err
+}
+
+func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
+    result := z.MustParse(input, ctx...)
+    return any(result)
+}
+
 // MODIFIER METHODS
 func (z *ZodString[T]) Optional() *ZodString[*string] {
     ni := z.internals.ZodTypeInternals.Clone()
@@ -284,6 +294,27 @@ func (z *ZodString[T]) Prefault(prefaultValue string) *ZodString[T] {
     return z.withInternals(ni)
 }
 
+func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
+    // Function-based defaults - Go enhancement
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetDefaultFunc(fn)
+    return z.withInternals(ni)
+}
+
+func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
+    // Function-based prefaults - Go enhancement
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetPrefaultFunc(fn)
+    return z.withInternals(ni)
+}
+
+func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
+    // Metadata attachment - Go enhancement
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.SetMeta(meta)
+    return z.withInternals(ni)
+}
+
 // VALIDATION METHODS
 func (z *ZodString[T]) Min(min int, params ...any) *ZodString[T] {
     check := checks.MinLength(min, params...)
@@ -303,6 +334,20 @@ func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, 
 // REFINEMENT METHODS
 func (z *ZodString[T]) Refine(fn func(string) bool, params ...any) *ZodString[T] {
     check := checks.NewRefine[string](fn, params...)
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.AddCheck(check)
+    return z.withInternals(ni)
+}
+
+func (z *ZodString[T]) Check(name string, fn func(string) bool, params ...any) *ZodString[T] {
+    check := checks.NewCustomCheck(name, fn, params...)
+    ni := z.internals.ZodTypeInternals.Clone()
+    ni.AddCheck(check)
+    return z.withInternals(ni)
+}
+
+func (z *ZodString[T]) CheckParam(name, param string, fn func(string, string) bool, params ...any) *ZodString[T] {
+    check := checks.NewParameterizedCheck(name, param, fn, params...)
     ni := z.internals.ZodTypeInternals.Clone()
     ni.AddCheck(check)
     return z.withInternals(ni)
@@ -432,7 +477,114 @@ No direct `fmt.Errorf` inside parsing/validation code.
 
 ---
 
-## 14  Implementation → PR Checklist
+## 14  Custom Validator System Integration
+
+GoZod provides a flexible, registry-based custom validator system that integrates seamlessly with both programmatic APIs and struct tags.
+
+### 14.1  Validator Interfaces
+
+```go
+// Basic validator interface
+type ZodValidator[T any] interface {
+    Name() string
+    Validate(value T) bool
+    ErrorMessage(ctx *core.ParseContext) string
+}
+
+// Parameterized validator interface
+type ZodParameterizedValidator[T any] interface {
+    ZodValidator[T]
+    ValidateParam(value T, param string) bool
+    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
+}
+
+// Detailed validator interface (for complex error reporting)
+type ZodDetailedValidator[T any] interface {
+    ZodValidator[T]
+    ValidateWithDetails(value T) (*core.ValidationResult, error)
+}
+```
+
+### 14.2  Validator Registration and Usage
+
+```go
+// 1. Register custom validators (users implement in their code)
+validators.Register(&UniqueUsernameValidator{})
+validators.Register(&MinAgeValidator{})
+
+// 2. Use in struct tags
+type User struct {
+    Username string `gozod:"required,unique_username,min=3"`
+    Age      int    `gozod:"required,min_age=21"`
+    Email    string `gozod:"required,email"`
+}
+
+// 3. Generate schema from tags
+schema := gozod.FromStruct[User]()
+result, err := schema.Parse(user)
+
+// 4. Use programmatically with Check methods
+schema := gozod.String().Check("unique_username", func(s string) bool {
+    return !isDuplicateUsername(s)
+})
+```
+
+### 14.3  Converter Functions
+
+Schema types integrate custom validators using converter functions:
+
+```go
+// Convert validator to refinement function
+func (z *ZodString[T]) UseValidator(validatorName string) *ZodString[T] {
+    validator := validators.GetValidator[string](validatorName)
+    if validator == nil {
+        panic(fmt.Sprintf("validator %s not found", validatorName))
+    }
+    
+    refineFn := validators.ToRefineFn(validator)
+    return z.Refine(refineFn)
+}
+
+// Convert validator to check function  
+func (z *ZodString[T]) UseValidatorCheck(validatorName string) *ZodString[T] {
+    validator := validators.GetValidator[string](validatorName)
+    if validator == nil {
+        panic(fmt.Sprintf("validator %s not found", validatorName))
+    }
+    
+    checkFn := validators.ToCheckFn(validator)
+    return z.Check(validatorName, checkFn)
+}
+```
+
+### 14.4  Implementation Example
+
+```go
+// Example custom validator
+type UniqueUsernameValidator struct{}
+
+func (v *UniqueUsernameValidator) Name() string {
+    return "unique_username"
+}
+
+func (v *UniqueUsernameValidator) Validate(value string) bool {
+    // Check database or cache for username uniqueness
+    return !database.UsernameExists(value)
+}
+
+func (v *UniqueUsernameValidator) ErrorMessage(ctx *core.ParseContext) string {
+    return "Username must be unique"
+}
+
+// Register the validator
+func init() {
+    validators.Register(&UniqueUsernameValidator{})
+}
+```
+
+---
+
+## 15  Implementation → PR Checklist
 
 - [ ] File respects 8-section order & headings.  
 - [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).  
@@ -441,9 +593,12 @@ No direct `fmt.Errorf` inside parsing/validation code.
 - [ ] `StrictParse` method accepts exact constraint type `T` with compile-time safety.
 - [ ] Both methods share the same validation pipeline and modifier handling.
 - [ ] Both `MustParse` and `MustStrictParse` implemented.
+- [ ] `ParseAny` and `MustParseAny` methods implemented for untyped results.
 - [ ] `GetInternals`, `IsOptional`, `IsNilable` methods implemented.
 - [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.  
 - [ ] Default/Prefault accept value types, not pointers (compile-time safety).
+- [ ] Enhanced modifiers implemented: `DefaultFunc`, `PrefaultFunc`, `Meta`, `Nullish`.
+- [ ] Custom validator integration: `Check` and `CheckParam` methods implemented.
 - [ ] Coerce method implemented for primitive types.
 - [ ] Type constraints defined correctly (`T | *T` pattern).
 - [ ] Comprehensive unit tests added following test guide structure.  

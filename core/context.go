@@ -1,5 +1,10 @@
 package core
 
+import (
+	"strconv"
+	"strings"
+)
+
 // =============================================================================
 // CONTEXT CREATION FUNCTIONS
 // =============================================================================
@@ -146,23 +151,29 @@ func (p *ParsePayload) GetPathString() string {
 		return "root"
 	}
 
-	var result string
+	var b strings.Builder
+	b.Grow(len(p.path)*8 + 4) // Pre-allocate capacity: estimated 8 chars per element + "root"
+
 	for i, element := range p.path {
 		if i == 0 {
-			result += "root"
+			b.WriteString("root")
 		}
 
 		switch elem := element.(type) {
 		case string:
-			result += "." + elem
+			b.WriteByte('.')
+			b.WriteString(elem)
 		case int:
-			result += "[" + string(rune(elem)) + "]"
+			b.WriteByte('[')
+			b.WriteString(strconv.Itoa(elem))
+			b.WriteByte(']')
 		default:
-			result += "." + string(rune(i))
+			b.WriteByte('.')
+			b.WriteString(strconv.Itoa(i))
 		}
 	}
 
-	return result
+	return b.String()
 }
 
 // =============================================================================

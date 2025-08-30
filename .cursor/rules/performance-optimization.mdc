@@ -1,0 +1,527 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+
+# GoZod Performance Optimization Guide
+
+This document provides comprehensive performance optimization guidelines specific to the GoZod validation library, focusing on Go 1.24+ enhancements, Parse vs StrictParse performance characteristics, and advanced optimization patterns.
+
+## 🎯 Core Optimization Philosophy
+
+### 1. Elegance-First Performance Approach
+- **Maintainability Priority**: Prioritize code readability and maintainability over aggressive optimization
+- **Balanced Approach**: Target 10-20% performance improvements with maintained code quality
+- **Progressive Improvement**: Implement optimizations incrementally, each independently verifiable
+- **Avoid Over-Engineering**: Focus on practical improvements; avoid excessive complexity
+
+### 2. Performance Hierarchy
+1. **StrictParse Optimization**: Compile-time type safety with maximum performance
+2. **Parse Path Optimization**: Runtime flexibility with reasonable performance
+3. **Hot Path Identification**: Optimize most frequently executed code paths
+4. **Memory Allocation Reduction**: Minimize allocations in critical paths
+
+---
+
+## 🚀 Parse vs StrictParse Performance Characteristics
+
+### Performance Comparison Matrix
+
+| Method | Input Type | Performance | Type Safety | Use Case |
+|--------|------------|-------------|-------------|----------|
+| `Parse(any)` | `any` | Baseline (1x) | Runtime | API boundaries, unknown input |
+| `StrictParse(T)` | `T` | **3-5x faster** | Compile-time | Known types, internal validation |
+| `MustParse(any)` | `any` | Baseline + panic overhead | Runtime | Critical error scenarios |
+| `MustStrictParse(T)` | `T` | **3-5x faster + panic** | Compile-time | Type-safe critical scenarios |
+
+### When to Use Each Method
+
+```go
+// ✅ Use StrictParse for known input types (hot paths)
+func validateUserInput(user User) error {
+    schema := gozod.Struct[User]()
+    _, err := schema.StrictParse(user)  // 3-5x faster
+    return err
+}
+
+// ✅ Use Parse for API boundaries (flexibility needed)
+func handleAPIRequest(data any) (User, error) {
+    schema := gozod.Struct[User]()
+    return schema.Parse(data)  // Flexible input handling
+}
+
+// ✅ Use StrictParse in internal validation pipelines
+func processValidatedData(users []User) error {
+    schema := gozod.Struct[User]()
+    for _, user := range users {
+        if _, err := schema.StrictParse(user); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
+---
+
+## 🔧 Go 1.24+ Advanced Optimization Patterns
+
+### 1. Enhanced Generic Type Inference
+
+```go
+// Go 1.24 Enhanced Pattern - Type inference optimization
+func NewString[T StringConstraint]() *ZodString[T] {
+    // Compiler optimizes constraint type inference
+    var zero T
+    if reflect.TypeOf(zero).Kind() == reflect.Ptr {
+        return createStringSchema[T](core.ZodTypeString, withPtrOptimization())
+    }
+    return createStringSchema[T](core.ZodTypeString)
+}
+
+// Advanced constraint with Go 1.24 comparable enhancement
+type EnumConstraint[T comparable] interface {
+    T | *T
+    comparable  // Go 1.24 enhanced comparable interface
+}
+```
+
+### 2. Optimized Type Assertion Patterns
+
+```go
+// Go 1.24 Optimized type switch pattern
+func (z *ZodString[T]) fastPath(input any) (T, bool) {
+    // Compiler optimizations for type switches in Go 1.24
+    switch v := input.(type) {
+    case string:
+        // Direct type conversion - zero overhead
+        return any(v).(T), true
+    case *string:
+        if v != nil {
+            return any(*v).(T), true
+        }
+        return any("").(T), true
+    default:
+        // Fallback to full parsing pipeline
+        return *new(T), false
+    }
+}
+```
+
+### 3. Memory Layout Optimizations
+
+```go
+// Go 1.24 Memory-optimized internal structure
+type ZodStringInternals struct {
+    core.ZodTypeInternals
+    
+    // Optimized field ordering for better cache locality
+    checks    []core.ZodCheck     // Hot path - accessed frequently
+    meta      core.GlobalMeta     // Cold path - accessed rarely
+    def       *ZodStringDef       // Shared immutable data
+}
+
+// Pre-allocated pools for frequent operations
+var (
+    stringValidationPool = sync.Pool{
+        New: func() any {
+            return make([]byte, 0, 256) // Pre-sized for common string lengths
+        },
+    }
+)
+```
+
+---
+
+## 🧠 Memory Optimization Strategies
+
+### 1. Allocation Reduction Patterns
+
+```go
+// ✅ Pre-allocate slices with known capacity
+func validateSlice[T any](elements []T) error {
+    results := make([]T, 0, len(elements))  // Pre-allocate capacity
+    for _, elem := range elements {
+        // Process elements...
+        results = append(results, elem)
+    }
+    return nil
+}
+
+// ✅ Use sync.Pool for frequent allocations
+var parseContextPool = sync.Pool{
+    New: func() any {
+        return &core.ParseContext{
+            Path: make([]any, 0, 8), // Pre-allocate common path depth
+        }
+    },
+}
+
+func getParseContext() *core.ParseContext {
+    ctx := parseContextPool.Get().(*core.ParseContext)
+    ctx.Path = ctx.Path[:0] // Reset length, keep capacity
+    return ctx
+}
+
+func putParseContext(ctx *core.ParseContext) {
+    if cap(ctx.Path) < 32 { // Prevent unbounded growth
+        parseContextPool.Put(ctx)
+    }
+}
+```
+
+### 2. String Building Optimization
+
+```go
+// ✅ Use strings.Builder for efficient string concatenation
+func buildErrorMessage(issues []core.ZodIssue) string {
+    if len(issues) == 0 {
+        return ""
+    }
+    
+    var builder strings.Builder
+    builder.Grow(len(issues) * 50) // Estimate final size to reduce allocations
+    
+    for i, issue := range issues {
+        if i > 0 {
+            builder.WriteString("; ")
+        }
+        builder.WriteString(issue.Message)
+    }
+    
+    return builder.String()
+}
+```
+
+---
+
+## ⚡ Hot Path Optimization Techniques
+
+### 1. Early Return Patterns
+
+```go
+// ✅ Optimize common validation paths
+func (z *ZodString[T]) optimizedParse(input any) (T, error) {
+    // Fast path for exact type match
+    if str, ok := input.(string); ok {
+        if len(z.internals.Checks) == 0 {
+            // Zero checks - immediate return
+            return any(str).(T), nil
+        }
+        
+        // Fast validation for common checks
+        return z.validateStringFast(str)
+    }
+    
+    // Fallback to full parsing pipeline
+    return z.Parse(input)
+}
+
+func (z *ZodString[T]) validateStringFast(str string) (T, error) {
+    // Optimized check execution for common patterns
+    for _, check := range z.internals.Checks {
+        switch c := check.(type) {
+        case *checks.MinLengthCheck:
+            if len(str) < c.Min {
+                return *new(T), c.CreateError()
+            }
+        case *checks.MaxLengthCheck:
+            if len(str) > c.Max {
+                return *new(T), c.CreateError()
+            }
+        default:
+            // Fallback to generic check execution
+            if err := c.Execute(str); err != nil {
+                return *new(T), err
+            }
+        }
+    }
+    
+    return any(str).(T), nil
+}
+```
+
+### 2. Conditional Execution Optimization
+
+```go
+// ✅ Optimize check ordering based on frequency and cost
+func optimizeCheckOrder(checks []core.ZodCheck) []core.ZodCheck {
+    // Sort checks by execution cost (cheapest first)
+    sort.Slice(checks, func(i, j int) bool {
+        return getCheckCost(checks[i]) < getCheckCost(checks[j])
+    })
+    return checks
+}
+
+func getCheckCost(check core.ZodCheck) int {
+    switch check.(type) {
+    case *checks.MinLengthCheck, *checks.MaxLengthCheck:
+        return 1 // O(1) operations
+    case *checks.RegexCheck:
+        return 3 // O(n) but compiled regex
+    case *checks.CustomCheck:
+        return 5 // Unknown complexity
+    default:
+        return 2 // Default complexity
+    }
+}
+```
+
+---
+
+## 🏗️ Compile-Time Optimization Patterns
+
+### 1. Pre-compiled Resources
+
+```go
+// ✅ Pre-compile regular expressions at package level
+var (
+    emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+    uuidRegex  = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+    
+    // Pre-extracted constants
+    maxStringLength = 10000
+    defaultTimeout  = 30 * time.Second
+)
+
+// ✅ Use constants instead of magic numbers
+const (
+    MaxValidationDepth = 32
+    MaxErrorMessages   = 100
+    DefaultBufferSize  = 256
+)
+```
+
+### 2. Type Constraint Optimization
+
+```go
+// ✅ Leverage generic constraints for compile-time optimization
+type NumericConstraint interface {
+    ~int | ~int8 | ~int16 | ~int32 | ~int64 |
+    ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
+    ~float32 | ~float64
+}
+
+func validateNumeric[T NumericConstraint](value T, min, max T) bool {
+    // Compiler can optimize this based on concrete type T
+    return value >= min && value <= max
+}
+
+// ✅ Compile-time type safety with generics
+func convertToConstraintType[Base, Constraint any](value Base) Constraint {
+    // Compiler optimizes based on known types
+    return any(value).(Constraint)
+}
+```
+
+---
+
+## 📊 Pointer Identity Preservation
+
+The GoZod implementation includes sophisticated pointer identity preservation for optimal memory usage:
+
+```go
+// Advanced pointer identity preservation pattern
+func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+    // Check if constraint type R is a pointer type
+    var zeroR R
+    isPointerConstraint := reflect.TypeOf(zeroR).Kind() == reflect.Ptr
+    
+    if isPointerConstraint && !z.hasModifiers() {
+        // Special handling to maintain input pointer address
+        if inputPtr, ok := input.(*T); ok && inputPtr != nil {
+            // Validate in-place and return same pointer if valid
+            if err := z.validateInPlace(inputPtr); err != nil {
+                return zeroR, err
+            }
+            return any(inputPtr).(R), nil
+        }
+    }
+    
+    // Standard parsing flow
+    return z.parseStandard(input, ctx...)
+}
+
+func (z *ZodStruct[T, R]) validateInPlace(ptr *T) error {
+    // Optimize validation for pointer types
+    // Avoid unnecessary allocations by validating the pointed-to value directly
+    return z.validateValue(*ptr)
+}
+```
+
+---
+
+## 🔍 Performance Testing and Benchmarking
+
+### 1. Required Benchmark Patterns
+
+```go
+// Benchmark Parse vs StrictParse performance
+func BenchmarkStringParse(b *testing.B) {
+    schema := gozod.String().Min(5).Max(100)
+    input := "test string value"
+    
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := schema.Parse(input)
+        if err != nil {
+            b.Fatal(err)
+        }
+    }
+}
+
+func BenchmarkStringStrictParse(b *testing.B) {
+    schema := gozod.String().Min(5).Max(100)
+    input := "test string value"
+    
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := schema.StrictParse(input)
+        if err != nil {
+            b.Fatal(err)
+        }
+    }
+}
+
+// Memory allocation benchmarks
+func BenchmarkStringParseAllocs(b *testing.B) {
+    schema := gozod.String().Min(5)
+    input := "test"
+    
+    b.ReportAllocs()
+    b.ResetTimer()
+    
+    for i := 0; i < b.N; i++ {
+        schema.Parse(input)
+    }
+}
+```
+
+### 2. Performance Regression Testing
+
+```go
+// Performance regression test helper
+func TestPerformanceRegression(t *testing.T) {
+    schema := gozod.String().Min(5).Max(100)
+    input := "test string value"
+    
+    // Baseline measurement
+    baseline := testing.Benchmark(func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            schema.Parse(input)
+        }
+    })
+    
+    // StrictParse should be significantly faster
+    strictResult := testing.Benchmark(func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            schema.StrictParse(input)
+        }
+    })
+    
+    // Assert performance improvement
+    speedup := float64(baseline.NsPerOp()) / float64(strictResult.NsPerOp())
+    if speedup < 2.0 {
+        t.Errorf("StrictParse not fast enough: %.2fx speedup, expected at least 2x", speedup)
+    }
+}
+```
+
+---
+
+## ⚠️ Performance Anti-Patterns
+
+### 1. Common Performance Mistakes
+
+```go
+// ❌ Avoid: Unnecessary reflection in hot paths
+func badValidation(input any) error {
+    v := reflect.ValueOf(input)
+    t := v.Type() // Expensive reflection call
+    // ... validation logic
+}
+
+// ✅ Good: Use type assertions or generics
+func goodValidation[T any](input T) error {
+    // Direct type operations - no reflection
+    return validateTyped(input)
+}
+
+// ❌ Avoid: Creating new instances in loops
+func badBatchValidation(items []string) {
+    for _, item := range items {
+        schema := gozod.String().Min(5) // Creates new instance each iteration
+        schema.Parse(item)
+    }
+}
+
+// ✅ Good: Reuse schema instances
+func goodBatchValidation(items []string) {
+    schema := gozod.String().Min(5) // Create once
+    for _, item := range items {
+        schema.Parse(item) // Reuse
+    }
+}
+```
+
+### 2. Memory Leak Prevention
+
+```go
+// ✅ Prevent unbounded growth in caches
+type BoundedCache[K comparable, V any] struct {
+    data map[K]V
+    maxSize int
+    mu   sync.RWMutex
+}
+
+func (c *BoundedCache[K, V]) Get(key K) (V, bool) {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    
+    value, exists := c.data[key]
+    return value, exists
+}
+
+func (c *BoundedCache[K, V]) Set(key K, value V) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    if len(c.data) >= c.maxSize {
+        // Remove oldest entry to prevent unbounded growth
+        for k := range c.data {
+            delete(c.data, k)
+            break
+        }
+    }
+    
+    c.data[key] = value
+}
+```
+
+---
+
+## 🎯 Performance Optimization Checklist
+
+### Implementation Review
+- [ ] StrictParse implemented for all schema types with 3-5x performance improvement
+- [ ] Hot paths identified and optimized with early returns
+- [ ] Memory allocations minimized using sync.Pool and pre-allocation
+- [ ] Regular expressions pre-compiled at package level
+- [ ] Type assertions optimized using type switches instead of reflection
+- [ ] Pointer identity preserved where beneficial
+
+### Testing Requirements
+- [ ] Benchmark tests comparing Parse vs StrictParse performance
+- [ ] Memory allocation benchmarks with b.ReportAllocs()
+- [ ] Performance regression tests with minimum speedup assertions
+- [ ] Real-world scenario benchmarks with representative data
+- [ ] Race detection tests pass with -race flag
+
+### Go 1.24+ Specific
+- [ ] Enhanced generic type inference patterns utilized
+- [ ] Advanced comparable interface constraints implemented
+- [ ] Memory layout optimized for cache locality
+- [ ] Compile-time optimizations leveraged for known types
+
+This guide ensures that GoZod maintains excellent performance while providing both flexibility (Parse) and type safety (StrictParse) for different use cases.

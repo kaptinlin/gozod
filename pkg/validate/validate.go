@@ -539,15 +539,20 @@ func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
 	return false
 }
 
+// Pre-compiled regex for ISOTime validation
+var isoTimeRegex = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
+
+// Pre-compiled regex for ISODuration validation
+var durationRegex = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
+
 // ISOTime validates if string is a valid ISO time format
 func ISOTime(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		// Build or reuse compiled regex for ISO time. Pattern:
+		// Pattern:
 		// HH:MM            (24-hour)
 		// HH:MM:SS         (optional seconds)
 		// HH:MM:SS.sss...  (optional fractional seconds, dot or comma)
 		// This aligns with ISO-8601 and Zod TS implementation.
-		isoTimeRegex := regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
 		return isoTimeRegex.MatchString(str)
 	}
 	return false
@@ -556,7 +561,7 @@ func ISOTime(value any) bool {
 // ISODuration validates if string is a valid ISO 8601 duration format
 func ISODuration(value any) bool {
 	if duration, ok := reflectx.ExtractString(value); ok {
-		durationRegex := regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
+		// Use pre-compiled regex for performance
 
 		// First check basic format
 		if !durationRegex.MatchString(duration) {

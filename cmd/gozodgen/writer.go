@@ -205,24 +205,25 @@ func (w *FileWriter) generateFieldSchemaCodeForStruct(field tagparser.FieldInfo,
 	}
 	// Check for special UUID case first
 	if w.hasUUIDRule(field.Rules) && w.isStringType(field.Type) {
-		schemaCode := "gozod.Uuid()"
+		var b strings.Builder
+		b.WriteString("gozod.Uuid()")
 
 		// Apply other validation rules (excluding UUID)
 		for _, rule := range field.Rules {
 			if rule.Name != "uuid" {
 				validatorCode := w.generateValidatorChain(rule, field.Type)
 				if validatorCode != "" {
-					schemaCode += validatorCode
+					b.WriteString(validatorCode)
 				}
 			}
 		}
 
 		// Handle optional fields
 		if !field.Required && !w.isPointerType(field.Type) {
-			schemaCode += ".Optional()"
+			b.WriteString(".Optional()")
 		}
 
-		return schemaCode, nil
+		return b.String(), nil
 	}
 
 	// Check for special Enum case
@@ -232,35 +233,41 @@ func (w *FileWriter) generateFieldSchemaCodeForStruct(field tagparser.FieldInfo,
 		for _, param := range enumRule.Params {
 			values = append(values, fmt.Sprintf(`"%s"`, param))
 		}
-		schemaCode := fmt.Sprintf("gozod.Enum(%s)", strings.Join(values, ", "))
+
+		var b strings.Builder
+		b.WriteString("gozod.Enum(")
+		b.WriteString(strings.Join(values, ", "))
+		b.WriteByte(')')
 
 		// Apply other validation rules (excluding enum)
 		for _, rule := range field.Rules {
 			if rule.Name != "enum" {
 				validatorCode := w.generateValidatorChain(rule, field.Type)
 				if validatorCode != "" {
-					schemaCode += validatorCode
+					b.WriteString(validatorCode)
 				}
 			}
 		}
 
 		// Handle optional fields
 		if !field.Required && !w.isPointerType(field.Type) {
-			schemaCode += ".Optional()"
+			b.WriteString(".Optional()")
 		}
 
-		return schemaCode, nil
+		return b.String(), nil
 	}
 
 	// Get base constructor for the field type using AST type name for better circular detection
 	baseConstructor := w.getBaseConstructorFromTypeName(fieldTypeName, structName)
-	schemaCode := baseConstructor
+
+	var b strings.Builder
+	b.WriteString(baseConstructor)
 
 	// Apply validation rules in order
 	for _, rule := range field.Rules {
 		validatorCode := w.generateValidatorChain(rule, field.Type)
 		if validatorCode != "" {
-			schemaCode += validatorCode
+			b.WriteString(validatorCode)
 		}
 	}
 
@@ -268,10 +275,10 @@ func (w *FileWriter) generateFieldSchemaCodeForStruct(field tagparser.FieldInfo,
 	// Pointer types are always optional
 	// Non-pointer, non-required fields are also optional
 	if w.isPointerType(field.Type) || !field.Required {
-		schemaCode += ".Optional()"
+		b.WriteString(".Optional()")
 	}
 
-	return schemaCode, nil
+	return b.String(), nil
 }
 
 // generateValidatorChain generates validator method chain for a rule

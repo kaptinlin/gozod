@@ -417,7 +417,7 @@ Object schemas validate `map[string]any` data (like JSON):
 
 ```go
 // Object schema for map[string]any
-userSchema := gozod.Object(gozod.Fields{
+userSchema := gozod.Object(gozod.ObjectSchema{
     "name":  gozod.String().Min(2),
     "age":   gozod.Int().Min(0),
     "email": gozod.String().Email().Optional(),
@@ -456,7 +456,7 @@ result, err := basicSchema.Parse(user)     // ✅ Basic validation
 
 ```go
 // Struct schema with field validation
-userSchema := gozod.Struct[User](gozod.Fields{
+userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2).Max(50),
     "age":   gozod.Int().Min(0).Max(120), 
     "email": gozod.String().Email(),
@@ -634,7 +634,7 @@ type Node struct {
 // Lazy schema for recursive validation
 var nodeSchema gozod.ZodType[Node]
 nodeSchema = gozod.Lazy(func() gozod.ZodType[Node] {
-    return gozod.Struct[Node](gozod.Fields{
+    return gozod.Struct[Node](gozod.StructSchema{
         "value":    gozod.String(),
         "children": gozod.Array(nodeSchema), // Recursive reference
     })

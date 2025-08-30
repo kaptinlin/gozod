@@ -355,7 +355,7 @@ type User struct {
     Email string `json:"email"`
 }
 
-userSchema := gozod.Struct[User](gozod.Fields{
+userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2),
     "age":   gozod.Int().Min(0).Optional(),
     "email": gozod.String().Email(),
