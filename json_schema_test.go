@@ -106,7 +106,7 @@ func TestToJSONSchema_PrimitiveTypes(t *testing.T) {
 		{
 			name:     "Never",
 			schema:   Never(),
-			expected: `{"not":{}}`,
+			expected: `{"not":true}`,
 		},
 		{
 			name:     "Integer",

@@ -66,12 +66,12 @@ func (z *ZodFloatTyped[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodFloatTyped[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodFloatTyped[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for float type conversion
@@ -189,21 +189,21 @@ func (z *ZodFloatTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFl
 
 // Optional returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodFloatTyped[T, R]) Optional() *ZodFloatTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodFloatTyped[T, R]) Nilable() *ZodFloatTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility.
 func (z *ZodFloatTyped[T, R]) Nullish() *ZodFloatTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -212,7 +212,7 @@ func (z *ZodFloatTyped[T, R]) Nullish() *ZodFloatTyped[T, *T] {
 // NonOptional removes optional flag and returns value constraint (T).
 // Mirrors Optional() -> NonOptional() pattern, enabling strict non-nil validation.
 func (z *ZodFloatTyped[T, R]) NonOptional() *ZodFloatTyped[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -226,7 +226,7 @@ func (z *ZodFloatTyped[T, R]) NonOptional() *ZodFloatTyped[T, T] {
 
 // Default keeps the current constraint type R.
 func (z *ZodFloatTyped[T, R]) Default(v float64) *ZodFloatTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the default value to the appropriate constraint type
 	var zero R
 	switch any(zero).(type) {
@@ -247,7 +247,7 @@ func (z *ZodFloatTyped[T, R]) Default(v float64) *ZodFloatTyped[T, R] {
 
 // DefaultFunc keeps the current constraint type R.
 func (z *ZodFloatTyped[T, R]) DefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		v := fn()
 		// Convert the default value to the appropriate constraint type
@@ -271,7 +271,7 @@ func (z *ZodFloatTyped[T, R]) DefaultFunc(fn func() float64) *ZodFloatTyped[T, R
 
 // Prefault keeps the current constraint type R.
 func (z *ZodFloatTyped[T, R]) Prefault(v float64) *ZodFloatTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the prefault value to the appropriate constraint type
 	var zero R
 	switch any(zero).(type) {
@@ -292,7 +292,7 @@ func (z *ZodFloatTyped[T, R]) Prefault(v float64) *ZodFloatTyped[T, R] {
 
 // PrefaultFunc keeps the current constraint type R.
 func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		v := fn()
 		// Convert the prefault value to the appropriate constraint type
@@ -328,7 +328,7 @@ func (z *ZodFloatTyped[T, R]) Meta(meta core.GlobalMeta) *ZodFloatTyped[T, R] {
 // Min adds minimum value validation (alias for Gte)
 func (z *ZodFloatTyped[T, R]) Min(minimum float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Gte(minimum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -336,7 +336,7 @@ func (z *ZodFloatTyped[T, R]) Min(minimum float64, params ...any) *ZodFloatTyped
 // Max adds maximum value validation (alias for Lte)
 func (z *ZodFloatTyped[T, R]) Max(maximum float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lte(maximum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -344,7 +344,7 @@ func (z *ZodFloatTyped[T, R]) Max(maximum float64, params ...any) *ZodFloatTyped
 // Gt adds greater than validation (exclusive)
 func (z *ZodFloatTyped[T, R]) Gt(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Gt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -352,7 +352,7 @@ func (z *ZodFloatTyped[T, R]) Gt(value float64, params ...any) *ZodFloatTyped[T,
 // Gte adds greater than or equal validation (inclusive)
 func (z *ZodFloatTyped[T, R]) Gte(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Gte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -360,7 +360,7 @@ func (z *ZodFloatTyped[T, R]) Gte(value float64, params ...any) *ZodFloatTyped[T
 // Lt adds less than validation (exclusive)
 func (z *ZodFloatTyped[T, R]) Lt(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -368,7 +368,7 @@ func (z *ZodFloatTyped[T, R]) Lt(value float64, params ...any) *ZodFloatTyped[T,
 // Lte adds less than or equal validation (inclusive)
 func (z *ZodFloatTyped[T, R]) Lte(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.Lte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -396,7 +396,7 @@ func (z *ZodFloatTyped[T, R]) NonPositive(params ...any) *ZodFloatTyped[T, R] {
 // MultipleOf adds multiple of validation
 func (z *ZodFloatTyped[T, R]) MultipleOf(value float64, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.MultipleOf(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -428,7 +428,7 @@ func (z *ZodFloatTyped[T, R]) Int(params ...any) *ZodFloatTyped[T, R] {
 			return false
 		}
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -455,7 +455,7 @@ func (z *ZodFloatTyped[T, R]) Finite(params ...any) *ZodFloatTyped[T, R] {
 			return false
 		}
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -518,7 +518,7 @@ func (z *ZodFloatTyped[T, R]) Overwrite(transform func(T) T, params ...any) *Zod
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -594,7 +594,7 @@ func (z *ZodFloatTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodFloatTy
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -654,7 +654,7 @@ func convertToFloatType[T FloatConstraint](v any) (T, bool) {
 // RefineAny adds flexible custom validation logic
 func (z *ZodFloatTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFloatTyped[T, R] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -676,13 +676,13 @@ func (z *ZodFloatTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFloat
 func (z *ZodFloatTyped[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodFloatTyped[T, R]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -715,9 +715,9 @@ func extractFloatValue[T FloatConstraint, R any](value R) T {
 func newZodFloatFromDef[T FloatConstraint, R any](def *ZodFloatDef) *ZodFloatTyped[T, R] {
 	internals := &ZodFloatInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
-			Type:   def.ZodTypeDef.Type,
-			Checks: def.ZodTypeDef.Checks,
-			Coerce: def.ZodTypeDef.Coerce,
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
 			Bag:    make(map[string]any),
 		},
 		Def: def,
@@ -731,8 +731,8 @@ func newZodFloatFromDef[T FloatConstraint, R any](def *ZodFloatDef) *ZodFloatTyp
 		return any(newZodFloatFromDef[T, R](floatDef)).(core.ZodType[any])
 	}
 
-	if def.ZodTypeDef.Error != nil {
-		internals.ZodTypeInternals.Error = def.ZodTypeDef.Error
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
 	return &ZodFloatTyped[T, R]{internals: internals}
@@ -822,35 +822,35 @@ func newFloatTyped[T FloatConstraint, R any](typeCode core.ZodTypeCode, params .
 // CoercedFloat32 creates a float32 schema with coercion enabled
 func CoercedFloat32(params ...any) *ZodFloatTyped[float32, float32] {
 	schema := Float32(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedFloat32Ptr creates a *float32 schema with coercion enabled
 func CoercedFloat32Ptr(params ...any) *ZodFloatTyped[float32, *float32] {
 	schema := Float32Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedFloat64 creates a float64 schema with coercion enabled
 func CoercedFloat64(params ...any) *ZodFloatTyped[float64, float64] {
 	schema := Float64(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedFloat64Ptr creates a *float64 schema with coercion enabled
 func CoercedFloat64Ptr(params ...any) *ZodFloatTyped[float64, *float64] {
 	schema := Float64Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedFloat creates a flexible float schema with coercion enabled
 func CoercedFloat[T FloatConstraint](params ...any) *ZodFloatTyped[T, T] {
 	schema := FloatTyped[T](params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
@@ -898,7 +898,7 @@ func (z *ZodFloatTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload)
 		}
 	}
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

@@ -42,12 +42,12 @@ func (z *ZodFile[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns whether the file type is optional
 func (z *ZodFile[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.Optional
+	return z.internals.Optional
 }
 
 // IsNilable returns whether the file type is nilable
 func (z *ZodFile[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.Nilable
+	return z.internals.Nilable
 }
 
 // =============================================================================
@@ -155,21 +155,21 @@ func (z *ZodFile[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, err
 
 // Optional makes the file type optional and returns pointer constraint
 func (z *ZodFile[T, R]) Optional() *ZodFile[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable makes the file type nilable and returns pointer constraint
 func (z *ZodFile[T, R]) Nilable() *ZodFile[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish makes the file type both optional and nilable
 func (z *ZodFile[T, R]) Nullish() *ZodFile[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -177,14 +177,14 @@ func (z *ZodFile[T, R]) Nullish() *ZodFile[T, *T] {
 
 // Default sets a default value for the file type
 func (z *ZodFile[T, R]) Default(v T) *ZodFile[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc sets a default function for the file type
 func (z *ZodFile[T, R]) DefaultFunc(fn func() T) *ZodFile[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -193,14 +193,14 @@ func (z *ZodFile[T, R]) DefaultFunc(fn func() T) *ZodFile[T, R] {
 
 // Prefault sets a prefault value for the file type
 func (z *ZodFile[T, R]) Prefault(v T) *ZodFile[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc sets a prefault function for the file type
 func (z *ZodFile[T, R]) PrefaultFunc(fn func() T) *ZodFile[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -220,7 +220,7 @@ func (z *ZodFile[T, R]) Meta(meta core.GlobalMeta) *ZodFile[T, R] {
 // Min sets minimum file size validation
 func (z *ZodFile[T, R]) Min(minimum int64, params ...any) *ZodFile[T, R] {
 	check := checks.MinFileSize(minimum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -228,7 +228,7 @@ func (z *ZodFile[T, R]) Min(minimum int64, params ...any) *ZodFile[T, R] {
 // Max sets maximum file size validation
 func (z *ZodFile[T, R]) Max(maximum int64, params ...any) *ZodFile[T, R] {
 	check := checks.MaxFileSize(maximum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -236,7 +236,7 @@ func (z *ZodFile[T, R]) Max(maximum int64, params ...any) *ZodFile[T, R] {
 // Size sets exact file size validation
 func (z *ZodFile[T, R]) Size(expected int64, params ...any) *ZodFile[T, R] {
 	check := checks.FileSize(expected, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -244,7 +244,7 @@ func (z *ZodFile[T, R]) Size(expected int64, params ...any) *ZodFile[T, R] {
 // Mime sets MIME type validation
 func (z *ZodFile[T, R]) Mime(mimeTypes []string, params ...any) *ZodFile[T, R] {
 	check := checks.Mime(mimeTypes, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -266,7 +266,7 @@ func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -277,7 +277,7 @@ func (z *ZodFile[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFile[T, 
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -311,7 +311,7 @@ func (z *ZodFile[T, R]) Overwrite(transform func(R) R, params ...any) *ZodFile[T
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -366,7 +366,7 @@ func convertToFileConstraintType[T any, R any](value any) R {
 	// For any type (R = any), return the value directly
 	// This handles File().Prefault() case where R is any
 	if reflect.TypeOf(zero) == reflect.TypeOf((*any)(nil)).Elem() {
-		return any(value).(R)
+		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 
 	// Direct type conversion - try this first

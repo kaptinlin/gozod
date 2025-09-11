@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -8,6 +9,12 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+// Test error variables
+var (
+	errTransformError  = errors.New("transform error")
+	errOnlyTrueAllowed = errors.New("only true values allowed")
 )
 
 // =============================================================================
@@ -74,7 +81,7 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 	t.Run("Transform error with Prefault fallback", func(t *testing.T) {
 		// When transform fails, it should not fall back to Prefault
 		schema := String().Prefault("prefault_value").Transform(func(input string, ctx *core.RefinementContext) (any, error) {
-			return nil, fmt.Errorf("transform error")
+			return nil, fmt.Errorf("%w", errTransformError)
 		})
 
 		// Transform error should be returned, not fall back to Prefault
@@ -239,7 +246,7 @@ func TestBool_TransformError(t *testing.T) {
 	// Create transform that only accepts true
 	transform := boolSchema.Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
 		if !b {
-			return nil, fmt.Errorf("only true values allowed")
+			return nil, fmt.Errorf("%w", errOnlyTrueAllowed)
 		}
 		return "accepted", nil
 	})

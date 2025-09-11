@@ -594,8 +594,7 @@ func ISOTime(params ...any) core.ZodCheck {
 	def := &core.ZodCheckDef{Check: "iso_time"}
 	ApplyCheckParams(def, checkParams)
 
-	var check *core.ZodCheckInternals
-	check = &core.ZodCheckInternals{
+	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.ISOTime(payload.GetValue()) {
@@ -621,8 +620,7 @@ func ISODuration(params ...any) core.ZodCheck {
 	def := &core.ZodCheckDef{Check: "iso_duration"}
 	ApplyCheckParams(def, checkParams)
 
-	var check *core.ZodCheckInternals
-	check = &core.ZodCheckInternals{
+	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.ISODuration(payload.GetValue()) {

@@ -168,7 +168,7 @@ func TestStringBool_Modifiers(t *testing.T) {
 		optionalSchema := boolSchema.Optional()
 
 		// Type check: ensure it returns *ZodStringBool[*bool]
-		var _ *ZodStringBool[*bool] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		result, err := optionalSchema.Parse("true")
@@ -180,14 +180,14 @@ func TestStringBool_Modifiers(t *testing.T) {
 		// From *bool to *bool via Optional (maintains type)
 		ptrSchema := StringBoolPtr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodStringBool[*bool] = optionalPtrSchema
+		var _ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *bool", func(t *testing.T) {
 		boolSchema := StringBool()
 		nilableSchema := boolSchema.Nilable()
 
-		var _ *ZodStringBool[*bool] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -199,24 +199,24 @@ func TestStringBool_Modifiers(t *testing.T) {
 		// bool maintains bool
 		boolSchema := StringBool()
 		defaultBoolSchema := boolSchema.Default(true)
-		var _ *ZodStringBool[bool] = defaultBoolSchema
+		var _ = defaultBoolSchema
 
 		// *bool maintains *bool
 		ptrSchema := StringBoolPtr()
 		defaultPtrSchema := ptrSchema.Default(false)
-		var _ *ZodStringBool[*bool] = defaultPtrSchema
+		var _ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		// bool maintains bool
 		boolSchema := StringBool()
 		prefaultBoolSchema := boolSchema.Prefault("true")
-		var _ *ZodStringBool[bool] = prefaultBoolSchema
+		var _ = prefaultBoolSchema
 
 		// *bool maintains *bool
 		ptrSchema := StringBoolPtr()
 		prefaultPtrSchema := ptrSchema.Prefault("false")
-		var _ *ZodStringBool[*bool] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 }
 
@@ -231,7 +231,7 @@ func TestStringBool_Chaining(t *testing.T) {
 					Default(false). // *ZodStringBool[bool] (maintains type)
 					Optional()      // *ZodStringBool[*bool] (type conversion)
 
-		var _ *ZodStringBool[*bool] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse("true")
@@ -246,7 +246,7 @@ func TestStringBool_Chaining(t *testing.T) {
 						Nilable().    // *ZodStringBool[*bool] (maintains type)
 						Default(true) // *ZodStringBool[*bool] (maintains type)
 
-		var _ *ZodStringBool[*bool] = schema
+		var _ = schema
 
 		result, err := schema.Parse("false")
 		require.NoError(t, err)

@@ -13,6 +13,11 @@ import (
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
+// Static error variables
+var (
+	ErrParseComplexUnexpectedType = errors.New("internal error: ParseComplex returned unexpected type")
+)
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -47,12 +52,12 @@ func (z *ZodSlice[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodSlice[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodSlice[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using slice-specific parsing logic with type safety
@@ -94,7 +99,7 @@ func (z *ZodSlice[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 			return typedResult, nil
 		}
 		var zero R
-		return zero, fmt.Errorf("internal error: ParseComplex returned unexpected type %T", result)
+		return zero, fmt.Errorf("%w %T", ErrParseComplexUnexpectedType, result)
 	}
 }
 
@@ -153,21 +158,21 @@ func (z *ZodSlice[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, er
 
 // Optional creates optional slice schema (always returns pointer constraint)
 func (z *ZodSlice[T, R]) Optional() *ZodSlice[T, *[]T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values (always returns pointer constraint)
 func (z *ZodSlice[T, R]) Nilable() *ZodSlice[T, *[]T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers (always returns pointer constraint)
 func (z *ZodSlice[T, R]) Nullish() *ZodSlice[T, *[]T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -175,7 +180,7 @@ func (z *ZodSlice[T, R]) Nullish() *ZodSlice[T, *[]T] {
 
 // NonOptional removes Optional flag and enforces non-nil slice constraint ([]T).
 func (z *ZodSlice[T, R]) NonOptional() *ZodSlice[T, []T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -190,14 +195,14 @@ func (z *ZodSlice[T, R]) NonOptional() *ZodSlice[T, []T] {
 
 // Default preserves current constraint type
 func (z *ZodSlice[T, R]) Default(v []T) *ZodSlice[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type
 func (z *ZodSlice[T, R]) DefaultFunc(fn func() []T) *ZodSlice[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -206,14 +211,14 @@ func (z *ZodSlice[T, R]) DefaultFunc(fn func() []T) *ZodSlice[T, R] {
 
 // Prefault provides fallback values on validation failure (preserves constraint type)
 func (z *ZodSlice[T, R]) Prefault(v []T) *ZodSlice[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values (preserves constraint type)
 func (z *ZodSlice[T, R]) PrefaultFunc(fn func() []T) *ZodSlice[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -233,7 +238,7 @@ func (z *ZodSlice[T, R]) Meta(meta core.GlobalMeta) *ZodSlice[T, R] {
 // Min sets minimum number of elements
 func (z *ZodSlice[T, R]) Min(minLen int, params ...any) *ZodSlice[T, R] {
 	check := checks.MinSize(minLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -241,7 +246,7 @@ func (z *ZodSlice[T, R]) Min(minLen int, params ...any) *ZodSlice[T, R] {
 // Max sets maximum number of elements
 func (z *ZodSlice[T, R]) Max(maxLen int, params ...any) *ZodSlice[T, R] {
 	check := checks.MaxSize(maxLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -249,7 +254,7 @@ func (z *ZodSlice[T, R]) Max(maxLen int, params ...any) *ZodSlice[T, R] {
 // Length sets exact number of elements
 func (z *ZodSlice[T, R]) Length(exactLen int, params ...any) *ZodSlice[T, R] {
 	check := checks.Size(exactLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -257,7 +262,7 @@ func (z *ZodSlice[T, R]) Length(exactLen int, params ...any) *ZodSlice[T, R] {
 // NonEmpty ensures slice has at least one element
 func (z *ZodSlice[T, R]) NonEmpty(params ...any) *ZodSlice[T, R] {
 	check := checks.MinSize(1, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -296,7 +301,7 @@ func (z *ZodSlice[T, R]) Overwrite(transform func(R) R, params ...any) *ZodSlice
 		}
 		return input
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -330,7 +335,7 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -340,7 +345,7 @@ func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -370,9 +375,9 @@ func (z *ZodSlice[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSlice[T
 // CloneFrom copies configuration from another schema
 func (z *ZodSlice[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodSlice[T, R]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -448,9 +453,7 @@ func (z *ZodSlice[T, R]) validateSlice(value []T, checks []core.ZodCheck, ctx *c
 	// Collect any slice-level issues (length, size, etc.)
 	if result.HasIssues() {
 		sliceIssues := result.GetIssues()
-		for _, issue := range sliceIssues {
-			collectedIssues = append(collectedIssues, issue)
-		}
+		collectedIssues = append(collectedIssues, sliceIssues...)
 	}
 
 	// Get the potentially transformed value for element validation
@@ -718,7 +721,7 @@ func SliceTyped[T any, R any](elementSchema any, paramArgs ...any) *ZodSlice[T, 
 	// Add a minimal check that always passes to trigger validation
 	if elementSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		sliceSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+		sliceSchema.internals.AddCheck(alwaysPassCheck)
 	}
 
 	return sliceSchema
@@ -749,7 +752,7 @@ func (z *ZodSlice[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 		}
 	}
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

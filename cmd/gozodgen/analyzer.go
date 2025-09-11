@@ -18,6 +18,13 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
+// Static error variables to comply with err113
+var (
+	ErrInvalidRuleFormat = fmt.Errorf("invalid rule format")
+	ErrRuleRequiresParam = fmt.Errorf("rule requires a parameter")
+	ErrEmptyRuleName     = fmt.Errorf("empty rule name")
+)
+
 // timeType is a marker type for time.Time detection
 type timeType struct{}
 
@@ -340,7 +347,7 @@ func (a *StructAnalyzer) typesToReflectType(t types.Type) reflect.Type {
 		}
 	case *types.Pointer:
 		baseType := a.typesToReflectType(typ.Elem())
-		return reflect.PtrTo(baseType)
+		return reflect.PointerTo(baseType)
 	case *types.Slice:
 		elemType := a.typesToReflectType(typ.Elem())
 		return reflect.SliceOf(elemType)
@@ -397,7 +404,7 @@ func (a *StructAnalyzer) getReflectTypeFromAST(expr ast.Expr) reflect.Type {
 	case *ast.StarExpr:
 		// Pointer type
 		baseType := a.getReflectTypeFromAST(t.X)
-		return reflect.PtrTo(baseType)
+		return reflect.PointerTo(baseType)
 	case *ast.ArrayType:
 		// Slice or array type - treat both as slice for simplicity
 		elemType := a.getReflectTypeFromAST(t.Elt)
@@ -499,28 +506,29 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 		if strings.Contains(part, "=") {
 			ruleParts := strings.SplitN(part, "=", 2)
 			if len(ruleParts) != 2 {
-				return nil, fmt.Errorf("invalid rule format: %s", part)
+				return nil, fmt.Errorf("%w: %s", ErrInvalidRuleFormat, part)
 			}
 
 			rule.Name = strings.TrimSpace(ruleParts[0])
 			paramValue := strings.TrimSpace(ruleParts[1])
 
 			if paramValue == "" {
-				return nil, fmt.Errorf("rule '%s' requires a parameter", rule.Name)
+				return nil, fmt.Errorf("%w: %s", ErrRuleRequiresParam, rule.Name)
 			}
 
 			// Handle complex parameters (JSON arrays/objects) and enum values
-			if (strings.HasPrefix(paramValue, "[") && strings.HasSuffix(paramValue, "]")) ||
-				(strings.HasPrefix(paramValue, "{") && strings.HasSuffix(paramValue, "}")) {
+			switch {
+			case (strings.HasPrefix(paramValue, "[") && strings.HasSuffix(paramValue, "]")) ||
+				(strings.HasPrefix(paramValue, "{") && strings.HasSuffix(paramValue, "}")):
 				// Complex parameter (JSON array or object)
 				rule.Params = []string{paramValue}
-			} else if rule.Name == "enum" && strings.Contains(paramValue, " ") {
+			case rule.Name == "enum" && strings.Contains(paramValue, " "):
 				// Enum values separated by spaces
 				rule.Params = strings.Fields(paramValue)
-			} else if strings.Contains(paramValue, " ") && rule.Name != "regex" {
+			case strings.Contains(paramValue, " ") && rule.Name != "regex":
 				// Multiple space-separated parameters (but not for regex)
 				rule.Params = strings.Fields(paramValue)
-			} else {
+			default:
 				// Single parameter
 				rule.Params = []string{paramValue}
 			}
@@ -530,7 +538,7 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 		}
 
 		if rule.Name == "" {
-			return nil, fmt.Errorf("empty rule name")
+			return nil, ErrEmptyRuleName
 		}
 
 		rules = append(rules, rule)

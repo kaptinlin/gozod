@@ -1792,12 +1792,17 @@ func TestObject_MultipleErrorCollection(t *testing.T) {
 		fieldErrors := 0
 		unrecognizedErrors := 0
 		for _, issue := range zodErr.Issues {
-			if issue.Code == core.TooSmall {
+			switch issue.Code {
+			case core.TooSmall:
 				fieldErrors++
 				assert.Equal(t, []any{"name"}, issue.Path, "Field error should have correct path")
-			} else if issue.Code == core.UnrecognizedKeys {
+			case core.UnrecognizedKeys:
 				unrecognizedErrors++
 				assert.Equal(t, []any{}, issue.Path, "Unrecognized keys error should have empty path")
+			case core.InvalidType, core.InvalidValue, core.InvalidFormat, core.InvalidUnion, core.InvalidKey, core.InvalidElement, core.TooBig, core.NotMultipleOf, core.Custom, core.InvalidSchema, core.InvalidDiscriminator, core.IncompatibleTypes, core.MissingRequired, core.TypeConversion, core.NilPointer:
+				// These issue codes are not expected in this specific test
+			default:
+				// Handle unexpected issue codes gracefully
 			}
 		}
 

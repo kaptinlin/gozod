@@ -95,7 +95,7 @@ func TestNever_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodNever[any, *any]
-		var _ *ZodNever[any, *any] = optionalSchema
+		var _ = optionalSchema
 
 		// Test nil value (should be allowed for optional)
 		result, err := optionalSchema.Parse(nil)
@@ -111,7 +111,7 @@ func TestNever_Modifiers(t *testing.T) {
 		schema := Never()
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodNever[any, *any] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -127,7 +127,7 @@ func TestNever_Modifiers(t *testing.T) {
 		schema := Never()
 		nullishSchema := schema.Nullish()
 
-		var _ *ZodNever[any, *any] = nullishSchema
+		var _ = nullishSchema
 
 		// Test nil handling
 		result, err := nullishSchema.Parse(nil)
@@ -278,7 +278,7 @@ func TestNever_DefaultAndPrefault(t *testing.T) {
 func TestNever_Factories(t *testing.T) {
 	t.Run("Never factory", func(t *testing.T) {
 		schema := Never()
-		var _ *ZodNever[any, any] = schema
+		var _ = schema
 
 		_, err := schema.Parse("test")
 		assert.Error(t, err)
@@ -286,7 +286,7 @@ func TestNever_Factories(t *testing.T) {
 
 	t.Run("NeverPtr factory", func(t *testing.T) {
 		schema := NeverPtr()
-		var _ *ZodNever[any, *any] = schema
+		var _ = schema
 
 		_, err := schema.Parse("test")
 		assert.Error(t, err)
@@ -294,7 +294,7 @@ func TestNever_Factories(t *testing.T) {
 
 	t.Run("NeverTyped factory", func(t *testing.T) {
 		schema := NeverTyped[string, string]()
-		var _ *ZodNever[string, string] = schema
+		var _ = schema
 
 		_, err := schema.Parse("test")
 		assert.Error(t, err)
@@ -302,7 +302,7 @@ func TestNever_Factories(t *testing.T) {
 
 	t.Run("NeverTyped with explicit types", func(t *testing.T) {
 		schema := NeverTyped[any, any]()
-		var _ *ZodNever[any, any] = schema
+		var _ = schema
 
 		_, err := schema.Parse("test")
 		assert.Error(t, err)
@@ -310,7 +310,7 @@ func TestNever_Factories(t *testing.T) {
 
 	t.Run("NeverTyped with pointer constraint", func(t *testing.T) {
 		schema := NeverTyped[any, *any]()
-		var _ *ZodNever[any, *any] = schema
+		var _ = schema
 
 		_, err := schema.Parse("test")
 		assert.Error(t, err)

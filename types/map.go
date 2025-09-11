@@ -50,12 +50,12 @@ func (z *ZodMap[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodMap[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodMap[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using direct validation approach
@@ -183,21 +183,21 @@ func (z *ZodMap[T, R]) ValueType() any {
 
 // Optional creates optional map schema that returns pointer constraint
 func (z *ZodMap[T, R]) Optional() *ZodMap[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values and returns pointer constraint
 func (z *ZodMap[T, R]) Nilable() *ZodMap[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodMap[T, R]) Nullish() *ZodMap[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -205,7 +205,7 @@ func (z *ZodMap[T, R]) Nullish() *ZodMap[T, *T] {
 
 // NonOptional removes Optional flag to require map value and returns base constraint type.
 func (z *ZodMap[T, R]) NonOptional() *ZodMap[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -221,14 +221,14 @@ func (z *ZodMap[T, R]) NonOptional() *ZodMap[T, T] {
 
 // Default preserves current constraint type R
 func (z *ZodMap[T, R]) Default(v T) *ZodMap[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodMap[T, R]) DefaultFunc(fn func() T) *ZodMap[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -237,14 +237,14 @@ func (z *ZodMap[T, R]) DefaultFunc(fn func() T) *ZodMap[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodMap[T, R]) Prefault(v T) *ZodMap[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodMap[T, R]) PrefaultFunc(fn func() T) *ZodMap[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -269,7 +269,7 @@ func (z *ZodMap[T, R]) Min(minLen int, params ...any) *ZodMap[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.MinSize(minLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -282,7 +282,7 @@ func (z *ZodMap[T, R]) Max(maxLen int, params ...any) *ZodMap[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.MaxSize(maxLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -295,7 +295,7 @@ func (z *ZodMap[T, R]) Size(exactLen int, params ...any) *ZodMap[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.Size(exactLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -335,7 +335,7 @@ func (z *ZodMap[T, R]) Overwrite(transform func(R) R, params ...any) *ZodMap[T, 
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -395,7 +395,7 @@ func (z *ZodMap[T, R]) Refine(fn func(R) bool, params ...any) *ZodMap[T, R] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -411,7 +411,7 @@ func (z *ZodMap[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodMap[T, R]
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -494,7 +494,7 @@ func convertToMapConstraintType[T any, R any](value T) R {
 		// Need to return *map[any]any from map[any]any
 		if mapVal, ok := any(value).(map[any]any); ok {
 			mapCopy := mapVal
-			return any(&mapCopy).(R) //nolint:unconvert
+			return any(&mapCopy).(R)
 		}
 		return any((*map[any]any)(nil)).(R)
 	default:
@@ -592,7 +592,7 @@ func convertToMapConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
@@ -875,7 +875,7 @@ func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMa
 	// Add a minimal check that always passes to trigger validation
 	if keySchema != nil || valueSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		mapSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+		mapSchema.internals.AddCheck(alwaysPassCheck)
 	}
 
 	return mapSchema
@@ -907,7 +907,7 @@ func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

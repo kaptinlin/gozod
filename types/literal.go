@@ -125,7 +125,7 @@ func (z *ZodLiteral[T, R]) IsNilable() bool {
 // Optional returns a new schema that allows the value to be nil.
 // It changes the constraint type from R to *T.
 func (z *ZodLiteral[T, R]) Optional() *ZodLiteral[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
@@ -133,14 +133,14 @@ func (z *ZodLiteral[T, R]) Optional() *ZodLiteral[T, *T] {
 // Nilable returns a new schema that allows the value to be nil.
 // It changes the constraint type from R to *T.
 func (z *ZodLiteral[T, R]) Nilable() *ZodLiteral[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers.
 func (z *ZodLiteral[T, R]) Nullish() *ZodLiteral[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -148,26 +148,26 @@ func (z *ZodLiteral[T, R]) Nullish() *ZodLiteral[T, *T] {
 
 // Default sets a default value for the schema.
 func (z *ZodLiteral[T, R]) Default(v T) *ZodLiteral[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // Prefault sets a fallback value if parsing fails.
 func (z *ZodLiteral[T, R]) Prefault(v T) *ZodLiteral[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 func (z *ZodLiteral[T, R]) DefaultFunc(fn func() T) *ZodLiteral[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
 func (z *ZodLiteral[T, R]) PrefaultFunc(fn func() T) *ZodLiteral[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -202,7 +202,7 @@ func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T,
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
 }
@@ -210,7 +210,7 @@ func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T,
 // RefineAny adds a custom validation check to the schema, accepting `any`.
 func (z *ZodLiteral[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodLiteral[T, R] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
 }

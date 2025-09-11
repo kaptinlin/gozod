@@ -45,10 +45,6 @@ func TestDirectCheckCreation(t *testing.T) {
 		},
 	}
 
-	if check == nil {
-		t.Fatal("Check creation returned nil")
-	}
-
 	internals := check.GetZod()
 	if internals == nil {
 		t.Fatal("GetZod returned nil")

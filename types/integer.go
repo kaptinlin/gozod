@@ -58,12 +58,12 @@ func (z *ZodIntegerTyped[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodIntegerTyped[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodIntegerTyped[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for integer type conversion
@@ -151,13 +151,13 @@ func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 	// But only if no other modifiers (Optional, Nilable, Prefault) are set
 	originalInternals := z.internals
 	if isPointerConstraint &&
-		!originalInternals.ZodTypeInternals.Optional &&
-		!originalInternals.ZodTypeInternals.Nilable &&
-		originalInternals.ZodTypeInternals.PrefaultValue == nil &&
-		originalInternals.ZodTypeInternals.PrefaultFunc == nil {
+		!originalInternals.Optional &&
+		!originalInternals.Nilable &&
+		originalInternals.PrefaultValue == nil &&
+		originalInternals.PrefaultFunc == nil {
 		// Create a copy of internals with Optional flag temporarily enabled
 		tempInternals := *originalInternals
-		tempInternals.ZodTypeInternals.SetOptional(true)
+		tempInternals.SetOptional(true)
 		z.internals = &tempInternals
 
 		// Restore original internals after parsing
@@ -183,7 +183,7 @@ func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 			// Handle nil input for optional/nilable schemas
 			if result == nil {
 				internals := originalInternals // Use original internals for nil checking
-				if internals.ZodTypeInternals.Optional || internals.ZodTypeInternals.Nilable {
+				if internals.Optional || internals.Nilable {
 					return zeroR, nil
 				}
 				return zeroR, issues.CreateNonOptionalError(ctx)
@@ -442,21 +442,21 @@ func (z *ZodIntegerTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *Zod
 
 // Optional returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodIntegerTyped[T, R]) Optional() *ZodIntegerTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodIntegerTyped[T, R]) Nilable() *ZodIntegerTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility.
 func (z *ZodIntegerTyped[T, R]) Nullish() *ZodIntegerTyped[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -466,7 +466,7 @@ func (z *ZodIntegerTyped[T, R]) Nullish() *ZodIntegerTyped[T, *T] {
 // It is the counterpart of Optional() when you need to revert a previously optional schema
 // back to a required field while keeping strong type safety.
 func (z *ZodIntegerTyped[T, R]) NonOptional() *ZodIntegerTyped[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// ensure field is required and mark NonOptional for custom error reporting
 	in.SetOptional(false)
 	in.SetNonOptional(true)
@@ -481,14 +481,14 @@ func (z *ZodIntegerTyped[T, R]) NonOptional() *ZodIntegerTyped[T, T] {
 
 // Default keeps the current generic type T.
 func (z *ZodIntegerTyped[T, R]) Default(v int64) *ZodIntegerTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic type T.
 func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -497,7 +497,7 @@ func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T,
 
 // Prefault keeps the current generic type T.
 func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the prefault value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
@@ -514,8 +514,7 @@ func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
 		val := int32(v) // #nosec G115
 		in.SetPrefaultValue(val)
 	case *int64:
-		val := int64(v)
-		in.SetPrefaultValue(val)
+		in.SetPrefaultValue(v)
 	case *uint:
 		val := uint(v) // #nosec G115
 		in.SetPrefaultValue(val)
@@ -559,7 +558,7 @@ func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
 
 // PrefaultFunc keeps the current generic type R.
 func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -579,7 +578,7 @@ func (z *ZodIntegerTyped[T, R]) Meta(meta core.GlobalMeta) *ZodIntegerTyped[T, R
 // Min adds minimum value validation (alias for Gte)
 func (z *ZodIntegerTyped[T, R]) Min(minimum int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Gte(minimum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -587,7 +586,7 @@ func (z *ZodIntegerTyped[T, R]) Min(minimum int64, params ...any) *ZodIntegerTyp
 // Max adds maximum value validation (alias for Lte)
 func (z *ZodIntegerTyped[T, R]) Max(maximum int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Lte(maximum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -595,7 +594,7 @@ func (z *ZodIntegerTyped[T, R]) Max(maximum int64, params ...any) *ZodIntegerTyp
 // Gt adds greater than validation (exclusive)
 func (z *ZodIntegerTyped[T, R]) Gt(value int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Gt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -603,7 +602,7 @@ func (z *ZodIntegerTyped[T, R]) Gt(value int64, params ...any) *ZodIntegerTyped[
 // Gte adds greater than or equal validation (inclusive)
 func (z *ZodIntegerTyped[T, R]) Gte(value int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Gte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -611,7 +610,7 @@ func (z *ZodIntegerTyped[T, R]) Gte(value int64, params ...any) *ZodIntegerTyped
 // Lt adds less than validation (exclusive)
 func (z *ZodIntegerTyped[T, R]) Lt(value int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Lt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -619,7 +618,7 @@ func (z *ZodIntegerTyped[T, R]) Lt(value int64, params ...any) *ZodIntegerTyped[
 // Lte adds less than or equal validation (inclusive)
 func (z *ZodIntegerTyped[T, R]) Lte(value int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.Lte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -647,7 +646,7 @@ func (z *ZodIntegerTyped[T, R]) NonPositive(params ...any) *ZodIntegerTyped[T, R
 // MultipleOf adds multiple of validation
 func (z *ZodIntegerTyped[T, R]) MultipleOf(value int64, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.MultipleOf(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -699,7 +698,7 @@ func (z *ZodIntegerTyped[T, R]) Overwrite(transform func(T) T, params ...any) *Z
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -793,7 +792,7 @@ func (z *ZodIntegerTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodInteg
 	customParams := utils.NormalizeCustomParams(param)
 
 	check := checks.NewCustom[any](wrapper, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -918,7 +917,7 @@ func convertToIntegerType[T IntegerConstraint](v any) (T, bool) {
 // RefineAny adds flexible custom validation logic
 func (z *ZodIntegerTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntegerTyped[T, R] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -940,13 +939,13 @@ func (z *ZodIntegerTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodInt
 func (z *ZodIntegerTyped[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodIntegerTyped[T, R]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -1011,9 +1010,9 @@ func extractIntegerValue[T IntegerConstraint, R any](value R) T {
 func newZodIntegerFromDef[T IntegerConstraint, R any](def *ZodIntegerDef) *ZodIntegerTyped[T, R] {
 	internals := &ZodIntegerInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
-			Type:   def.ZodTypeDef.Type,
-			Checks: def.ZodTypeDef.Checks,
-			Coerce: def.ZodTypeDef.Coerce,
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
 			Bag:    make(map[string]any),
 		},
 		Def: def,
@@ -1027,8 +1026,8 @@ func newZodIntegerFromDef[T IntegerConstraint, R any](def *ZodIntegerDef) *ZodIn
 		return any(newZodIntegerFromDef[T, R](intDef)).(core.ZodType[any])
 	}
 
-	if def.ZodTypeDef.Error != nil {
-		internals.ZodTypeInternals.Error = def.ZodTypeDef.Error
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
 	return &ZodIntegerTyped[T, R]{internals: internals}
@@ -1214,154 +1213,154 @@ func newIntegerTyped[T IntegerConstraint, R any](typeCode core.ZodTypeCode, para
 // CoercedInteger creates a int64 schema with coercion enabled
 func CoercedInteger(params ...any) *ZodIntegerTyped[int64, int64] {
 	schema := Int64(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedIntegerPtr creates a *int64 schema with coercion enabled
 func CoercedIntegerPtr(params ...any) *ZodIntegerTyped[int64, *int64] {
 	schema := Int64Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt creates an int schema with coercion enabled
 func CoercedInt(params ...any) *ZodIntegerTyped[int, int] {
 	schema := Int(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedIntPtr creates a *int schema with coercion enabled
 func CoercedIntPtr(params ...any) *ZodIntegerTyped[int, *int] {
 	schema := IntPtr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt8 creates an int8 schema with coercion enabled
 func CoercedInt8(params ...any) *ZodIntegerTyped[int8, int8] {
 	schema := Int8(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt8Ptr creates a *int8 schema with coercion enabled
 func CoercedInt8Ptr(params ...any) *ZodIntegerTyped[int8, *int8] {
 	schema := Int8Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt16 creates an int16 schema with coercion enabled
 func CoercedInt16(params ...any) *ZodIntegerTyped[int16, int16] {
 	schema := Int16(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt16Ptr creates a *int16 schema with coercion enabled
 func CoercedInt16Ptr(params ...any) *ZodIntegerTyped[int16, *int16] {
 	schema := Int16Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt32 creates an int32 schema with coercion enabled
 func CoercedInt32(params ...any) *ZodIntegerTyped[int32, int32] {
 	schema := Int32(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt32Ptr creates a *int32 schema with coercion enabled
 func CoercedInt32Ptr(params ...any) *ZodIntegerTyped[int32, *int32] {
 	schema := Int32Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt64 creates an int64 schema with coercion enabled
 func CoercedInt64(params ...any) *ZodIntegerTyped[int64, int64] {
 	schema := Int64(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedInt64Ptr creates a *int64 schema with coercion enabled
 func CoercedInt64Ptr(params ...any) *ZodIntegerTyped[int64, *int64] {
 	schema := Int64Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint creates a uint schema with coercion enabled
 func CoercedUint(params ...any) *ZodIntegerTyped[uint, uint] {
 	schema := Uint(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUintPtr creates a *uint schema with coercion enabled
 func CoercedUintPtr(params ...any) *ZodIntegerTyped[uint, *uint] {
 	schema := UintPtr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint8 creates a uint8 schema with coercion enabled
 func CoercedUint8(params ...any) *ZodIntegerTyped[uint8, uint8] {
 	schema := Uint8(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint8Ptr creates a *uint8 schema with coercion enabled
 func CoercedUint8Ptr(params ...any) *ZodIntegerTyped[uint8, *uint8] {
 	schema := Uint8Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint16 creates a uint16 schema with coercion enabled
 func CoercedUint16(params ...any) *ZodIntegerTyped[uint16, uint16] {
 	schema := Uint16(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint16Ptr creates a *uint16 schema with coercion enabled
 func CoercedUint16Ptr(params ...any) *ZodIntegerTyped[uint16, *uint16] {
 	schema := Uint16Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint32 creates a uint32 schema with coercion enabled
 func CoercedUint32(params ...any) *ZodIntegerTyped[uint32, uint32] {
 	schema := Uint32(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint32Ptr creates a *uint32 schema with coercion enabled
 func CoercedUint32Ptr(params ...any) *ZodIntegerTyped[uint32, *uint32] {
 	schema := Uint32Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint64 creates a uint64 schema with coercion enabled
 func CoercedUint64(params ...any) *ZodIntegerTyped[uint64, uint64] {
 	schema := Uint64(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedUint64Ptr creates a *uint64 schema with coercion enabled
 func CoercedUint64Ptr(params ...any) *ZodIntegerTyped[uint64, *uint64] {
 	schema := Uint64Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
@@ -1466,7 +1465,7 @@ func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayloa
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
 }

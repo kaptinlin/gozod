@@ -523,6 +523,7 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 		} else {
 			// If no error, it means the input was accepted, which is also valid behavior
 			// depending on the current implementation
+			t.Log("Input was accepted by discriminated union")
 		}
 
 		// Valid discriminated union should pass normally

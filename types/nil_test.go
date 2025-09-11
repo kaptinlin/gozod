@@ -87,7 +87,7 @@ func TestNil_TypeSafety(t *testing.T) {
 func TestNil_Modifiers(t *testing.T) {
 	t.Run("Optional returns pointer constraint", func(t *testing.T) {
 		schema := Nil().Optional()
-		var _ *ZodNil[*any] = schema
+		var _ = schema
 
 		// nil input - nil type always returns nil regardless of constraint type
 		result, err := schema.Parse(nil)
@@ -97,7 +97,7 @@ func TestNil_Modifiers(t *testing.T) {
 
 	t.Run("Nilable returns pointer constraint", func(t *testing.T) {
 		schema := Nil().Nilable()
-		var _ *ZodNil[*any] = schema
+		var _ = schema
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestNil_Modifiers(t *testing.T) {
 
 	t.Run("Nullish returns pointer constraint", func(t *testing.T) {
 		schema := Nil().Nullish()
-		var _ *ZodNil[*any] = schema
+		var _ = schema
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -116,17 +116,17 @@ func TestNil_Modifiers(t *testing.T) {
 	t.Run("Default preserves constraint type", func(t *testing.T) {
 		// Value constraint preserved
 		valueSchema := Nil().Default("fallback")
-		var _ *ZodNil[any] = valueSchema
+		var _ = valueSchema
 
 		// Pointer constraint preserved
 		ptrSchema := NilPtr().Default("fallback")
-		var _ *ZodNil[*any] = ptrSchema
+		var _ = ptrSchema
 	})
 
 	t.Run("Prefault preserves constraint type", func(t *testing.T) {
 		// Value constraint preserved
 		valueSchema := Nil().Prefault("fallback")
-		var _ *ZodNil[any] = valueSchema
+		var _ = valueSchema
 
 		// Test prefault only works for nil input
 		_, err := valueSchema.Parse("invalid")
@@ -135,7 +135,7 @@ func TestNil_Modifiers(t *testing.T) {
 
 		// Pointer constraint preserved
 		ptrSchema := NilPtr().Prefault("fallback")
-		var _ *ZodNil[*any] = ptrSchema
+		var _ = ptrSchema
 
 		_, err = ptrSchema.Parse("invalid")
 		require.Error(t, err)
@@ -541,7 +541,7 @@ func TestNil_PointerIdentityPreservation(t *testing.T) {
 func TestNil_GenericArchitecture(t *testing.T) {
 	t.Run("Nil factory returns value constraint", func(t *testing.T) {
 		schema := Nil()
-		var _ *ZodNil[any] = schema
+		var _ = schema
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -550,7 +550,7 @@ func TestNil_GenericArchitecture(t *testing.T) {
 
 	t.Run("NilPtr factory returns pointer constraint", func(t *testing.T) {
 		schema := NilPtr()
-		var _ *ZodNil[*any] = schema
+		var _ = schema
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -560,7 +560,7 @@ func TestNil_GenericArchitecture(t *testing.T) {
 	t.Run("NilTyped with explicit constraint types", func(t *testing.T) {
 		// Value constraint
 		valueSchema := NilTyped[string]()
-		var _ *ZodNil[string] = valueSchema
+		var _ = valueSchema
 
 		result, err := valueSchema.Parse(nil)
 		require.NoError(t, err)
@@ -568,7 +568,7 @@ func TestNil_GenericArchitecture(t *testing.T) {
 
 		// Pointer constraint
 		ptrSchema := NilTyped[*string]()
-		var _ *ZodNil[*string] = ptrSchema
+		var _ = ptrSchema
 
 		ptrResult, err := ptrSchema.Parse(nil)
 		require.NoError(t, err)

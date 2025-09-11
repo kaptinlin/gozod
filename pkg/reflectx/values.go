@@ -20,6 +20,8 @@ func HasLength(v any) bool {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.String, reflect.Array, reflect.Slice:
 		return true
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Struct, reflect.UnsafePointer:
+		return false
 	default:
 		return false
 	}
@@ -33,6 +35,8 @@ func HasSize(v any) bool {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Map, reflect.Chan, reflect.Slice, reflect.Array:
 		return true
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Func, reflect.Interface, reflect.Pointer, reflect.String, reflect.Struct, reflect.UnsafePointer:
+		return false
 	default:
 		return false
 	}

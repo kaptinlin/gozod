@@ -49,12 +49,12 @@ func (z *ZodNil[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodNil[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodNil[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // validateNilValue is the validator function for Nil type
@@ -196,21 +196,21 @@ func (z *ZodNil[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 
 // Optional always returns *any because the optional value may be nil or missing.
 func (z *ZodNil[T]) Optional() *ZodNil[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *any because the value may be nil.
 func (z *ZodNil[T]) Nilable() *ZodNil[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodNil[T]) Nullish() *ZodNil[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -218,14 +218,14 @@ func (z *ZodNil[T]) Nullish() *ZodNil[*any] {
 
 // Default keeps the current generic type T.
 func (z *ZodNil[T]) Default(v any) *ZodNil[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic type T.
 func (z *ZodNil[T]) DefaultFunc(fn func() any) *ZodNil[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -234,14 +234,14 @@ func (z *ZodNil[T]) DefaultFunc(fn func() any) *ZodNil[T] {
 
 // Prefault keeps the current generic type T.
 func (z *ZodNil[T]) Prefault(v any) *ZodNil[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodNil[T]) PrefaultFunc(fn func() any) *ZodNil[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(fn)
 	return z.withInternals(in)
 }
@@ -297,20 +297,14 @@ func (z *ZodNil[T]) Refine(fn func(T) bool, params ...any) *ZodNil[T] {
 				nilPtr := (*any)(nil)
 				return fn(any(nilPtr).(T))
 			}
-			if anyVal, ok := v.(any); ok {
-				ptr := &anyVal
-				return fn(any(ptr).(T))
-			}
-			return false
+			ptr := &v
+			return fn(any(ptr).(T))
 		case any:
 			// Schema output is any
 			if v == nil {
 				return fn(any(nil).(T))
 			}
-			if anyVal, ok := v.(any); ok {
-				return fn(any(anyVal).(T))
-			}
-			return false
+			return fn(any(v).(T)) //nolint:unconvert // Required for generic type constraint conversion
 		default:
 			// Unsupported type – should never happen
 			return false
@@ -318,7 +312,7 @@ func (z *ZodNil[T]) Refine(fn func(T) bool, params ...any) *ZodNil[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -326,7 +320,7 @@ func (z *ZodNil[T]) Refine(fn func(T) bool, params ...any) *ZodNil[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodNil[T]) RefineAny(fn func(any) bool, params ...any) *ZodNil[T] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -357,13 +351,13 @@ func (z *ZodNil[T]) withInternals(in *core.ZodTypeInternals) *ZodNil[T] {
 func (z *ZodNil[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodNil[T]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -391,14 +385,14 @@ func convertAnyToConstraintType[T any](value any) (T, bool) {
 	switch any(zero).(type) {
 	case *any:
 		// For *any constraint, try direct conversion first (in case value is already *any)
-		if converted, ok := any(value).(T); ok {
+		if converted, ok := any(value).(T); ok { //nolint:unconvert // Required for generic type constraint conversion
 			return converted, true
 		}
 		// For *any constraint, wrap the value in a pointer
 		return any(&value).(T), true
 	default:
 		// For any constraint, try direct conversion
-		if converted, ok := any(value).(T); ok {
+		if converted, ok := any(value).(T); ok { //nolint:unconvert // Required for generic type constraint conversion
 			return converted, true
 		}
 		return zero, false

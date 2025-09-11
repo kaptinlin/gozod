@@ -6,6 +6,11 @@ import (
 	"sync/atomic"
 )
 
+// Static error variables to comply with err113
+var (
+	ErrSchemaNotZodSchema = fmt.Errorf("schema does not implement ZodSchema interface")
+)
+
 // =============================================================================
 // CORE SCHEMA INTERFACE & INTERNALS
 // =============================================================================
@@ -257,5 +262,5 @@ func ConvertToZodSchema(schema any) (ZodSchema, error) {
 	if zodSchema, ok := schema.(ZodSchema); ok {
 		return zodSchema, nil
 	}
-	return nil, fmt.Errorf("schema does not implement ZodSchema interface: %T", schema)
+	return nil, fmt.Errorf("%w: %T", ErrSchemaNotZodSchema, schema)
 }

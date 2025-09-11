@@ -1,12 +1,18 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/pkg/coerce"
+)
+
+// Static error variables
+var (
+	ErrUnableToConvert = errors.New("unable to convert value to expected type")
 )
 
 // =============================================================================
@@ -1303,7 +1309,7 @@ func convertResultToType[T any](result any) (T, error) {
 		}
 	}
 
-	return zero, fmt.Errorf("unable to convert value of type %T to expected type", result)
+	return zero, fmt.Errorf("%w: value of type %T", ErrUnableToConvert, result)
 }
 
 // performFastTypeCheck performs optimized type checking with early return for common cases.

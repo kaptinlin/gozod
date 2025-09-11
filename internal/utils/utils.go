@@ -57,6 +57,8 @@ func IsPrimitiveType(typeName core.ZodTypeCode) bool {
 		return true
 	case core.ZodTypeBigInt:
 		return true
+	case core.ZodTypeNumber, core.ZodTypeNaN, core.ZodTypeInteger, core.ZodTypeDate, core.ZodTypeNil, core.ZodTypeAny, core.ZodTypeUnknown, core.ZodTypeNever, core.ZodTypeArray, core.ZodTypeSlice, core.ZodTypeObject, core.ZodTypeStruct, core.ZodTypeRecord, core.ZodTypeMap, core.ZodTypeUnion, core.ZodTypeDiscriminated, core.ZodTypeIntersection, core.ZodTypeStringBool, core.ZodTypeFunction, core.ZodTypeLazy, core.ZodTypeLiteral, core.ZodTypeEnum, core.ZodTypeOptional, core.ZodTypeNilable, core.ZodTypeDefault, core.ZodTypePrefault, core.ZodTypePipeline, core.ZodTypeTransform, core.ZodTypePipe, core.ZodTypeCustom, core.ZodTypeCheck, core.ZodTypeRefine, core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeEmail, core.ZodTypeURL, core.ZodTypeIso, core.ZodTypeISODateTime, core.ZodTypeISODate, core.ZodTypeISOTime, core.ZodTypeISODuration, core.ZodTypeFile, core.ZodTypeFloat, core.ZodTypeUintptr, core.ZodTypeNonOptional:
+		return false
 	default:
 		return false
 	}
@@ -102,6 +104,8 @@ func GetNumericOrigin(value any) string {
 			return "bigint"
 		case core.ParsedTypeString:
 			return "string"
+		case core.ParsedTypeNumber, core.ParsedTypeBool, core.ParsedTypeFloat, core.ParsedTypeObject, core.ParsedTypeFunction, core.ParsedTypeFile, core.ParsedTypeDate, core.ParsedTypeArray, core.ParsedTypeSlice, core.ParsedTypeMap, core.ParsedTypeNaN, core.ParsedTypeNil, core.ParsedTypeComplex, core.ParsedTypeStruct, core.ParsedTypeEnum, core.ParsedTypeUnknown:
+			return "unknown"
 		default:
 			return "unknown"
 		}
@@ -136,6 +140,8 @@ func GetSizableOrigin(value any) string {
 	switch parsedType {
 	case core.ParsedTypeFile:
 		return "file"
+	case core.ParsedTypeString, core.ParsedTypeNumber, core.ParsedTypeBigint, core.ParsedTypeBool, core.ParsedTypeFloat, core.ParsedTypeObject, core.ParsedTypeFunction, core.ParsedTypeDate, core.ParsedTypeArray, core.ParsedTypeSlice, core.ParsedTypeMap, core.ParsedTypeNaN, core.ParsedTypeNil, core.ParsedTypeComplex, core.ParsedTypeStruct, core.ParsedTypeEnum, core.ParsedTypeUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}
@@ -396,7 +402,7 @@ func ToDotPath(path []any) string {
 func needsBracketNotation(s string) bool {
 	// Check for spaces, hyphens, dots, or non-alphanumeric characters
 	for _, char := range s {
-		if char == ' ' || char == '-' || char == '.' || !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_') {
+		if char == ' ' || char == '-' || char == '.' || (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '_' {
 			return true
 		}
 	}

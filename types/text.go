@@ -106,7 +106,7 @@ func JWTTyped[T StringConstraint](params ...any) *ZodJWT[T] {
 		jwtCheck = checks.JWT(forwarded...)
 	}
 
-	newInternals := base.internals.ZodTypeInternals.Clone()
+	newInternals := base.internals.Clone()
 	newInternals.AddCheck(jwtCheck)
 
 	return &ZodJWT[T]{base.withInternals(newInternals)}
@@ -157,7 +157,7 @@ func Base64Typed[T StringConstraint](params ...any) *ZodBase64[T] {
 	// Attach Base64 format check (it will process params for custom error).
 	base64Check := checks.Base64(params...)
 
-	newInternals := base.internals.ZodTypeInternals.Clone()
+	newInternals := base.internals.Clone()
 	newInternals.AddCheck(base64Check)
 
 	return &ZodBase64[T]{base.withInternals(newInternals)}
@@ -206,7 +206,7 @@ func Base64URLTyped[T StringConstraint](params ...any) *ZodBase64URL[T] {
 	// Attach Base64URL format check (handles custom error via params).
 	base64URLCheck := checks.Base64URL(params...)
 
-	newInternals := base.internals.ZodTypeInternals.Clone()
+	newInternals := base.internals.Clone()
 	newInternals.AddCheck(base64URLCheck)
 
 	return &ZodBase64URL[T]{base.withInternals(newInternals)}

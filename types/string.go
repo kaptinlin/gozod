@@ -51,12 +51,12 @@ func (z *ZodString[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodString[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodString[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for string type conversion
@@ -142,21 +142,21 @@ func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 
 // Optional always returns *string because the optional value may be nil.
 func (z *ZodString[T]) Optional() *ZodString[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *string because the value may be nil.
 func (z *ZodString[T]) Nilable() *ZodString[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodString[T]) Nullish() *ZodString[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -164,14 +164,14 @@ func (z *ZodString[T]) Nullish() *ZodString[*string] {
 
 // Default keeps the current generic type T.
 func (z *ZodString[T]) Default(v string) *ZodString[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic type T.
 func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -180,14 +180,14 @@ func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
 
 // Prefault keeps the current generic type T.
 func (z *ZodString[T]) Prefault(v string) *ZodString[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -230,7 +230,7 @@ func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
 // Min adds minimum length validation
 func (z *ZodString[T]) Min(minLen int, params ...any) *ZodString[T] {
 	check := checks.MinLength(minLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -238,7 +238,7 @@ func (z *ZodString[T]) Min(minLen int, params ...any) *ZodString[T] {
 // Max adds maximum length validation
 func (z *ZodString[T]) Max(maxLen int, params ...any) *ZodString[T] {
 	check := checks.MaxLength(maxLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -246,7 +246,7 @@ func (z *ZodString[T]) Max(maxLen int, params ...any) *ZodString[T] {
 // Length adds exact length validation
 func (z *ZodString[T]) Length(length int, params ...any) *ZodString[T] {
 	check := checks.Length(length, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -254,7 +254,7 @@ func (z *ZodString[T]) Length(length int, params ...any) *ZodString[T] {
 // Regex adds custom regex validation
 func (z *ZodString[T]) Regex(pattern *regexp.Regexp, params ...any) *ZodString[T] {
 	check := checks.Regex(pattern, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -268,7 +268,7 @@ func (z *ZodString[T]) RegexString(pattern string, params ...any) *ZodString[T] 
 // StartsWith adds prefix validation
 func (z *ZodString[T]) StartsWith(prefix string, params ...any) *ZodString[T] {
 	check := checks.StartsWith(prefix, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -276,7 +276,7 @@ func (z *ZodString[T]) StartsWith(prefix string, params ...any) *ZodString[T] {
 // EndsWith adds suffix validation
 func (z *ZodString[T]) EndsWith(suffix string, params ...any) *ZodString[T] {
 	check := checks.EndsWith(suffix, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -284,7 +284,7 @@ func (z *ZodString[T]) EndsWith(suffix string, params ...any) *ZodString[T] {
 // Includes adds substring validation
 func (z *ZodString[T]) Includes(substring string, params ...any) *ZodString[T] {
 	check := checks.Includes(substring, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -313,7 +313,7 @@ func (z *ZodString[T]) Trim(params ...any) *ZodString[T] {
 // JSON adds JSON format validation
 func (z *ZodString[T]) JSON(params ...any) *ZodString[T] {
 	check := checks.JSON(params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -321,7 +321,7 @@ func (z *ZodString[T]) JSON(params ...any) *ZodString[T] {
 // Email adds email format validation
 func (z *ZodString[T]) Email(params ...any) *ZodString[T] {
 	check := checks.Email(params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -353,7 +353,7 @@ func (z *ZodString[T]) Overwrite(transform func(T) T, params ...any) *ZodString[
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -393,7 +393,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 	}
 
 	check := checks.NewCustom[T](wrapped, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -435,7 +435,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -443,7 +443,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -484,7 +484,7 @@ func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 func (z *ZodString[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodString[T]); ok && src != nil {
 		z.internals = &ZodStringInternals{
-			ZodTypeInternals: *src.internals.ZodTypeInternals.Clone(),
+			ZodTypeInternals: *src.internals.Clone(),
 			Def:              src.internals.Def,
 		}
 	}
@@ -652,7 +652,7 @@ func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
 
 // NonOptional removes the optional flag and returns a new schema with string value type
 func (z *ZodString[T]) NonOptional() *ZodString[string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 

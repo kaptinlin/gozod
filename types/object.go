@@ -13,6 +13,11 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
+// Static error variables
+var (
+	ErrNilPointerCannotConvertToObject = errors.New("nil pointer cannot be converted to object")
+)
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -71,12 +76,12 @@ func (z *ZodObject[T, R]) GetCatchall() core.ZodSchema {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodObject[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodObject[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using object-specific parsing logic with engine.ParseComplex
@@ -179,21 +184,21 @@ func (z *ZodObject[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, e
 
 // Optional creates optional object schema
 func (z *ZodObject[T, R]) Optional() *ZodObject[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values
 func (z *ZodObject[T, R]) Nilable() *ZodObject[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodObject[T, R]) Nullish() *ZodObject[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -203,7 +208,7 @@ func (z *ZodObject[T, R]) Nullish() *ZodObject[T, *T] {
 // It returns a schema whose constraint type is the base value (T), mirroring
 // the behaviour of .Optional().NonOptional() chain in TypeScript Zod.
 func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -222,14 +227,14 @@ func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
 
 // Default preserves current type
 func (z *ZodObject[T, R]) Default(v T) *ZodObject[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current type
 func (z *ZodObject[T, R]) DefaultFunc(fn func() T) *ZodObject[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -238,14 +243,14 @@ func (z *ZodObject[T, R]) DefaultFunc(fn func() T) *ZodObject[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodObject[T, R]) Prefault(v T) *ZodObject[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -265,7 +270,7 @@ func (z *ZodObject[T, R]) Meta(meta core.GlobalMeta) *ZodObject[T, R] {
 // Min sets minimum number of fields
 func (z *ZodObject[T, R]) Min(minLen int, params ...any) *ZodObject[T, R] {
 	check := checks.MinSize(minLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -273,7 +278,7 @@ func (z *ZodObject[T, R]) Min(minLen int, params ...any) *ZodObject[T, R] {
 // Max sets maximum number of fields
 func (z *ZodObject[T, R]) Max(maxLen int, params ...any) *ZodObject[T, R] {
 	check := checks.MaxSize(maxLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -281,7 +286,7 @@ func (z *ZodObject[T, R]) Max(maxLen int, params ...any) *ZodObject[T, R] {
 // Size sets exact number of fields
 func (z *ZodObject[T, R]) Size(exactLen int, params ...any) *ZodObject[T, R] {
 	check := checks.Size(exactLen, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -289,7 +294,7 @@ func (z *ZodObject[T, R]) Size(exactLen int, params ...any) *ZodObject[T, R] {
 // Property validates a specific property using the provided schema
 func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...any) *ZodObject[T, R] {
 	check := checks.NewProperty(key, schema, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check.GetZod())
 	return z.withInternals(newInternals)
 }
@@ -369,7 +374,7 @@ func (z *ZodObject[T, R]) Merge(other *ZodObject[T, R], params ...any) *ZodObjec
 
 // Partial makes all fields optional
 func (z *ZodObject[T, R]) Partial(keys ...[]string) *ZodObject[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 
 	var partialExceptions map[string]bool
 	if len(keys) > 0 && len(keys[0]) > 0 {
@@ -398,7 +403,7 @@ func (z *ZodObject[T, R]) Partial(keys ...[]string) *ZodObject[T, R] {
 
 // Required makes all fields required (opposite of Partial)
 func (z *ZodObject[T, R]) Required(fields ...[]string) *ZodObject[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 
 	var partialExceptions map[string]bool
 	if len(fields) > 0 && len(fields[0]) > 0 {
@@ -437,7 +442,7 @@ func (z *ZodObject[T, R]) Passthrough() *ZodObject[T, R] {
 
 // Catchall sets a schema for unknown keys
 func (z *ZodObject[T, R]) Catchall(catchallSchema core.ZodSchema) *ZodObject[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
 		ZodTypeInternals: *newInternals,
 		Def:              z.internals.Def,
@@ -487,7 +492,7 @@ func (z *ZodObject[T, R]) Overwrite(transform func(R) R, params ...any) *ZodObje
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -522,7 +527,7 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -533,7 +538,7 @@ func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject
 	param := utils.GetFirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -570,7 +575,7 @@ func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T,
 
 // withUnknownKeys creates new instance with specified unknown keys handling
 func (z *ZodObject[T, R]) withUnknownKeys(mode ObjectMode) *ZodObject[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
 		ZodTypeInternals:  *newInternals,
 		Def:               z.internals.Def,
@@ -585,9 +590,9 @@ func (z *ZodObject[T, R]) withUnknownKeys(mode ObjectMode) *ZodObject[T, R] {
 // CloneFrom copies configuration from another schema
 func (z *ZodObject[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodObject[T, R]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -711,7 +716,7 @@ func (z *ZodObject[T, R]) extractObject(value any) (map[string]any, error) {
 	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
-			return nil, fmt.Errorf("nil pointer cannot be converted to object")
+			return nil, fmt.Errorf("%w", ErrNilPointerCannotConvertToObject)
 		}
 		rv = rv.Elem()
 	}
@@ -886,9 +891,7 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 		// Collect any object-level issues
 		if result.HasIssues() {
 			objectIssues := result.GetIssues()
-			for _, issue := range objectIssues {
-				collectedIssues = append(collectedIssues, issue)
-			}
+			collectedIssues = append(collectedIssues, objectIssues...)
 		}
 
 		// Get the potentially transformed value
@@ -1070,7 +1073,7 @@ func ObjectTyped[T any, R any](shape core.ObjectSchema, params ...any) *ZodObjec
 
 	// Add a minimal check to trigger field validation
 	alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-	objectSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+	objectSchema.internals.AddCheck(alwaysPassCheck)
 
 	return objectSchema
 }
@@ -1131,7 +1134,7 @@ func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

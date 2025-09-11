@@ -639,11 +639,12 @@ func ToComplexFromString(s string) (complex128, error) {
 		}
 		if strings.HasSuffix(imagStr, "i") || strings.HasSuffix(imagStr, "j") {
 			imagStr = imagStr[:len(imagStr)-1]
-			if imagStr == "+" {
+			switch imagStr {
+			case "+":
 				imag = 1
-			} else if imagStr == "-" {
+			case "-":
 				imag = -1
-			} else {
+			default:
 				if imag, err = strconv.ParseFloat(imagStr, 64); err != nil {
 					return 0, NewFormatError(imagStr, "imaginary part")
 				}

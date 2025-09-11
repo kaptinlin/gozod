@@ -37,21 +37,25 @@ func (v *TestParamValidator) ErrorMessage(ctx *core.ParseContext) string {
 }
 
 func (v *TestParamValidator) ValidateParam(value int, param string) bool {
-	if param == "even" {
+	switch param {
+	case "even":
 		return value%2 == 0
-	} else if param == "odd" {
+	case "odd":
 		return value%2 != 0
+	default:
+		return v.Validate(value)
 	}
-	return v.Validate(value)
 }
 
 func (v *TestParamValidator) ErrorMessageWithParam(ctx *core.ParseContext, param string) string {
-	if param == "even" {
+	switch param {
+	case "even":
 		return "Value must be even"
-	} else if param == "odd" {
+	case "odd":
 		return "Value must be odd"
+	default:
+		return v.ErrorMessage(ctx)
 	}
-	return v.ErrorMessage(ctx)
 }
 
 func TestValidatorRegistration(t *testing.T) {

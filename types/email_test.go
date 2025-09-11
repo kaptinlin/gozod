@@ -275,14 +275,14 @@ func TestEmail_DefaultAndPrefault(t *testing.T) {
 
 func TestZodEmail_TypeSafety(t *testing.T) {
 	t.Run("String type", func(t *testing.T) {
-		var _ *ZodEmail[string] = Email()
-		var _ *ZodEmail[string] = EmailTyped[string]()
+		_ = Email()
+		_ = EmailTyped[string]()
 	})
 
 	t.Run("Pointer type", func(t *testing.T) {
-		var _ *ZodEmail[*string] = EmailPtr()
-		var _ *ZodEmail[*string] = EmailTyped[*string]()
-		var _ *ZodEmail[*string] = Email().Optional()
+		_ = EmailPtr()
+		_ = EmailTyped[*string]()
+		_ = Email().Optional()
 	})
 
 	t.Run("Non-string types should not compile", func(t *testing.T) {

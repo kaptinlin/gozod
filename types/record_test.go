@@ -1247,7 +1247,7 @@ func TestRecord_KeySchemaValidation(t *testing.T) {
 		var zodErr *issues.ZodError
 		require.True(t, issues.IsZodError(err, &zodErr))
 		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.IssueCode(core.InvalidType), zodErr.Issues[0].Code)
+		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 		assert.Equal(t, []any{"email"}, zodErr.Issues[0].Path)
 	})
 
@@ -1264,7 +1264,7 @@ func TestRecord_KeySchemaValidation(t *testing.T) {
 		var zodErr *issues.ZodError
 		require.True(t, issues.IsZodError(err, &zodErr))
 		assert.Len(t, zodErr.Issues, 1)
-		assert.Equal(t, core.IssueCode(core.UnrecognizedKeys), zodErr.Issues[0].Code)
+		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
 	})
 
 	t.Run("partial record - valid (missing keys allowed)", func(t *testing.T) {
@@ -1287,7 +1287,7 @@ func TestRecord_KeySchemaValidation(t *testing.T) {
 		require.Error(t, err) // Unrecognized keys are still checked in partial records
 		var zodErr *issues.ZodError
 		require.True(t, issues.IsZodError(err, &zodErr))
-		assert.Equal(t, core.IssueCode(core.UnrecognizedKeys), zodErr.Issues[0].Code)
+		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
 	})
 
 	t.Run("literal key schema", func(t *testing.T) {

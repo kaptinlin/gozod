@@ -51,12 +51,12 @@ func (z *ZodBigInt[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodBigInt[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodBigInt[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for big.Int type conversion
@@ -95,14 +95,15 @@ func (z *ZodBigInt[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 		}
 
 		// Prefault/PrefaultFunc - use as new input
-		if internals.PrefaultValue != nil {
+		switch {
+		case internals.PrefaultValue != nil:
 			input = internals.PrefaultValue
-		} else if internals.PrefaultFunc != nil {
+		case internals.PrefaultFunc != nil:
 			input = internals.PrefaultFunc()
-		} else if internals.Optional || internals.Nilable {
+		case internals.Optional || internals.Nilable:
 			// Optional/Nilable - allow nil
 			return engine.ConvertToConstraintType[*big.Int, T](nil, parseCtx, core.ZodTypeBigInt)
-		} else {
+		default:
 			// Reject nil input
 			return zero, issues.CreateInvalidTypeError(core.ZodTypeBigInt, nil, parseCtx)
 		}
@@ -167,21 +168,21 @@ func (z *ZodBigInt[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 
 // Optional always returns **big.Int for nullable semantics
 func (z *ZodBigInt[T]) Optional() *ZodBigInt[**big.Int] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns **big.Int
 func (z *ZodBigInt[T]) Nilable() *ZodBigInt[**big.Int] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodBigInt[T]) Nullish() *ZodBigInt[**big.Int] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -190,7 +191,7 @@ func (z *ZodBigInt[T]) Nullish() *ZodBigInt[**big.Int] {
 // NonOptional removes optional flag and returns *big.Int constraint (single pointer).
 // This is useful after Optional()/Nilable() when nil values should be disallowed again.
 func (z *ZodBigInt[T]) NonOptional() *ZodBigInt[*big.Int] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -204,14 +205,14 @@ func (z *ZodBigInt[T]) NonOptional() *ZodBigInt[*big.Int] {
 
 // Default preserves current generic type T
 func (z *ZodBigInt[T]) Default(v *big.Int) *ZodBigInt[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodBigInt[T]) DefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -220,14 +221,14 @@ func (z *ZodBigInt[T]) DefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodBigInt[T]) Prefault(v *big.Int) *ZodBigInt[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps current generic type T.
 func (z *ZodBigInt[T]) PrefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -245,7 +246,7 @@ func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
 // Min adds minimum value validation
 func (z *ZodBigInt[T]) Min(minimum *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Gte(minimum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -253,7 +254,7 @@ func (z *ZodBigInt[T]) Min(minimum *big.Int, params ...any) *ZodBigInt[T] {
 // Max adds maximum value validation
 func (z *ZodBigInt[T]) Max(maximum *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Lte(maximum, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -261,7 +262,7 @@ func (z *ZodBigInt[T]) Max(maximum *big.Int, params ...any) *ZodBigInt[T] {
 // Gt adds greater than validation (exclusive)
 func (z *ZodBigInt[T]) Gt(value *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Gt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -269,7 +270,7 @@ func (z *ZodBigInt[T]) Gt(value *big.Int, params ...any) *ZodBigInt[T] {
 // Gte adds greater than or equal validation (inclusive)
 func (z *ZodBigInt[T]) Gte(value *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Gte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -277,7 +278,7 @@ func (z *ZodBigInt[T]) Gte(value *big.Int, params ...any) *ZodBigInt[T] {
 // Lt adds less than validation (exclusive)
 func (z *ZodBigInt[T]) Lt(value *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Lt(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -285,7 +286,7 @@ func (z *ZodBigInt[T]) Lt(value *big.Int, params ...any) *ZodBigInt[T] {
 // Lte adds less than or equal validation (inclusive)
 func (z *ZodBigInt[T]) Lte(value *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.Lte(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -313,7 +314,7 @@ func (z *ZodBigInt[T]) NonPositive(params ...any) *ZodBigInt[T] {
 // MultipleOf adds multiple of validation
 func (z *ZodBigInt[T]) MultipleOf(value *big.Int, params ...any) *ZodBigInt[T] {
 	check := checks.MultipleOf(value, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -340,7 +341,7 @@ func (z *ZodBigInt[T]) Overwrite(transform func(T) T, params ...any) *ZodBigInt[
 		}
 		return input
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -390,7 +391,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 
 	// Use checks package for custom validation
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -399,7 +400,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 func (z *ZodBigInt[T]) RefineAny(fn func(any) bool, params ...any) *ZodBigInt[T] {
 	// MUST use checks package for custom validation
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -453,9 +454,9 @@ func (z *ZodBigInt[T]) withInternals(in *core.ZodTypeInternals) *ZodBigInt[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodBigInt[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodBigInt[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -533,13 +534,13 @@ func BigIntTyped[T BigIntegerConstraint](params ...any) *ZodBigInt[T] {
 // CoercedBigInt creates coerced *big.Int schema
 func CoercedBigInt(params ...any) *ZodBigInt[*big.Int] {
 	schema := BigInt(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedBigIntPtr creates coerced **big.Int schema
 func CoercedBigIntPtr(params ...any) *ZodBigInt[**big.Int] {
 	schema := BigIntPtr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }

@@ -152,7 +152,7 @@ func TestFunction_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodFunction[*any]
-		var _ *ZodFunction[*any] = optionalSchema
+		_ = optionalSchema
 
 		// Test with function
 		testFunc := func() {}
@@ -170,7 +170,7 @@ func TestFunction_Modifiers(t *testing.T) {
 		schema := Function()
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodFunction[*any] = nilableSchema
+		_ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -184,12 +184,12 @@ func TestFunction_Modifiers(t *testing.T) {
 		// any maintains any
 		schema := Function()
 		defaultSchema := schema.Default(defaultFunc)
-		var _ *ZodFunction[any] = defaultSchema
+		_ = defaultSchema
 
 		// *any maintains *any
 		ptrSchema := FunctionPtr()
 		defaultPtrSchema := ptrSchema.Default(defaultFunc)
-		var _ *ZodFunction[*any] = defaultPtrSchema
+		_ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
@@ -198,12 +198,12 @@ func TestFunction_Modifiers(t *testing.T) {
 		// any maintains any
 		schema := Function()
 		prefaultSchema := schema.Prefault(prefaultFunc)
-		var _ *ZodFunction[any] = prefaultSchema
+		var _ = prefaultSchema
 
 		// *any maintains *any
 		ptrSchema := FunctionPtr()
 		prefaultPtrSchema := ptrSchema.Prefault(prefaultFunc)
-		var _ *ZodFunction[*any] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 }
 
@@ -220,7 +220,7 @@ func TestFunction_Chaining(t *testing.T) {
 					Default(defaultFunc). // *ZodFunction[any] (maintains type)
 					Optional()            // *ZodFunction[*any] (type conversion)
 
-		var _ *ZodFunction[*any] = schema
+		var _ = schema
 
 		// Test final behavior
 		testFunc := func(x int) int { return x * 2 }
@@ -236,7 +236,7 @@ func TestFunction_Chaining(t *testing.T) {
 						Nilable().           // *ZodFunction[*any] (maintains type)
 						Default(defaultFunc) // *ZodFunction[*any] (maintains type)
 
-		var _ *ZodFunction[*any] = schema
+		var _ = schema
 
 		result, err := schema.Parse(func() {})
 		require.NoError(t, err)

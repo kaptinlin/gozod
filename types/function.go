@@ -1,7 +1,6 @@
 package types
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/kaptinlin/gozod/core"
@@ -55,12 +54,12 @@ func (z *ZodFunction[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodFunction[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodFunction[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates and returns a function that performs input/output validation
@@ -93,21 +92,13 @@ func (z *ZodFunction[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) 
 		}
 		// Create pointer to the function
 		fnPtr := &result
-		return any(fnPtr).(T), nil //nolint:unconvert
+		return any(fnPtr).(T), nil
 	} else {
 		// T is any - return the function directly
 		if result == nil {
 			return zero, nil
 		}
-		if fn, ok := result.(any); ok {
-			return any(fn).(T), nil //nolint:unconvert
-		}
-		return zero, issues.CreateTypeConversionError(
-			fmt.Sprintf("%T", result),
-			"function",
-			input,
-			ctx[0],
-		)
+		return any(result).(T), nil //nolint:unconvert
 	}
 }
 
@@ -155,21 +146,13 @@ func (z *ZodFunction[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, err
 		}
 		// Create pointer to the function
 		fnPtr := &result
-		return any(fnPtr).(T), nil //nolint:unconvert
+		return any(fnPtr).(T), nil
 	} else {
 		// T is any - return the function directly
 		if result == nil {
 			return zero, nil
 		}
-		if fn, ok := result.(any); ok {
-			return any(fn).(T), nil //nolint:unconvert
-		}
-		return zero, issues.CreateTypeConversionError(
-			fmt.Sprintf("%T", result),
-			"function",
-			any(input),
-			ctx[0],
-		)
+		return any(result).(T), nil //nolint:unconvert
 	}
 }
 
@@ -188,21 +171,21 @@ func (z *ZodFunction[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 
 // Optional allows the function to be nil
 func (z *ZodFunction[T]) Optional() *ZodFunction[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows the function to be nil
 func (z *ZodFunction[T]) Nilable() *ZodFunction[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodFunction[T]) Nullish() *ZodFunction[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -210,28 +193,28 @@ func (z *ZodFunction[T]) Nullish() *ZodFunction[*any] {
 
 // Default preserves the current generic type T
 func (z *ZodFunction[T]) Default(v any) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves the current generic type T
 func (z *ZodFunction[T]) DefaultFunc(fn func() any) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(fn)
 	return z.withInternals(in)
 }
 
 // Prefault preserves the current generic type T
 func (z *ZodFunction[T]) Prefault(v any) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc preserves the current generic type T
 func (z *ZodFunction[T]) PrefaultFunc(fn func() any) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(fn)
 	return z.withInternals(in)
 }
@@ -272,7 +255,7 @@ func (z *ZodFunction[T]) Overwrite(transform func(T) T, params ...any) *ZodFunct
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -305,7 +288,7 @@ func (z *ZodFunction[T]) Refine(fn func(T) bool, params ...any) *ZodFunction[T] 
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -319,7 +302,7 @@ func (z *ZodFunction[T]) RefineAny(fn func(any) bool, params ...any) *ZodFunctio
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -330,7 +313,7 @@ func (z *ZodFunction[T]) RefineAny(fn func(any) bool, params ...any) *ZodFunctio
 
 // Input sets the input schema for function arguments
 func (z *ZodFunction[T]) Input(inputSchema core.ZodType[any]) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	newInternals := &ZodFunctionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
@@ -342,7 +325,7 @@ func (z *ZodFunction[T]) Input(inputSchema core.ZodType[any]) *ZodFunction[T] {
 
 // Output sets the output schema for function return value
 func (z *ZodFunction[T]) Output(outputSchema core.ZodType[any]) *ZodFunction[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	newInternals := &ZodFunctionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
@@ -444,14 +427,17 @@ func (z *ZodFunction[T]) validateFunction(value any, checks []core.ZodCheck, ctx
 func (z *ZodFunction[T]) validateFunctionSignature(input any, ctx *core.ParseContext) error {
 	// Validate input parameters if input schema is provided
 	if z.internals.Input != nil {
-		// For simplicity, we'll validate this during Implement() call
+		// Input validation is deferred to Implement() call
 		// since we need actual arguments to validate against the schema
+		// TODO: Consider pre-validation if possible
+		_ = ctx // Prevent unused parameter warning
 	}
 
 	// Validate return type if output schema is provided
 	if z.internals.Output != nil {
 		// For simplicity, we'll validate this during function execution
 		// since we need actual return values to validate against the schema
+		_ = ctx // Prevent unused parameter warning
 	}
 
 	return nil

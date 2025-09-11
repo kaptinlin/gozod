@@ -452,23 +452,23 @@ func TestISO_RangeValidation(t *testing.T) {
 func TestISO_TypeSafety(t *testing.T) {
 	t.Run("basic_schema_returns_string", func(t *testing.T) {
 		schema := IsoDateTime()
-		var result string = schema.MustParse("2023-12-25T15:30:45Z")
+		result := schema.MustParse("2023-12-25T15:30:45Z")
 		assert.Equal(t, "2023-12-25T15:30:45Z", result)
 	})
 
 	t.Run("optional_schema_returns_pointer", func(t *testing.T) {
 		schema := IsoDateTime().Optional()
-		var result *string = schema.MustParse("2023-12-25T15:30:45Z")
+		result := schema.MustParse("2023-12-25T15:30:45Z")
 		require.NotNil(t, result)
 		assert.Equal(t, "2023-12-25T15:30:45Z", *result)
 
-		var nilResult *string = schema.MustParse(nil)
+		nilResult := schema.MustParse(nil)
 		assert.Nil(t, nilResult)
 	})
 
 	t.Run("ptr_schema", func(t *testing.T) {
 		schema := IsoDateTimePtr()
-		var result *string = schema.MustParse("2023-12-25T15:30:45Z")
+		result := schema.MustParse("2023-12-25T15:30:45Z")
 		require.NotNil(t, result)
 		assert.Equal(t, "2023-12-25T15:30:45Z", *result)
 	})

@@ -61,12 +61,12 @@ func (z *ZodComplex[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodComplex[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodComplex[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce attempts to coerce input to target complex type using coerce package
@@ -273,21 +273,21 @@ func (z *ZodComplex[T]) applyComplexChecks128(value complex128, checks []core.Zo
 
 // Optional always returns *complex128 for nullable semantics
 func (z *ZodComplex[T]) Optional() *ZodComplex[*complex128] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withComplex128PtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodComplex[T]) Nilable() *ZodComplex[*complex128] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withComplex128PtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodComplex[T]) Nullish() *ZodComplex[*complex128] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withComplex128PtrInternals(in)
@@ -295,7 +295,7 @@ func (z *ZodComplex[T]) Nullish() *ZodComplex[*complex128] {
 
 // Default preserves current generic type T
 func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the default value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
@@ -316,7 +316,7 @@ func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 
 // DefaultFunc preserves current generic type T
 func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		v := fn()
 		// Convert the default value to the appropriate constraint type
@@ -340,7 +340,7 @@ func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the prefault value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
@@ -361,7 +361,7 @@ func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		v := fn()
 		// Convert the prefault value to the appropriate constraint type
@@ -401,7 +401,7 @@ func (z *ZodComplex[T]) Min(minimum float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -414,7 +414,7 @@ func (z *ZodComplex[T]) Max(maximum float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -427,7 +427,7 @@ func (z *ZodComplex[T]) Gt(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -440,7 +440,7 @@ func (z *ZodComplex[T]) Gte(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -453,7 +453,7 @@ func (z *ZodComplex[T]) Lt(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -466,7 +466,7 @@ func (z *ZodComplex[T]) Lte(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -500,7 +500,7 @@ func (z *ZodComplex[T]) Finite(params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -536,7 +536,7 @@ func (z *ZodComplex[T]) Overwrite(transform func(T) T, params ...any) *ZodComple
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -606,7 +606,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -614,7 +614,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 // RefineAny provides flexible validation without type conversion
 func (z *ZodComplex[T]) RefineAny(fn func(any) bool, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -642,9 +642,9 @@ func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] 
 // CloneFrom copies configuration from another schema
 func (z *ZodComplex[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodComplex[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -709,7 +709,7 @@ func convertToComplexType[T ComplexConstraint](v any) (T, bool) {
 	}
 
 	// Extract complex value from input
-	var complexValue *complex128 = convertToComplexValue(v)
+	complexValue := convertToComplexValue(v)
 	if complexValue == nil {
 		return zero, false // Reject all non-complex types
 	}
@@ -841,27 +841,27 @@ func CoercedComplexPtr(params ...any) *ZodComplex[*complex128] {
 // CoercedComplex64 creates coerced complex64 schema
 func CoercedComplex64(params ...any) *ZodComplex[complex64] {
 	schema := Complex64(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedComplex64Ptr creates coerced *complex64 schema
 func CoercedComplex64Ptr(params ...any) *ZodComplex[*complex64] {
 	schema := Complex64Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedComplex128 creates coerced complex128 schema
 func CoercedComplex128(params ...any) *ZodComplex[complex128] {
 	schema := Complex128(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedComplex128Ptr creates coerced *complex128 schema
 func CoercedComplex128Ptr(params ...any) *ZodComplex[*complex128] {
 	schema := Complex128Ptr(params...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }

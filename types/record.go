@@ -14,6 +14,18 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
+// Static error variables
+var (
+	ErrInternalMapType             = errors.New("internal error: T is not a map type")
+	ErrInternalMapKeyNotString     = errors.New("internal error: map key is not string")
+	ErrInternalCannotConvertValue  = errors.New("internal error: cannot convert value type")
+	ErrInternalCannotConvertRecord = errors.New("internal error: cannot convert validated record back to T")
+	ErrNilPointerToRecord          = errors.New("nil pointer to record")
+	ErrNonStringKeyInMap           = errors.New("non-string key found in map, records require string keys")
+	ErrExpectedMapStringAny        = errors.New("expected map[string]any")
+	ErrValueValidationFailed       = errors.New("value validation failed for key")
+)
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -60,12 +72,12 @@ func (z *ZodRecord[T, R]) ValueType() any {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodRecord[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodRecord[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using unified ParseComplex API
@@ -171,21 +183,21 @@ func (z *ZodRecord[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, e
 
 // Optional creates optional record schema that returns pointer constraint
 func (z *ZodRecord[T, R]) Optional() *ZodRecord[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values and returns pointer constraint
 func (z *ZodRecord[T, R]) Nilable() *ZodRecord[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodRecord[T, R]) Nullish() *ZodRecord[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -193,7 +205,7 @@ func (z *ZodRecord[T, R]) Nullish() *ZodRecord[T, *T] {
 
 // NonOptional removes Optional flag and enforces record presence.
 func (z *ZodRecord[T, R]) NonOptional() *ZodRecord[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -208,14 +220,14 @@ func (z *ZodRecord[T, R]) NonOptional() *ZodRecord[T, T] {
 
 // Default preserves current constraint type R
 func (z *ZodRecord[T, R]) Default(v T) *ZodRecord[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodRecord[T, R]) DefaultFunc(fn func() T) *ZodRecord[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -224,14 +236,14 @@ func (z *ZodRecord[T, R]) DefaultFunc(fn func() T) *ZodRecord[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodRecord[T, R]) Prefault(v T) *ZodRecord[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -254,7 +266,7 @@ func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.MinSize(minLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -267,7 +279,7 @@ func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.MaxSize(maxLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -280,7 +292,7 @@ func (z *ZodRecord[T, R]) Size(exactLen int, params ...any) *ZodRecord[T, R] {
 		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
 	}
 	check := checks.Size(exactLen, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -335,7 +347,7 @@ func (z *ZodRecord[T, R]) Overwrite(transform func(R) R, params ...any) *ZodReco
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -364,7 +376,7 @@ func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -380,7 +392,7 @@ func (z *ZodRecord[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodRecord
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -482,14 +494,14 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		// Use reflection to convert T to map[string]any
 		valueReflect := reflect.ValueOf(value)
 		if valueReflect.Kind() != reflect.Map {
-			return value, fmt.Errorf("internal error: T is not a map type")
+			return value, fmt.Errorf("%w", ErrInternalMapType)
 		}
 
 		recordValue = make(map[string]any)
 		for _, key := range valueReflect.MapKeys() {
 			keyStr, ok := key.Interface().(string)
 			if !ok {
-				return value, fmt.Errorf("internal error: map key is not string")
+				return value, fmt.Errorf("%w", ErrInternalMapKeyNotString)
 			}
 			recordValue[keyStr] = valueReflect.MapIndex(key).Interface()
 		}
@@ -508,7 +520,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		// Use reflection to convert map[string]any back to T
 		targetType := reflect.TypeOf(value)
 		if targetType.Kind() != reflect.Map {
-			return value, fmt.Errorf("internal error: T is not a map type")
+			return value, fmt.Errorf("%w", ErrInternalMapType)
 		}
 
 		newMap := reflect.MakeMap(targetType)
@@ -523,7 +535,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 				if valValue.CanConvert(valueType) {
 					valValue = valValue.Convert(valueType)
 				} else {
-					return value, fmt.Errorf("internal error: cannot convert value type")
+					return value, fmt.Errorf("%w", ErrInternalCannotConvertValue)
 				}
 			}
 
@@ -533,7 +545,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		if result, ok := newMap.Interface().(T); ok {
 			return result, nil
 		}
-		return value, fmt.Errorf("internal error: cannot convert validated record back to T")
+		return value, fmt.Errorf("%w", ErrInternalCannotConvertRecord)
 	}
 }
 
@@ -567,7 +579,7 @@ func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 	}
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
@@ -669,7 +681,7 @@ func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 		if recordPtr != nil {
 			return *recordPtr, nil
 		}
-		return nil, fmt.Errorf("nil pointer to record")
+		return nil, fmt.Errorf("%w", ErrNilPointerToRecord)
 	}
 
 	// Handle map[any]any and convert to map[string]any
@@ -680,7 +692,7 @@ func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 				result[strKey] = v
 			} else {
 				// Non-string key found, invalid for record
-				return nil, fmt.Errorf("non-string key found in map: %T, records require string keys", k)
+				return nil, ErrNonStringKeyInMap
 			}
 		}
 		return result, nil
@@ -696,14 +708,14 @@ func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 					result[strKey] = v
 				} else {
 					// Non-string key found, invalid for record
-					return nil, fmt.Errorf("non-string key found in map: %T, records require string keys", k)
+					return nil, ErrNonStringKeyInMap
 				}
 			}
 			return result, nil
 		}
 	}
 
-	return nil, fmt.Errorf("expected map[string]any, got %T", value)
+	return nil, ErrExpectedMapStringAny
 }
 
 // validateRecord validates record entries using value schema
@@ -836,7 +848,7 @@ func (z *ZodRecord[T, R]) validateValue(value any, schema any, ctx *core.ParseCo
 		// Check if there's an error (second return value)
 		if errInterface := results[1].Interface(); errInterface != nil {
 			if err, ok := errInterface.(error); ok {
-				return fmt.Errorf("value validation failed for key '%s': %w", key, err)
+				return fmt.Errorf("%w '%s': %w", ErrValueValidationFailed, key, err)
 			}
 		}
 	}
@@ -985,7 +997,7 @@ func RecordTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *Zo
 	// Ensure validator is called when key or value schema exists
 	if keySchema != nil || valueSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		recordSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+		recordSchema.internals.AddCheck(alwaysPassCheck)
 	}
 
 	return recordSchema
@@ -1017,7 +1029,7 @@ func (z *ZodRecord[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

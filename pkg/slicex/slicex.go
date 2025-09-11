@@ -147,6 +147,8 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 		// Convert string to slice of characters
 		str := rv.String()
 		return StringToChars(str), nil
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Struct, reflect.UnsafePointer:
+		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
 	default:
 		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
 	}
@@ -225,7 +227,7 @@ func Merge(a, b any) (any, error) {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSecondSlice, errB)
 	}
 
-	merged := append(sliceA, sliceB...)
+	merged := append(sliceA, sliceB...) //nolint:gocritic // Creating new slice intentionally
 	return convertToOriginalType(merged, a, b)
 }
 
@@ -276,7 +278,7 @@ func Length(input any) (int, error) {
 	}
 
 	rv := reflect.ValueOf(input)
-	switch rv.Kind() {
+	switch rv.Kind() { //nolint:exhaustive // Only handling slice, array, and string types
 	case reflect.Slice, reflect.Array, reflect.String:
 		return rv.Len(), nil
 	default:
@@ -456,11 +458,12 @@ func Join(slice any, separator string) string {
 func convertToOriginalType(merged []any, original1, original2 any) (any, error) {
 	// Get the type of the first non-nil original
 	var originalType reflect.Type
-	if original1 != nil {
+	switch {
+	case original1 != nil:
 		originalType = reflect.TypeOf(original1)
-	} else if original2 != nil {
+	case original2 != nil:
 		originalType = reflect.TypeOf(original2)
-	} else {
+	default:
 		return merged, nil
 	}
 
@@ -476,12 +479,13 @@ func convertToOriginalType(merged []any, original1, original2 any) (any, error) 
 
 		for i, item := range merged {
 			itemValue := reflect.ValueOf(item)
-			if itemValue.Type().ConvertibleTo(elemType) {
+			switch {
+			case itemValue.Type().ConvertibleTo(elemType):
 				converted := itemValue.Convert(elemType)
 				result.Index(i).Set(converted)
-			} else if itemValue.Type().AssignableTo(elemType) {
+			case itemValue.Type().AssignableTo(elemType):
 				result.Index(i).Set(itemValue)
-			} else {
+			default:
 				// Cannot convert, return []any
 				return merged, nil
 			}

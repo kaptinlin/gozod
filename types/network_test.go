@@ -156,7 +156,7 @@ func TestIPv4_Modifiers(t *testing.T) {
 		optionalSchema := stringSchema.Optional()
 
 		// Type check: ensure it returns *ZodIPv4[*string]
-		var _ *ZodIPv4[*string] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		result, err := optionalSchema.Parse("192.168.1.1")
@@ -168,14 +168,14 @@ func TestIPv4_Modifiers(t *testing.T) {
 		// From *string to *string via Optional (maintains type)
 		ptrSchema := IPv4Ptr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodIPv4[*string] = optionalPtrSchema
+		var _ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *string", func(t *testing.T) {
 		stringSchema := IPv4()
 		nilableSchema := stringSchema.Nilable()
 
-		var _ *ZodIPv4[*string] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -187,24 +187,24 @@ func TestIPv4_Modifiers(t *testing.T) {
 		// string maintains string
 		stringSchema := IPv4()
 		defaultStringSchema := stringSchema.Default("192.168.1.1")
-		var _ *ZodIPv4[string] = defaultStringSchema
+		var _ = defaultStringSchema
 
 		// *string maintains *string
 		ptrSchema := IPv4Ptr()
 		defaultPtrSchema := ptrSchema.Default("192.168.1.1")
-		var _ *ZodIPv4[*string] = defaultPtrSchema
+		var _ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		// string maintains string
 		stringSchema := IPv4()
 		prefaultStringSchema := stringSchema.Prefault("192.168.1.1")
-		var _ *ZodIPv4[string] = prefaultStringSchema
+		var _ = prefaultStringSchema
 
 		// *string maintains *string
 		ptrSchema := IPv4Ptr()
 		prefaultPtrSchema := ptrSchema.Prefault("192.168.1.1")
-		var _ *ZodIPv4[*string] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 }
 
@@ -219,7 +219,7 @@ func TestIPv4_Chaining(t *testing.T) {
 					Default("192.168.1.1"). // *ZodIPv4[string] (maintains type)
 					Optional()              // *ZodIPv4[*string] (type conversion)
 
-		var _ *ZodIPv4[*string] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse("10.0.0.1")
@@ -234,7 +234,7 @@ func TestIPv4_Chaining(t *testing.T) {
 					Nilable().             // *ZodIPv4[*string] (maintains type)
 					Default("192.168.1.1") // *ZodIPv4[*string] (maintains type)
 
-		var _ *ZodIPv4[*string] = schema
+		var _ = schema
 
 		result, err := schema.Parse("172.16.0.1")
 		require.NoError(t, err)

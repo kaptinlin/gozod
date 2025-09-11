@@ -1,8 +1,14 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+)
+
+// Static error variables
+var (
+	ErrInvalidTransformType = errors.New("invalid type for transform")
 )
 
 // isNilInput performs compile-time nil checking to avoid reflection
@@ -226,7 +232,7 @@ func NewZodTransform[In, Out any](source ZodType[In], wrapperFn func(In, *Refine
 			return wrapperFn(typedData, ctx)
 		}
 		// This should ideally not happen if parsing is correct
-		return nil, fmt.Errorf("invalid type for transform: expected %T", *new(In))
+		return nil, fmt.Errorf("%w: expected %T", ErrInvalidTransformType, *new(In))
 	})
 
 	return &ZodTransform[In, Out]{

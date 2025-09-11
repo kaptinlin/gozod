@@ -15,14 +15,14 @@ import (
 func TestFile_BasicFunctionality(t *testing.T) {
 	t.Run("File factory", func(t *testing.T) {
 		schema := File()
-		var _ *ZodFile[any, any] = schema
+		_ = schema
 
 		require.NotNil(t, schema)
 	})
 
 	t.Run("FilePtr factory", func(t *testing.T) {
 		schema := FilePtr()
-		var _ *ZodFile[any, *any] = schema
+		_ = schema
 
 		require.NotNil(t, schema)
 	})
@@ -42,7 +42,7 @@ func TestFile_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodFile[any, *any]
-		var _ *ZodFile[any, *any] = optionalSchema
+		_ = optionalSchema
 
 		require.NotNil(t, optionalSchema)
 	})
@@ -51,7 +51,7 @@ func TestFile_Modifiers(t *testing.T) {
 		schema := File()
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodFile[any, *any] = nilableSchema
+		_ = nilableSchema
 
 		require.NotNil(t, nilableSchema)
 	})
@@ -60,7 +60,7 @@ func TestFile_Modifiers(t *testing.T) {
 		schema := File()
 		defaultSchema := schema.Default("default_value")
 
-		var _ *ZodFile[any, any] = defaultSchema
+		_ = defaultSchema
 
 		require.NotNil(t, defaultSchema)
 	})
@@ -438,10 +438,12 @@ func TestFile_Overwrite(t *testing.T) {
 			err := tempFile.Close()
 			if err != nil {
 				// Handle or log the error if necessary
+				t.Logf("Failed to close temp file: %v", err)
 			}
 			err = os.Remove(tempFile.Name())
 			if err != nil {
 				// Handle or log the error if necessary
+				t.Logf("Failed to remove temp file: %v", err)
 			}
 		}()
 

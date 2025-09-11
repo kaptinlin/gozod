@@ -48,12 +48,12 @@ func (z *ZodEnum[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodEnum[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodEnum[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using enum-specific parsing logic
@@ -121,21 +121,21 @@ func (z *ZodEnum[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, err
 
 // Optional always returns *T constraint because the optional value may be nil.
 func (z *ZodEnum[T, R]) Optional() *ZodEnum[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *T constraint because the value may be nil.
 func (z *ZodEnum[T, R]) Nilable() *ZodEnum[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodEnum[T, R]) Nullish() *ZodEnum[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -143,14 +143,14 @@ func (z *ZodEnum[T, R]) Nullish() *ZodEnum[T, *T] {
 
 // Default keeps the current generic constraint type R.
 func (z *ZodEnum[T, R]) Default(v T) *ZodEnum[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic constraint type R.
 func (z *ZodEnum[T, R]) DefaultFunc(fn func() T) *ZodEnum[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -159,14 +159,14 @@ func (z *ZodEnum[T, R]) DefaultFunc(fn func() T) *ZodEnum[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodEnum[T, R]) Prefault(v T) *ZodEnum[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -302,7 +302,7 @@ func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
 
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -318,7 +318,7 @@ func (z *ZodEnum[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodEnum[T, 
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -338,7 +338,7 @@ func (z *ZodEnum[T, R]) validateEnumWithIssues(value T, checks []core.ZodCheck, 
 		for v := range z.internals.Values {
 			validValues = append(validValues, v)
 		}
-		rawIssue := issues.CreateIssue(core.InvalidValue, fmt.Sprintf("Invalid enum value"), map[string]any{
+		rawIssue := issues.CreateIssue(core.InvalidValue, "Invalid enum value", map[string]any{
 			"received": fmt.Sprintf("%v", value),
 			"options":  validValues,
 		}, value)
@@ -353,9 +353,7 @@ func (z *ZodEnum[T, R]) validateEnumWithIssues(value T, checks []core.ZodCheck, 
 
 		if result.HasIssues() {
 			checkIssues := result.GetIssues()
-			for _, issue := range checkIssues {
-				collectedIssues = append(collectedIssues, issue)
-			}
+			collectedIssues = append(collectedIssues, checkIssues...)
 		}
 
 		// Get the potentially transformed value for return
@@ -407,13 +405,13 @@ func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] 
 func (z *ZodEnum[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodEnum[T, R]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 

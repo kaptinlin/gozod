@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test errors
+var (
+	errMockValidationFailed = errors.New("mock validation failed")
+	errTransformFailed      = errors.New("transform failed")
+	errTransformError       = errors.New("transform error")
+)
+
 // =============================================================================
 // TEST HELPERS
 // =============================================================================
@@ -18,7 +25,7 @@ import (
 func mockValidator[T any](shouldFail bool) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
 	return func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 		if shouldFail {
-			return value, errors.New("mock validation failed")
+			return value, errMockValidationFailed
 		}
 		return value, nil
 	}
@@ -278,7 +285,7 @@ func TestParsePrimitive(t *testing.T) {
 	t.Run("transform function error", func(t *testing.T) {
 		internals := createMockInternals()
 		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
-			return nil, errors.New("transform failed")
+			return nil, errTransformFailed
 		})
 		validator := mockValidator[string](false)
 
@@ -572,7 +579,7 @@ func TestApplyTransformIfPresent(t *testing.T) {
 	t.Run("transform function error", func(t *testing.T) {
 		internals := createMockInternals()
 		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
-			return nil, errors.New("transform error")
+			return nil, errTransformError
 		})
 		ctx := &core.ParseContext{}
 

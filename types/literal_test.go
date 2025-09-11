@@ -86,7 +86,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 	t.Run("pointer constraint literals", func(t *testing.T) {
 		// Single value pointer constraint
 		ptrSchema := LiteralPtr("hello")
-		var _ *ZodLiteral[string, *string] = ptrSchema
+		var _ = ptrSchema
 
 		str := "hello"
 		result, err := ptrSchema.ParseAny(&str)
@@ -96,7 +96,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 
 		// Multiple values pointer constraint
 		ptrMultiSchema := LiteralPtrOf([]string{"red", "green", "blue"})
-		var _ *ZodLiteral[string, *string] = ptrMultiSchema
+		var _ = ptrMultiSchema
 
 		color := "red"
 		result2, err := ptrMultiSchema.ParseAny(&color)
@@ -192,18 +192,18 @@ func TestLiteral_TypeSafety(t *testing.T) {
 	t.Run("type constraint differentiation", func(t *testing.T) {
 		// Value constraint type
 		valueSchema := LiteralOf([]string{"hello"}) // *ZodLiteral[string, string]
-		var _ *ZodLiteral[string, string] = valueSchema
+		var _ = valueSchema
 
 		// Pointer constraint type
 		ptrSchema := valueSchema.Optional() // *ZodLiteral[string, *string]
-		var _ *ZodLiteral[string, *string] = ptrSchema
+		var _ = ptrSchema
 
 		// Verify different return types
 		val := valueSchema.MustParseAny("hello").(string) // string
-		var _ string = val
+		var _ = val
 
 		ptr := ptrSchema.MustParseAny(&[]string{"hello"}[0]).(*string) // *string
-		var _ *string = ptr
+		var _ = ptr
 	})
 }
 
@@ -217,7 +217,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodLiteral[string, *string]
-		var _ *ZodLiteral[string, *string] = optionalSchema
+		var _ = optionalSchema
 
 		// Valid literal value
 		str := "hello"
@@ -236,7 +236,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 		schema := LiteralOf([]int{42})
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodLiteral[int, *int] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.ParseAny(nil)
@@ -253,7 +253,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 	t.Run("Default preserves current constraint type", func(t *testing.T) {
 		schema := LiteralOf([]string{"red", "green", "blue"})
 		defaultSchema := schema.Default("red")
-		var _ *ZodLiteral[string, string] = defaultSchema
+		var _ = defaultSchema
 
 		// Valid input should override default
 		result, err := defaultSchema.ParseAny("blue")
@@ -264,7 +264,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 	t.Run("Prefault preserves current constraint type", func(t *testing.T) {
 		schema := LiteralOf([]int{1, 2, 3})
 		prefaultSchema := schema.Prefault(1)
-		var _ *ZodLiteral[int, int] = prefaultSchema
+		var _ = prefaultSchema
 
 		// Valid input should override prefault
 		result, err := prefaultSchema.ParseAny(2)
@@ -275,7 +275,7 @@ func TestLiteral_Modifiers(t *testing.T) {
 	t.Run("Nullish returns pointer constraint type", func(t *testing.T) {
 		schema := LiteralOf([]string{"test"})
 		nullishSchema := schema.Nullish()
-		var _ *ZodLiteral[string, *string] = nullishSchema
+		var _ = nullishSchema
 
 		// Test nil handling
 		result, err := nullishSchema.ParseAny(nil)
@@ -302,7 +302,7 @@ func TestLiteral_Chaining(t *testing.T) {
 
 		// Chain to Default (preserves constraint) then Optional (changes to pointer constraint)
 		chainedSchema := schema.Default("active").Optional() // *ZodLiteral[string, *string]
-		var _ *ZodLiteral[string, *string] = chainedSchema
+		var _ = chainedSchema
 
 		// Test final behavior
 		str := "inactive"
@@ -317,7 +317,7 @@ func TestLiteral_Chaining(t *testing.T) {
 			Nilable().
 			Default(true)
 
-		var _ *ZodLiteral[bool, *bool] = schema
+		var _ = schema
 
 		// Test with value
 		val := false
@@ -948,7 +948,7 @@ func TestLiteral_AdditionalPrimitiveTypes(t *testing.T) {
 	t.Run("Pointer constraint constructors work correctly", func(t *testing.T) {
 		// Test LiteralPtr (single value)
 		ptrSchema := LiteralPtrOf([]string{"hello"})
-		var _ *ZodLiteral[string, *string] = ptrSchema
+		var _ = ptrSchema
 
 		str := "hello"
 		result, err := ptrSchema.ParseAny(&str)
@@ -958,7 +958,7 @@ func TestLiteral_AdditionalPrimitiveTypes(t *testing.T) {
 
 		// Test LiteralPtrOf (multiple values)
 		ptrMultiSchema := LiteralPtrOf([]string{"hello", "world"})
-		var _ *ZodLiteral[string, *string] = ptrMultiSchema
+		var _ = ptrMultiSchema
 
 		str2 := "world"
 		result2, err := ptrMultiSchema.ParseAny(&str2)

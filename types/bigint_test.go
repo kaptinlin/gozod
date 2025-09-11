@@ -133,7 +133,7 @@ func TestBigInt_Modifiers(t *testing.T) {
 		optionalSchema := bigSchema.Optional()
 
 		// Type check: ensure it returns *ZodBigInt[**big.Int]
-		var _ *ZodBigInt[**big.Int] = optionalSchema
+		_ = optionalSchema
 
 		// Functionality test
 		bigVal := big.NewInt(42)
@@ -148,7 +148,7 @@ func TestBigInt_Modifiers(t *testing.T) {
 		bigSchema := BigInt()
 		nilableSchema := bigSchema.Nilable()
 
-		var _ *ZodBigInt[**big.Int] = nilableSchema
+		_ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -162,12 +162,12 @@ func TestBigInt_Modifiers(t *testing.T) {
 		// *big.Int maintains *big.Int
 		bigSchema := BigInt()
 		defaultBigSchema := bigSchema.Default(defaultVal)
-		var _ *ZodBigInt[*big.Int] = defaultBigSchema
+		_ = defaultBigSchema
 
 		// **big.Int maintains **big.Int
 		ptrSchema := BigIntPtr()
 		defaultPtrSchema := ptrSchema.Default(defaultVal)
-		var _ *ZodBigInt[**big.Int] = defaultPtrSchema
+		_ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
@@ -176,12 +176,12 @@ func TestBigInt_Modifiers(t *testing.T) {
 		// *big.Int maintains *big.Int
 		bigSchema := BigInt()
 		prefaultBigSchema := bigSchema.Prefault(prefaultVal)
-		var _ *ZodBigInt[*big.Int] = prefaultBigSchema
+		_ = prefaultBigSchema
 
 		// **big.Int maintains **big.Int
 		ptrSchema := BigIntPtr()
 		prefaultPtrSchema := ptrSchema.Prefault(prefaultVal)
-		var _ *ZodBigInt[**big.Int] = prefaultPtrSchema
+		_ = prefaultPtrSchema
 	})
 
 	t.Run("Default priority over Prefault", func(t *testing.T) {
@@ -741,7 +741,7 @@ func TestBigInt_NonOptional(t *testing.T) {
 
 	// Optional().NonOptional()
 	chain := BigInt().Optional().NonOptional()
-	var _ *ZodBigInt[*big.Int] = chain
+	_ = chain
 	_, err = chain.Parse(nil)
 	assert.Error(t, err)
 
@@ -756,7 +756,7 @@ func TestBigInt_NonOptional(t *testing.T) {
 
 	// BigIntPtr().NonOptional()
 	ptrSchema := BigIntPtr().NonOptional()
-	var _ *ZodBigInt[*big.Int] = ptrSchema
+	_ = ptrSchema
 	vv := big.NewInt(456)
 	res2, err := ptrSchema.Parse(&vv)
 	require.NoError(t, err)

@@ -50,12 +50,12 @@ func (z *ZodTime[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodTime[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodTime[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for time type conversion
@@ -125,21 +125,21 @@ func (z *ZodTime[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error)
 
 // Optional always returns *time.Time because the optional value may be nil.
 func (z *ZodTime[T]) Optional() *ZodTime[*time.Time] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *time.Time because the value may be nil.
 func (z *ZodTime[T]) Nilable() *ZodTime[*time.Time] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodTime[T]) Nullish() *ZodTime[*time.Time] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -147,14 +147,14 @@ func (z *ZodTime[T]) Nullish() *ZodTime[*time.Time] {
 
 // Default keeps the current generic type T.
 func (z *ZodTime[T]) Default(v time.Time) *ZodTime[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic type T.
 func (z *ZodTime[T]) DefaultFunc(fn func() time.Time) *ZodTime[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -163,14 +163,14 @@ func (z *ZodTime[T]) DefaultFunc(fn func() time.Time) *ZodTime[T] {
 
 // Prefault keeps the current generic type T.
 func (z *ZodTime[T]) Prefault(v time.Time) *ZodTime[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodTime[T]) PrefaultFunc(fn func() time.Time) *ZodTime[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -205,7 +205,7 @@ func (z *ZodTime[T]) Overwrite(transform func(T) T, params ...any) *ZodTime[T] {
 		}
 		return input
 	}, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -265,7 +265,7 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 
 	check := checks.NewCustom[any](wrapper, customParams)
 
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -277,7 +277,7 @@ func (z *ZodTime[T]) RefineAny(fn func(any) bool, params ...any) *ZodTime[T] {
 	customParams := utils.NormalizeCustomParams(param)
 
 	check := checks.NewCustom[any](fn, customParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -308,13 +308,13 @@ func (z *ZodTime[T]) withInternals(in *core.ZodTypeInternals) *ZodTime[T] {
 func (z *ZodTime[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodTime[T]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -397,13 +397,13 @@ func TimeTyped[T TimeConstraint](params ...any) *ZodTime[T] {
 // CoercedTime creates a time.Time schema with coercion enabled
 func CoercedTime(args ...any) *ZodTime[time.Time] {
 	schema := Time(args...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedTimePtr creates a *time.Time schema with coercion enabled
 func CoercedTimePtr(args ...any) *ZodTime[*time.Time] {
 	schema := TimePtr(args...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }

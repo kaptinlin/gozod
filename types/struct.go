@@ -20,6 +20,12 @@ import (
 	"github.com/kaptinlin/gozod/pkg/validators"
 )
 
+// Static error variables
+var (
+	ErrFieldNotFoundOrNotSettable = errors.New("field not found or not settable")
+	ErrCannotAssignToField        = errors.New("cannot assign value to field of type")
+)
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -56,12 +62,12 @@ func (z *ZodStruct[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodStruct[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodStruct[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Shape returns the struct field schemas for JSON Schema conversion
@@ -203,21 +209,21 @@ func (z *ZodStruct[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, e
 
 // Optional always returns *T constraint because the optional value may be nil.
 func (z *ZodStruct[T, R]) Optional() *ZodStruct[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *T constraint because the value may be nil.
 func (z *ZodStruct[T, R]) Nilable() *ZodStruct[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodStruct[T, R]) Nullish() *ZodStruct[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -225,7 +231,7 @@ func (z *ZodStruct[T, R]) Nullish() *ZodStruct[T, *T] {
 
 // NonOptional removes Optional flag and enforces non-nil struct value (T).
 func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -240,14 +246,14 @@ func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
 
 // Default keeps the current generic constraint type R.
 func (z *ZodStruct[T, R]) Default(v T) *ZodStruct[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic constraint type R.
 func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -256,14 +262,14 @@ func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodStruct[T, R]) Prefault(v T) *ZodStruct[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -307,7 +313,7 @@ func (z *ZodStruct[T, R]) Overwrite(transform func(R) R, params ...any) *ZodStru
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -337,7 +343,7 @@ func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R
 
 	checkParams := checks.NormalizeCheckParams(params...)
 	check := checks.NewCustom[any](wrapper, checkParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -345,7 +351,7 @@ func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R
 func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct[T, R] {
 	checkParams := checks.NormalizeCheckParams(params...)
 	check := checks.NewCustom[any](fn, checkParams)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -389,7 +395,7 @@ func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) 
 
 // Partial makes all fields optional by allowing zero values
 func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 
 	var partialExceptions map[string]bool
 	if len(keys) > 0 && len(keys[0]) > 0 {
@@ -416,7 +422,7 @@ func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
 
 // Required makes all fields required (opposite of Partial)
 func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 
 	var partialExceptions map[string]bool
 	if len(fields) > 0 && len(fields[0]) > 0 {
@@ -463,9 +469,9 @@ func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T,
 // CloneFrom allows copying configuration from a source
 func (z *ZodStruct[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodStruct[T, R]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -705,7 +711,7 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	// Apply field defaults and validate struct fields if schema is defined
 	transformedValue := value
-	if z.internals.Shape != nil && len(z.internals.Shape) > 0 {
+	if len(z.internals.Shape) > 0 {
 		if transformed, err := z.parseStructWithDefaults(any(value), ctx); err != nil {
 			return value, err
 		} else if convertedValue, ok := transformed.(T); ok {
@@ -738,7 +744,7 @@ func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodChec
 
 // parseStructWithDefaults parses struct fields with field schemas, applying defaults and transformations
 func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseContext) (any, error) {
-	if z.internals.Shape == nil || len(z.internals.Shape) == 0 {
+	if len(z.internals.Shape) == 0 {
 		return input, nil // No field schemas defined, return input as-is
 	}
 
@@ -914,7 +920,7 @@ func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structTyp
 		}
 	}
 
-	return fmt.Errorf("field %s not found or not settable", fieldName)
+	return ErrFieldNotFoundOrNotSettable
 }
 
 // setReflectFieldValue sets a reflect.Value field to the given value with proper type conversion
@@ -992,7 +998,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 		return nil
 	}
 
-	return fmt.Errorf("cannot assign %v (%T) to field of type %v", value, value, fieldVal.Type())
+	return ErrCannotAssignToField
 }
 
 // convertMapTypes converts between different map types (e.g., map[any]any to map[string]string)
@@ -1474,7 +1480,7 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -1518,11 +1524,12 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 			return zero, false
 		}
 
-		if rv.Type().AssignableTo(field.Type) {
+		switch {
+		case rv.Type().AssignableTo(field.Type):
 			v.Field(i).Set(rv)
-		} else if rv.Type().ConvertibleTo(field.Type) {
+		case rv.Type().ConvertibleTo(field.Type):
 			v.Field(i).Set(rv.Convert(field.Type))
-		} else {
+		default:
 			return zero, false
 		}
 	}
@@ -2081,7 +2088,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 			// This should never be reached in the cycle detection path
 			// as createSchemaFromTypeWithCycleDetection handles it
 			schema = createNestedStructSchema(fieldType)
-			if isPointer && schema != nil {
+			if isPointer {
 				// Make nested struct nilable if it's a pointer and not required
 				if !fieldInfo.Required {
 					if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
@@ -2925,13 +2932,14 @@ func parseArrayDefault(value string) []interface{} {
 	for _, char := range value {
 		switch {
 		case char == '\'' || char == '"':
-			if !inQuote {
+			switch {
+			case !inQuote:
 				inQuote = true
 				quoteChar = char
-			} else if char == quoteChar {
+			case char == quoteChar:
 				inQuote = false
 				quoteChar = 0
-			} else {
+			default:
 				current.WriteRune(char)
 			}
 		case char == ',' && !inQuote:

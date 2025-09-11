@@ -63,12 +63,12 @@ func (z *ZodLazy[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodLazy[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodLazy[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface - lazy schemas delegate to inner schema
@@ -117,23 +117,24 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 
 		// Default/DefaultFunc - short circuit
 		if internals.DefaultValue != nil {
-			return any(internals.DefaultValue).(T), nil
+			return any(internals.DefaultValue).(T), nil //nolint:unconvert // Required for generic type constraint conversion
 		}
 		if internals.DefaultFunc != nil {
 			defaultValue := internals.DefaultFunc()
-			return any(defaultValue).(T), nil
+			return any(defaultValue).(T), nil //nolint:unconvert // Required for generic type constraint conversion
 		}
 
 		// Prefault/PrefaultFunc - use as new input
-		if internals.PrefaultValue != nil {
+		switch {
+		case internals.PrefaultValue != nil:
 			input = internals.PrefaultValue
-		} else if internals.PrefaultFunc != nil {
+		case internals.PrefaultFunc != nil:
 			input = internals.PrefaultFunc()
-		} else if internals.Optional || internals.Nilable {
+		case internals.Optional || internals.Nilable:
 			// Optional/Nilable - allow nil
 			var zero T
 			return zero, nil
-		} else {
+		default:
 			// Reject nil input
 			var zero T
 			return zero, issues.CreateInvalidTypeError(core.ZodTypeLazy, nil, parseCtx)
@@ -228,21 +229,21 @@ func (z *ZodLazy[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 
 // Optional allows the lazy schema to be nil, returns pointer type
 func (z *ZodLazy[T]) Optional() *ZodLazy[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows the lazy schema to be nil, returns pointer type
 func (z *ZodLazy[T]) Nilable() *ZodLazy[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers, returns pointer type
 func (z *ZodLazy[T]) Nullish() *ZodLazy[*any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -250,7 +251,7 @@ func (z *ZodLazy[T]) Nullish() *ZodLazy[*any] {
 
 // NonOptional removes Optional flag and enforces non-nil value (any).
 func (z *ZodLazy[T]) NonOptional() *ZodLazy[any] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -265,28 +266,28 @@ func (z *ZodLazy[T]) NonOptional() *ZodLazy[any] {
 
 // Default preserves the current generic type T
 func (z *ZodLazy[T]) Default(v any) *ZodLazy[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves the current generic type T
 func (z *ZodLazy[T]) DefaultFunc(fn func() any) *ZodLazy[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(fn)
 	return z.withInternals(in)
 }
 
 // Prefault preserves the current generic type T
 func (z *ZodLazy[T]) Prefault(v any) *ZodLazy[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc preserves the current generic type T
 func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(fn)
 	return z.withInternals(in)
 }
@@ -341,7 +342,7 @@ func (z *ZodLazy[T]) Refine(fn func(T) bool, params ...any) *ZodLazy[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -355,7 +356,7 @@ func (z *ZodLazy[T]) RefineAny(fn func(any) bool, params ...any) *ZodLazy[T] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -581,9 +582,9 @@ func (z *ZodLazy[T]) withInternals(in *core.ZodTypeInternals) *ZodLazy[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodLazy[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodLazy[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -714,7 +715,7 @@ func (z *ZodLazyTyped[S]) Default(v any) *ZodLazyTyped[S] {
 
 // Refine applies custom validation with type safety
 func (z *ZodLazyTyped[S]) Refine(fn func(any) bool, params ...any) *ZodLazyTyped[S] {
-	newLazy := z.ZodLazy.RefineAny(fn, params...)
+	newLazy := z.RefineAny(fn, params...)
 	return &ZodLazyTyped[S]{ZodLazy: newLazy, getter: z.getter}
 }
 

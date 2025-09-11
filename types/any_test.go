@@ -130,7 +130,7 @@ func TestAny_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodAny[any, *any]
-		var _ *ZodAny[any, *any] = optionalSchema
+		_ = optionalSchema
 
 		// Test non-nil value - returns pointer
 		result, err := optionalSchema.Parse("hello")
@@ -148,7 +148,7 @@ func TestAny_Modifiers(t *testing.T) {
 		schema := Any()
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodAny[any, *any] = nilableSchema
+		_ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -166,7 +166,7 @@ func TestAny_Modifiers(t *testing.T) {
 		schema := Any()
 		defaultSchema := schema.Default("default_value")
 
-		var _ *ZodAny[any, any] = defaultSchema
+		_ = defaultSchema
 
 		// Valid input should override default
 		result, err := defaultSchema.Parse("input_value")
@@ -231,7 +231,7 @@ func TestAny_Refine(t *testing.T) {
 func TestAny_Factories(t *testing.T) {
 	t.Run("Any factory", func(t *testing.T) {
 		schema := Any()
-		var _ *ZodAny[any, any] = schema
+		_ = schema
 
 		result, err := schema.Parse("test")
 		require.NoError(t, err)
@@ -240,7 +240,7 @@ func TestAny_Factories(t *testing.T) {
 
 	t.Run("AnyPtr factory", func(t *testing.T) {
 		schema := AnyPtr()
-		var _ *ZodAny[any, *any] = schema
+		_ = schema
 
 		result, err := schema.Parse("test")
 		require.NoError(t, err)

@@ -46,12 +46,12 @@ func (z *ZodNever[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodNever[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodNever[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // validateNeverValue is the validator function for Never type
@@ -140,21 +140,21 @@ func (z *ZodNever[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
 
 // Optional makes the never optional (allows nil) - returns pointer constraint
 func (z *ZodNever[T, R]) Optional() *ZodNever[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable makes the never nilable (allows nil) - returns pointer constraint
 func (z *ZodNever[T, R]) Nilable() *ZodNever[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish makes the never both optional and nilable - returns pointer constraint
 func (z *ZodNever[T, R]) Nullish() *ZodNever[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -162,14 +162,14 @@ func (z *ZodNever[T, R]) Nullish() *ZodNever[T, *T] {
 
 // Default sets a default value - preserves current constraint type
 func (z *ZodNever[T, R]) Default(value T) *ZodNever[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(value)
 	return z.withInternals(in)
 }
 
 // DefaultFunc sets a default value function - preserves current constraint type
 func (z *ZodNever[T, R]) DefaultFunc(fn func() T) *ZodNever[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -178,14 +178,14 @@ func (z *ZodNever[T, R]) DefaultFunc(fn func() T) *ZodNever[T, R] {
 
 // Prefault sets a prefault (fallback) value - preserves current constraint type
 func (z *ZodNever[T, R]) Prefault(value T) *ZodNever[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(value)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps the current generic type R.
 func (z *ZodNever[T, R]) PrefaultFunc(fn func() T) *ZodNever[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -244,7 +244,7 @@ func (z *ZodNever[T, R]) Refine(fn func(R) bool, params ...any) *ZodNever[T, R] 
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -260,7 +260,7 @@ func (z *ZodNever[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNever[T
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -311,7 +311,7 @@ func extractNeverValue[T any, R any](value R) T {
 		var zero T
 		return zero
 	default:
-		return any(value).(T) //nolint:unconvert
+		return any(value).(T)
 	}
 }
 
@@ -377,9 +377,9 @@ func convertToNeverConstraintValue[T any, R any](value any) (R, bool) {
 func newZodNeverFromDef[T any, R any](def *ZodNeverDef) *ZodNever[T, R] {
 	internals := &ZodNeverInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
-			Type:   def.ZodTypeDef.Type,
-			Checks: def.ZodTypeDef.Checks,
-			Coerce: def.ZodTypeDef.Coerce,
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
 			Bag:    make(map[string]any),
 		},
 		Def: def,
@@ -393,8 +393,8 @@ func newZodNeverFromDef[T any, R any](def *ZodNeverDef) *ZodNever[T, R] {
 		return any(newZodNeverFromDef[T, R](neverDef)).(core.ZodType[any])
 	}
 
-	if def.ZodTypeDef.Error != nil {
-		internals.Error = def.ZodTypeDef.Error
+	if def.Error != nil {
+		internals.Error = def.Error
 	}
 
 	return &ZodNever[T, R]{internals: internals}

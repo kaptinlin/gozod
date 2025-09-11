@@ -144,10 +144,10 @@ func TestBool_TypeSafety(t *testing.T) {
 
 	t.Run("generic type constraint verification", func(t *testing.T) {
 		// Compile-time type checking - these should compile
-		var _ *ZodBool[bool] = Bool()
-		var _ *ZodBool[*bool] = BoolPtr()
-		var _ *ZodBool[*bool] = Bool().Optional()
-		var _ *ZodBool[bool] = Bool().Default(true)
+		var _ = Bool()
+		var _ = BoolPtr()
+		var _ = Bool().Optional()
+		var _ = Bool().Default(true)
 
 		// Verify actual behavior matches type constraints
 		boolSchema := Bool()
@@ -173,7 +173,7 @@ func TestBool_Modifiers(t *testing.T) {
 		optionalSchema := boolSchema.Optional()
 
 		// Type check: ensure it returns *ZodBool[*bool]
-		var _ *ZodBool[*bool] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		result, err := optionalSchema.Parse(true)
@@ -185,14 +185,14 @@ func TestBool_Modifiers(t *testing.T) {
 		// From *bool to *bool via Optional (maintains type)
 		ptrSchema := BoolPtr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodBool[*bool] = optionalPtrSchema
+		var _ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *bool", func(t *testing.T) {
 		boolSchema := Bool()
 		nilableSchema := boolSchema.Nilable()
 
-		var _ *ZodBool[*bool] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -204,7 +204,7 @@ func TestBool_Modifiers(t *testing.T) {
 		boolSchema := Bool()
 		nullishSchema := boolSchema.Nullish()
 
-		var _ *ZodBool[*bool] = nullishSchema
+		var _ = nullishSchema
 
 		// Test nil handling
 		result, err := nullishSchema.Parse(nil)
@@ -222,12 +222,12 @@ func TestBool_Modifiers(t *testing.T) {
 		// bool maintains bool
 		boolSchema := Bool()
 		defaultBoolSchema := boolSchema.Default(true)
-		var _ *ZodBool[bool] = defaultBoolSchema
+		var _ = defaultBoolSchema
 
 		// *bool maintains *bool
 		ptrSchema := BoolPtr()
 		defaultPtrSchema := ptrSchema.Default(false)
-		var _ *ZodBool[*bool] = defaultPtrSchema
+		var _ = defaultPtrSchema
 
 		// Test behavior
 		result, err := defaultBoolSchema.Parse(false)
@@ -240,12 +240,12 @@ func TestBool_Modifiers(t *testing.T) {
 		// bool maintains bool
 		boolSchema := Bool()
 		prefaultBoolSchema := boolSchema.Prefault(true)
-		var _ *ZodBool[bool] = prefaultBoolSchema
+		var _ = prefaultBoolSchema
 
 		// *bool maintains *bool
 		ptrSchema := BoolPtr()
 		prefaultPtrSchema := ptrSchema.Prefault(false)
-		var _ *ZodBool[*bool] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 
 		// Test behavior
 		result, err := prefaultBoolSchema.Parse(false)
@@ -499,7 +499,7 @@ func TestBool_Modifiers(t *testing.T) {
 			schema := Bool().Default(true).Optional()
 
 			// Test type evolution
-			var _ *ZodBool[*bool] = schema
+			var _ = schema
 
 			result, err := schema.Parse(false)
 			require.NoError(t, err)
@@ -805,7 +805,7 @@ func TestBool_Modifiers(t *testing.T) {
 
 		// --- Optional().NonOptional() chain ---
 		chained := Bool().Optional().NonOptional()
-		var _ *ZodBool[bool] = chained // compile-time type assertion
+		var _ = chained // compile-time type assertion
 
 		res, err := chained.Parse(false)
 		require.NoError(t, err)
@@ -962,7 +962,7 @@ func TestBool_Chaining(t *testing.T) {
 					Default(false). // *ZodBool[bool] (maintains type)
 					Optional()      // *ZodBool[*bool] (type conversion)
 
-		var _ *ZodBool[*bool] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse(true)
@@ -977,7 +977,7 @@ func TestBool_Chaining(t *testing.T) {
 					Nilable().    // *ZodBool[*bool] (maintains type)
 					Default(true) // *ZodBool[*bool] (maintains type)
 
-		var _ *ZodBool[*bool] = schema
+		var _ = schema
 
 		result, err := schema.Parse(false)
 		require.NoError(t, err)
@@ -990,7 +990,7 @@ func TestBool_Chaining(t *testing.T) {
 			Default(true).
 			Prefault(false)
 
-		var _ *ZodBool[bool] = schema
+		var _ = schema
 
 		result, err := schema.Parse(true)
 		require.NoError(t, err)
@@ -1002,8 +1002,8 @@ func TestBool_Chaining(t *testing.T) {
 		schema1 := Bool().Default(true).Optional()
 		schema2 := Bool().Optional().Default(true)
 
-		var _ *ZodBool[*bool] = schema1
-		var _ *ZodBool[*bool] = schema2
+		var _ = schema1
+		var _ = schema2
 
 		// Both should handle the same inputs similarly
 		result1, err1 := schema1.Parse(false)

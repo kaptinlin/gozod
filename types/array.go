@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -9,6 +10,13 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+)
+
+// Static error variables
+var (
+	ErrNilPointerToArray    = errors.New("nil pointer to array")
+	ErrNilPointer           = errors.New("nil pointer")
+	ErrExpectedArrayOrSlice = errors.New("expected array or slice")
 )
 
 // =============================================================================
@@ -47,12 +55,12 @@ func (z *ZodArray[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodArray[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodArray[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using array-specific parsing logic
@@ -165,21 +173,21 @@ func (z *ZodArray[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, er
 
 // Optional always returns *[]any constraint because the optional value may be nil.
 func (z *ZodArray[T, R]) Optional() *ZodArray[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *[]any constraint because the value may be nil.
 func (z *ZodArray[T, R]) Nilable() *ZodArray[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodArray[T, R]) Nullish() *ZodArray[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -189,7 +197,7 @@ func (z *ZodArray[T, R]) Nullish() *ZodArray[T, *T] {
 // This mirrors the behaviour of Optional().NonOptional() in TS Zod, and
 // produces dedicated "expected = nonoptional" error when input is nil.
 func (z *ZodArray[T, R]) NonOptional() *ZodArray[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -205,14 +213,14 @@ func (z *ZodArray[T, R]) NonOptional() *ZodArray[T, T] {
 
 // Default keeps the current generic constraint type R.
 func (z *ZodArray[T, R]) Default(v T) *ZodArray[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic constraint type R.
 func (z *ZodArray[T, R]) DefaultFunc(fn func() T) *ZodArray[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -221,14 +229,14 @@ func (z *ZodArray[T, R]) DefaultFunc(fn func() T) *ZodArray[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodArray[T, R]) Prefault(v T) *ZodArray[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -248,7 +256,7 @@ func (z *ZodArray[T, R]) Meta(meta core.GlobalMeta) *ZodArray[T, R] {
 // Min sets minimum number of elements
 func (z *ZodArray[T, R]) Min(minLen int, args ...any) *ZodArray[T, R] {
 	check := checks.MinLength(minLen, utils.GetFirstParam(args...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -256,7 +264,7 @@ func (z *ZodArray[T, R]) Min(minLen int, args ...any) *ZodArray[T, R] {
 // Max sets maximum number of elements
 func (z *ZodArray[T, R]) Max(maxLen int, args ...any) *ZodArray[T, R] {
 	check := checks.MaxLength(maxLen, utils.GetFirstParam(args...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -264,7 +272,7 @@ func (z *ZodArray[T, R]) Max(maxLen int, args ...any) *ZodArray[T, R] {
 // Length sets exact number of elements
 func (z *ZodArray[T, R]) Length(exactLen int, args ...any) *ZodArray[T, R] {
 	check := checks.Length(exactLen, utils.GetFirstParam(args...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -333,7 +341,7 @@ func (z *ZodArray[T, R]) Overwrite(transform func(R) R, params ...any) *ZodArray
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -413,7 +421,7 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
 
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -429,7 +437,7 @@ func (z *ZodArray[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodArray[T
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -464,13 +472,13 @@ func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R
 func (z *ZodArray[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodArray[T, R]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -488,10 +496,9 @@ func convertArrayFromGeneric[T any, R any](arrayValue []any) R {
 	// Check if R is a pointer type (like *[]any)
 	if zeroType.Kind() == reflect.Ptr {
 		// Create pointer to the array
-		if ptrVal := any(&arrayValue); ptrVal != nil {
-			if converted, ok := ptrVal.(R); ok {
-				return converted
-			}
+		ptrVal := any(&arrayValue)
+		if converted, ok := ptrVal.(R); ok {
+			return converted
 		}
 		// Return nil pointer if conversion fails
 		return zero
@@ -588,7 +595,7 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		if v != nil {
 			return *v, nil
 		}
-		return nil, fmt.Errorf("nil pointer to array")
+		return nil, fmt.Errorf("%w", ErrNilPointerToArray)
 	default:
 		// Try to convert using reflection
 		rv := reflect.ValueOf(value)
@@ -596,13 +603,13 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		// Handle pointer to slice/array
 		if rv.Kind() == reflect.Ptr {
 			if rv.IsNil() {
-				return nil, fmt.Errorf("nil pointer")
+				return nil, fmt.Errorf("%w", ErrNilPointer)
 			}
 			rv = rv.Elem()
 		}
 
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return nil, fmt.Errorf("expected array or slice, got %T", value)
+			return nil, fmt.Errorf("%w, got %T", ErrExpectedArrayOrSlice, value)
 		}
 
 		result := make([]any, rv.Len())
@@ -879,7 +886,7 @@ func (z *ZodArray[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }

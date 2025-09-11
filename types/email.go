@@ -51,7 +51,7 @@ func (z *ZodEmail[T]) withEmailPattern(patternCheck core.ZodCheck) *ZodEmail[T] 
 	cloned := z.GetInternals().Clone()
 	cloned.Checks = removeEmailChecks(cloned.Checks)
 	cloned.AddCheck(patternCheck)
-	return newFromString(z.ZodString.withInternals(cloned))
+	return newFromString(z.withInternals(cloned))
 }
 
 // -----------------------------------------------------------------------------

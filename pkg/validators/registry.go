@@ -1,8 +1,14 @@
 package validators
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+)
+
+// Static error variables
+var (
+	ErrValidatorAlreadyExists = errors.New("validator already exists")
 )
 
 // ValidatorRegistry manages registered validators
@@ -23,7 +29,7 @@ func Register[T any](validator ZodValidator[T]) error {
 
 	name := validator.Name()
 	if _, exists := registry.validators[name]; exists {
-		return fmt.Errorf("validator already exists: %s", name)
+		return fmt.Errorf("%w: %s", ErrValidatorAlreadyExists, name)
 	}
 
 	registry.validators[name] = validator

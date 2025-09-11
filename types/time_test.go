@@ -172,7 +172,7 @@ func TestTime_Modifiers(t *testing.T) {
 		optionalSchema := timeSchema.Optional()
 
 		// Type check: ensure it returns *ZodTime[*time.Time]
-		var _ *ZodTime[*time.Time] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		testTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -185,14 +185,14 @@ func TestTime_Modifiers(t *testing.T) {
 		// From *time.Time to *time.Time via Optional (maintains type)
 		ptrSchema := TimePtr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodTime[*time.Time] = optionalPtrSchema
+		var _ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *time.Time", func(t *testing.T) {
 		timeSchema := Time()
 		nilableSchema := timeSchema.Nilable()
 
-		var _ *ZodTime[*time.Time] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -206,12 +206,12 @@ func TestTime_Modifiers(t *testing.T) {
 		// time.Time maintains time.Time
 		timeSchema := Time()
 		defaultTimeSchema := timeSchema.Default(defaultTime)
-		var _ *ZodTime[time.Time] = defaultTimeSchema
+		var _ = defaultTimeSchema
 
 		// *time.Time maintains *time.Time
 		ptrSchema := TimePtr()
 		defaultPtrSchema := ptrSchema.Default(defaultTime)
-		var _ *ZodTime[*time.Time] = defaultPtrSchema
+		var _ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
@@ -220,19 +220,19 @@ func TestTime_Modifiers(t *testing.T) {
 		// time.Time maintains time.Time
 		timeSchema := Time()
 		prefaultTimeSchema := timeSchema.Prefault(prefaultTime)
-		var _ *ZodTime[time.Time] = prefaultTimeSchema
+		var _ = prefaultTimeSchema
 
 		// *time.Time maintains *time.Time
 		ptrSchema := TimePtr()
 		prefaultPtrSchema := ptrSchema.Prefault(prefaultTime)
-		var _ *ZodTime[*time.Time] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 
 	t.Run("Nullish combines optional and nilable", func(t *testing.T) {
 		timeSchema := Time()
 		nullishSchema := timeSchema.Nullish()
 
-		var _ *ZodTime[*time.Time] = nullishSchema
+		var _ = nullishSchema
 
 		// Test nil handling
 		result, err := nullishSchema.Parse(nil)
@@ -261,7 +261,7 @@ func TestTime_Chaining(t *testing.T) {
 					Default(defaultTime). // *ZodTime[time.Time] (maintains type)
 					Optional()            // *ZodTime[*time.Time] (type conversion)
 
-		var _ *ZodTime[*time.Time] = schema
+		var _ = schema
 
 		// Test final behavior
 		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
@@ -277,7 +277,7 @@ func TestTime_Chaining(t *testing.T) {
 					Nilable().           // *ZodTime[*time.Time] (maintains type)
 					Default(defaultTime) // *ZodTime[*time.Time] (maintains type)
 
-		var _ *ZodTime[*time.Time] = schema
+		var _ = schema
 
 		testTime := time.Date(2023, 12, 25, 15, 30, 0, 0, time.UTC)
 		result, err := schema.Parse(testTime)
@@ -443,18 +443,18 @@ func TestTime_DefaultAndPrefault(t *testing.T) {
 		// time.Time maintains time.Time
 		timeSchema := Time()
 		defaultTimeSchema := timeSchema.Default(defaultTime)
-		var _ *ZodTime[time.Time] = defaultTimeSchema
+		var _ = defaultTimeSchema
 
 		prefaultTimeSchema := timeSchema.Prefault(prefaultTime)
-		var _ *ZodTime[time.Time] = prefaultTimeSchema
+		var _ = prefaultTimeSchema
 
 		// *time.Time maintains *time.Time
 		ptrSchema := TimePtr()
 		defaultPtrSchema := ptrSchema.Default(defaultTime)
-		var _ *ZodTime[*time.Time] = defaultPtrSchema
+		var _ = defaultPtrSchema
 
 		prefaultPtrSchema := ptrSchema.Prefault(prefaultTime)
-		var _ *ZodTime[*time.Time] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 }
 

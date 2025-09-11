@@ -51,7 +51,7 @@ func newIsoFromString[T IsoConstraint](str *ZodString[T]) *ZodIso[T] { return &Z
 func (z *ZodIso[T]) cloneWithCheck(check core.ZodCheck) *ZodIso[T] {
 	in := z.GetInternals().Clone()
 	in.AddCheck(check)
-	return newIsoFromString(z.ZodString.withInternals(in))
+	return newIsoFromString(z.withInternals(in))
 }
 
 // -----------------------------------------------------------------------------

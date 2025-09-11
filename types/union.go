@@ -45,12 +45,12 @@ func (z *ZodUnion[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodUnion[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodUnion[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using engine.ParseComplex for unified Default/Prefault handling
@@ -215,21 +215,21 @@ func (z *ZodUnion[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, er
 
 // Optional creates optional union schema that returns pointer constraint
 func (z *ZodUnion[T, R]) Optional() *ZodUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values and returns pointer constraint
 func (z *ZodUnion[T, R]) Nilable() *ZodUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodUnion[T, R]) Nullish() *ZodUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -237,7 +237,7 @@ func (z *ZodUnion[T, R]) Nullish() *ZodUnion[T, *T] {
 
 // NonOptional removes Optional flag and enforces non-nil value (T).
 func (z *ZodUnion[T, R]) NonOptional() *ZodUnion[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -252,14 +252,14 @@ func (z *ZodUnion[T, R]) NonOptional() *ZodUnion[T, T] {
 
 // Default preserves current constraint type R
 func (z *ZodUnion[T, R]) Default(v T) *ZodUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodUnion[T, R]) DefaultFunc(fn func() T) *ZodUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -268,14 +268,14 @@ func (z *ZodUnion[T, R]) DefaultFunc(fn func() T) *ZodUnion[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodUnion[T, R]) Prefault(v T) *ZodUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps current generic type R.
 func (z *ZodUnion[T, R]) PrefaultFunc(fn func() T) *ZodUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -343,7 +343,7 @@ func (z *ZodUnion[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnion[T, R] 
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -359,7 +359,7 @@ func (z *ZodUnion[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodUnion[T
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -417,7 +417,7 @@ func convertToUnionConstraintType[T any, R any](value any) R {
 		// R is some kind of pointer type
 		// Check if value is already a pointer
 		if reflect.TypeOf(value).Kind() == reflect.Ptr {
-			return any(value).(R)
+			return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		// For Optional schemas, if the value comes from Default/Prefault processing
 		// and the original input was nil, we should return nil instead of wrapping
@@ -434,14 +434,14 @@ func convertToUnionConstraintType[T any, R any](value any) R {
 			valueReflect := reflect.ValueOf(value)
 			if !valueReflect.IsNil() {
 				dereferencedValue := valueReflect.Elem().Interface()
-				return any(dereferencedValue).(R)
+				return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
 			}
 			var zero R
 			return zero
 		}
 
 		// For non-pointer values, try direct conversion (for Default values)
-		return any(value).(R)
+		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 }
 
@@ -450,7 +450,7 @@ func extractUnionValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
 		if v != nil {
-			return any(*v).(T)
+			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		var zero T
 		return zero
@@ -464,7 +464,7 @@ func convertToUnionConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
@@ -580,7 +580,7 @@ func UnionTyped[T any, R any](options []any, args ...any) *ZodUnion[T, R] {
 
 	// Add a minimal check to trigger union validation
 	alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-	unionSchema.internals.ZodTypeInternals.AddCheck(alwaysPassCheck)
+	unionSchema.internals.AddCheck(alwaysPassCheck)
 
 	return unionSchema
 }

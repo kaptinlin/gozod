@@ -722,7 +722,7 @@ func TestMap_Overwrite(t *testing.T) {
 				// Convert string keys to uppercase and increment values
 				result := make(map[any]any)
 				for k, v := range m {
-					var newKey any = k
+					newKey := k
 					if strKey, ok := k.(string); ok {
 						newKey = strings.ToUpper(strKey)
 					}

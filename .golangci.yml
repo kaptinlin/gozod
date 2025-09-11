@@ -19,20 +19,11 @@ linters:
     - revive
     - unconvert
     - whitespace
-  disable:
-    - err113  # disable dynamic error string check
-    - unconvert  # disable generic conversion linter as code relies on intentional type assertions
   settings:
-    gocritic:
-      disabled-checks:
-        - ifElseChain
-        - appendAssign
     revive:
       rules:
         - name: unused-parameter
           disabled: true
-    staticcheck:
-      checks: ["all,-SA4010,-SA4031,-S1039,-QF1011,-QF1003,-S1009"]
   exclusions:
     generated: lax
     rules:
@@ -43,15 +34,6 @@ linters:
           - noctx
           - revive
         path: _test\.go
-      # Skip QF1008 embedded field selector issues - these are often necessary
-      # to avoid infinite recursion when implementing methods on wrapper types
-      - linters:
-          - staticcheck
-        text: "QF1008.*could remove embedded field.*from selector"
-      # Exhaustive reflect.Kind/type switches in low-level reflectx utilities are intentionally selective
-      - linters:
-          - exhaustive
-        path: ^pkg/reflectx/|^internal/utils/|^pkg/slicex/
     paths:
       - third_party$
       - builtin$

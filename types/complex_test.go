@@ -181,7 +181,7 @@ func TestComplex_Modifiers(t *testing.T) {
 		optionalSchema := complex64Schema.Optional()
 
 		// Type check: ensure it returns *ZodComplex[*complex128]
-		var _ *ZodComplex[*complex128] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		result, err := optionalSchema.Parse(complex128(complex(1.5, 2.5)))
@@ -193,14 +193,14 @@ func TestComplex_Modifiers(t *testing.T) {
 		// From *complex64 to *complex128 via Optional (type conversion)
 		ptrSchema := Complex64Ptr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodComplex[*complex128] = optionalPtrSchema
+		_ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *complex128", func(t *testing.T) {
 		complex64Schema := Complex64()
 		nilableSchema := complex64Schema.Nilable()
 
-		var _ *ZodComplex[*complex128] = nilableSchema
+		_ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -212,24 +212,24 @@ func TestComplex_Modifiers(t *testing.T) {
 		// complex64 maintains complex64
 		complex64Schema := Complex64()
 		defaultComplex64Schema := complex64Schema.Default(complex(1.0, 2.0))
-		var _ *ZodComplex[complex64] = defaultComplex64Schema
+		_ = defaultComplex64Schema
 
 		// *complex128 maintains *complex128
 		ptrSchema := Complex128Ptr()
 		defaultPtrSchema := ptrSchema.Default(complex(3.0, 4.0))
-		var _ *ZodComplex[*complex128] = defaultPtrSchema
+		_ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		// complex64 maintains complex64
 		complex64Schema := Complex64()
 		prefaultComplex64Schema := complex64Schema.Prefault(complex(1.0, 2.0))
-		var _ *ZodComplex[complex64] = prefaultComplex64Schema
+		_ = prefaultComplex64Schema
 
 		// *complex128 maintains *complex128
 		ptrSchema := Complex128Ptr()
 		prefaultPtrSchema := ptrSchema.Prefault(complex(3.0, 4.0))
-		var _ *ZodComplex[*complex128] = prefaultPtrSchema
+		_ = prefaultPtrSchema
 	})
 }
 
@@ -244,7 +244,7 @@ func TestComplex_Chaining(t *testing.T) {
 					Default(complex(1.0, 2.0)). // *ZodComplex[complex64] (maintains type)
 					Optional()                  // *ZodComplex[*complex128] (type conversion)
 
-		var _ *ZodComplex[*complex128] = schema
+		_ = schema
 
 		// Test final behavior
 		result, err := schema.Parse(complex(3.0, 4.0))
@@ -259,7 +259,7 @@ func TestComplex_Chaining(t *testing.T) {
 						Nilable().                 // *ZodComplex[*complex128] (type conversion)
 						Default(complex(1.0, 2.0)) // *ZodComplex[*complex128] (maintains type)
 
-		var _ *ZodComplex[*complex128] = schema
+		_ = schema
 
 		result, err := schema.Parse(complex(3.0, 4.0))
 		require.NoError(t, err)

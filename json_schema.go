@@ -107,8 +107,14 @@ func toJSONSchemaSingle(schema core.ZodSchema, opts JSONSchemaOptions) (*lib.Sch
 		if s.Defs == nil {
 			s.Defs = make(map[string]*lib.Schema)
 		}
-		for defKey, defSchema := range c.defs {
-			s.Defs[defKey] = defSchema
+		// Sort keys to ensure deterministic output order
+		defKeys := make([]string, 0, len(c.defs))
+		for defKey := range c.defs {
+			defKeys = append(defKeys, defKey)
+		}
+		sort.Strings(defKeys)
+		for _, defKey := range defKeys {
+			s.Defs[defKey] = c.defs[defKey]
 		}
 	}
 
@@ -143,8 +149,14 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts JSONSchemaOp
 	rootSchema := &lib.Schema{}
 	if len(c.defs) > 0 {
 		rootSchema.Defs = make(map[string]*lib.Schema, len(c.defs))
-		for key, def := range c.defs {
-			rootSchema.Defs[key] = def
+		// Sort keys to ensure deterministic output order
+		defKeys := make([]string, 0, len(c.defs))
+		for key := range c.defs {
+			defKeys = append(defKeys, key)
+		}
+		sort.Strings(defKeys)
+		for _, key := range defKeys {
+			rootSchema.Defs[key] = c.defs[key]
 		}
 	}
 
@@ -248,14 +260,15 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 	var err error
 
 	// Handle Optional / Nilable fields
-	if internals.IsOptional() && !internals.IsNilable() {
+	switch {
+	case internals.IsOptional() && !internals.IsNilable():
 		// Optional fields: render as the underlying schema (no null union).
 		converted, errInner := c.doConvert(schema)
 		if errInner != nil {
 			return nil, errInner
 		}
 		finalSchema = converted
-	} else if internals.IsNilable() {
+	case internals.IsNilable():
 		// Nilable: underlying schema OR null
 		baseSchema, derr := c.doConvert(schema)
 		if derr != nil {
@@ -274,7 +287,7 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 				},
 			}
 		}
-	} else {
+	default:
 		finalSchema, err = c.doConvert(schema)
 		if err != nil {
 			return nil, err
@@ -409,7 +422,14 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypeAny, core.ZodTypeUnknown:
 		jsonSchema = &lib.Schema{}
 	case core.ZodTypeNever:
-		jsonSchema = &lib.Schema{Not: &lib.Schema{}}
+		// Never type should not match anything, which is represented as {"not": {}}
+		// However, empty schemas are omitted due to omitempty tags in the jsonschema library
+		// As a workaround, we create a special structure that will force {"not": {}} output
+		// by using Boolean schema which serializes differently
+		emptyNotSchema := &lib.Schema{}
+		emptyNotSchema.Boolean = new(bool) // Setting boolean forces non-omitted serialization
+		*emptyNotSchema.Boolean = true     // true means "match everything", so "not true" = "match nothing" (Never behavior)
+		jsonSchema = &lib.Schema{Not: emptyNotSchema}
 	case core.ZodTypeUnion:
 		jsonSchema, err = c.convertUnion(schema)
 	case core.ZodTypePipe, core.ZodTypePipeline:
@@ -603,9 +623,8 @@ func (c *converter) convertObject(schema core.ZodSchema) (*lib.Schema, error) {
 	// Try StructSchema (for ZodStruct)
 	if s, ok := schema.(interface{ Shape() core.StructSchema }); ok {
 		shape := s.Shape()
-		// Convert StructSchema to ObjectSchema (they're the same type alias)
-		objectShape := core.ObjectSchema(shape)
-		return c.convertObjectFromShape(schema, objectShape)
+		// StructSchema and ObjectSchema are the same type alias
+		return c.convertObjectFromShape(schema, shape)
 	}
 
 	return nil, ErrSchemaNotObjectOrStruct

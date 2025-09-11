@@ -84,7 +84,7 @@ func TestInt_BasicFunctionality(t *testing.T) {
 		schema := Int64(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeInt64, schema.internals.Def.ZodTypeDef.Type)
+		assert.Equal(t, core.ZodTypeInt64, schema.internals.Def.Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
@@ -171,7 +171,7 @@ func TestInt_Modifiers(t *testing.T) {
 		optionalSchema := int32Schema.Optional()
 
 		// Type check: ensure it returns the correct type
-		var _ *ZodIntegerTyped[int32, *int32] = optionalSchema
+		var _ = optionalSchema
 
 		// Test with value
 		result, err := optionalSchema.Parse(int32(42))
@@ -192,7 +192,7 @@ func TestInt_Modifiers(t *testing.T) {
 		nilableSchema := int64Schema.Nilable()
 
 		// Type check: ensure it returns the correct type
-		var _ *ZodIntegerTyped[int64, *int64] = nilableSchema
+		var _ = nilableSchema
 
 		// Test with value
 		result, err := nilableSchema.Parse(int64(123))
@@ -213,7 +213,7 @@ func TestInt_Modifiers(t *testing.T) {
 		nullishSchema := uint16Schema.Nullish()
 
 		// Type check: ensure it returns the correct type
-		var _ *ZodIntegerTyped[uint16, *uint16] = nullishSchema
+		var _ = nullishSchema
 
 		// Test with value
 		result, err := nullishSchema.Parse(uint16(789))
@@ -233,11 +233,11 @@ func TestInt_Modifiers(t *testing.T) {
 		schema := Int().Optional()
 
 		// Type check
-		var _ *ZodIntegerTyped[int, *int] = schema
+		var _ = schema
 
 		// Add validation
 		validatedSchema := schema.Min(0).Max(100)
-		var _ *ZodIntegerTyped[int, *int] = validatedSchema
+		var _ = validatedSchema
 
 		// Test functionality
 		result, err := validatedSchema.Parse(50)
@@ -283,7 +283,7 @@ func TestInt_Chaining(t *testing.T) {
 					Default(42). // *ZodIntegerTyped[int, int] (maintains type)
 					Optional()   // *ZodIntegerTyped[int, *int] (type conversion)
 
-		var _ *ZodIntegerTyped[int, *int] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse(int(100))
@@ -298,7 +298,7 @@ func TestInt_Chaining(t *testing.T) {
 					Default(42). // *ZodIntegerTyped[int, int] (maintains type)
 					Optional()   // *ZodIntegerTyped[int, *int] (type conversion)
 
-		var _ *ZodIntegerTyped[int, *int] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse(int(100))
@@ -924,11 +924,11 @@ func TestInt_Overwrite(t *testing.T) {
 		})
 
 		// Should be the same underlying type
-		var _ *ZodIntegerTyped[int64, int64] = overwritten
+		var _ = overwritten
 
 		// Can continue chaining int methods
 		final := overwritten.Max(100)
-		var _ *ZodIntegerTyped[int64, int64] = final
+		var _ = final
 	})
 
 	t.Run("overwrite with different integer types", func(t *testing.T) {
@@ -1520,7 +1520,7 @@ func TestInt_PointerIdentityPreservation(t *testing.T) {
 	t.Run("Multiple integer types pointer identity", func(t *testing.T) {
 		// Test int32 Optional returns *int32
 		int32Schema := Int32().Optional()
-		var _ *ZodIntegerTyped[int32, *int32] = int32Schema
+		var _ = int32Schema
 
 		val32 := int32(123)
 		ptr32 := &val32
@@ -1531,7 +1531,7 @@ func TestInt_PointerIdentityPreservation(t *testing.T) {
 
 		// Test int64 Optional returns *int64
 		int64Schema := Int64().Optional()
-		var _ *ZodIntegerTyped[int64, *int64] = int64Schema
+		var _ = int64Schema
 
 		val64 := int64(456)
 		ptr64 := &val64
@@ -1542,7 +1542,7 @@ func TestInt_PointerIdentityPreservation(t *testing.T) {
 
 		// Test uint32 Optional returns *uint32
 		uint32Schema := Uint32().Optional()
-		var _ *ZodIntegerTyped[uint32, *uint32] = uint32Schema
+		var _ = uint32Schema
 
 		valU32 := uint32(789)
 		ptrU32 := &valU32
@@ -1562,7 +1562,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int8 -> *int8
 		int8Schema := Int8()
 		int8Optional := int8Schema.Optional()
-		var _ *ZodIntegerTyped[int8, *int8] = int8Optional
+		var _ = int8Optional
 
 		result8, err := int8Optional.Parse(int8(42))
 		require.NoError(t, err)
@@ -1573,7 +1573,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int16 -> *int16
 		int16Schema := Int16()
 		int16Optional := int16Schema.Optional()
-		var _ *ZodIntegerTyped[int16, *int16] = int16Optional
+		var _ = int16Optional
 
 		result16, err := int16Optional.Parse(int16(1000))
 		require.NoError(t, err)
@@ -1584,7 +1584,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int32 -> *int32
 		int32Schema := Int32()
 		int32Optional := int32Schema.Optional()
-		var _ *ZodIntegerTyped[int32, *int32] = int32Optional
+		var _ = int32Optional
 
 		result32, err := int32Optional.Parse(int32(100000))
 		require.NoError(t, err)
@@ -1595,7 +1595,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int64 -> *int64
 		int64Schema := Int64()
 		int64Optional := int64Schema.Optional()
-		var _ *ZodIntegerTyped[int64, *int64] = int64Optional
+		var _ = int64Optional
 
 		result64, err := int64Optional.Parse(int64(1000000))
 		require.NoError(t, err)
@@ -1606,7 +1606,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test uint types
 		uint8Schema := Uint8()
 		uint8Optional := uint8Schema.Optional()
-		var _ *ZodIntegerTyped[uint8, *uint8] = uint8Optional
+		var _ = uint8Optional
 
 		resultU8, err := uint8Optional.Parse(uint8(255))
 		require.NoError(t, err)
@@ -1616,7 +1616,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 
 		uint16Schema := Uint16()
 		uint16Optional := uint16Schema.Optional()
-		var _ *ZodIntegerTyped[uint16, *uint16] = uint16Optional
+		var _ = uint16Optional
 
 		resultU16, err := uint16Optional.Parse(uint16(65535))
 		require.NoError(t, err)
@@ -1626,7 +1626,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 
 		uint32Schema := Uint32()
 		uint32Optional := uint32Schema.Optional()
-		var _ *ZodIntegerTyped[uint32, *uint32] = uint32Optional
+		var _ = uint32Optional
 
 		resultU32, err := uint32Optional.Parse(uint32(4294967295))
 		require.NoError(t, err)
@@ -1636,7 +1636,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 
 		uint64Schema := Uint64()
 		uint64Optional := uint64Schema.Optional()
-		var _ *ZodIntegerTyped[uint64, *uint64] = uint64Optional
+		var _ = uint64Optional
 
 		resultU64, err := uint64Optional.Parse(uint64(18446744073709551615))
 		require.NoError(t, err)
@@ -1647,7 +1647,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int and uint
 		intSchema := Int()
 		intOptional := intSchema.Optional()
-		var _ *ZodIntegerTyped[int, *int] = intOptional
+		var _ = intOptional
 
 		resultInt, err := intOptional.Parse(int(42))
 		require.NoError(t, err)
@@ -1657,7 +1657,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 
 		uintSchema := Uint()
 		uintOptional := uintSchema.Optional()
-		var _ *ZodIntegerTyped[uint, *uint] = uintOptional
+		var _ = uintOptional
 
 		resultUint, err := uintOptional.Parse(uint(42))
 		require.NoError(t, err)
@@ -1670,7 +1670,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int8 -> *int8
 		int8Schema := Int8()
 		int8Nilable := int8Schema.Nilable()
-		var _ *ZodIntegerTyped[int8, *int8] = int8Nilable
+		var _ = int8Nilable
 
 		result8, err := int8Nilable.Parse(int8(42))
 		require.NoError(t, err)
@@ -1686,7 +1686,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int32 -> *int32
 		int32Schema := Int32()
 		int32Nilable := int32Schema.Nilable()
-		var _ *ZodIntegerTyped[int32, *int32] = int32Nilable
+		var _ = int32Nilable
 
 		result32, err := int32Nilable.Parse(int32(100000))
 		require.NoError(t, err)
@@ -1702,7 +1702,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test uint64 -> *uint64
 		uint64Schema := Uint64()
 		uint64Nilable := uint64Schema.Nilable()
-		var _ *ZodIntegerTyped[uint64, *uint64] = uint64Nilable
+		var _ = uint64Nilable
 
 		resultU64, err := uint64Nilable.Parse(uint64(12345))
 		require.NoError(t, err)
@@ -1720,7 +1720,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test int16 -> *int16
 		int16Schema := Int16()
 		int16Nullish := int16Schema.Nullish()
-		var _ *ZodIntegerTyped[int16, *int16] = int16Nullish
+		var _ = int16Nullish
 
 		result16, err := int16Nullish.Parse(int16(1000))
 		require.NoError(t, err)
@@ -1736,7 +1736,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test uint32 -> *uint32
 		uint32Schema := Uint32()
 		uint32Nullish := uint32Schema.Nullish()
-		var _ *ZodIntegerTyped[uint32, *uint32] = uint32Nullish
+		var _ = uint32Nullish
 
 		resultU32, err := uint32Nullish.Parse(uint32(4000000))
 		require.NoError(t, err)
@@ -1754,7 +1754,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test Int64Ptr().Optional() maintains *int64
 		int64PtrSchema := Int64Ptr()
 		int64PtrOptional := int64PtrSchema.Optional()
-		var _ *ZodIntegerTyped[int64, *int64] = int64PtrOptional
+		var _ = int64PtrOptional
 
 		// Test with value input (should convert to pointer)
 		result, err := int64PtrOptional.Parse(int64(123))
@@ -1766,7 +1766,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test Int32Ptr().Nilable() maintains *int32
 		int32PtrSchema := Int32Ptr()
 		int32PtrNilable := int32PtrSchema.Nilable()
-		var _ *ZodIntegerTyped[int32, *int32] = int32PtrNilable
+		var _ = int32PtrNilable
 
 		result32, err := int32PtrNilable.Parse(int32(456))
 		require.NoError(t, err)
@@ -1777,7 +1777,7 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 		// Test Uint16Ptr().Nullish() maintains *uint16
 		uint16PtrSchema := Uint16Ptr()
 		uint16PtrNullish := uint16PtrSchema.Nullish()
-		var _ *ZodIntegerTyped[uint16, *uint16] = uint16PtrNullish
+		var _ = uint16PtrNullish
 
 		resultU16, err := uint16PtrNullish.Parse(uint16(789))
 		require.NoError(t, err)
@@ -1796,7 +1796,7 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 					Min(0).      // *ZodIntegerTyped[int32, int32] (maintains type)
 					Optional()   // *ZodIntegerTyped[int32, *int32] (type conversion)
 
-		var _ *ZodIntegerTyped[int32, *int32] = schema
+		var _ = schema
 
 		// Test with valid value
 		result, err := schema.Parse(int32(100))
@@ -1820,7 +1820,7 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 					Positive(). // *ZodIntegerTyped[uint64, uint64] (maintains type)
 					Nilable()   // *ZodIntegerTyped[uint64, *uint64] (type conversion)
 
-		var _ *ZodIntegerTyped[uint64, *uint64] = schema
+		var _ = schema
 
 		// Test with valid value
 		result, err := schema.Parse(uint64(500))
@@ -1847,7 +1847,7 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 					Max(100).  // *ZodIntegerTyped[int16, *int16] (maintains constraint type)
 					Positive() // *ZodIntegerTyped[int16, *int16] (maintains constraint type)
 
-		var _ *ZodIntegerTyped[int16, *int16] = schema
+		var _ = schema
 
 		// Test with pointer input
 		val := int16(50)
@@ -1870,15 +1870,15 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 
 		// First conversion: value to pointer
 		optionalSchema := originalSchema.Optional() // *ZodIntegerTyped[int8, *int8]
-		var _ *ZodIntegerTyped[int8, *int8] = optionalSchema
+		var _ = optionalSchema
 
 		// Second conversion: should maintain pointer constraint
 		nilableSchema := optionalSchema.Nilable() // *ZodIntegerTyped[int8, *int8]
-		var _ *ZodIntegerTyped[int8, *int8] = nilableSchema
+		var _ = nilableSchema
 
 		// Third conversion: should maintain pointer constraint
 		nullishSchema := nilableSchema.Nullish() // *ZodIntegerTyped[int8, *int8]
-		var _ *ZodIntegerTyped[int8, *int8] = nullishSchema
+		var _ = nullishSchema
 
 		// Test functionality
 		result, err := nullishSchema.Parse(int8(42))
@@ -1899,86 +1899,86 @@ func TestInt_CompilationTimeTypeSafety(t *testing.T) {
 		// These should all compile without issues - testing compile-time type safety
 
 		// Base value schemas
-		var _ *ZodIntegerTyped[int8, int8] = Int8()
-		var _ *ZodIntegerTyped[int16, int16] = Int16()
-		var _ *ZodIntegerTyped[int32, int32] = Int32()
-		var _ *ZodIntegerTyped[int64, int64] = Int64()
-		var _ *ZodIntegerTyped[int, int] = Int()
-		var _ *ZodIntegerTyped[uint8, uint8] = Uint8()
-		var _ *ZodIntegerTyped[uint16, uint16] = Uint16()
-		var _ *ZodIntegerTyped[uint32, uint32] = Uint32()
-		var _ *ZodIntegerTyped[uint64, uint64] = Uint64()
-		var _ *ZodIntegerTyped[uint, uint] = Uint()
+		var _ = Int8()
+		var _ = Int16()
+		var _ = Int32()
+		var _ = Int64()
+		var _ = Int()
+		var _ = Uint8()
+		var _ = Uint16()
+		var _ = Uint32()
+		var _ = Uint64()
+		var _ = Uint()
 
 		// Base pointer schemas
-		var _ *ZodIntegerTyped[int8, *int8] = Int8Ptr()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16Ptr()
-		var _ *ZodIntegerTyped[int32, *int32] = Int32Ptr()
-		var _ *ZodIntegerTyped[int64, *int64] = Int64Ptr()
-		var _ *ZodIntegerTyped[int, *int] = IntPtr()
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8Ptr()
-		var _ *ZodIntegerTyped[uint16, *uint16] = Uint16Ptr()
-		var _ *ZodIntegerTyped[uint32, *uint32] = Uint32Ptr()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64Ptr()
-		var _ *ZodIntegerTyped[uint, *uint] = UintPtr()
+		var _ = Int8Ptr()
+		var _ = Int16Ptr()
+		var _ = Int32Ptr()
+		var _ = Int64Ptr()
+		var _ = IntPtr()
+		var _ = Uint8Ptr()
+		var _ = Uint16Ptr()
+		var _ = Uint32Ptr()
+		var _ = Uint64Ptr()
+		var _ = UintPtr()
 
 		// Optional conversions (value -> pointer)
-		var _ *ZodIntegerTyped[int8, *int8] = Int8().Optional()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16().Optional()
-		var _ *ZodIntegerTyped[int32, *int32] = Int32().Optional()
-		var _ *ZodIntegerTyped[int64, *int64] = Int64().Optional()
-		var _ *ZodIntegerTyped[int, *int] = Int().Optional()
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8().Optional()
-		var _ *ZodIntegerTyped[uint16, *uint16] = Uint16().Optional()
-		var _ *ZodIntegerTyped[uint32, *uint32] = Uint32().Optional()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64().Optional()
-		var _ *ZodIntegerTyped[uint, *uint] = Uint().Optional()
+		var _ = Int8().Optional()
+		var _ = Int16().Optional()
+		var _ = Int32().Optional()
+		var _ = Int64().Optional()
+		var _ = Int().Optional()
+		var _ = Uint8().Optional()
+		var _ = Uint16().Optional()
+		var _ = Uint32().Optional()
+		var _ = Uint64().Optional()
+		var _ = Uint().Optional()
 
 		// Nilable conversions (value -> pointer)
-		var _ *ZodIntegerTyped[int8, *int8] = Int8().Nilable()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16().Nilable()
-		var _ *ZodIntegerTyped[int32, *int32] = Int32().Nilable()
-		var _ *ZodIntegerTyped[int64, *int64] = Int64().Nilable()
-		var _ *ZodIntegerTyped[int, *int] = Int().Nilable()
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8().Nilable()
-		var _ *ZodIntegerTyped[uint16, *uint16] = Uint16().Nilable()
-		var _ *ZodIntegerTyped[uint32, *uint32] = Uint32().Nilable()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64().Nilable()
-		var _ *ZodIntegerTyped[uint, *uint] = Uint().Nilable()
+		var _ = Int8().Nilable()
+		var _ = Int16().Nilable()
+		var _ = Int32().Nilable()
+		var _ = Int64().Nilable()
+		var _ = Int().Nilable()
+		var _ = Uint8().Nilable()
+		var _ = Uint16().Nilable()
+		var _ = Uint32().Nilable()
+		var _ = Uint64().Nilable()
+		var _ = Uint().Nilable()
 
 		// Nullish conversions (value -> pointer)
-		var _ *ZodIntegerTyped[int8, *int8] = Int8().Nullish()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16().Nullish()
-		var _ *ZodIntegerTyped[int32, *int32] = Int32().Nullish()
-		var _ *ZodIntegerTyped[int64, *int64] = Int64().Nullish()
-		var _ *ZodIntegerTyped[int, *int] = Int().Nullish()
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8().Nullish()
-		var _ *ZodIntegerTyped[uint16, *uint16] = Uint16().Nullish()
-		var _ *ZodIntegerTyped[uint32, *uint32] = Uint32().Nullish()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64().Nullish()
-		var _ *ZodIntegerTyped[uint, *uint] = Uint().Nullish()
+		var _ = Int8().Nullish()
+		var _ = Int16().Nullish()
+		var _ = Int32().Nullish()
+		var _ = Int64().Nullish()
+		var _ = Int().Nullish()
+		var _ = Uint8().Nullish()
+		var _ = Uint16().Nullish()
+		var _ = Uint32().Nullish()
+		var _ = Uint64().Nullish()
+		var _ = Uint().Nullish()
 
 		// Pointer schema modifier methods (pointer -> pointer)
-		var _ *ZodIntegerTyped[int8, *int8] = Int8Ptr().Optional()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16Ptr().Nilable()
-		var _ *ZodIntegerTyped[int32, *int32] = Int32Ptr().Nullish()
-		var _ *ZodIntegerTyped[int64, *int64] = Int64Ptr().Optional()
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8Ptr().Nilable()
-		var _ *ZodIntegerTyped[uint16, *uint16] = Uint16Ptr().Nullish()
-		var _ *ZodIntegerTyped[uint32, *uint32] = Uint32Ptr().Optional()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64Ptr().Nilable()
+		var _ = Int8Ptr().Optional()
+		var _ = Int16Ptr().Nilable()
+		var _ = Int32Ptr().Nullish()
+		var _ = Int64Ptr().Optional()
+		var _ = Uint8Ptr().Nilable()
+		var _ = Uint16Ptr().Nullish()
+		var _ = Uint32Ptr().Optional()
+		var _ = Uint64Ptr().Nilable()
 
 		// Complex chaining type assertions
-		var _ *ZodIntegerTyped[int32, *int32] = Int32().Default(42).Optional()
-		var _ *ZodIntegerTyped[uint64, *uint64] = Uint64().Min(0).Max(1000).Nilable()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16().Positive().Nullish()
-		var _ *ZodIntegerTyped[int8, *int8] = Int8().NonNegative().Step(2).Optional()
+		var _ = Int32().Default(42).Optional()
+		var _ = Uint64().Min(0).Max(1000).Nilable()
+		var _ = Int16().Positive().Nullish()
+		var _ = Int8().NonNegative().Step(2).Optional()
 
 		// Validation method chaining maintains constraint type
-		var _ *ZodIntegerTyped[int32, int32] = Int32().Min(0).Max(100).Positive()
-		var _ *ZodIntegerTyped[uint64, uint64] = Uint64().Max(1000).NonNegative()
-		var _ *ZodIntegerTyped[int16, *int16] = Int16Ptr().Min(-100).Max(100)
-		var _ *ZodIntegerTyped[uint8, *uint8] = Uint8Ptr().Max(255).MultipleOf(5)
+		var _ = Int32().Min(0).Max(100).Positive()
+		var _ = Uint64().Max(1000).NonNegative()
+		var _ = Int16Ptr().Min(-100).Max(100)
+		var _ = Uint8Ptr().Max(255).MultipleOf(5)
 	})
 
 	t.Run("method chaining preserves type safety", func(t *testing.T) {
@@ -1986,15 +1986,15 @@ func TestInt_CompilationTimeTypeSafety(t *testing.T) {
 
 		// Value schema with validation chain then conversion
 		schema1 := Int32().Min(0).Max(1000).Positive().Optional()
-		var _ *ZodIntegerTyped[int32, *int32] = schema1
+		var _ = schema1
 
 		// Pointer schema with validation chain
 		schema2 := Int64Ptr().Min(-1000).Max(1000).NonNegative()
-		var _ *ZodIntegerTyped[int64, *int64] = schema2
+		var _ = schema2
 
 		// Multiple conversions
 		schema3 := Int16().Optional().Nilable().Nullish()
-		var _ *ZodIntegerTyped[int16, *int16] = schema3
+		var _ = schema3
 
 		// Test that they all work functionally
 		result1, err1 := schema1.Parse(int32(500))
@@ -2115,7 +2115,7 @@ func TestInt_MustParseTypeSafety(t *testing.T) {
 		})
 
 		// Verify the schema type is still correct after panic recovery
-		var _ *ZodIntegerTyped[int32, *int32] = optionalSchema
+		var _ = optionalSchema
 	})
 }
 
@@ -2203,7 +2203,7 @@ func TestInt_NonOptional(t *testing.T) {
 
 	// --- Optional().NonOptional() chain ---
 	chain := Int64().Optional().NonOptional()
-	var _ *ZodIntegerTyped[int64, int64] = chain
+	var _ = chain
 
 	res2, err := chain.Parse(int64(55))
 	require.NoError(t, err)
@@ -2232,7 +2232,7 @@ func TestInt_NonOptional(t *testing.T) {
 	// --- Int64Ptr().NonOptional() ---
 	val := int64(444)
 	ptrSchema := Int64Ptr().NonOptional()
-	var _ *ZodIntegerTyped[int64, int64] = ptrSchema
+	var _ = ptrSchema
 
 	r1, err := ptrSchema.Parse(&val)
 	require.NoError(t, err)

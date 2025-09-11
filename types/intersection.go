@@ -48,12 +48,12 @@ func (z *ZodIntersection[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodIntersection[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodIntersection[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using engine.ParseComplex for unified Default/Prefault handling
@@ -241,21 +241,21 @@ func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseConte
 
 // Optional makes the intersection optional and returns pointer constraint
 func (z *ZodIntersection[T, R]) Optional() *ZodIntersection[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable makes the intersection nilable and returns pointer constraint
 func (z *ZodIntersection[T, R]) Nilable() *ZodIntersection[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -263,7 +263,7 @@ func (z *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
 
 // NonOptional removes Optional flag and enforces non-nil value (T).
 func (z *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -279,14 +279,14 @@ func (z *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
 
 // Default preserves current constraint type R
 func (z *ZodIntersection[T, R]) Default(v T) *ZodIntersection[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -295,14 +295,14 @@ func (z *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] 
 
 // Prefault provides fallback values on validation failure
 func (z *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps current generic type R.
 func (z *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -377,7 +377,7 @@ func (z *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodInter
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -393,7 +393,7 @@ func (z *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *Zod
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -452,7 +452,7 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 		// R is some kind of pointer type
 		// Check if value is already a pointer
 		if reflect.TypeOf(value).Kind() == reflect.Ptr {
-			return any(value).(R)
+			return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		// Convert value to pointer
 		valueCopy := value
@@ -466,12 +466,12 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 			valueReflect := reflect.ValueOf(value)
 			if !valueReflect.IsNil() {
 				dereferencedValue := valueReflect.Elem().Interface()
-				return any(dereferencedValue).(R)
+				return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
 			}
 			return *new(R)
 		}
 		// Direct conversion
-		return any(value).(R)
+		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 }
 
@@ -480,7 +480,7 @@ func extractIntersectionValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
 		if v != nil {
-			return any(*v).(T)
+			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		var zero T
 		return zero
@@ -494,7 +494,7 @@ func convertToIntersectionConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 

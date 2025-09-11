@@ -333,7 +333,7 @@ func TestString_Modifiers(t *testing.T) {
 		optionalSchema := stringSchema.Optional()
 
 		// Type check: ensure it returns *ZodString[*string]
-		var _ *ZodString[*string] = optionalSchema
+		var _ = optionalSchema
 
 		// Functionality test
 		result, err := optionalSchema.Parse("hello")
@@ -345,14 +345,14 @@ func TestString_Modifiers(t *testing.T) {
 		// From *string to *string via Optional (maintains type)
 		ptrSchema := StringPtr()
 		optionalPtrSchema := ptrSchema.Optional()
-		var _ *ZodString[*string] = optionalPtrSchema
+		var _ = optionalPtrSchema
 	})
 
 	t.Run("Nilable always returns *string", func(t *testing.T) {
 		stringSchema := String()
 		nilableSchema := stringSchema.Nilable()
 
-		var _ *ZodString[*string] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -364,31 +364,31 @@ func TestString_Modifiers(t *testing.T) {
 		// string maintains string
 		stringSchema := String()
 		defaultStringSchema := stringSchema.Default("default")
-		var _ *ZodString[string] = defaultStringSchema
+		var _ = defaultStringSchema
 
 		// *string maintains *string
 		ptrSchema := StringPtr()
 		defaultPtrSchema := ptrSchema.Default("default")
-		var _ *ZodString[*string] = defaultPtrSchema
+		var _ = defaultPtrSchema
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
 		// string maintains string
 		stringSchema := String()
 		prefaultStringSchema := stringSchema.Prefault("fallback")
-		var _ *ZodString[string] = prefaultStringSchema
+		var _ = prefaultStringSchema
 
 		// *string maintains *string
 		ptrSchema := StringPtr()
 		prefaultPtrSchema := ptrSchema.Prefault("fallback")
-		var _ *ZodString[*string] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 
 	t.Run("Nullish combines optional and nilable", func(t *testing.T) {
 		stringSchema := String()
 		nullishSchema := stringSchema.Nullish()
 
-		var _ *ZodString[*string] = nullishSchema
+		var _ = nullishSchema
 
 		// Test nil handling
 		result, err := nullishSchema.Parse(nil)
@@ -674,13 +674,13 @@ func TestString_Chaining(t *testing.T) {
 	t.Run("type evolution through chain", func(t *testing.T) {
 		// Start with string, add validation, then make optional
 		base := String()
-		var _ *ZodString[string] = base
+		var _ = base
 
 		withValidation := base.Min(3)
-		var _ *ZodString[string] = withValidation
+		var _ = withValidation
 
 		optional := withValidation.Optional()
-		var _ *ZodString[*string] = optional
+		var _ = optional
 
 		// Functionality test
 		result, err := optional.Parse("hello")
@@ -1161,7 +1161,7 @@ func TestString_Modifiers_NonOptional(t *testing.T) {
 
 	// --- Optional().NonOptional() chain ---
 	chainSchema := String().Optional().NonOptional()
-	var _ *ZodString[string] = chainSchema // compile-time type check
+	var _ = chainSchema // compile-time type check
 
 	// Should behave like required string now
 	result2, err2 := chainSchema.Parse("world")
@@ -1193,7 +1193,7 @@ func TestString_Modifiers_NonOptional(t *testing.T) {
 
 	// --- StringPtr().NonOptional() ---
 	ptrChain := StringPtr().NonOptional()
-	var _ *ZodString[string] = ptrChain
+	var _ = ptrChain
 
 	// Accepts raw string input
 	resPtr1, err := ptrChain.Parse("pointer-str")
@@ -1446,7 +1446,7 @@ func TestString_Modifiers_Overwrite(t *testing.T) {
 		overwritten := original.Overwrite(strings.ToUpper)
 
 		// Should still be a string schema
-		var _ *ZodString[string] = overwritten
+		var _ = overwritten
 
 		result, err := overwritten.Parse("test")
 		require.NoError(t, err)

@@ -303,7 +303,7 @@ func TestLazy_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodLazy[*any]
-		var _ *ZodLazy[*any] = optionalSchema
+		var _ = optionalSchema
 
 		// Test with valid input
 		result, err := optionalSchema.Parse("hello")
@@ -323,7 +323,7 @@ func TestLazy_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodLazy[*any]
-		var _ *ZodLazy[*any] = optionalSchema
+		var _ = optionalSchema
 
 		// Test with valid input
 		result, err := optionalSchema.Parse("hello")
@@ -342,7 +342,7 @@ func TestLazy_Modifiers(t *testing.T) {
 		})
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodLazy[*any] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -356,7 +356,7 @@ func TestLazy_Modifiers(t *testing.T) {
 		})
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodLazy[*any] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -372,14 +372,14 @@ func TestLazy_Modifiers(t *testing.T) {
 			return String()
 		})
 		defaultSchema := schema.Default(defaultValue)
-		var _ *ZodLazy[any] = defaultSchema
+		var _ = defaultSchema
 
 		// *any maintains *any
 		ptrSchema := LazyPtr(func() any {
 			return String()
 		})
 		defaultPtrSchema := ptrSchema.Default(defaultValue)
-		var _ *ZodLazy[*any] = defaultPtrSchema
+		var _ = defaultPtrSchema
 	})
 
 	t.Run("type-safe Default preserves type", func(t *testing.T) {
@@ -389,7 +389,7 @@ func TestLazy_Modifiers(t *testing.T) {
 			return String()
 		})
 		defaultSchema := schema.Default(defaultValue)
-		var _ *ZodLazyTyped[*ZodString[string]] = defaultSchema
+		var _ = defaultSchema
 
 		// Test behavior
 		result, err := defaultSchema.Parse("hello")
@@ -405,14 +405,14 @@ func TestLazy_Modifiers(t *testing.T) {
 			return String()
 		})
 		prefaultSchema := schema.Prefault(prefaultValue)
-		var _ *ZodLazy[any] = prefaultSchema
+		var _ = prefaultSchema
 
 		// *any maintains *any
 		ptrSchema := LazyPtr(func() any {
 			return String()
 		})
 		prefaultPtrSchema := ptrSchema.Prefault(prefaultValue)
-		var _ *ZodLazy[*any] = prefaultPtrSchema
+		var _ = prefaultPtrSchema
 	})
 }
 
@@ -431,7 +431,7 @@ func TestLazy_Chaining(t *testing.T) {
 			Default(defaultValue). // *ZodLazy[any] (maintains type)
 			Optional()             // *ZodLazy[*any] (type conversion)
 
-		var _ *ZodLazy[*any] = schema
+		var _ = schema
 
 		// Test final behavior
 		result, err := schema.Parse("hello")
@@ -447,7 +447,7 @@ func TestLazy_Chaining(t *testing.T) {
 		}).
 			Default(defaultValue) // Preserves ZodLazyTyped type
 
-		var _ *ZodLazyTyped[*ZodString[string]] = schema
+		var _ = schema
 
 		// Test behavior
 		result, err := schema.Parse("hello")
@@ -462,7 +462,7 @@ func TestLazy_Chaining(t *testing.T) {
 			Nilable().      // *ZodLazy[*any] (maintains type)
 			Default("test") // *ZodLazy[*any] (maintains type)
 
-		var _ *ZodLazy[*any] = schema
+		var _ = schema
 
 		result, err := schema.Parse("hello")
 		require.NoError(t, err)
@@ -830,8 +830,7 @@ func TestLazy_ErrorHandling(t *testing.T) {
 
 func TestLazy_EdgeCases(t *testing.T) {
 	t.Run("recursive schema evaluation", func(t *testing.T) {
-		var TreeNodeSchema *ZodLazy[any]
-		TreeNodeSchema = LazyAny(func() any {
+		TreeNodeSchema := LazyAny(func() any {
 			// In a real implementation, this would be a proper object schema
 			// For this test, we'll use a simple string schema
 			return String()
@@ -843,8 +842,7 @@ func TestLazy_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("type-safe recursive schema", func(t *testing.T) {
-		var RecursiveSchema *ZodLazyTyped[*ZodString[string]]
-		RecursiveSchema = Lazy[*ZodString[string]](func() *ZodString[string] {
+		RecursiveSchema := Lazy[*ZodString[string]](func() *ZodString[string] {
 			return String().Min(2)
 		})
 

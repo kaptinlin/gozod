@@ -220,14 +220,15 @@ func parseTagRule(part string) TagRule {
 		var params []string
 		if paramStr != "" {
 			// Handle quoted parameters
-			if strings.HasPrefix(paramStr, "'") && strings.HasSuffix(paramStr, "'") {
+			switch {
+			case strings.HasPrefix(paramStr, "'") && strings.HasSuffix(paramStr, "'"):
 				// Single quoted parameter
 				unquoted := paramStr[1 : len(paramStr)-1]
 				params = []string{unescapeString(unquoted)}
-			} else if strings.Contains(paramStr, " ") {
+			case strings.Contains(paramStr, " "):
 				// Multiple space-separated parameters
 				params = strings.Fields(paramStr)
-			} else {
+			default:
 				// Single parameter
 				params = []string{paramStr}
 			}

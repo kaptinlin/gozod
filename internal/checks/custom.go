@@ -79,14 +79,14 @@ func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 	}
 
 	// Handle additional parameters from CustomParams.Params
-	if customParams.Params != nil && len(customParams.Params) > 0 {
+	if len(customParams.Params) > 0 {
 		for k, v := range customParams.Params {
 			def.Params[k] = v
 		}
 	}
 
 	// Store custom path if provided
-	if customParams.Path != nil && len(customParams.Path) > 0 {
+	if len(customParams.Path) > 0 {
 		def.Params["path"] = customParams.Path
 	}
 

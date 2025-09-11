@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kaptinlin/gozod/core"
@@ -8,6 +9,17 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+)
+
+// Static error variables
+var (
+	ErrSchemaIsNil                   = errors.New("schema is nil")
+	ErrSchemaInternalsIsNil          = errors.New("schema internals is nil")
+	ErrNoDiscriminatorValuesFound    = errors.New("no discriminator values found for field")
+	ErrOptionIsNil                   = errors.New("option is nil")
+	ErrDuplicateDiscriminatorValue   = errors.New("duplicate discriminator value")
+	ErrFailedToBuildDiscriminatorMap = errors.New("failed to build discriminator map")
+	ErrNoValidDiscriminatorValues    = errors.New("no valid discriminator values found for field")
 )
 
 // =============================================================================
@@ -47,12 +59,12 @@ func (z *ZodDiscriminatedUnion[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodDiscriminatedUnion[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodDiscriminatedUnion[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Parse validates input using discriminated union logic with direct validation approach
@@ -215,21 +227,21 @@ func (z *ZodDiscriminatedUnion[T, R]) ParseAny(input any, ctx ...*core.ParseCont
 
 // Optional creates optional discriminated union schema that returns pointer constraint
 func (z *ZodDiscriminatedUnion[T, R]) Optional() *ZodDiscriminatedUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values and returns pointer constraint
 func (z *ZodDiscriminatedUnion[T, R]) Nilable() *ZodDiscriminatedUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodDiscriminatedUnion[T, R]) Nullish() *ZodDiscriminatedUnion[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -237,14 +249,14 @@ func (z *ZodDiscriminatedUnion[T, R]) Nullish() *ZodDiscriminatedUnion[T, *T] {
 
 // Default preserves current constraint type R
 func (z *ZodDiscriminatedUnion[T, R]) Default(v T) *ZodDiscriminatedUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodDiscriminatedUnion[T, R]) DefaultFunc(fn func() T) *ZodDiscriminatedUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -253,14 +265,14 @@ func (z *ZodDiscriminatedUnion[T, R]) DefaultFunc(fn func() T) *ZodDiscriminated
 
 // Prefault provides fallback values on validation failure
 func (z *ZodDiscriminatedUnion[T, R]) Prefault(v T) *ZodDiscriminatedUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc keeps current generic type R.
 func (z *ZodDiscriminatedUnion[T, R]) PrefaultFunc(fn func() T) *ZodDiscriminatedUnion[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
@@ -342,7 +354,7 @@ func (z *ZodDiscriminatedUnion[T, R]) Refine(fn func(R) bool, params ...any) *Zo
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -358,7 +370,7 @@ func (z *ZodDiscriminatedUnion[T, R]) RefineAny(fn func(any) bool, params ...any
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -411,7 +423,7 @@ func convertToDiscriminatedUnionConstraintType[T any, R any](value any) R {
 		return any((*any)(nil)).(R)
 	default:
 		// Return value directly as R
-		return any(value).(R)
+		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 }
 
@@ -420,7 +432,7 @@ func extractDiscriminatedUnionValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
 		if v != nil {
-			return any(*v).(T)
+			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		var zero T
 		return zero
@@ -434,7 +446,7 @@ func convertToDiscriminatedUnionConstraintValue[T any, R any](value any) (R, boo
 	var zero R
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
@@ -458,13 +470,13 @@ func convertToDiscriminatedUnionConstraintValue[T any, R any](value any) (R, boo
 // getDiscriminatorValues extracts discriminator values from a schema
 func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([]any, error) {
 	if schema == nil {
-		return nil, fmt.Errorf("schema is nil")
+		return nil, fmt.Errorf("%w", ErrSchemaIsNil)
 	}
 
 	// Get schema internals
 	internals := schema.GetInternals()
 	if internals == nil {
-		return nil, fmt.Errorf("schema internals is nil")
+		return nil, fmt.Errorf("%w", ErrSchemaInternalsIsNil)
 	}
 
 	// Try to extract discriminator values from internals
@@ -480,7 +492,7 @@ func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([
 // getDiscriminatorValuesFromAnySchema extracts discriminator values from any schema using type assertion
 func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) ([]any, error) {
 	if schema == nil {
-		return nil, fmt.Errorf("schema is nil")
+		return nil, fmt.Errorf("%w", ErrSchemaIsNil)
 	}
 
 	// Try to get internals directly
@@ -525,7 +537,7 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 		}
 	}
 
-	return nil, fmt.Errorf("no discriminator values found for field '%s' in schema", discriminatorField)
+	return nil, fmt.Errorf("%w '%s' in schema", ErrNoDiscriminatorValuesFound, discriminatorField)
 }
 
 // extractDiscriminatorFromInternals extracts discriminator values from schema internals
@@ -586,7 +598,7 @@ func buildDiscriminatorMap(discriminator string, options []core.ZodSchema) (map[
 
 	for i, option := range options {
 		if option == nil {
-			allErrors = append(allErrors, fmt.Errorf("option %d is nil", i))
+			allErrors = append(allErrors, fmt.Errorf("%w: option %d", ErrOptionIsNil, i))
 			continue
 		}
 
@@ -600,7 +612,7 @@ func buildDiscriminatorMap(discriminator string, options []core.ZodSchema) (map[
 		// Add values to discriminator map
 		for _, value := range discriminatorValues {
 			if _, exists := discMap[value]; exists {
-				return nil, fmt.Errorf("duplicate discriminator value: %v", value)
+				return nil, fmt.Errorf("%w: %v", ErrDuplicateDiscriminatorValue, value)
 			}
 			discMap[value] = option
 		}
@@ -608,11 +620,11 @@ func buildDiscriminatorMap(discriminator string, options []core.ZodSchema) (map[
 
 	// If we have errors and no valid discriminator values, return error
 	if len(discMap) == 0 && len(allErrors) > 0 {
-		return nil, fmt.Errorf("failed to build discriminator map: %v", allErrors)
+		return nil, fmt.Errorf("%w: %v", ErrFailedToBuildDiscriminatorMap, allErrors)
 	}
 
 	if len(discMap) == 0 {
-		return nil, fmt.Errorf("no valid discriminator values found for field: %s", discriminator)
+		return nil, fmt.Errorf("%w: %s", ErrNoValidDiscriminatorValues, discriminator)
 	}
 
 	return discMap, nil

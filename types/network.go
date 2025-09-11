@@ -51,12 +51,12 @@ func (z *ZodIPv4[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodIPv4[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodIPv4[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements type conversion interface using coerce package
@@ -125,21 +125,21 @@ func (z *ZodIPv4[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error)
 
 // Optional allows nil values, returns pointer type for nullable semantics
 func (z *ZodIPv4[T]) Optional() *ZodIPv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodIPv4[T]) Nilable() *ZodIPv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodIPv4[T]) Nullish() *ZodIPv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -147,14 +147,14 @@ func (z *ZodIPv4[T]) Nullish() *ZodIPv4[*string] {
 
 // Default preserves current generic type T
 func (z *ZodIPv4[T]) Default(v string) *ZodIPv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodIPv4[T]) DefaultFunc(fn func() string) *ZodIPv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -163,14 +163,14 @@ func (z *ZodIPv4[T]) DefaultFunc(fn func() string) *ZodIPv4[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodIPv4[T]) Prefault(v string) *ZodIPv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodIPv4[T]) PrefaultFunc(fn func() string) *ZodIPv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -240,7 +240,7 @@ func (z *ZodIPv4[T]) Refine(fn func(T) bool, params ...any) *ZodIPv4[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -254,7 +254,7 @@ func (z *ZodIPv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv4[T] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -282,9 +282,9 @@ func (z *ZodIPv4[T]) withInternals(in *core.ZodTypeInternals) *ZodIPv4[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodIPv4[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodIPv4[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -313,7 +313,7 @@ func newZodIPv4FromDef[T NetworkConstraint](def *ZodIPv4Def) *ZodIPv4[T] {
 
 	// Add IPv4 validation check
 	ipv4Check := checks.IPv4()
-	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, ipv4Check)
+	internals.Checks = append(internals.Checks, ipv4Check)
 
 	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
@@ -364,7 +364,7 @@ func IPv4Typed[T NetworkConstraint](params ...any) *ZodIPv4[T] {
 // CoercedIPv4 creates coerced IPv4 schema that attempts string conversion
 func CoercedIPv4(params ...any) *ZodIPv4[string] {
 	schema := IPv4Typed[string](params...)
-	schema.internals.ZodTypeInternals.Coerce = true
+	schema.internals.Coerce = true
 	return schema
 }
 
@@ -399,12 +399,12 @@ func (z *ZodIPv6[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodIPv6[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodIPv6[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements type conversion interface using coerce package
@@ -473,21 +473,21 @@ func (z *ZodIPv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error)
 
 // Optional allows nil values, returns pointer type for nullable semantics
 func (z *ZodIPv6[T]) Optional() *ZodIPv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodIPv6[T]) Nilable() *ZodIPv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodIPv6[T]) Nullish() *ZodIPv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -495,14 +495,14 @@ func (z *ZodIPv6[T]) Nullish() *ZodIPv6[*string] {
 
 // Default preserves current generic type T
 func (z *ZodIPv6[T]) Default(v string) *ZodIPv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodIPv6[T]) DefaultFunc(fn func() string) *ZodIPv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -511,14 +511,14 @@ func (z *ZodIPv6[T]) DefaultFunc(fn func() string) *ZodIPv6[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodIPv6[T]) Prefault(v string) *ZodIPv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodIPv6[T]) PrefaultFunc(fn func() string) *ZodIPv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -592,7 +592,7 @@ func (z *ZodIPv6[T]) Refine(fn func(T) bool, params ...any) *ZodIPv6[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -606,7 +606,7 @@ func (z *ZodIPv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodIPv6[T] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -634,9 +634,9 @@ func (z *ZodIPv6[T]) withInternals(in *core.ZodTypeInternals) *ZodIPv6[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodIPv6[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodIPv6[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -654,7 +654,7 @@ func newZodIPv6FromDef[T NetworkConstraint](def *ZodIPv6Def) *ZodIPv6[T] {
 
 	// Add IPv6 validation check
 	ipv6Check := checks.IPv6()
-	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, ipv6Check)
+	internals.Checks = append(internals.Checks, ipv6Check)
 
 	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
@@ -701,7 +701,7 @@ func IPv6Typed[T NetworkConstraint](params ...any) *ZodIPv6[T] {
 // CoercedIPv6 creates coerced IPv6 schema that attempts string conversion
 func CoercedIPv6(params ...any) *ZodIPv6[string] {
 	schema := IPv6Typed[string](params...)
-	schema.internals.ZodTypeInternals.Coerce = true
+	schema.internals.Coerce = true
 	return schema
 }
 
@@ -736,12 +736,12 @@ func (z *ZodCIDRv4[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodCIDRv4[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodCIDRv4[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements type conversion interface using coerce package
@@ -810,21 +810,21 @@ func (z *ZodCIDRv4[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 
 // Optional allows nil values, returns pointer type for nullable semantics
 func (z *ZodCIDRv4[T]) Optional() *ZodCIDRv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodCIDRv4[T]) Nilable() *ZodCIDRv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodCIDRv4[T]) Nullish() *ZodCIDRv4[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -832,14 +832,14 @@ func (z *ZodCIDRv4[T]) Nullish() *ZodCIDRv4[*string] {
 
 // Default preserves current generic type T
 func (z *ZodCIDRv4[T]) Default(v string) *ZodCIDRv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodCIDRv4[T]) DefaultFunc(fn func() string) *ZodCIDRv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -848,14 +848,14 @@ func (z *ZodCIDRv4[T]) DefaultFunc(fn func() string) *ZodCIDRv4[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodCIDRv4[T]) Prefault(v string) *ZodCIDRv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodCIDRv4[T]) PrefaultFunc(fn func() string) *ZodCIDRv4[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -929,7 +929,7 @@ func (z *ZodCIDRv4[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv4[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -943,7 +943,7 @@ func (z *ZodCIDRv4[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv4[T]
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -971,9 +971,9 @@ func (z *ZodCIDRv4[T]) withInternals(in *core.ZodTypeInternals) *ZodCIDRv4[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodCIDRv4[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodCIDRv4[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -991,7 +991,7 @@ func newZodCIDRv4FromDef[T NetworkConstraint](def *ZodCIDRv4Def) *ZodCIDRv4[T] {
 
 	// Add CIDRv4 validation check
 	cidrv4Check := checks.CIDRv4()
-	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, cidrv4Check)
+	internals.Checks = append(internals.Checks, cidrv4Check)
 
 	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
@@ -1038,7 +1038,7 @@ func CIDRv4Typed[T NetworkConstraint](params ...any) *ZodCIDRv4[T] {
 // CoercedCIDRv4 creates coerced CIDRv4 schema that attempts string conversion
 func CoercedCIDRv4(params ...any) *ZodCIDRv4[string] {
 	schema := CIDRv4Typed[string](params...)
-	schema.internals.ZodTypeInternals.Coerce = true
+	schema.internals.Coerce = true
 	return schema
 }
 
@@ -1073,12 +1073,12 @@ func (z *ZodCIDRv6[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodCIDRv6[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodCIDRv6[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements type conversion interface using coerce package
@@ -1147,21 +1147,21 @@ func (z *ZodCIDRv6[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 
 // Optional allows nil values, returns pointer type for nullable semantics
 func (z *ZodCIDRv6[T]) Optional() *ZodCIDRv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodCIDRv6[T]) Nilable() *ZodCIDRv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodCIDRv6[T]) Nullish() *ZodCIDRv6[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -1169,14 +1169,14 @@ func (z *ZodCIDRv6[T]) Nullish() *ZodCIDRv6[*string] {
 
 // Default preserves current generic type T
 func (z *ZodCIDRv6[T]) Default(v string) *ZodCIDRv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodCIDRv6[T]) DefaultFunc(fn func() string) *ZodCIDRv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -1185,14 +1185,14 @@ func (z *ZodCIDRv6[T]) DefaultFunc(fn func() string) *ZodCIDRv6[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodCIDRv6[T]) Prefault(v string) *ZodCIDRv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodCIDRv6[T]) PrefaultFunc(fn func() string) *ZodCIDRv6[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -1262,7 +1262,7 @@ func (z *ZodCIDRv6[T]) Refine(fn func(T) bool, params ...any) *ZodCIDRv6[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -1276,7 +1276,7 @@ func (z *ZodCIDRv6[T]) RefineAny(fn func(any) bool, params ...any) *ZodCIDRv6[T]
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -1304,9 +1304,9 @@ func (z *ZodCIDRv6[T]) withInternals(in *core.ZodTypeInternals) *ZodCIDRv6[T] {
 // CloneFrom copies configuration from another schema
 func (z *ZodCIDRv6[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodCIDRv6[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -1324,7 +1324,7 @@ func newZodCIDRv6FromDef[T NetworkConstraint](def *ZodCIDRv6Def) *ZodCIDRv6[T] {
 
 	// Add CIDRv6 validation check
 	cidrv6Check := checks.CIDRv6()
-	internals.ZodTypeInternals.Checks = append(internals.ZodTypeInternals.Checks, cidrv6Check)
+	internals.Checks = append(internals.Checks, cidrv6Check)
 
 	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
@@ -1371,7 +1371,7 @@ func CIDRv6Typed[T NetworkConstraint](params ...any) *ZodCIDRv6[T] {
 // CoercedCIDRv6 creates coerced CIDRv6 schema that attempts string conversion
 func CoercedCIDRv6(params ...any) *ZodCIDRv6[string] {
 	schema := CIDRv6Typed[string](params...)
-	schema.internals.ZodTypeInternals.Coerce = true
+	schema.internals.Coerce = true
 	return schema
 }
 
@@ -1418,12 +1418,12 @@ func (z *ZodURL[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodURL[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodURL[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements type conversion interface using coerce package
@@ -1492,21 +1492,21 @@ func (z *ZodURL[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) 
 
 // Optional allows nil values, returns pointer type for nullable semantics
 func (z *ZodURL[T]) Optional() *ZodURL[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodURL[T]) Nilable() *ZodURL[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodURL[T]) Nullish() *ZodURL[*string] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -1514,14 +1514,14 @@ func (z *ZodURL[T]) Nullish() *ZodURL[*string] {
 
 // Default preserves current generic type T
 func (z *ZodURL[T]) Default(v string) *ZodURL[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodURL[T]) DefaultFunc(fn func() string) *ZodURL[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -1530,14 +1530,14 @@ func (z *ZodURL[T]) DefaultFunc(fn func() string) *ZodURL[T] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodURL[T]) Prefault(v string) *ZodURL[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodURL[T]) PrefaultFunc(fn func() string) *ZodURL[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -1585,7 +1585,7 @@ func (z *ZodURL[T]) Refine(fn func(T) bool, params ...any) *ZodURL[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -1599,7 +1599,7 @@ func (z *ZodURL[T]) RefineAny(fn func(any) bool, params ...any) *ZodURL[T] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -1751,6 +1751,6 @@ func URLTyped[T NetworkConstraint](params ...any) *ZodURL[T] {
 // CoercedURL creates coerced URL schema that attempts string conversion
 func CoercedURL(params ...any) *ZodURL[string] {
 	schema := URLTyped[string](params...)
-	schema.internals.ZodTypeInternals.Coerce = true
+	schema.internals.Coerce = true
 	return schema
 }

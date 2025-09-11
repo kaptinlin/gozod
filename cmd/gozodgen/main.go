@@ -24,6 +24,11 @@ import (
 	"strings"
 )
 
+// Static error variables to comply with err113
+var (
+	ErrConfigNil = fmt.Errorf("config cannot be nil")
+)
+
 // Command line flags
 var (
 	outputSuffix = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
@@ -212,7 +217,7 @@ type CodeGenerator struct {
 // NewCodeGenerator creates a new code generator instance
 func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config cannot be nil")
+		return nil, ErrConfigNil
 	}
 
 	// Create analyzer for parsing Go source files

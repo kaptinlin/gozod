@@ -48,12 +48,12 @@ func (z *ZodBool[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodBool[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodBool[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for boolean type conversion
@@ -133,21 +133,21 @@ func (z *ZodBool[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error)
 
 // Optional always returns *bool because the optional value may be nil.
 func (z *ZodBool[T]) Optional() *ZodBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable always returns *bool because the value may be nil.
 func (z *ZodBool[T]) Nilable() *ZodBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers for maximum flexibility
 func (z *ZodBool[T]) Nullish() *ZodBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -155,14 +155,14 @@ func (z *ZodBool[T]) Nullish() *ZodBool[*bool] {
 
 // Default keeps the current generic type T.
 func (z *ZodBool[T]) Default(v bool) *ZodBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc keeps the current generic type T.
 func (z *ZodBool[T]) DefaultFunc(fn func() bool) *ZodBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -171,7 +171,7 @@ func (z *ZodBool[T]) DefaultFunc(fn func() bool) *ZodBool[T] {
 
 // Prefault keeps the current generic type T.
 func (z *ZodBool[T]) Prefault(v bool) *ZodBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	// Convert the prefault value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
@@ -187,7 +187,7 @@ func (z *ZodBool[T]) Prefault(v bool) *ZodBool[T] {
 
 // PrefaultFunc keeps the current generic type T.
 func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		v := fn()
 		// Convert the prefault value to the appropriate constraint type
@@ -244,7 +244,7 @@ func (z *ZodBool[T]) Overwrite(transform func(T) T, params ...any) *ZodBool[T] {
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -363,7 +363,7 @@ func (z *ZodBool[T]) Refine(fn func(T) bool, params ...any) *ZodBool[T] {
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
 
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -381,7 +381,7 @@ func (z *ZodBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodBool[T] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -412,13 +412,13 @@ func (z *ZodBool[T]) withInternals(in *core.ZodTypeInternals) *ZodBool[T] {
 func (z *ZodBool[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodBool[T]); ok {
 		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 
 		// Copy all state from source
 		*z.internals = *src.internals
 
 		// Restore the original checks that were set by the constructor
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -498,14 +498,14 @@ func BoolTyped[T BoolConstraint](params ...any) *ZodBool[T] {
 // CoercedBool creates a bool schema with coercion enabled
 func CoercedBool(args ...any) *ZodBool[bool] {
 	schema := Bool(args...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
 // CoercedBoolPtr creates a *bool schema with coercion enabled
 func CoercedBoolPtr(args ...any) *ZodBool[*bool] {
 	schema := BoolPtr(args...)
-	schema.internals.ZodTypeInternals.SetCoerce(true)
+	schema.internals.SetCoerce(true)
 	return schema
 }
 
@@ -530,7 +530,7 @@ func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 		}
 	}
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -539,7 +539,7 @@ func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 // It also sets internals.Type to ZodTypeNonOptional so that error reporting
 // uses "nonoptional" rather than "bool" when nil is encountered.
 func (z *ZodBool[T]) NonOptional() *ZodBool[bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 	return &ZodBool[bool]{

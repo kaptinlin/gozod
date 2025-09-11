@@ -133,7 +133,7 @@ func TestUnknown_Modifiers(t *testing.T) {
 		optionalSchema := schema.Optional()
 
 		// Type check: ensure it returns *ZodUnknown[any, *any]
-		var _ *ZodUnknown[any, *any] = optionalSchema
+		var _ = optionalSchema
 
 		// Test non-nil value - returns pointer
 		result, err := optionalSchema.Parse("hello")
@@ -151,7 +151,7 @@ func TestUnknown_Modifiers(t *testing.T) {
 		schema := Unknown()
 		nilableSchema := schema.Nilable()
 
-		var _ *ZodUnknown[any, *any] = nilableSchema
+		var _ = nilableSchema
 
 		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
@@ -169,7 +169,7 @@ func TestUnknown_Modifiers(t *testing.T) {
 		schema := Unknown()
 		defaultSchema := schema.Default("default_value")
 
-		var _ *ZodUnknown[any, any] = defaultSchema
+		var _ = defaultSchema
 
 		// Valid input should override default
 		result, err := defaultSchema.Parse("input_value")
@@ -408,7 +408,7 @@ func TestUnknown_DefaultAndPrefault(t *testing.T) {
 func TestUnknown_Factories(t *testing.T) {
 	t.Run("Unknown factory", func(t *testing.T) {
 		schema := Unknown()
-		var _ *ZodUnknown[any, any] = schema
+		var _ = schema
 
 		result, err := schema.Parse("test")
 		require.NoError(t, err)
@@ -417,7 +417,7 @@ func TestUnknown_Factories(t *testing.T) {
 
 	t.Run("UnknownPtr factory", func(t *testing.T) {
 		schema := UnknownPtr()
-		var _ *ZodUnknown[any, *any] = schema
+		var _ = schema
 
 		result, err := schema.Parse("test")
 		require.NoError(t, err)

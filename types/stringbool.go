@@ -63,12 +63,12 @@ func (z *ZodStringBool[T]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodStringBool[T]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodStringBool[T]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // Coerce implements Coercible interface for string-to-bool type conversion
@@ -157,21 +157,21 @@ func (z *ZodStringBool[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T
 
 // Optional always returns *bool for nullable semantics
 func (z *ZodStringBool[T]) Optional() *ZodStringBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable allows nil values, returns pointer type
 func (z *ZodStringBool[T]) Nilable() *ZodStringBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodStringBool[T]) Nullish() *ZodStringBool[*bool] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -179,14 +179,14 @@ func (z *ZodStringBool[T]) Nullish() *ZodStringBool[*bool] {
 
 // Default preserves current generic type T
 func (z *ZodStringBool[T]) Default(v bool) *ZodStringBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current generic type T
 func (z *ZodStringBool[T]) DefaultFunc(fn func() bool) *ZodStringBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -196,7 +196,7 @@ func (z *ZodStringBool[T]) DefaultFunc(fn func() bool) *ZodStringBool[T] {
 // Prefault provides fallback values on validation failure
 // According to Zod v4 semantics, prefault accepts input type (string) for StringBool
 func (z *ZodStringBool[T]) Prefault(v string) *ZodStringBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
@@ -204,7 +204,7 @@ func (z *ZodStringBool[T]) Prefault(v string) *ZodStringBool[T] {
 // PrefaultFunc keeps current generic type T.
 // According to Zod v4 semantics, prefault function returns input type (string) for StringBool
 func (z *ZodStringBool[T]) PrefaultFunc(fn func() string) *ZodStringBool[T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -254,7 +254,7 @@ func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool
 
 	// MUST use checks package for custom validation
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -263,7 +263,7 @@ func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool
 func (z *ZodStringBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodStringBool[T] {
 	// MUST use checks package for custom validation
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -299,7 +299,7 @@ func (z *ZodStringBool[T]) Overwrite(transform func(T) T, params ...any) *ZodStr
 	}
 
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -340,9 +340,9 @@ func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBo
 // CloneFrom copies configuration from another schema
 func (z *ZodStringBool[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodStringBool[T]); ok {
-		originalChecks := z.internals.ZodTypeInternals.Checks
+		originalChecks := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.ZodTypeInternals.Checks = originalChecks
+		z.internals.Checks = originalChecks
 	}
 }
 
@@ -443,7 +443,7 @@ func (z *ZodStringBool[T]) extractStringBoolForEngine(input any) (bool, bool) {
 	}
 
 	// Try coercion if enabled and no success yet
-	if !success && z.internals.ZodTypeInternals.IsCoerce() {
+	if !success && z.internals.IsCoerce() {
 		if coerced, ok := z.Coerce(input); ok {
 			return z.extractStringBoolForEngine(coerced)
 		}

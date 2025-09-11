@@ -39,12 +39,12 @@ func (z *ZodAny[T, R]) GetInternals() *core.ZodTypeInternals {
 
 // IsOptional returns true if this schema accepts undefined/missing values
 func (z *ZodAny[T, R]) IsOptional() bool {
-	return z.internals.ZodTypeInternals.IsOptional()
+	return z.internals.IsOptional()
 }
 
 // IsNilable returns true if this schema accepts nil values
 func (z *ZodAny[T, R]) IsNilable() bool {
-	return z.internals.ZodTypeInternals.IsNilable()
+	return z.internals.IsNilable()
 }
 
 // validateAnyValue is the Any type validator - accepts any value and applies checks
@@ -102,21 +102,21 @@ func (z *ZodAny[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 
 // Optional makes the any type optional and returns pointer constraint
 func (z *ZodAny[T, R]) Optional() *ZodAny[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
 // Nilable makes the any type nilable and returns pointer constraint
 func (z *ZodAny[T, R]) Nilable() *ZodAny[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers
 func (z *ZodAny[T, R]) Nullish() *ZodAny[T, *T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
@@ -124,7 +124,7 @@ func (z *ZodAny[T, R]) Nullish() *ZodAny[T, *T] {
 
 // NonOptional removes Optional flag and returns base constraint type T.
 func (z *ZodAny[T, R]) NonOptional() *ZodAny[T, T] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
@@ -138,14 +138,14 @@ func (z *ZodAny[T, R]) NonOptional() *ZodAny[T, T] {
 
 // Default preserves current constraint type R
 func (z *ZodAny[T, R]) Default(v T) *ZodAny[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
 // DefaultFunc preserves current constraint type R
 func (z *ZodAny[T, R]) DefaultFunc(fn func() T) *ZodAny[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		return fn()
 	})
@@ -154,14 +154,14 @@ func (z *ZodAny[T, R]) DefaultFunc(fn func() T) *ZodAny[T, R] {
 
 // Prefault provides fallback values on validation failure
 func (z *ZodAny[T, R]) Prefault(v T) *ZodAny[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
 // PrefaultFunc provides dynamic fallback values
 func (z *ZodAny[T, R]) PrefaultFunc(fn func() T) *ZodAny[T, R] {
-	in := z.internals.ZodTypeInternals.Clone()
+	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		return fn()
 	})
@@ -188,7 +188,7 @@ func (z *ZodAny[T, R]) Overwrite(transform func(T) T, params ...any) *ZodAny[T, 
 	}, params...)
 
 	// Clone current internals and add the overwrite check
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(transformFunc)
 
 	return z.withInternals(newInternals)
@@ -215,7 +215,7 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -232,7 +232,7 @@ func (z *ZodAny[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodAny[T, R] {
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.ZodTypeInternals.Clone()
+	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
@@ -304,7 +304,7 @@ func convertToAnyConstraintType[T any, R any](value any) R {
 		if value == nil {
 			return zero // Return zero value for nil
 		}
-		return any(value).(R)
+		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 }
 
@@ -312,7 +312,7 @@ func convertToAnyConstraintType[T any, R any](value any) R {
 func extractAnyValue[T any, R any](value R) T {
 	if v, ok := any(value).(*any); ok {
 		if v != nil {
-			return any(*v).(T)
+			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		var zero T
 		return zero
@@ -325,7 +325,7 @@ func convertToAnyConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
 	// Direct type match
-	if r, ok := any(value).(R); ok {
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
