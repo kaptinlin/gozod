@@ -1,10 +1,10 @@
 package core
 
+import "sync"
+
 // ZodConfig represents global configuration for validation and error handling
 type ZodConfig struct {
-	// CustomError has highest priority, overrides LocaleError
 	CustomError ZodErrorMap
-	// LocaleError has lowest priority in error resolution chain
 	LocaleError ZodErrorMap
 }
 
@@ -24,15 +24,17 @@ func (c *ZodConfig) GetLocaleError() ZodErrorMap {
 	return c.LocaleError
 }
 
-// globalConfig is the global configuration instance
-var globalConfig = &ZodConfig{}
+var (
+	globalConfig   = &ZodConfig{}
+	globalConfigMu sync.RWMutex
+)
 
-// Config updates and returns the global configuration.
-// It merges the provided config with the existing global settings.
+// Config updates and returns the global configuration
 func Config(config *ZodConfig) *ZodConfig {
+	globalConfigMu.Lock()
+	defer globalConfigMu.Unlock()
+
 	if config != nil {
-		// Merge fields instead of replacing the whole object.
-		// This allows for granular updates.
 		if config.CustomError != nil {
 			globalConfig.CustomError = config.CustomError
 		}
@@ -40,15 +42,23 @@ func Config(config *ZodConfig) *ZodConfig {
 			globalConfig.LocaleError = config.LocaleError
 		}
 	} else {
-		// A nil config resets the global configuration.
 		globalConfig.CustomError = nil
 		globalConfig.LocaleError = nil
 	}
-	// Return the actual global config.
-	return globalConfig
+
+	return &ZodConfig{
+		CustomError: globalConfig.CustomError,
+		LocaleError: globalConfig.LocaleError,
+	}
 }
 
-// GetConfig returns a read-only copy of the current global configuration.
+// GetConfig returns a read-only copy of the current global configuration
 func GetConfig() *ZodConfig {
-	return globalConfig
+	globalConfigMu.RLock()
+	defer globalConfigMu.RUnlock()
+
+	return &ZodConfig{
+		CustomError: globalConfig.CustomError,
+		LocaleError: globalConfig.LocaleError,
+	}
 }

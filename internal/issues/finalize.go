@@ -12,10 +12,10 @@ import (
 // FinalizeIssue creates a finalized ZodIssue from a ZodRawIssue
 // Handles error message resolution chain and property mapping
 func FinalizeIssue(iss core.ZodRawIssue, ctx *core.ParseContext, config *core.ZodConfig) core.ZodIssue {
-	// Ensure path is not nil using slicex
+	// Ensure path is never nil for consistent API behavior
 	path := iss.Path
 	if path == nil {
-		path = []any{}
+		path = []any{} // Empty slice initialization
 	}
 
 	// Generate message using error resolution chain
@@ -203,6 +203,11 @@ func GetLocaleError(config *core.ZodConfig) core.ZodErrorMap {
 
 // MapPropertiesToIssue maps properties to ZodIssue fields using mapx
 func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
+	// Skip mapping operation when no properties to process
+	if len(properties) == 0 {
+		return
+	}
+
 	// Use mapx for safer property access with zero value defaults
 	// This ensures that missing or wrong-type properties result in zero values
 
@@ -270,11 +275,16 @@ func MergeRawIssueProperties(rawIssue *core.ZodRawIssue, newProperties map[strin
 // =============================================================================
 
 // ConvertRawIssuesToIssues converts a slice of raw issues to a slice of finalized issues
+// Uses precise pre-allocation and batch processing for optimal performance
 func ConvertRawIssuesToIssues(rawIssues []core.ZodRawIssue, ctx *core.ParseContext) []core.ZodIssue {
-	// Get the global config to be passed down
+	if len(rawIssues) == 0 {
+		return nil // Return nil slice for empty input
+	}
+
+	// Get the global config once for the entire batch
 	config := core.GetConfig()
 
-	// Manually iterate to ensure type correctness
+	// Pre-allocate with exact capacity for optimal memory usage
 	issues := make([]core.ZodIssue, len(rawIssues))
 	for i, rawIssue := range rawIssues {
 		issues[i] = FinalizeIssue(rawIssue, ctx, config)

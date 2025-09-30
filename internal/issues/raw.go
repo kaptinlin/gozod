@@ -14,10 +14,11 @@ func NewRawIssue(code core.IssueCode, input any, options ...func(*core.ZodRawIss
 	issue := core.ZodRawIssue{
 		Code:  code,
 		Input: input,
-		Path:  []any{},
+		Path:  []any{}, // Keep empty slice for API compatibility
 		// Properties will be initialized lazily when needed
 	}
 
+	// Apply option functions to configure the issue
 	for _, option := range options {
 		option(&issue)
 	}

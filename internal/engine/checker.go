@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"slices"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
@@ -42,28 +44,22 @@ func RunChecksOnValue(value any, checks []core.ZodCheck, payload *core.ParsePayl
 
 // executeChecks is the core implementation that runs all checks
 // Manages memory allocation and executes validation logic
+// Uses Go 1.22+ optimizations for slice operations
 func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload, ctx *core.ParseContext) *core.ParsePayload {
 	checksLen := len(checks)
 	if checksLen == 0 {
 		return payload
 	}
 
-	// Prepare issues slice with appropriate capacity
+	// Prepare issues slice with precise pre-allocation
 	currentIssues := payload.GetIssues()
 	currentLen := len(currentIssues)
 
-	// Expand capacity if needed
+	// Pre-allocate capacity based on common patterns:
+	// Most checks produce 0-1 issues, with occasional bursts
 	if cap(currentIssues) < currentLen+checksLen {
-		// Calculate new capacity based on current needs
-		newCapacity := currentLen + checksLen
-		if newCapacity < 8 {
-			newCapacity = 8 // Reasonable minimum
-		} else if newCapacity > 64 {
-			newCapacity = currentLen + checksLen/2 + 8 // Moderate growth for large slices
-		}
-
-		newIssues := make([]core.ZodRawIssue, currentLen, newCapacity)
-		copy(newIssues, currentIssues)
+		// Use Go 1.22+ slices.Grow for optimal capacity management
+		newIssues := slices.Grow(currentIssues, checksLen)
 		payload.SetIssues(newIssues)
 	}
 
@@ -120,7 +116,7 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 			}
 		}
 
-		// Merge issues into main payload
+		// Merge issues into main payload using efficient batch operation
 		payload.AddIssues(checkIssues...)
 
 		// Stop execution if abort flag is set

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
@@ -37,15 +39,19 @@ type ZodError struct {
 
 // NewZodError creates a new validation error with the given issues
 // Uses the default message formatter for error formatting
+// Uses Go 1.22+ slices.Clone for efficient issue copying
 func NewZodError(issues []ZodIssue) *ZodError {
+	// Clone issues slice to avoid mutation of original
+	issueCopy := slices.Clone(issues)
+
 	err := &ZodError{
 		Type:      any(nil),
-		Issues:    issues,
+		Issues:    issueCopy,
 		Name:      "ZodError",
 		formatter: defaultFormatter,
 	}
 	err.Zod.Output = any(nil)
-	err.Zod.Def = issues
+	err.Zod.Def = issueCopy
 	return err
 }
 
@@ -242,11 +248,14 @@ func TreeifyError(error *ZodError) *ZodErrorTree {
 }
 
 // TreeifyErrorWithMapper converts a ZodError into a tree structure with custom message mapping
+// Uses precise pre-allocation based on issue count for optimal performance
 func TreeifyErrorWithMapper(error *ZodError, mapper func(ZodIssue) string) *ZodErrorTree {
+	// Pre-allocate based on issue count to reduce allocations
+	issueCount := len(error.Issues)
 	tree := &ZodErrorTree{
-		Errors:     []string{},
-		Properties: make(map[string]*ZodErrorTree),
-		Items:      [](*ZodErrorTree){},
+		Errors:     make([]string, 0, max(issueCount/4, 2)), // Conservative estimate
+		Properties: make(map[string]*ZodErrorTree, max(issueCount/2, 4)),
+		Items:      make([](*ZodErrorTree), 0, max(issueCount/4, 2)),
 	}
 
 	for _, issue := range error.Issues {
@@ -321,10 +330,12 @@ func FlattenError(error *ZodError) *FlattenedError {
 }
 
 // FlattenErrorWithMapper flattens a ZodError into form and field errors with custom message mapping
+// Uses precise pre-allocation and efficient batch processing
 func FlattenErrorWithMapper(error *ZodError, mapper func(ZodIssue) string) *FlattenedError {
+	issueCount := len(error.Issues)
 	flattened := &FlattenedError{
-		FormErrors:  []string{},
-		FieldErrors: make(map[string][]string),
+		FormErrors:  make([]string, 0, max(issueCount/4, 2)),         // Conservative estimate
+		FieldErrors: make(map[string][]string, max(issueCount/2, 4)), // More fields expected
 	}
 
 	for _, issue := range error.Issues {
@@ -341,7 +352,8 @@ func FlattenErrorWithMapper(error *ZodError, mapper func(ZodIssue) string) *Flat
 			}
 
 			if flattened.FieldErrors[fieldPath] == nil {
-				flattened.FieldErrors[fieldPath] = []string{}
+				// Pre-allocate slice for this field
+				flattened.FieldErrors[fieldPath] = make([]string, 0, 2)
 			}
 			flattened.FieldErrors[fieldPath] = append(flattened.FieldErrors[fieldPath], message)
 		}
@@ -373,47 +385,42 @@ func FlattenErrorWithFormatter(error *ZodError, formatter MessageFormatter) *Fla
 
 // ToDotPath converts a path array to dot notation string
 func ToDotPath(path []any) string {
-	if slicex.IsEmpty(path) {
+	if len(path) == 0 {
 		return ""
 	}
 
-	// Use slicex.Map to convert path elements to strings
-	if stringParts, err := slicex.Map(path, func(element any) any {
+	// Use strings.Builder to construct path string efficiently
+	var builder strings.Builder
+	builder.Grow(len(path) * 8) // Rough estimate
+
+	for i, element := range path {
+		if i > 0 {
+			builder.WriteByte('.')
+		}
+
 		switch el := element.(type) {
 		case string:
 			if nonWordRegex.MatchString(el) {
-				return fmt.Sprintf("[%q]", el)
+				builder.WriteByte('[')
+				builder.WriteByte('"')
+				builder.WriteString(el)
+				builder.WriteByte('"')
+				builder.WriteByte(']')
+			} else {
+				builder.WriteString(el)
 			}
-			return el
 		case int:
-			return fmt.Sprintf("[%d]", el)
+			builder.WriteByte('[')
+			builder.WriteString(strconv.Itoa(el))
+			builder.WriteByte(']')
 		default:
-			return fmt.Sprintf("[%v]", el)
-		}
-	}); err == nil {
-		// Convert to []string using slicex
-		if parts, err := slicex.ToTyped[string](stringParts); err == nil {
-			return slicex.Join(parts, ".")
+			builder.WriteByte('[')
+			builder.WriteString(fmt.Sprintf("%v", el))
+			builder.WriteByte(']')
 		}
 	}
 
-	// Fallback implementation
-	parts := make([]string, len(path))
-	for i, element := range path {
-		switch el := element.(type) {
-		case string:
-			if nonWordRegex.MatchString(el) {
-				parts[i] = fmt.Sprintf("[%q]", el)
-			} else {
-				parts[i] = el
-			}
-		case int:
-			parts[i] = fmt.Sprintf("[%d]", el)
-		default:
-			parts[i] = fmt.Sprintf("[%v]", el)
-		}
-	}
-	return strings.Join(parts, ".")
+	return builder.String()
 }
 
 // PrettifyError formats a ZodError into a readable string using its formatter
@@ -423,41 +430,20 @@ func PrettifyError(error *ZodError) string {
 
 // PrettifyErrorWithFormatter formats a ZodError into a readable string with custom formatter
 func PrettifyErrorWithFormatter(error *ZodError, formatter MessageFormatter) string {
-	if error == nil || slicex.IsEmpty(error.Issues) {
+	if error == nil || len(error.Issues) == 0 {
 		return "Validation failed"
 	}
 
-	// Use slicex.Map to transform issues to error messages
-	if messages, err := slicex.Map(error.Issues, func(issue any) any {
-		if zodIssue, ok := issue.(ZodIssue); ok {
-			message := zodIssue.Message
-			if message == "" && formatter != nil {
-				message = formatter.FormatMessage(core.ZodRawIssue{
-					Code:       zodIssue.Code,
-					Path:       zodIssue.Path,
-					Message:    zodIssue.Message,
-					Properties: convertZodIssueToProperties(zodIssue),
-				})
-			}
+	// Use strings.Builder to avoid repeated string allocations
+	var builder strings.Builder
+	// Pre-allocate capacity based on estimated message lengths
+	builder.Grow(len(error.Issues) * 50) // Rough estimate
 
-			// Format with path if present
-			if !slicex.IsEmpty(zodIssue.Path) {
-				pathStr := ToDotPath(zodIssue.Path)
-				return fmt.Sprintf("%s: %s", pathStr, message)
-			}
-			return message
+	for i, issue := range error.Issues {
+		if i > 0 {
+			builder.WriteString("; ")
 		}
-		return ""
-	}); err == nil {
-		// Convert to []string and join
-		if stringMessages, err := slicex.ToTyped[string](messages); err == nil {
-			return slicex.Join(stringMessages, "; ")
-		}
-	}
 
-	// Fallback implementation
-	var messages []string
-	for _, issue := range error.Issues {
 		message := issue.Message
 		if message == "" && formatter != nil {
 			message = formatter.FormatMessage(core.ZodRawIssue{
@@ -468,15 +454,16 @@ func PrettifyErrorWithFormatter(error *ZodError, formatter MessageFormatter) str
 			})
 		}
 
-		if !slicex.IsEmpty(issue.Path) {
+		// Format with path if present
+		if len(issue.Path) > 0 {
 			pathStr := ToDotPath(issue.Path)
-			messages = append(messages, fmt.Sprintf("%s: %s", pathStr, message))
-		} else {
-			messages = append(messages, message)
+			builder.WriteString(pathStr)
+			builder.WriteString(": ")
 		}
+		builder.WriteString(message)
 	}
 
-	return strings.Join(messages, "; ")
+	return builder.String()
 }
 
 // =============================================================================

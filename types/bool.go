@@ -14,7 +14,7 @@ import (
 
 // BoolConstraint restricts values to bool or *bool.
 type BoolConstraint interface {
-	bool | *bool
+	~bool | ~*bool
 }
 
 // =============================================================================

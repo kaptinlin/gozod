@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -10,34 +11,29 @@ import (
 // =============================================================================
 
 // NewParseContext creates a new parse context with default values
-// Provides sensible defaults for typical validation scenarios
 func NewParseContext() *ParseContext {
 	return &ParseContext{
-		Error:       nil,   // Use default error messages
-		ReportInput: false, // Don't include input in issues by default
+		Error:       nil,
+		ReportInput: false,
 	}
 }
 
 // NewParsePayload creates a new parsing payload with given value
-// Initializes empty issues slice and empty path for validation
 func NewParsePayload(value any) *ParsePayload {
 	return &ParsePayload{
 		value:  value,
-		issues: make([]ZodRawIssue, 0), // Pre-allocate empty slice
-		path:   make([]any, 0),         // Initialize empty path
+		issues: make([]ZodRawIssue, 0, 2),
+		path:   make([]any, 0, 4),
 	}
 }
 
 // NewParsePayloadWithPath creates a new parsing payload with value and path
-// Used when validating nested structures where path context is important
 func NewParsePayloadWithPath(value any, path []any) *ParsePayload {
-	// Copy path to avoid mutation issues
-	pathCopy := make([]any, len(path))
-	copy(pathCopy, path)
+	pathCopy := slices.Clone(path)
 
 	return &ParsePayload{
 		value:  value,
-		issues: make([]ZodRawIssue, 0),
+		issues: make([]ZodRawIssue, 0, 2),
 		path:   pathCopy,
 	}
 }
@@ -47,27 +43,17 @@ func NewParsePayloadWithPath(value any, path []any) *ParsePayload {
 // =============================================================================
 
 // AddIssue adds a validation issue to the payload
-// The issue's path will be updated with the current payload path
 func (p *ParsePayload) AddIssue(issue ZodRawIssue) {
-	// Update issue path with current payload path
 	if len(p.path) > 0 {
-		// Combine payload path with issue path
-		combinedPath := make([]any, len(p.path)+len(issue.Path))
-		copy(combinedPath, p.path)
-		copy(combinedPath[len(p.path):], issue.Path)
-		issue.Path = combinedPath
+		issue.Path = slices.Concat(p.path, issue.Path)
 	}
 
 	p.issues = append(p.issues, issue)
 }
 
 // AddIssueWithPath adds a validation issue with a specific path override
-// Use this when the issue path should be different from the current payload path
 func (p *ParsePayload) AddIssueWithPath(issue ZodRawIssue, path []any) {
-	// Set the specific path for this issue
-	pathCopy := make([]any, len(path))
-	copy(pathCopy, path)
-	issue.Path = pathCopy
+	issue.Path = slices.Clone(path)
 
 	p.issues = append(p.issues, issue)
 }
@@ -88,41 +74,35 @@ func (p *ParsePayload) AddIssueWithCode(code IssueCode, message string) {
 	})
 }
 
-// AddIssues adds multiple issues to the payload.
+// AddIssues adds multiple issues to the payload
 func (p *ParsePayload) AddIssues(issues ...ZodRawIssue) {
-	if p.issues == nil {
-		p.issues = make([]ZodRawIssue, 0)
+	if len(issues) == 0 {
+		return
 	}
-	p.issues = append(p.issues, issues...)
+
+	if p.issues == nil {
+		p.issues = make([]ZodRawIssue, 0, len(issues)+2)
+	}
+
+	p.issues = slices.Concat(p.issues, issues)
 }
 
 // HasIssues checks if the payload has any validation issues
-// Returns true if validation has failed and issues are present
 func (p *ParsePayload) HasIssues() bool {
 	return len(p.issues) > 0
 }
 
 // GetIssueCount returns the number of validation issues
-// Useful for checking severity of validation failures
 func (p *ParsePayload) GetIssueCount() int {
 	return len(p.issues)
 }
 
 // Clone creates a deep copy of the payload
-// Useful when branching validation logic or preserving state
 func (p *ParsePayload) Clone() *ParsePayload {
-	// Copy issues slice
-	issuesCopy := make([]ZodRawIssue, len(p.issues))
-	copy(issuesCopy, p.issues)
-
-	// Copy path slice
-	pathCopy := make([]any, len(p.path))
-	copy(pathCopy, p.path)
-
 	return &ParsePayload{
 		value:  p.value,
-		issues: issuesCopy,
-		path:   pathCopy,
+		issues: slices.Clone(p.issues),
+		path:   slices.Clone(p.path),
 	}
 }
 
@@ -131,28 +111,35 @@ func (p *ParsePayload) Clone() *ParsePayload {
 // =============================================================================
 
 // PushPath adds a path element to the current validation path
-// Used when entering nested validation contexts (object fields, array elements)
 func (p *ParsePayload) PushPath(element any) {
 	p.path = append(p.path, element)
 }
 
 // GetPath returns a copy of the current validation path
-// Safe to modify without affecting the original payload
 func (p *ParsePayload) GetPath() []any {
-	pathCopy := make([]any, len(p.path))
-	copy(pathCopy, p.path)
-	return pathCopy
+	return slices.Clone(p.path)
 }
 
 // GetPathString returns a string representation of the current path
-// Useful for debugging and error messages
 func (p *ParsePayload) GetPathString() string {
 	if len(p.path) == 0 {
 		return "root"
 	}
 
+	capacity := 4
+	for _, element := range p.path {
+		switch elem := element.(type) {
+		case string:
+			capacity += 1 + len(elem)
+		case int:
+			capacity += 2 + len(strconv.Itoa(elem))
+		default:
+			capacity += 10
+		}
+	}
+
 	var b strings.Builder
-	b.Grow(len(p.path)*8 + 4) // Pre-allocate capacity: estimated 8 chars per element + "root"
+	b.Grow(capacity)
 
 	for i, element := range p.path {
 		if i == 0 {
@@ -181,16 +168,11 @@ func (p *ParsePayload) GetPathString() string {
 // =============================================================================
 
 // WithCleanIssues creates a new payload with same value and path but no issues
-// Used when starting fresh validation on a value with preserved context
 func (p *ParsePayload) WithCleanIssues() *ParsePayload {
-	// Copy path to avoid mutation
-	pathCopy := make([]any, len(p.path))
-	copy(pathCopy, p.path)
-
 	return &ParsePayload{
 		value:  p.value,
-		issues: make([]ZodRawIssue, 0),
-		path:   pathCopy,
+		issues: make([]ZodRawIssue, 0, 2),
+		path:   slices.Clone(p.path),
 	}
 }
 
@@ -199,7 +181,6 @@ func (p *ParsePayload) WithCleanIssues() *ParsePayload {
 // =============================================================================
 
 // WithCustomError creates a new context with a custom error mapping function
-// Allows per-validation customization of error messages
 func (ctx *ParseContext) WithCustomError(errorMap ZodErrorMap) *ParseContext {
 	return &ParseContext{
 		Error:       errorMap,
@@ -208,7 +189,6 @@ func (ctx *ParseContext) WithCustomError(errorMap ZodErrorMap) *ParseContext {
 }
 
 // WithReportInput creates a new context with input reporting enabled/disabled
-// Controls whether validation errors include the original input value
 func (ctx *ParseContext) WithReportInput(report bool) *ParseContext {
 	return &ParseContext{
 		Error:       ctx.Error,
@@ -217,7 +197,6 @@ func (ctx *ParseContext) WithReportInput(report bool) *ParseContext {
 }
 
 // Clone creates a copy of the parse context
-// Useful for modifying context for specific validation branches
 func (ctx *ParseContext) Clone() *ParseContext {
 	return &ParseContext{
 		Error:       ctx.Error,
@@ -230,8 +209,7 @@ func (p *ParsePayload) SetValue(v any) {
 	p.value = v
 }
 
-// SetIssues replaces the issues slice with a new one.
-// Use when bulk merging or overwriting issues.
+// SetIssues replaces the issues slice with a new one
 func (p *ParsePayload) SetIssues(issues []ZodRawIssue) {
 	p.issues = issues
 }
@@ -242,15 +220,11 @@ func (p *ParsePayload) GetValue() any {
 }
 
 // GetIssues returns a copy of the current validation issues
-// Safe to modify without affecting the original payload
 func (p *ParsePayload) GetIssues() []ZodRawIssue {
-	issuesCopy := make([]ZodRawIssue, len(p.issues))
-	copy(issuesCopy, p.issues)
-	return issuesCopy
+	return slices.Clone(p.issues)
 }
 
 // ClonePath returns a copy of the current validation path
-// Alias for GetPath() for better semantic clarity
 func (p *ParsePayload) ClonePath() []any {
 	return p.GetPath()
 }

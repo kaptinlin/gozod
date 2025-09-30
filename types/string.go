@@ -17,7 +17,7 @@ import (
 
 // StringConstraint restricts values to string or *string.
 type StringConstraint interface {
-	string | *string
+	~string | ~*string
 }
 
 // =============================================================================

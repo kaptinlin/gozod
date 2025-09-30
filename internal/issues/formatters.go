@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/coerce"
@@ -110,30 +111,27 @@ func StringifyPrimitive(value any) string {
 // JoinValuesWithSeparator formats an array of values with a custom separator using slicex
 // Enhanced with slicex for better slice handling and type safety
 func JoinValuesWithSeparator(values []any, separator string) string {
-	if slicex.IsEmpty(values) {
+	if len(values) == 0 {
 		return ""
 	}
 
-	// Use slicex.Map to transform values to strings
-	stringValues, err := slicex.Map(values, func(v any) any {
-		return StringifyPrimitive(v)
-	})
-	if err != nil {
-		// Fallback to manual processing
-		quoted := make([]string, len(values))
-		for i, v := range values {
-			quoted[i] = StringifyPrimitive(v)
+	// Handle single value case directly without string building overhead
+	if len(values) == 1 {
+		return StringifyPrimitive(values[0])
+	}
+
+	// Pre-allocate builder capacity based on estimated string lengths
+	var builder strings.Builder
+	builder.Grow(len(values) * 10) // Rough estimate
+
+	for i, v := range values {
+		if i > 0 {
+			builder.WriteString(separator)
 		}
-		return slicex.Join(quoted, separator)
+		builder.WriteString(StringifyPrimitive(v))
 	}
 
-	// Convert []any to []string using slicex
-	if strings, err := slicex.ToTyped[string](stringValues); err == nil {
-		return slicex.Join(strings, separator)
-	}
-
-	// Final fallback
-	return slicex.Join(stringValues, separator)
+	return builder.String()
 }
 
 // ParsedTypeToString converts input to parsed type string

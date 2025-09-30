@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
@@ -172,16 +174,45 @@ func GetLengthableOrigin(value any) string {
 // =============================================================================
 
 // EscapeRegex escapes special characters in a string for use in regex
+// Optimized with precise memory allocation following TypeScript v4 patterns
 func EscapeRegex(str string) string {
-	// Characters that need escaping in regex
-	specialChars := []string{"\\", "^", "$", ".", "[", "]", "|", "(", ")", "?", "*", "+", "{", "}"}
-
-	result := str
-	for _, char := range specialChars {
-		result = strings.ReplaceAll(result, char, "\\"+char)
+	if len(str) == 0 {
+		return str
 	}
 
-	return result
+	// Pre-calculate needed escape count for precise allocation
+	escapeCount := 0
+	for _, r := range str {
+		if needsEscape(r) {
+			escapeCount++
+		}
+	}
+
+	if escapeCount == 0 {
+		return str
+	}
+
+	// Allocate exact capacity needed
+	result := make([]rune, 0, len([]rune(str))+escapeCount)
+	for _, r := range str {
+		if needsEscape(r) {
+			result = append(result, '\\', r)
+		} else {
+			result = append(result, r)
+		}
+	}
+
+	return string(result)
+}
+
+// needsEscape checks if a character needs escaping in regex
+func needsEscape(r rune) bool {
+	switch r {
+	case '\\', '^', '$', '.', '[', ']', '|', '(', ')', '?', '*', '+', '{', '}':
+		return true
+	default:
+		return false
+	}
 }
 
 // =============================================================================
@@ -369,37 +400,74 @@ func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {
 
 // ToDotPath converts an error path to dot notation string
 // Compatible with TypeScript Zod v4 path formatting
+// Optimized with precise memory allocation
 func ToDotPath(path []any) string {
 	if len(path) == 0 {
 		return ""
 	}
 
-	var parts []string
+	// Pre-calculate required capacity for optimal allocation
+	capacity := 0
 	for i, segment := range path {
 		switch v := segment.(type) {
 		case int:
-			parts = append(parts, fmt.Sprintf("[%d]", v))
+			capacity += len(strconv.Itoa(v)) + 2 // "[" + number + "]"
 		case string:
 			if i == 0 {
-				parts = append(parts, v)
+				capacity += len(v)
 			} else {
-				// Check if string contains special characters that need bracket notation
 				if needsBracketNotation(v) {
-					parts = append(parts, fmt.Sprintf(`["%s"]`, v))
+					capacity += len(v) + 4 // `["` + string + `"]`
 				} else {
-					parts = append(parts, "."+v)
+					capacity += len(v) + 1 // "." + string
 				}
 			}
 		default:
-			parts = append(parts, fmt.Sprintf("[%v]", v))
+			capacity += 10 // Estimate for "[%v]" format
 		}
 	}
 
-	return strings.Join(parts, "")
+	var result strings.Builder
+	result.Grow(capacity)
+
+	for i, segment := range path {
+		switch v := segment.(type) {
+		case int:
+			result.WriteString("[")
+			result.WriteString(strconv.Itoa(v))
+			result.WriteString("]")
+		case string:
+			if i == 0 {
+				result.WriteString(v)
+			} else {
+				if needsBracketNotation(v) {
+					result.WriteString(`["`)
+					result.WriteString(v)
+					result.WriteString(`"]`)
+				} else {
+					result.WriteString(".")
+					result.WriteString(v)
+				}
+			}
+		default:
+			result.WriteString(fmt.Sprintf("[%v]", v))
+		}
+	}
+
+	return result.String()
 }
 
 // needsBracketNotation checks if a string needs bracket notation in path formatting
 func needsBracketNotation(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	// If string starts with a digit, it needs bracket notation
+	if s[0] >= '0' && s[0] <= '9' {
+		return true
+	}
+
 	// Check for spaces, hyphens, dots, or non-alphanumeric characters
 	for _, char := range s {
 		if char == ' ' || char == '-' || char == '.' || (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '_' {
@@ -468,4 +536,77 @@ func ExtractErrorInfo(issue core.ZodRawIssue) map[string]any {
 		"message":    issue.Message,
 		"properties": issue.Properties,
 	}
+}
+
+// =============================================================================
+// SLICE UTILITIES (SIMPLE GO 1.22+ IMPLEMENTATION)
+// =============================================================================
+
+// MergeStringSlices efficiently merges multiple string slices
+func MergeStringSlices(slicesInput ...[]string) []string {
+	if len(slicesInput) == 0 {
+		return nil
+	}
+	if len(slicesInput) == 1 {
+		return slices.Clone(slicesInput[0])
+	}
+	return slices.Concat(slicesInput...)
+}
+
+// UniqueStrings returns unique string values
+func UniqueStrings(input []string) []string {
+	if len(input) <= 1 {
+		return slices.Clone(input)
+	}
+
+	seen := make(map[string]bool, len(input))
+	result := make([]string, 0, len(input))
+	for _, item := range input {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+// ContainsString checks if a string slice contains a specific value
+func ContainsString(slice []string, value string) bool {
+	return slices.Contains(slice, value)
+}
+
+// IndexOfString finds the index of a string in a slice, returns -1 if not found
+func IndexOfString(slice []string, value string) int {
+	return slices.Index(slice, value)
+}
+
+// =============================================================================
+// TYPE DETECTION (DELEGATING TO PKG/REFLECTX)
+// =============================================================================
+
+// GetParsedType performs type detection by delegating to pkg/reflectx.ParsedType
+// This ensures consistency across the codebase and avoids duplication
+func GetParsedType(value any) core.ParsedType {
+	return reflectx.ParsedType(value)
+}
+
+// IsPrimitiveValue checks if a value is of a primitive type for fast-path optimization
+// Uses pkg/reflectx functions for consistent type checking
+func IsPrimitiveValue(value any) bool {
+	if value == nil {
+		return true
+	}
+
+	return reflectx.IsString(value) ||
+		reflectx.IsBool(value) ||
+		reflectx.IsNumeric(value)
+}
+
+// TypeDescription returns a human-readable type description for error messages
+// Delegates to pkg/reflectx.ParsedCategory for consistent behavior
+func TypeDescription(value any) string {
+	if value == nil {
+		return "null"
+	}
+	return reflectx.ParsedCategory(value)
 }

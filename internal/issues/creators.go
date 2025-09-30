@@ -12,9 +12,12 @@ import (
 
 // CreateIssue creates a new ZodRawIssue with mapx for safer property handling
 func CreateIssue(code core.IssueCode, message string, properties map[string]any, input any) core.ZodRawIssue {
-	safeProps := mapx.Copy(properties)
-	if safeProps == nil {
+	// Skip expensive copy operation when properties map is empty
+	var safeProps map[string]any
+	if len(properties) == 0 {
 		safeProps = make(map[string]any)
+	} else {
+		safeProps = mapx.Copy(properties)
 	}
 
 	return core.ZodRawIssue{
@@ -32,10 +35,10 @@ func CreateIssue(code core.IssueCode, message string, properties map[string]any,
 
 // CreateInvalidTypeIssue creates an invalid type issue
 func CreateInvalidTypeIssue(expected core.ZodTypeCode, input any) core.ZodRawIssue {
-	properties := map[string]any{
-		"expected": string(expected),
-		"received": string(reflectx.ParsedType(input)),
-	}
+	// Pre-allocate map capacity to avoid rehashing during insertion
+	properties := make(map[string]any, 2)
+	properties["expected"] = string(expected)
+	properties["received"] = string(reflectx.ParsedType(input))
 
 	return CreateIssue(core.InvalidType, "", properties, input)
 }
@@ -52,41 +55,45 @@ func CreateInvalidTypeIssueFromCode(expected core.ZodTypeCode, input any) core.Z
 
 // CreateInvalidValueIssue creates an invalid value issue
 func CreateInvalidValueIssue(validValues []any, input any) core.ZodRawIssue {
-	// Use slicex to get unique values
+	// Apply unique operation only for small slices to balance deduplication vs performance
 	values := validValues
-	if !slicex.IsEmpty(validValues) {
+	if len(validValues) > 1 && len(validValues) <= 10 {
+		// For small slices, deduplication cost is minimal
 		if uniqueValues, err := slicex.Unique(validValues); err == nil {
 			if uniqueSlice, ok := uniqueValues.([]any); ok {
 				values = uniqueSlice
 			}
 		}
+	} else if len(validValues) > 10 {
+		// For larger slices, keep original to avoid O(n²) unique operation
+		values = validValues
 	}
 
-	properties := map[string]any{
-		"values": values,
-	}
+	// Single-property map creation
+	properties := make(map[string]any, 1)
+	properties["values"] = values
 
 	return CreateIssue(core.InvalidValue, "", properties, input)
 }
 
 // CreateTooBigIssue creates a "too big" issue
 func CreateTooBigIssue(maximum any, inclusive bool, origin string, input any) core.ZodRawIssue {
-	properties := map[string]any{
-		"maximum":   maximum,
-		"inclusive": inclusive,
-		"origin":    origin,
-	}
+	// Pre-allocate map capacity for three known properties
+	properties := make(map[string]any, 3)
+	properties["maximum"] = maximum
+	properties["inclusive"] = inclusive
+	properties["origin"] = origin
 
 	return CreateIssue(core.TooBig, "", properties, input)
 }
 
 // CreateTooSmallIssue creates a "too small" issue
 func CreateTooSmallIssue(minimum any, inclusive bool, origin string, input any) core.ZodRawIssue {
-	properties := map[string]any{
-		"minimum":   minimum,
-		"inclusive": inclusive,
-		"origin":    origin,
-	}
+	// Pre-allocate map capacity for three known properties
+	properties := make(map[string]any, 3)
+	properties["minimum"] = minimum
+	properties["inclusive"] = inclusive
+	properties["origin"] = origin
 
 	return CreateIssue(core.TooSmall, "", properties, input)
 }
@@ -111,9 +118,13 @@ func CreateFixedLengthArrayIssue(expectedLength any, actualLength int, input any
 
 // CreateInvalidFormatIssue creates an invalid format issue
 func CreateInvalidFormatIssue(format string, input any, additionalProps map[string]any) core.ZodRawIssue {
-	properties := map[string]any{
-		"format": format,
+	// Calculate map capacity based on format field plus any additional properties
+	size := 1
+	if additionalProps != nil {
+		size += len(additionalProps)
 	}
+	properties := make(map[string]any, size)
+	properties["format"] = format
 
 	// Use mapx for safer property merging
 	if additionalProps != nil {
@@ -125,19 +136,20 @@ func CreateInvalidFormatIssue(format string, input any, additionalProps map[stri
 
 // CreateNotMultipleOfIssue creates a "not multiple of" issue
 func CreateNotMultipleOfIssue(divisor any, origin string, input any) core.ZodRawIssue {
-	properties := map[string]any{
-		"divisor": divisor,
-		"origin":  origin,
-	}
+	// Pre-allocate map capacity for two known properties
+	properties := make(map[string]any, 2)
+	properties["divisor"] = divisor
+	properties["origin"] = origin
 
 	return CreateIssue(core.NotMultipleOf, "", properties, input)
 }
 
 // CreateUnrecognizedKeysIssue creates an unrecognized keys issue
 func CreateUnrecognizedKeysIssue(keys []string, input any) core.ZodRawIssue {
-	// Use slicex to get unique keys
+	// Apply deduplication only for small key sets where performance cost is negligible
 	processedKeys := keys
-	if !slicex.IsEmpty(keys) {
+	if len(keys) > 1 && len(keys) <= 5 {
+		// For small key sets, deduplication improves error message clarity
 		if uniqueKeys, err := slicex.Unique(keys); err == nil {
 			if uniqueSlice, ok := uniqueKeys.([]string); ok {
 				processedKeys = uniqueSlice
