@@ -248,7 +248,9 @@ func IsIterable(v any) bool {
 // TYPE PARSING
 // =============================================================================
 
-// ParsedType returns the parsed type using core package definition
+// ParsedType returns the parsed type for runtime type detection
+// This corresponds to Zod v4's getParsedType() function which returns ParsedTypes
+// See: .reference/zod/packages/zod/src/v4/core/util.ts:412
 func ParsedType(v any) core.ParsedType {
 	if v == nil {
 		return core.ParsedTypeNil

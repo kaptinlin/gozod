@@ -153,7 +153,9 @@ const (
 // PARSED TYPE CONSTANTS
 // =============================================================================
 
-// ParsedType represents the type of parsed data values
+// ParsedType represents the type of parsed data values at runtime
+// This corresponds to Zod v4's ParsedTypes
+// See: .reference/zod/packages/zod/src/v4/core/util.ts:66-82
 // These are used during runtime type detection and validation
 type ParsedType string
 

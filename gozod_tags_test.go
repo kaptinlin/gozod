@@ -4,6 +4,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
@@ -35,12 +38,10 @@ func TestMainFromStruct_BasicUsage(t *testing.T) {
 	}
 
 	result, err := schema.Parse(user)
-	if err != nil {
-		t.Fatalf("Parse should succeed for valid user: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for valid user")
 
 	if result.Name != user.Name {
-		t.Errorf("Expected name %s, got %s", user.Name, result.Name)
+		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
 	}
 }
 
@@ -59,16 +60,14 @@ func TestMainFromStructPtr_BasicUsage(t *testing.T) {
 	}
 
 	result, err := schema.Parse(user)
-	if err != nil {
-		t.Fatalf("Parse should succeed for valid user pointer: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for valid user pointer")
 
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
 
 	if result.Name != user.Name {
-		t.Errorf("Expected name %s, got %s", user.Name, result.Name)
+		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
 	}
 }
 
@@ -99,9 +98,7 @@ func TestMainFromStruct_WithModifiers(t *testing.T) {
 	}
 
 	_, err := refineSchema.Parse(validUser)
-	if err != nil {
-		t.Fatalf("Valid user should pass refine validation: %v", err)
-	}
+	require.NoError(t, err, "Valid user should pass refine validation")
 }
 
 // =============================================================================
@@ -145,16 +142,14 @@ func TestMainFromStruct_DocumentationExample(t *testing.T) {
 	}
 
 	result, err := schema.Parse(validUser)
-	if err != nil {
-		t.Fatalf("Documentation example should work: %v", err)
-	}
+	require.NoError(t, err, "Documentation example should work")
 
 	if result.Name != validUser.Name {
-		t.Errorf("Expected name %s, got %s", validUser.Name, result.Name)
+		assert.Equal(t, validUser.Name, result.Name, "Expected name %s, got %s", validUser.Name, result.Name)
 	}
 
 	if result.Email != validUser.Email {
-		t.Errorf("Expected email %s, got %s", validUser.Email, result.Email)
+		assert.Equal(t, validUser.Email, result.Email, "Expected email %s, got %s", validUser.Email, result.Email)
 	}
 }
 
@@ -193,12 +188,10 @@ func TestTagValidation_StringValidators(t *testing.T) {
 		}
 
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid input should pass")
 
 		if result.MinMaxString != valid.MinMaxString {
-			t.Errorf("Expected MinMaxString %s, got %s", valid.MinMaxString, result.MinMaxString)
+			assert.Equal(t, valid.MinMaxString, result.MinMaxString, "Expected MinMaxString %s, got %s", valid.MinMaxString, result.MinMaxString)
 		}
 	})
 
@@ -208,9 +201,7 @@ func TestTagValidation_StringValidators(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Should fail for string too short")
-		}
+		assert.Error(t, err, "Should fail for string too short")
 	})
 }
 
@@ -247,12 +238,10 @@ func TestTagValidation_NumericValidators(t *testing.T) {
 		}
 
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid numeric input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid numeric input should pass")
 
 		if result.MinInt != valid.MinInt {
-			t.Errorf("Expected MinInt %d, got %d", valid.MinInt, result.MinInt)
+			assert.Equal(t, valid.MinInt, result.MinInt, "Expected MinInt %d, got %d", valid.MinInt, result.MinInt)
 		}
 	})
 }
@@ -281,12 +270,10 @@ func TestTagValidation_ModifierCombinations(t *testing.T) {
 		}
 
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid complex combinations should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid complex combinations should pass")
 
 		if result.RequiredField != valid.RequiredField {
-			t.Errorf("Expected RequiredField %s, got %s", valid.RequiredField, result.RequiredField)
+			assert.Equal(t, valid.RequiredField, result.RequiredField, "Expected RequiredField %s, got %s", valid.RequiredField, result.RequiredField)
 		}
 	})
 }
@@ -306,9 +293,7 @@ func TestTagValidation_ErrorHandling(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Should fail for invalid email")
-		}
+		assert.Error(t, err, "Should fail for invalid email")
 	})
 
 	t.Run("range validation failure", func(t *testing.T) {
@@ -318,9 +303,7 @@ func TestTagValidation_ErrorHandling(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Should fail for value below minimum")
-		}
+		assert.Error(t, err, "Should fail for value below minimum")
 	})
 }
 
@@ -345,12 +328,10 @@ func TestTagValidation_EdgeCases(t *testing.T) {
 		}
 
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Edge cases should be handled gracefully: %v", err)
-		}
+		require.NoError(t, err, "Edge cases should be handled gracefully")
 
 		if result.EmptyTag != valid.EmptyTag {
-			t.Errorf("Expected EmptyTag %s, got %s", valid.EmptyTag, result.EmptyTag)
+			assert.Equal(t, valid.EmptyTag, result.EmptyTag, "Expected EmptyTag %s, got %s", valid.EmptyTag, result.EmptyTag)
 		}
 	})
 }
@@ -382,15 +363,13 @@ func TestTagValidation_NestedStructSupport(t *testing.T) {
 		}
 
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid nested struct should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid nested struct should pass")
 
 		if result.Name != valid.Name {
-			t.Errorf("Expected Name %s, got %s", valid.Name, result.Name)
+			assert.Equal(t, valid.Name, result.Name, "Expected Name %s, got %s", valid.Name, result.Name)
 		}
 		if result.Address.Street != valid.Address.Street {
-			t.Errorf("Expected Street %s, got %s", valid.Address.Street, result.Address.Street)
+			assert.Equal(t, valid.Address.Street, result.Address.Street, "Expected Street %s, got %s", valid.Address.Street, result.Address.Street)
 		}
 	})
 }
@@ -416,9 +395,7 @@ func TestTagValidation_EmailFormats(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid emails should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid emails should pass")
 	})
 
 	t.Run("invalid emails", func(t *testing.T) {
@@ -429,9 +406,7 @@ func TestTagValidation_EmailFormats(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Invalid emails should fail")
-		}
+		assert.Error(t, err, "Invalid emails should fail")
 	})
 }
 
@@ -456,9 +431,7 @@ func TestTagValidation_NetworkFormats(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid network formats should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid network formats should pass")
 	})
 }
 
@@ -483,9 +456,7 @@ func TestTagValidation_IDFormats(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid ID formats should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid ID formats should pass")
 	})
 }
 
@@ -517,9 +488,7 @@ func TestTagValidation_TimeFormats(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid time formats should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid time formats should pass")
 	})
 }
 
@@ -550,9 +519,7 @@ func TestTagValidation_ArrayValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid arrays should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid arrays should pass")
 	})
 
 	t.Run("invalid array lengths", func(t *testing.T) {
@@ -566,9 +533,7 @@ func TestTagValidation_ArrayValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Invalid array lengths should fail")
-		}
+		assert.Error(t, err, "Invalid array lengths should fail")
 	})
 }
 
@@ -591,9 +556,7 @@ func TestTagValidation_MapValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid maps should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid maps should pass")
 	})
 }
 
@@ -620,9 +583,7 @@ func TestTagValidation_EnumValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid enum values should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid enum values should pass")
 	})
 
 	t.Run("invalid enum values", func(t *testing.T) {
@@ -634,9 +595,7 @@ func TestTagValidation_EnumValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Invalid enum values should fail")
-		}
+		assert.Error(t, err, "Invalid enum values should fail")
 	})
 }
 
@@ -655,9 +614,7 @@ func TestTagValidation_LiteralValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid literal values should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid literal values should pass")
 	})
 
 	t.Run("invalid literal values", func(t *testing.T) {
@@ -667,9 +624,7 @@ func TestTagValidation_LiteralValidation(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Invalid literal values should fail")
-		}
+		assert.Error(t, err, "Invalid literal values should fail")
 	})
 }
 
@@ -698,9 +653,7 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		}
 
 		result, err := schema.Parse(empty)
-		if err != nil {
-			t.Fatalf("Default values should be applied: %v", err)
-		}
+		require.NoError(t, err, "Default values should be applied")
 
 		if result.Name == nil || *result.Name != "Anonymous" {
 			t.Errorf("Expected default name 'Anonymous', got %v", result.Name)
@@ -740,9 +693,7 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		}
 
 		result, err := schema.Parse(nonEmpty)
-		if err != nil {
-			t.Fatalf("Parsing should succeed: %v", err)
-		}
+		require.NoError(t, err, "Parsing should succeed")
 
 		// Non-nil values should be preserved (defaults should not be applied)
 		if result.Name == nil || *result.Name != "John" {
@@ -787,9 +738,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		// Test with valid struct - should work normally
 		validInput := TestStruct{Name: "ValidName"}
 		result, err := schema.Parse(validInput)
-		if err != nil {
-			t.Fatalf("Valid input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid input should pass")
 		if result.Name != "ValidName" {
 			t.Errorf("Expected 'ValidName', got %s", result.Name)
 		}
@@ -805,9 +754,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		// Test with struct that has valid data
 		validInput := TestStruct{Name: "LongEnoughName"}
 		result, err := schema.Parse(validInput)
-		if err != nil {
-			t.Fatalf("Valid input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid input should pass")
 		if result.Name != "LongEnoughName" {
 			t.Errorf("Expected 'LongEnoughName', got %s", result.Name)
 		}
@@ -815,9 +762,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		// Test with struct that has invalid data - should fail validation
 		invalidInput := TestStruct{Name: "Bad"} // Too short
 		_, err = schema.Parse(invalidInput)
-		if err == nil {
-			t.Error("Invalid input should fail validation")
-		}
+		assert.Error(t, err, "Invalid input should fail validation")
 	})
 
 	t.Run("default and prefault together", func(t *testing.T) {
@@ -835,9 +780,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		// Test normal parsing behavior
 		validInput := TestStruct{Name: "TestName"}
 		result, err := schema.Parse(validInput)
-		if err != nil {
-			t.Fatalf("Valid input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid input should pass")
 		if result.Name != "TestName" {
 			t.Errorf("Expected 'TestName', got %s", result.Name)
 		}
@@ -866,9 +809,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 			Score:    8.5,
 		}
 		result, err := schema.Parse(validInput)
-		if err != nil {
-			t.Fatalf("Valid input should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid input should pass")
 		if result.Name != "TestName" {
 			t.Errorf("Expected 'TestName', got %s", result.Name)
 		}
@@ -914,9 +855,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 		// Test with actual boolean value (coercion happens at parse time)
 		valid := TestStruct{Value: true}
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Should parse valid struct: %v", err)
-		}
+		require.NoError(t, err, "Should parse valid struct")
 		if result.Value != true {
 			t.Errorf("Expected Value to be true, got %v", result.Value)
 		}
@@ -934,9 +873,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 
 		valid := TestStruct{Value: 3.14}
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Should parse valid struct: %v", err)
-		}
+		require.NoError(t, err, "Should parse valid struct")
 		if result.Value != 3.14 {
 			t.Errorf("Expected Value to be 3.14, got %f", result.Value)
 		}
@@ -954,9 +891,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 
 		valid := TestStruct{Value: "test"}
 		result, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Should parse valid struct: %v", err)
-		}
+		require.NoError(t, err, "Should parse valid struct")
 		if result.Value != "test" {
 			t.Errorf("Expected Value to be 'test', got %s", result.Value)
 		}
@@ -981,9 +916,7 @@ func TestTagValidation_PointerFields(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid pointer fields should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid pointer fields should pass")
 	})
 
 	t.Run("required pointer cannot be nil", func(t *testing.T) {
@@ -992,9 +925,7 @@ func TestTagValidation_PointerFields(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalid)
-		if err == nil {
-			t.Error("Required pointer field cannot be nil")
-		}
+		assert.Error(t, err, "Required pointer field cannot be nil")
 	})
 }
 
@@ -1043,9 +974,7 @@ func TestTagValidation_ComplexNestedStructs(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid complex nested struct should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid complex nested struct should pass")
 	})
 }
 
@@ -1080,9 +1009,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid create request should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid create request should pass")
 	})
 
 	t.Run("update validation", func(t *testing.T) {
@@ -1095,9 +1022,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid update request should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid update request should pass")
 	})
 
 	t.Run("query validation", func(t *testing.T) {
@@ -1111,9 +1036,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 		}
 
 		_, err := schema.Parse(valid)
-		if err != nil {
-			t.Fatalf("Valid query should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid query should pass")
 
 		// Nil is valid for optional pointer fields
 		// Defaults in struct tags work differently than in direct schema construction
@@ -1129,9 +1052,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 		}
 
 		result2, err := schema.Parse(validWithValues)
-		if err != nil {
-			t.Fatalf("Valid query with values should pass: %v", err)
-		}
+		require.NoError(t, err, "Valid query with values should pass")
 
 		if result2.Page == nil || *result2.Page != 2 {
 			t.Errorf("Expected page 2, got %v", result2.Page)

@@ -1,6 +1,6 @@
 package core
 
-import "sync"
+import "sync/atomic"
 
 // ZodConfig represents global configuration for validation and error handling
 type ZodConfig struct {
@@ -24,41 +24,55 @@ func (c *ZodConfig) GetLocaleError() ZodErrorMap {
 	return c.LocaleError
 }
 
-var (
-	globalConfig   = &ZodConfig{}
-	globalConfigMu sync.RWMutex
-)
+var globalConfig atomic.Pointer[ZodConfig]
+
+func init() {
+	// Initialize with empty config
+	globalConfig.Store(&ZodConfig{})
+}
 
 // Config updates and returns the global configuration
 func Config(config *ZodConfig) *ZodConfig {
-	globalConfigMu.Lock()
-	defer globalConfigMu.Unlock()
-
-	if config != nil {
-		if config.CustomError != nil {
-			globalConfig.CustomError = config.CustomError
-		}
-		if config.LocaleError != nil {
-			globalConfig.LocaleError = config.LocaleError
-		}
-	} else {
-		globalConfig.CustomError = nil
-		globalConfig.LocaleError = nil
+	if config == nil {
+		// Reset to empty config
+		newConfig := &ZodConfig{}
+		globalConfig.Store(newConfig)
+		return &ZodConfig{}
 	}
 
+	// Get current config
+	current := globalConfig.Load()
+
+	// Create new config (immutable update pattern)
+	newConfig := &ZodConfig{
+		CustomError: current.CustomError,
+		LocaleError: current.LocaleError,
+	}
+
+	// Apply updates
+	if config.CustomError != nil {
+		newConfig.CustomError = config.CustomError
+	}
+	if config.LocaleError != nil {
+		newConfig.LocaleError = config.LocaleError
+	}
+
+	// Atomic swap
+	globalConfig.Store(newConfig)
+
+	// Return copy
 	return &ZodConfig{
-		CustomError: globalConfig.CustomError,
-		LocaleError: globalConfig.LocaleError,
+		CustomError: newConfig.CustomError,
+		LocaleError: newConfig.LocaleError,
 	}
 }
 
 // GetConfig returns a read-only copy of the current global configuration
 func GetConfig() *ZodConfig {
-	globalConfigMu.RLock()
-	defer globalConfigMu.RUnlock()
-
+	cfg := globalConfig.Load()
+	// Return a copy to prevent external mutation
 	return &ZodConfig{
-		CustomError: globalConfig.CustomError,
-		LocaleError: globalConfig.LocaleError,
+		CustomError: cfg.CustomError,
+		LocaleError: cfg.LocaleError,
 	}
 }

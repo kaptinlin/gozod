@@ -4,6 +4,9 @@ import (
 	"flag"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseBuildTags(t *testing.T) {
@@ -45,7 +48,7 @@ func TestParseBuildTags(t *testing.T) {
 
 			for i, tag := range result {
 				if tag != tt.expected[i] {
-					t.Errorf("Expected tag %s, got %s", tt.expected[i], tag)
+					assert.Equal(t, tt.expected[i], tag, "Expected tag %s, got %s", tt.expected[i], tag)
 				}
 			}
 		})
@@ -173,18 +176,10 @@ func TestMainCommandLineParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			suffix, pkg, verbose, dryRun, packages := runMainWithArgs(tt.args)
 
-			if suffix != tt.expectedSuffix {
-				t.Errorf("Expected suffix %s, got %s", tt.expectedSuffix, suffix)
-			}
-			if pkg != tt.expectedPackage {
-				t.Errorf("Expected package %s, got %s", tt.expectedPackage, pkg)
-			}
-			if verbose != tt.expectedVerbose {
-				t.Errorf("Expected verbose %t, got %t", tt.expectedVerbose, verbose)
-			}
-			if dryRun != tt.expectedDryRun {
-				t.Errorf("Expected dryRun %t, got %t", tt.expectedDryRun, dryRun)
-			}
+			assert.Equal(t, tt.expectedSuffix, suffix, "Expected suffix %s, got %s", tt.expectedSuffix, suffix)
+			assert.Equal(t, tt.expectedPackage, pkg, "Expected package %s, got %s", tt.expectedPackage, pkg)
+			assert.Equal(t, tt.expectedVerbose, verbose, "Expected verbose %t, got %t", tt.expectedVerbose, verbose)
+			assert.Equal(t, tt.expectedDryRun, dryRun, "Expected dryRun %t, got %t", tt.expectedDryRun, dryRun)
 
 			if len(packages) != len(tt.expectedPackages) {
 				t.Errorf("Expected %d packages, got %d", len(tt.expectedPackages), len(packages))
@@ -232,22 +227,16 @@ type TestProduct struct {
 
 	// Create and run generator
 	generator, err := NewCodeGenerator(config)
-	if err != nil {
-		t.Fatalf("Failed to create generator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create generator")
 
 	// Update writer to use temp directory
 	writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-	if err != nil {
-		t.Fatalf("Failed to create writer: %v", err)
-	}
+	require.NoError(t, err, "Failed to create writer")
 	generator.writer = writer
 
 	// Process package
 	err = generator.ProcessPackage(helper.GetTempDir())
-	if err != nil {
-		t.Fatalf("Failed to process package: %v", err)
-	}
+	require.NoError(t, err, "Failed to process package")
 
 	// Verify results - check both generated files
 	helper.AssertFileExists("test_user_gen.go")

@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodeGenerator_ProcessPackage(t *testing.T) {
@@ -115,24 +118,19 @@ type User struct {
 
 			// Create generator
 			generator, err := NewCodeGenerator(tt.config)
-			if err != nil {
-				t.Fatalf("Failed to create generator: %v", err)
-			}
+			require.NoError(t, err, "Failed to create generator")
 
 			// Update writer to use temp directory
 			writer, err := NewFileWriter(helper.GetTempDir(), tt.config.PackageName, tt.config.OutputSuffix, tt.config.DryRun, tt.config.Verbose)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 			generator.writer = writer
 
 			// Process package
 			err = generator.ProcessPackage(helper.GetTempDir())
-			if tt.expectError && err == nil {
-				t.Error("Expected error but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error: %v", err)
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
 			}
 
 			// Check expected files
@@ -197,21 +195,15 @@ type Employee struct {
 	}
 
 	generator, err := NewCodeGenerator(config)
-	if err != nil {
-		t.Fatalf("Failed to create generator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create generator")
 
 	// Update writer to use temp directory
 	writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-	if err != nil {
-		t.Fatalf("Failed to create writer: %v", err)
-	}
+	require.NoError(t, err, "Failed to create writer")
 	generator.writer = writer
 
 	err = generator.ProcessPackage(helper.GetTempDir())
-	if err != nil {
-		t.Fatalf("Failed to process package: %v", err)
-	}
+	require.NoError(t, err, "Failed to process package")
 
 	// Check each generated file exists
 	expectedFiles := []string{"node_gen.go", "department_gen.go", "employee_gen.go"}
@@ -274,20 +266,14 @@ type Product struct {
 	}
 
 	generator, err := NewCodeGenerator(config)
-	if err != nil {
-		t.Fatalf("Failed to create generator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create generator")
 
 	writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-	if err != nil {
-		t.Fatalf("Failed to create writer: %v", err)
-	}
+	require.NoError(t, err, "Failed to create writer")
 	generator.writer = writer
 
 	err = generator.ProcessPackage(helper.GetTempDir())
-	if err != nil {
-		t.Fatalf("Failed to process package: %v", err)
-	}
+	require.NoError(t, err, "Failed to process package")
 
 	helper.AssertFileExists("product_gen.go")
 
@@ -331,9 +317,7 @@ func TestCodeGenerator_RealTestdata(t *testing.T) {
 
 			// Copy testdata file to temp directory
 			content, err := os.ReadFile(fullPath)
-			if err != nil {
-				t.Fatalf("Failed to read testdata file: %v", err)
-			}
+			require.NoError(t, err, "Failed to read testdata file")
 			helper.CreateGoFile(filename, string(content))
 
 			config := &GeneratorConfig{
@@ -344,20 +328,14 @@ func TestCodeGenerator_RealTestdata(t *testing.T) {
 			}
 
 			generator, err := NewCodeGenerator(config)
-			if err != nil {
-				t.Fatalf("Failed to create generator: %v", err)
-			}
+			require.NoError(t, err, "Failed to create generator")
 
 			writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 			generator.writer = writer
 
 			err = generator.ProcessPackage(helper.GetTempDir())
-			if err != nil {
-				t.Fatalf("Failed to process %s: %v", filename, err)
-			}
+			require.NoError(t, err, "Failed to process %s", filename)
 
 			// Check that generation succeeded
 			files := helper.ListGeneratedFiles()
@@ -408,14 +386,13 @@ func TestNewCodeGenerator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			generator, err := NewCodeGenerator(tt.config)
-			if tt.expectError && err == nil {
-				t.Error("Expected error but got none")
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
 			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-			if !tt.expectError && generator == nil {
-				t.Error("Expected generator but got nil")
+			if !tt.expectError {
+				assert.NotNil(t, generator, "Expected generator but got nil")
 			}
 		})
 	}

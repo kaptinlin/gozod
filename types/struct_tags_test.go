@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/validators"
 )
@@ -145,12 +148,10 @@ func TestFromStruct_BasicUsage(t *testing.T) {
 	}
 
 	result, err := schema.Parse(user)
-	if err != nil {
-		t.Fatalf("Parse should succeed for valid user: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for valid user")
 
 	if result.Name != user.Name {
-		t.Errorf("Expected name %s, got %s", user.Name, result.Name)
+		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
 	}
 }
 
@@ -170,16 +171,14 @@ func TestFromStructPtr_PointerTypes(t *testing.T) {
 	}
 
 	result, err := schema.Parse(user)
-	if err != nil {
-		t.Fatalf("Parse should succeed for valid user pointer: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for valid user pointer")
 
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
 
 	if result.Name != user.Name {
-		t.Errorf("Expected name %s, got %s", user.Name, result.Name)
+		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
 	}
 }
 
@@ -193,9 +192,7 @@ func TestFromStruct_EmptyStruct(t *testing.T) {
 	}
 
 	result, err := schema.Parse(EmptyStruct{})
-	if err != nil {
-		t.Fatalf("Parse should succeed for empty struct: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for empty struct")
 
 	// Verify result is correct type
 	_ = result // EmptyStruct type assertion
@@ -214,12 +211,10 @@ func TestFromStruct_NoTags(t *testing.T) {
 	}
 
 	result, err := schema.Parse(user)
-	if err != nil {
-		t.Fatalf("Parse should succeed for user without tags: %v", err)
-	}
+	require.NoError(t, err, "Parse should succeed for user without tags")
 
 	if result.Name != user.Name {
-		t.Errorf("Expected name %s, got %s", user.Name, result.Name)
+		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
 	}
 }
 
@@ -239,9 +234,7 @@ func TestFromStruct_Integration(t *testing.T) {
 
 	// Test nil handling with optional
 	result, err := optionalSchema.Parse(nil)
-	if err != nil {
-		t.Fatalf("Optional schema should handle nil: %v", err)
-	}
+	require.NoError(t, err, "Optional schema should handle nil")
 
 	// For optional structs, nil input should return nil pointer
 	if result != nil {
@@ -264,9 +257,7 @@ func TestFromStruct_WithRefine(t *testing.T) {
 	}
 
 	_, err := schema.Parse(adult)
-	if err != nil {
-		t.Fatalf("Adult user should pass validation: %v", err)
-	}
+	require.NoError(t, err, "Adult user should pass validation")
 
 	// Test invalid case
 	minor := TaggedUser{
@@ -316,7 +307,7 @@ func TestFromStructWithCustomValidators(t *testing.T) {
 		t.Errorf("Expected valid user to parse successfully, got error: %v", err)
 	}
 	if result.Username != validUser.Username {
-		t.Errorf("Expected username %s, got %s", validUser.Username, result.Username)
+		assert.Equal(t, validUser.Username, result.Username, "Expected username %s, got %s", validUser.Username, result.Username)
 	}
 
 	// Test invalid username (taken)
@@ -328,9 +319,7 @@ func TestFromStructWithCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidUser1)
-	if err == nil {
-		t.Error("Expected error for taken username, but got none")
-	}
+	assert.Error(t, err, "Expected error for taken username, but got none")
 
 	// Test invalid age (too young)
 	invalidUser2 := UserWithCustomValidators{
@@ -341,9 +330,7 @@ func TestFromStructWithCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidUser2)
-	if err == nil {
-		t.Error("Expected error for underage user, but got none")
-	}
+	assert.Error(t, err, "Expected error for underage user, but got none")
 
 	// Test invalid SKU (wrong prefix)
 	invalidUser3 := UserWithCustomValidators{
@@ -354,9 +341,7 @@ func TestFromStructWithCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidUser3)
-	if err == nil {
-		t.Error("Expected error for wrong SKU prefix, but got none")
-	}
+	assert.Error(t, err, "Expected error for wrong SKU prefix, but got none")
 
 	// Test invalid code (wrong length)
 	invalidUser4 := UserWithCustomValidators{
@@ -367,9 +352,7 @@ func TestFromStructWithCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidUser4)
-	if err == nil {
-		t.Error("Expected error for wrong code length, but got none")
-	}
+	assert.Error(t, err, "Expected error for wrong code length, but got none")
 }
 
 type ProductWithMixedValidation struct {
@@ -401,7 +384,7 @@ func TestMixedBuiltinAndCustomValidators(t *testing.T) {
 		t.Errorf("Expected valid product to parse successfully, got error: %v", err)
 	}
 	if result.Name != validProduct.Name {
-		t.Errorf("Expected name %s, got %s", validProduct.Name, result.Name)
+		assert.Equal(t, validProduct.Name, result.Name, "Expected name %s, got %s", validProduct.Name, result.Name)
 	}
 
 	// Test invalid product (name too short)
@@ -412,9 +395,7 @@ func TestMixedBuiltinAndCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidProduct1)
-	if err == nil {
-		t.Error("Expected error for short name, but got none")
-	}
+	assert.Error(t, err, "Expected error for short name, but got none")
 
 	// Test invalid product (name is taken username)
 	invalidProduct2 := ProductWithMixedValidation{
@@ -424,9 +405,7 @@ func TestMixedBuiltinAndCustomValidators(t *testing.T) {
 	}
 
 	_, err = schema.Parse(invalidProduct2)
-	if err == nil {
-		t.Error("Expected error for taken username as product name, but got none")
-	}
+	assert.Error(t, err, "Expected error for taken username as product name, but got none")
 }
 
 func TestCustomValidatorWithoutParams(t *testing.T) {
@@ -449,7 +428,5 @@ func TestCustomValidatorWithoutParams(t *testing.T) {
 	// Test invalid case
 	invalidUser := SimpleUser{Username: "admin"}
 	_, err = schema.Parse(invalidUser)
-	if err == nil {
-		t.Error("Expected error for taken username, but got none")
-	}
+	assert.Error(t, err, "Expected error for taken username, but got none")
 }

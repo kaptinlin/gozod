@@ -2,7 +2,9 @@ package mapx
 
 import (
 	"errors"
+	"maps"
 	"reflect"
+	"slices"
 
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
@@ -260,11 +262,7 @@ func Keys(input any) []string {
 
 	switch v := input.(type) {
 	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		return keys
+		return slices.Collect(maps.Keys(v))
 	case map[any]any:
 		keys := make([]string, 0, len(v))
 		for key := range v {
@@ -343,9 +341,5 @@ func getStructKeys(input any) []string {
 		return nil
 	}
 
-	keys := make([]string, 0, len(structMap))
-	for key := range structMap {
-		keys = append(keys, key)
-	}
-	return keys
+	return slices.Collect(maps.Keys(structMap))
 }

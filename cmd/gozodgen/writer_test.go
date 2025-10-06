@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
@@ -78,9 +81,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			}
 
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 
 			// Create a mock GenerationInfo for the test
 			info := &GenerationInfo{
@@ -215,21 +216,18 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 
 			schema, err := writer.generateFieldSchemaCodeForStruct(tt.field, tt.structName)
-			if tt.expectError && err == nil {
-				t.Error("Expected error but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error: %v", err)
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
 			}
 
 			if !tt.expectError {
 				if !strings.Contains(schema, tt.expectedSchema) {
-					t.Errorf("Expected schema to contain %s, got %s", tt.expectedSchema, schema)
+					assert.Equal(t, tt.expectedSchema, schema, "Expected schema to contain %s, got %s", tt.expectedSchema, schema)
 				}
 			}
 		})
@@ -285,9 +283,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 
 			content, err := writer.generateCode(tt.info)
 			if err != nil {
@@ -351,9 +347,7 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 
 			// Create a mock field with the rules
 			field := tagparser.FieldInfo{
@@ -368,12 +362,10 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 			}
 
 			result, err := writer.generateFieldSchemaCodeForStruct(field, "TestStruct")
-			if err != nil {
-				t.Fatalf("Failed to generate field schema: %v", err)
-			}
+			require.NoError(t, err, "Failed to generate field schema")
 
 			if !strings.Contains(result, tt.expected) {
-				t.Errorf("Expected result to contain %s, got %s", tt.expected, result)
+				assert.Equal(t, tt.expected, result, "Expected result to contain %s, got %s", tt.expected, result)
 			}
 
 			// Basic validation that we got a schema back
@@ -400,16 +392,12 @@ func TestFileWriter_GetBasicTypeConstructor(t *testing.T) {
 	}
 
 	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	if err != nil {
-		t.Fatalf("Failed to create writer: %v", err)
-	}
+	require.NoError(t, err, "Failed to create writer")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := writer.getBasicTypeConstructor(tt.typeName)
-			if result != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, result)
-			}
+			assert.Equal(t, tt.expected, result, "Expected %s, got %s", tt.expected, result)
 		})
 	}
 }
@@ -454,15 +442,13 @@ func TestFileWriter_CircularReferenceHandling(t *testing.T) {
 	}
 
 	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	if err != nil {
-		t.Fatalf("Failed to create writer: %v", err)
-	}
+	require.NoError(t, err, "Failed to create writer")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := writer.getBaseConstructorFromTypeName(tt.typeName, tt.structName)
 			if !strings.Contains(result, tt.expected) {
-				t.Errorf("Expected result to contain %s, got %s", tt.expected, result)
+				assert.Equal(t, tt.expected, result, "Expected result to contain %s, got %s", tt.expected, result)
 			}
 		})
 	}

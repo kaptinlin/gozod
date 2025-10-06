@@ -1,11 +1,12 @@
 package gozod
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/types"
@@ -112,7 +113,7 @@ func toJSONSchemaSingle(schema core.ZodSchema, opts JSONSchemaOptions) (*lib.Sch
 		for defKey := range c.defs {
 			defKeys = append(defKeys, defKey)
 		}
-		sort.Strings(defKeys)
+		slices.Sort(defKeys)
 		for _, defKey := range defKeys {
 			s.Defs[defKey] = c.defs[defKey]
 		}
@@ -154,7 +155,7 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts JSONSchemaOp
 		for key := range c.defs {
 			defKeys = append(defKeys, key)
 		}
-		sort.Strings(defKeys)
+		slices.Sort(defKeys)
 		for _, key := range defKeys {
 			rootSchema.Defs[key] = c.defs[key]
 		}
@@ -666,7 +667,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 		jsonSchema.Properties = &schemaMap
 	}
 	if len(required) > 0 {
-		sort.Slice(required, func(i, j int) bool { return required[i] > required[j] })
+		slices.SortFunc(required, func(a, b string) int { return cmp.Compare(b, a) })
 		jsonSchema.Required = required
 	}
 
@@ -1156,12 +1157,12 @@ func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
 	if len(enumValues) > 0 {
 		switch enumValues[0].(type) {
 		case string:
-			sort.SliceStable(enumValues, func(i, j int) bool {
-				return enumValues[i].(string) < enumValues[j].(string)
+			slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+				return cmp.Compare(a.(string), b.(string))
 			})
 		case int, int32, int64, uint, uint32, uint64, float64, float32:
-			sort.SliceStable(enumValues, func(i, j int) bool {
-				return fmt.Sprintf("%v", enumValues[i]) < fmt.Sprintf("%v", enumValues[j])
+			slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+				return cmp.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
 			})
 		}
 	}

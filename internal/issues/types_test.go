@@ -217,12 +217,12 @@ func TestIssueSubtypes(t *testing.T) {
 				Message: "Type error",
 			},
 			Expected: core.ZodTypeString,
-			Received: core.ZodTypeNumber,
+			Received: core.ParsedTypeNumber,
 		}
 
 		assert.Equal(t, InvalidType, issue.Code)
 		assert.Equal(t, core.ZodTypeString, issue.Expected)
-		assert.Equal(t, core.ZodTypeNumber, issue.Received)
+		assert.Equal(t, core.ParsedTypeNumber, issue.Received)
 	})
 
 	t.Run("ZodIssueTooBig structure", func(t *testing.T) {

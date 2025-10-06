@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestGoldenFiles tests that generated code matches expected golden files
@@ -43,9 +45,7 @@ func TestGoldenFiles(t *testing.T) {
 
 			// Read and copy source file to temp directory
 			sourceContent, err := os.ReadFile(sourceFilePath)
-			if err != nil {
-				t.Fatalf("Failed to read source file: %v", err)
-			}
+			require.NoError(t, err, "Failed to read source file")
 			helper.CreateGoFile(tt.sourceFile, string(sourceContent))
 
 			// Generate code
@@ -57,20 +57,14 @@ func TestGoldenFiles(t *testing.T) {
 			}
 
 			generator, err := NewCodeGenerator(config)
-			if err != nil {
-				t.Fatalf("Failed to create generator: %v", err)
-			}
+			require.NoError(t, err, "Failed to create generator")
 
 			writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 			generator.writer = writer
 
 			err = generator.ProcessPackage(helper.GetTempDir())
-			if err != nil {
-				t.Fatalf("Failed to generate code: %v", err)
-			}
+			require.NoError(t, err, "Failed to generate code")
 
 			// Find generated file
 			generatedFiles := helper.ListGeneratedFiles()
@@ -94,18 +88,14 @@ func TestGoldenFiles(t *testing.T) {
 			if tt.updateGolden {
 				// Update golden file
 				err := os.WriteFile(expectedFilePath, []byte(normalizedGenerated), 0600)
-				if err != nil {
-					t.Fatalf("Failed to update golden file: %v", err)
-				}
+				require.NoError(t, err, "Failed to update golden file")
 				t.Logf("Updated golden file: %s", expectedFilePath)
 				return
 			}
 
 			// Compare with expected content
 			expectedContent, err := os.ReadFile(expectedFilePath)
-			if err != nil {
-				t.Fatalf("Failed to read expected file: %v", err)
-			}
+			require.NoError(t, err, "Failed to read expected file")
 
 			normalizedExpected := normalizeGeneratedCode(string(expectedContent))
 
@@ -174,9 +164,7 @@ func TestCreateGoldenFiles(t *testing.T) {
 
 			// Read source file
 			sourceContent, err := os.ReadFile(sourceFilePath)
-			if err != nil {
-				t.Fatalf("Failed to read source file: %v", err)
-			}
+			require.NoError(t, err, "Failed to read source file")
 			helper.CreateGoFile(testCase, string(sourceContent))
 
 			// Generate code
@@ -188,20 +176,14 @@ func TestCreateGoldenFiles(t *testing.T) {
 			}
 
 			generator, err := NewCodeGenerator(config)
-			if err != nil {
-				t.Fatalf("Failed to create generator: %v", err)
-			}
+			require.NoError(t, err, "Failed to create generator")
 
 			writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-			if err != nil {
-				t.Fatalf("Failed to create writer: %v", err)
-			}
+			require.NoError(t, err, "Failed to create writer")
 			generator.writer = writer
 
 			err = generator.ProcessPackage(helper.GetTempDir())
-			if err != nil {
-				t.Fatalf("Failed to generate code: %v", err)
-			}
+			require.NoError(t, err, "Failed to generate code")
 
 			// Find generated file
 			generatedFiles := helper.ListGeneratedFiles()
@@ -225,9 +207,7 @@ func TestCreateGoldenFiles(t *testing.T) {
 			goldenFile := filepath.Join("testdata", "expected_"+baseName+"_gen.go")
 
 			err = os.WriteFile(goldenFile, []byte(normalizedContent), 0600)
-			if err != nil {
-				t.Fatalf("Failed to create golden file: %v", err)
-			}
+			require.NoError(t, err, "Failed to create golden file")
 
 			t.Logf("Created golden file: %s", goldenFile)
 		})
@@ -274,9 +254,7 @@ func TestRegenerateGoldenFiles(t *testing.T) {
 		helper := NewTestHelper(t)
 
 		sourceContent, err := os.ReadFile(sourceFilePath)
-		if err != nil {
-			t.Fatalf("Failed to read source file: %v", err)
-		}
+		require.NoError(t, err, "Failed to read source file")
 		helper.CreateGoFile(test.sourceFile, string(sourceContent))
 
 		config := &GeneratorConfig{
@@ -287,20 +265,14 @@ func TestRegenerateGoldenFiles(t *testing.T) {
 		}
 
 		generator, err := NewCodeGenerator(config)
-		if err != nil {
-			t.Fatalf("Failed to create generator: %v", err)
-		}
+		require.NoError(t, err, "Failed to create generator")
 
 		writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
-		if err != nil {
-			t.Fatalf("Failed to create writer: %v", err)
-		}
+		require.NoError(t, err, "Failed to create writer")
 		generator.writer = writer
 
 		err = generator.ProcessPackage(helper.GetTempDir())
-		if err != nil {
-			t.Fatalf("Failed to generate code: %v", err)
-		}
+		require.NoError(t, err, "Failed to generate code")
 
 		generatedFiles := helper.ListGeneratedFiles()
 		var generatedFile string
@@ -320,9 +292,7 @@ func TestRegenerateGoldenFiles(t *testing.T) {
 
 		expectedFilePath := filepath.Join("testdata", test.expectedFile)
 		err = os.WriteFile(expectedFilePath, []byte(normalizedGenerated), 0600)
-		if err != nil {
-			t.Fatalf("Failed to update golden file: %v", err)
-		}
+		require.NoError(t, err, "Failed to update golden file")
 		t.Logf("Updated golden file: %s", expectedFilePath)
 	})
 }

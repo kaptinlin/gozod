@@ -425,21 +425,10 @@ func (z *ZodFunction[T]) validateFunction(value any, checks []core.ZodCheck, ctx
 
 // validateFunctionSignature validates the function signature against the schema's constraints
 func (z *ZodFunction[T]) validateFunctionSignature(input any, ctx *core.ParseContext) error {
-	// Validate input parameters if input schema is provided
-	if z.internals.Input != nil {
-		// Input validation is deferred to Implement() call
-		// since we need actual arguments to validate against the schema
-		// TODO: Consider pre-validation if possible
-		_ = ctx // Prevent unused parameter warning
-	}
-
-	// Validate return type if output schema is provided
-	if z.internals.Output != nil {
-		// For simplicity, we'll validate this during function execution
-		// since we need actual return values to validate against the schema
-		_ = ctx // Prevent unused parameter warning
-	}
-
+	// Input and output validation is deferred to runtime (Implement() call and function execution)
+	// since we need actual arguments and return values to validate against the schemas.
+	// Pre-validation is not possible for function types without runtime values.
+	_ = ctx // Prevent unused parameter warning
 	return nil
 }
 

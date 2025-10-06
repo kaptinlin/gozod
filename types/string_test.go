@@ -17,7 +17,9 @@ import (
 // =============================================================================
 
 func TestString_BasicFunctionality(t *testing.T) {
+	t.Parallel()
 	t.Run("valid string inputs", func(t *testing.T) {
+		t.Parallel()
 		schema := String()
 
 		// Test string value
@@ -79,7 +81,9 @@ func TestString_BasicFunctionality(t *testing.T) {
 // =============================================================================
 
 func TestString_StrictParse(t *testing.T) {
+	t.Parallel()
 	t.Run("basic functionality", func(t *testing.T) {
+		t.Parallel()
 		schema := String()
 
 		// Test StrictParse with exact type match
@@ -198,7 +202,9 @@ func TestString_MustStrictParse(t *testing.T) {
 // =============================================================================
 
 func TestString_TypeSafety(t *testing.T) {
+	t.Parallel()
 	t.Run("String returns string type", func(t *testing.T) {
+		t.Parallel()
 		schema := String()
 		require.NotNil(t, schema)
 
@@ -327,7 +333,9 @@ func TestString_TypeSafety(t *testing.T) {
 // =============================================================================
 
 func TestString_Modifiers(t *testing.T) {
+	t.Parallel()
 	t.Run("Optional always returns *string", func(t *testing.T) {
+		t.Parallel()
 		// From string to *string via Optional
 		stringSchema := String()
 		optionalSchema := stringSchema.Optional()
@@ -432,7 +440,9 @@ func TestString_Modifiers(t *testing.T) {
 // =============================================================================
 
 func TestString_BasicFunctionality_Validations(t *testing.T) {
+	t.Parallel()
 	t.Run("length validations", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			name    string
 			schema  *ZodString[string]
@@ -631,7 +641,9 @@ func TestString_BasicFunctionality_Validations(t *testing.T) {
 // =============================================================================
 
 func TestString_Chaining(t *testing.T) {
+	t.Parallel()
 	t.Run("multiple validations", func(t *testing.T) {
+		t.Parallel()
 		schema := String().Min(5).Max(10).StartsWith("hello")
 
 		// Valid input

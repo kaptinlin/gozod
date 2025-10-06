@@ -3,6 +3,8 @@ package locales
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kaptinlin/gozod/core"
 )
 
@@ -20,9 +22,7 @@ func TestLocaleFormatterFunction(t *testing.T) {
 		result := formatFunc(issue)
 		expected := "custom error: invalid_type"
 
-		if result != expected {
-			t.Errorf("Expected '%s', got '%s'", expected, result)
-		}
+		assert.Equal(t, expected, result, "Expected '%s', got '%s'", expected, result)
 	})
 }
 
@@ -120,9 +120,7 @@ func TestRegisterLocale(t *testing.T) {
 		result := formatter(issue)
 		expected := "CUSTOM: invalid_type"
 
-		if result != expected {
-			t.Errorf("Expected '%s', got '%s'", expected, result)
-		}
+		assert.Equal(t, expected, result, "Expected '%s', got '%s'", expected, result)
 
 		// Clean up
 		delete(DefaultLocales, "custom")

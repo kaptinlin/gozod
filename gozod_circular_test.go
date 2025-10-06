@@ -2,6 +2,9 @@ package gozod
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
@@ -59,13 +62,9 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 		}
 
 		result, err := schema.Parse(user1)
-		if err != nil {
-			t.Fatalf("Failed to parse valid user with no friends: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse valid user with no friends")
 
-		if result.Name != "Alice" {
-			t.Errorf("Expected name 'Alice', got '%s'", result.Name)
-		}
+		assert.Equal(t, "Alice", result.Name)
 
 		// Test user with friends (circular reference)
 		user2 := CircularUser{
@@ -103,9 +102,8 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 	})
 
 	t.Run("validation errors propagate through circular references", func(t *testing.T) {
-		// TODO: This is a known limitation - validation doesn't fully propagate through lazy schemas in slices
-		// The circular references are handled correctly (no stack overflow), but nested validation
-		// within lazy schemas inside slices needs more work.
+		// KNOWN LIMITATION: Validation doesn't fully propagate through lazy schemas in slices.
+		// Circular references work correctly (no stack overflow), but nested validation needs improvement.
 		t.Skip("Known limitation: validation propagation through lazy schemas in slices needs improvement")
 		schema := FromStruct[CircularUser]()
 

@@ -398,17 +398,119 @@ type User struct {
 }
 ```
 
+## Go Language Idioms and Zod v4 Compatibility
+
+### Core Design Philosophy: Semantic Equivalence over Literal Translation
+
+GoZod maintains **semantic compatibility** with Zod v4 while embracing Go language conventions. This principle applies across naming, types, and error handling.
+
+#### Type Naming Convention
+
+**Principle**: Use Go's native type names, not TypeScript's
+
+```go
+// ✅ Correct: Go type names
+ParsedTypeBool ParsedType = "bool"  // Go's boolean type is "bool"
+ParsedTypeNil  ParsedType = "nil"   // Go's zero value is "nil"
+
+// ❌ Incorrect: TypeScript type names
+ParsedTypeBoolean ParsedType = "boolean"  // Would be unfamiliar to Go developers
+ParsedTypeNull    ParsedType = "null"     // Not Go terminology
+```
+
+**Mapping Examples**:
+| Zod v4 (TypeScript) | GoZod (Go) | Rationale |
+|---------------------|------------|-----------|
+| `z.boolean()` → `"boolean"` | `gozod.Bool()` → `"bool"` | Go's type is `bool` |
+| `z.null()` → `"null"` | `gozod.Nil()` → `"nil"` | Go uses `nil`, not `null` |
+| `z.number()` → `"number"` | `gozod.Number()` → `"number"` | Both languages use "number" |
+
+**Error Message Comparison**:
+```
+// Zod v4 (JavaScript developers see familiar terms)
+"Invalid input: expected string, received boolean"
+
+// GoZod (Go developers see familiar terms)
+"Invalid input: expected string, received bool"
+```
+
+Both are correct because they use terminology familiar to developers in their respective languages.
+
+#### Go-Specific Type Extensions
+
+GoZod includes types that don't exist in JavaScript but are fundamental to Go:
+
+| Type | Purpose | Example Error |
+|------|---------|---------------|
+| `ParsedTypeFloat` | Distinguish int from float | `"expected number, received float"` |
+| `ParsedTypeSlice` | Distinguish array from slice | `"expected array, received slice"` |
+| `ParsedTypeComplex` | Go's complex numbers | `"expected number, received complex"` |
+| `ParsedTypeStruct` | Go structs vs generic objects | `"expected object, received struct"` |
+
+These provide **more precise error messages** than generic "number" or "object" would.
+
+#### Error Structure Enhancement
+
+**Zod v4 Approach**:
+```typescript
+// Stores input, calculates type dynamically during formatting
+interface $ZodIssueInvalidType {
+  expected: string;
+  input?: unknown;  // Type calculated from this when formatting
+}
+```
+
+**GoZod Approach**:
+```go
+// Pre-calculates and stores type for better Go error handling
+type ZodIssueInvalidType struct {
+    Expected core.ZodTypeCode `json:"expected"`
+    Received core.ParsedType  `json:"received"`  // Pre-calculated
+}
+```
+
+**Advantages of GoZod's approach**:
+1. **Go Error Convention**: Errors should contain complete information
+2. **Performance**: Avoid recalculating type on every format operation
+3. **Independence**: Error can be serialized without the original input
+
+### API Semantic Mapping
+
+GoZod ensures **behavioral compatibility** while using Go naming:
+
+```go
+// Semantic equivalence maintained
+// Zod v4: z.boolean().optional()
+// GoZod:  gozod.Bool().Optional()
+// Both: Accept bool/nil, return *bool
+
+// Zod v4: z.string().nullable()
+// GoZod:  gozod.String().Nilable()
+// Both: Accept string/nil, return *string
+
+// Type names reflect runtime behavior
+// Zod v4: typeof value === "boolean" → "boolean"
+// GoZod:  reflect.TypeOf(value).Kind() == reflect.Bool → "bool"
+```
+
+### Documentation Cross-Reference
+
+See `docs/feature-mapping.md` for complete Zod v4 ↔ GoZod API mapping table.
+
+---
+
 ## Important Design Decisions
 
 1. **Complete Strict Type Semantics** - All methods require exact input types, zero automatic conversions
 2. **Parse vs StrictParse Duality** - Runtime flexibility vs compile-time type safety for performance optimization
-3. **Zod v4 Compatibility First** - Maintain identical API surface and behavior
+3. **Semantic Zod v4 Compatibility** - Maintain identical behavior with Go-native naming conventions
 4. **Pointer Identity Preservation** - Optional/Nilable maintain input pointer addresses when appropriate
 5. **Immutable Modifiers** - Modifiers create new instances via copy-on-write
 6. **Unified Engine Architecture** - ParsePrimitive/ParseComplex for consistent behavior
-7. **Go Idioms** - Error values instead of exceptions, interfaces over inheritance
+7. **Go Idioms First** - Error values instead of exceptions, Go type names, interfaces over inheritance
 8. **Zero Dependencies** - Pure Go implementation, no external libraries
 9. **User-Controlled Custom Validators** - No pre-registered validators, users register their own
+10. **Enhanced Error Information** - Pre-calculated type information in errors (Go enhancement)
 
 ## Error Handling
 

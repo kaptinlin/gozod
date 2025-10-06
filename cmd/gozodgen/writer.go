@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )

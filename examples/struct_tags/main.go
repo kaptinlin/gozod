@@ -3,12 +3,13 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod"
 )

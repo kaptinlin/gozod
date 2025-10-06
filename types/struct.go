@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"

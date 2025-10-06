@@ -1,11 +1,12 @@
 package gozod
 
 import (
-	"encoding/json"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/types"

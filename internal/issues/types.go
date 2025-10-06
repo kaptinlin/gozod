@@ -38,11 +38,12 @@ type ZodIssue = core.ZodIssue
 // =============================================================================
 
 // ZodIssueInvalidType represents a type validation error
+// Corresponds to Zod v4's $ZodIssueInvalidType
+// See: .reference/zod/packages/zod/src/v4/core/errors.ts:20-24
 type ZodIssueInvalidType struct {
 	ZodIssueBase
-	// TODO: consider switching to core.ParsedType for better type-safety
-	Expected core.ZodTypeCode `json:"expected"`
-	Received core.ZodTypeCode `json:"received"`
+	Expected core.ZodTypeCode `json:"expected"` // Schema type that was expected
+	Received core.ParsedType  `json:"received"` // Runtime type that was received
 }
 
 // ZodIssueTooBig represents a value exceeding maximum constraint error

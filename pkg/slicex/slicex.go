@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -299,12 +300,9 @@ func Contains(slice any, value any) bool {
 		return false
 	}
 
-	for _, item := range sliceAny {
-		if reflect.DeepEqual(item, value) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(sliceAny, func(item any) bool {
+		return reflect.DeepEqual(item, value)
+	})
 }
 
 // IndexOf returns the index of the first occurrence of value in slice
@@ -314,12 +312,9 @@ func IndexOf(slice any, value any) int {
 		return -1
 	}
 
-	for i, item := range sliceAny {
-		if reflect.DeepEqual(item, value) {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(sliceAny, func(item any) bool {
+		return reflect.DeepEqual(item, value)
+	})
 }
 
 // Reverse reverses a slice

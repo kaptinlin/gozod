@@ -452,8 +452,7 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, expected, result) // Should be default, not prefault
 	})
 
-	// TODO: This test is currently disabled because the implementation may not yet
-	// fully support Zod v4's default short-circuit behavior. Enable when implementation is updated.
+	// DISABLED: Test for Zod v4 default short-circuit behavior. Enable when default short-circuiting is implemented.
 	/*
 		t.Run("Default short-circuits validation", func(t *testing.T) {
 			// Default value should bypass discriminated union validation constraints
