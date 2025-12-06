@@ -496,6 +496,13 @@ func LoadConfig(path string) (*Config, error) {
 - **[Error Customization](docs/error-customization.md)** - Custom error messages and internationalization
 - **[Error Formatting](docs/error-formatting.md)** - Structured error handling and display
 - **[JSON Schema](docs/json-schema.md)** - Generate JSON Schema from GoZod schemas
+
+### OpenAPI 3.1 Support  ✅
+
+GoZod schemas generate JSON Schema Draft 2020-12, which is **fully compatible with OpenAPI 3.1**. Features like nullable types (`["string", "null"]`), numeric exclusive bounds, conditional schemas (`if`/`then`/`else`), and tuple validation work out of the box. See [JSON Schema docs](docs/json-schema.md) for details.
+
+> **Note**: OpenAPI 3.0 is not supported (use OpenAPI 3.1 instead).
+
 - **[Metadata](docs/metadata.md)** - Schema metadata and introspection capabilities
 - **[Examples](examples/)** - Working examples for common use cases
 

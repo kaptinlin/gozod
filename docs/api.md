@@ -285,21 +285,47 @@ result, err = schema.Parse("hi")         // Length: 2, Min: 3 ❌
 ### Format Validation
 
 ```go
-// Email validation
-emailSchema := gozod.String().Email()
-result, err := emailSchema.Parse("user@example.com")  // ✅
+// Basic string formats  
+gozod.Email()                              // Email validation
+gozod.URL()                                // URL validation  
 
-// URL validation  
-urlSchema := gozod.String().URL()
-result, err = urlSchema.Parse("https://example.com")  // ✅
+// Network addresses (types/network.go)
+gozod.IPv4()                               // IPv4: "192.168.1.1"
+gozod.IPv6()                               // IPv6: "2001:db8::8a2e:370:7334"
+gozod.MAC()                                // MAC: "00:1A:2B:3C:4D:5E" (default ":")
+gozod.MAC("-")                             // MAC: "00-1a-2b-3c-4d-5e"
+gozod.CIDRv4()                             // IPv4 CIDR: "192.168.1.0/24"
+gozod.CIDRv6()                             // IPv6 CIDR: "2001:db8::/32"
 
-// UUID validation
-uuidSchema := gozod.String().UUID()  
-result, err = uuidSchema.Parse("550e8400-e29b-41d4-a716-446655440000")  // ✅
+// ISO 8601 date/time formats (types/iso.go)
+gozod.IsoDate()                            // Date: "2024-12-06"
+gozod.IsoTime()                            // Time: "15:30:00"
+gozod.IsoDateTime()                        // DateTime: "2024-12-06T15:30:00Z"
+gozod.IsoDuration()                        // Duration: "P1Y2M3D", "PT1H30M"
 
-// Custom regex
-regexSchema := gozod.String().Regex(`^\d{3}-\d{2}-\d{4}$`)
-result, err = regexSchema.Parse("123-45-6789")  // ✅
+// ISO time with precision
+precision := -1  // HH:MM only
+gozod.IsoTime(types.IsoTimeOptions{Precision: &precision})
+
+// Unique identifiers (types/ids.go)
+gozod.Uuid()                               // UUID format
+gozod.Uuid("v4")                           // UUID v4 specific
+gozod.Cuid()                               // CUID v1
+gozod.Cuid2()                              // CUID v2 
+gozod.Ulid()                               // ULID format
+gozod.Nanoid()                             // NanoID format
+
+// Text encodings (types/text.go)
+gozod.Base64()                             // Base64 encoding
+gozod.Base64URL()                          // URL-safe Base64
+gozod.Emoji()                              // Emoji characters
+
+// Tokens (types/text.go)
+gozod.JWT()                                // JWT token structure
+gozod.JWT(types.JWTOptions{Algorithm: "HS256"})  // JWT with algorithm
+
+// For custom patterns, still use String
+gozod.String().Regex(`^\d{3}-\d{2}-\d{4}$`)
 ```
 
 ### String Transformations
@@ -309,15 +335,31 @@ result, err = regexSchema.Parse("123-45-6789")  // ✅
 schema := gozod.String().
     Trim().              // Remove whitespace
     ToLower().           // Convert to lowercase
-    ToUpper()            // Convert to uppercase
+    ToUpper().           // Convert to uppercase
+    Slugify()            // URL-friendly: "Hello World!" → "hello-world"
 
-result, err := schema.Parse("  HELLO  ")  // Result: "hello"
+result, err := schema.Parse("  HELLO WORLD  ")  // Result: "hello-world"
 
 // Custom transformation
 transformSchema := gozod.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
     return strings.ReplaceAll(s, " ", "_"), nil
 })
 result, err = transformSchema.Parse("hello world")  // Result: "hello_world"
+```
+
+### Metadata
+
+```go
+// Add description
+schema := gozod.Email().Describe("User's email address")
+
+// Add rich metadata
+schema = gozod.Uuid().Meta(core.GlobalMeta{
+    ID:          "user_id",
+    Title:       "User ID",
+    Description: "Unique identifier",
+    Examples:    []any{"550e8400-e29b-41d4-a716-446655440000"},
+})
 ```
 
 ---
@@ -420,7 +462,7 @@ Object schemas validate `map[string]any` data (like JSON):
 userSchema := gozod.Object(gozod.ObjectSchema{
     "name":  gozod.String().Min(2),
     "age":   gozod.Int().Min(0),
-    "email": gozod.String().Email().Optional(),
+    "email": gozod.Email().Optional(),
 })
 
 // Validate JSON-like data
@@ -459,7 +501,7 @@ result, err := basicSchema.Parse(user)     // ✅ Basic validation
 userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2).Max(50),
     "age":   gozod.Int().Min(0).Max(120), 
-    "email": gozod.String().Email(),
+    "email": gozod.Email(),
 })
 
 validUser := User{Name: "Bob", Age: 30, Email: "bob@example.com"}
@@ -734,6 +776,10 @@ validators.Register(&MinLengthValidator{})
 
 ```go
 // Programmatic usage
+// For a custom email validator, you would typically register it once
+// and then use gozod.String().Refine(validators.ToRefineFn(validators.Get[string]("custom_email")))
+// or simply use gozod.Email() if it's a standard email validation.
+// The example below shows how to use the registered custom_email validator.
 validator, _ := validators.Get[string]("custom_email")
 schema := gozod.String().Refine(validators.ToRefineFn(validator))
 
@@ -857,7 +903,7 @@ if zodErr, ok := err.(*issues.ZodError); ok {
 ```go
 // Use StrictParse for known input types
 str := "hello@example.com"
-schema := gozod.String().Email()
+schema := gozod.Email()
 result, err := schema.StrictParse(str)  // Optimal performance
 
 // Use code generation for struct validation
