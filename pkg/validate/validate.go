@@ -2,6 +2,7 @@ package validate
 
 import (
 	"math"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -337,20 +338,48 @@ func IPv6(value any) bool {
 	return false
 }
 
+// ValidateCIDR validates CIDR notation with strict format checking
+// version: 0=both, 4=IPv4 only, 6=IPv6 only
+func ValidateCIDR(value any, version int) bool {
+	str, ok := reflectx.ExtractString(value)
+	if !ok {
+		return false
+	}
+
+	// Step 1: Strict check for exactly one slash
+	parts := strings.Split(str, "/")
+	if len(parts) != 2 {
+		return false
+	}
+
+	// Step 2: Use standard library for parsing
+	_, ipnet, err := net.ParseCIDR(str)
+	if err != nil {
+		return false
+	}
+
+	// Step 3: Optional version check
+	if version != 0 {
+		isV4 := ipnet.IP.To4() != nil
+		if version == 4 && !isV4 {
+			return false
+		}
+		if version == 6 && isV4 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // CIDRv4 validates if string is a valid IPv4 CIDR format
 func CIDRv4(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.CIDRv4.MatchString(str)
-	}
-	return false
+	return ValidateCIDR(value, 4)
 }
 
 // CIDRv6 validates if string is a valid IPv6 CIDR format
 func CIDRv6(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.CIDRv6.MatchString(str)
-	}
-	return false
+	return ValidateCIDR(value, 6)
 }
 
 // Base64 validates if string is valid Base64 encoding
@@ -375,6 +404,62 @@ func E164(value any) bool {
 		return regexes.E164.MatchString(str)
 	}
 	return false
+}
+
+// ==============================================================================
+// MAC ADDRESS VALIDATION FUNCTIONS
+// =============================================================================
+
+// MACOptions defines configuration for MAC address validation
+type MACOptions struct {
+	// Delimiter specifies the separator between hex pairs (default: ":")
+	// Common delimiters: ":", "-", "."
+	// Examples:
+	//   ":" -> "00:1A:2B:3C:4D:5E"
+	//   "-" -> "00-1A-2B-3C-4D-5E"
+	//   "." -> "00.1A.2B.3C.4D.5E"
+	Delimiter string
+}
+
+// MAC validates if string is a valid MAC address using default colon delimiter.
+// Accepts both uppercase and lowercase hex digits.
+// Examples:
+//
+//	"00:1A:2B:3C:4D:5E" -> true
+//	"00:1a:2b:3c:4d:5e" -> true
+//	"00-1A-2B-3C-4D-5E" -> false (wrong delimiter)
+//	"00:1A:2B:3C:4D"    -> false (incomplete)
+func MAC(value any) bool {
+	return MACWithOptions(value, MACOptions{Delimiter: ":"})
+}
+
+// MACWithOptions validates if string is a valid MAC address with custom delimiter.
+// This implementation matches Zod's TypeScript version using case-sensitive branches.
+//
+// The validation accepts MAC addresses in the format:
+//
+//	XX:XX:XX:XX:XX:XX (where X is a hex digit, : can be replaced by delimiter)
+//
+// Both uppercase and lowercase hex digits are valid, but they should not be mixed
+// within a single validation (though the regex allows both).
+//
+// Examples:
+//
+//	MACWithOptions("00:1a:2b:3c:4d:5e", MACOptions{Delimiter: ":"})  -> true
+//	MACWithOptions("00-1A-2B-3C-4D-5E", MACOptions{Delimiter: "-"})  -> true
+//	MACWithOptions("00.1a.2b.3c.4d.5e", MACOptions{Delimiter: "."})  -> true
+func MACWithOptions(value any, opts MACOptions) bool {
+	str, ok := reflectx.ExtractString(value)
+	if !ok {
+		return false
+	}
+
+	delim := opts.Delimiter
+	if delim == "" {
+		delim = ":"
+	}
+
+	return regexes.MAC(delim).MatchString(str)
 }
 
 // =============================================================================

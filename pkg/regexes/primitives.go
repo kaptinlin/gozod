@@ -25,20 +25,20 @@ func StringRegex(minimum, maximum int) *regexp.Regexp {
 //	};
 var String = regexp.MustCompile(`^[\s\S]*$`)
 
-// Bigint matches big integers
-// TypeScript original code:
-// export const bigint: RegExp = /^\d+n?$/;
-var Bigint = regexp.MustCompile(`^\d+n?$`)
+// Bigint matches big integers (supports negative numbers)
+// TypeScript original code (v4.1.11 fixed):
+// export const bigint: RegExp = /^-?\d+n?$/;
+var Bigint = regexp.MustCompile(`^-?\d+n?$`)
 
-// Integer matches integers
-// TypeScript original code:
-// export const integer: RegExp = /^\d+$/;
-var Integer = regexp.MustCompile(`^\d+$`)
+// Integer matches integers (supports negative numbers)
+// TypeScript original code (v4.1.11 fixed):
+// export const integer: RegExp = /^-?\d+$/;
+var Integer = regexp.MustCompile(`^-?\d+$`)
 
 // Number matches numbers including decimals and negative numbers
-// TypeScript original code:
-// export const number: RegExp = /^-?\d+(?:\.\d+)?/i;
-var Number = regexp.MustCompile(`^-?\d+(?:\.\d+)?`)
+// TypeScript original code (v4.1.11 fixed):
+// export const number: RegExp = /^-?\d+(?:\.\d+)?$/;
+var Number = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
 
 // Boolean matches boolean values (true/false)
 // TypeScript original code:

@@ -43,3 +43,40 @@ var Hostname = regexp.MustCompile(`^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$`)
 // TypeScript original code:
 // export const domain: RegExp = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 var Domain = regexp.MustCompile(`^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+
+// MAC returns a regex for validating MAC addresses with the specified delimiter.
+// Matches Zod TypeScript implementation using two branches for case-sensitive matching.
+// TypeScript original code:
+//
+//	export const mac = (delimiter?: string): RegExp => {
+//	  const escapedDelim = util.escapeRegex(delimiter ?? ":");
+//	  return new RegExp(`^(?:[0-9A-F]{2}${escapedDelim}){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}${escapedDelim}){5}[0-9a-f]{2}$`);
+//	};
+//
+// The regex uses two alternatives:
+// - First branch: uppercase hex digits (0-9A-F)
+// - Second branch: lowercase hex digits (0-9a-f)
+// This approach provides case-sensitive matching while accepting both cases.
+//
+// Examples:
+//
+//	MAC(":")  matches "00:1A:2B:3C:4D:5E" or "00:1a:2b:3c:4d:5e"
+//	MAC("-")  matches "00-1A-2B-3C-4D-5E" or "00-1a-2b-3c-4d-5e"
+//	MAC(".")  matches "00.1A.2B.3C.4D.5E" or "00.1a.2b.3c.4d.5e"
+func MAC(delimiter string) *regexp.Regexp {
+	if delimiter == "" {
+		delimiter = ":"
+	}
+
+	// Escape special regex characters in the delimiter (e.g., "." becomes "\.")
+	escaped := regexp.QuoteMeta(delimiter)
+
+	// Build pattern with two branches for uppercase and lowercase hex
+	// Format: ^(?:[0-9A-F]{2}DELIM){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}DELIM){5}[0-9a-f]{2}$
+	pattern := "^(?:[0-9A-F]{2}" + escaped + "){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}" + escaped + "){5}[0-9a-f]{2}$"
+
+	return regexp.MustCompile(pattern)
+}
+
+// MACDefault is the default MAC address regex using colon as delimiter
+var MACDefault = MAC(":")

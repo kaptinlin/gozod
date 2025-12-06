@@ -8,6 +8,8 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/mapx"
+	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
 // Static error variables
@@ -841,13 +843,17 @@ func processModifiersInternal[T any](
 
 	// Original logic: Default/DefaultFunc always has highest priority (short-circuit)
 	// 1. Default/DefaultFunc - short-circuit mechanism, highest priority
+	// 1. Default/DefaultFunc - short-circuit mechanism, highest priority
 	if internals.DefaultValue != nil {
+		// Clone default value to prevent shared state issues
+		clonedValue := cloneDefaultValue(internals.DefaultValue)
+
 		// Default is a short-circuit mechanism, returns value directly without any parsing process (including Transform)
 		if hasOverwriteCheck(internals.Checks) {
-			result, err := ApplyChecks(internals.DefaultValue, internals.Checks, ctx)
+			result, err := ApplyChecks(clonedValue, internals.Checks, ctx)
 			return result, true, err
 		}
-		return internals.DefaultValue, true, nil
+		return clonedValue, true, nil
 	}
 
 	if internals.DefaultFunc != nil {
@@ -1343,4 +1349,40 @@ func ApplyChecks[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext)
 	}
 
 	return convertResultToType[T](result.GetValue())
+}
+
+// cloneDefaultValue creates a shallow copy of map/slice default values
+func cloneDefaultValue(v any) any {
+	if v == nil {
+		return nil
+	}
+
+	// Try slice cloning
+	if reflectx.IsSlice(v) {
+		rv := reflect.ValueOf(v)
+		// Create new slice with same type, length and capacity
+		newSlice := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
+		// Copy elements
+		reflect.Copy(newSlice, rv)
+		return newSlice.Interface()
+	}
+
+	// Try map cloning
+	if reflectx.IsMap(v) {
+		if m, ok := v.(map[string]any); ok {
+			return mapx.Copy(m)
+		}
+		// Basic copy for generic maps using reflection (fallback)
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Map {
+			newMap := reflect.MakeMap(rv.Type())
+			iter := rv.MapRange()
+			for iter.Next() {
+				newMap.SetMapIndex(iter.Key(), iter.Value())
+			}
+			return newMap.Interface()
+		}
+	}
+
+	return v
 }

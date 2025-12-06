@@ -205,6 +205,63 @@ func IPv6(params ...any) core.ZodCheck {
 }
 
 // =============================================================================
+// MAC ADDRESS VALIDATION
+// =============================================================================
+
+// MAC creates a MAC address validation check with JSON Schema support.
+// Uses default colon (":") delimiter.
+// Supports: MAC("invalid MAC") or MAC(CheckParams{Error: "invalid MAC address"})
+func MAC(params ...any) core.ZodCheck {
+	return MACWithOptions(validate.MACOptions{Delimiter: ":"}, params...)
+}
+
+// MACWithDelimiter creates a MAC address validation check with custom delimiter.
+// Common delimiters: ":", "-", "."
+// Supports: MACWithDelimiter("-", "invalid MAC") or MACWithDelimiter(".", CheckParams{Error: "invalid MAC"})
+func MACWithDelimiter(delimiter string, params ...any) core.ZodCheck {
+	return MACWithOptions(validate.MACOptions{Delimiter: delimiter}, params...)
+}
+
+// MACWithOptions creates a MAC address validation check with full configuration options.
+// This implementation aligns with Zod's TypeScript version, using case-sensitive matching.
+// Supports: MACWithOptions(validate.MACOptions{Delimiter: "-"}, "invalid MAC")
+//
+// Example validations:
+//
+//	"00:1A:2B:3C:4D:5E" with delimiter ":" -> valid
+//	"00-1a-2b-3c-4d-5e" with delimiter "-" -> valid
+//	"00.1A.2B.3C.4D.5E" with delimiter "." -> valid
+func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "mac"}
+	ApplyCheckParams(def, checkParams)
+
+	// Determine delimiter for schema metadata
+	delim := options.Delimiter
+	if delim == "" {
+		delim = ":"
+	}
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.MACWithOptions(payload.GetValue(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("mac", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				// Set custom format for JSON Schema
+				SetBagProperty(schema, "format", "mac")
+				// Use the specific delimiter's regex pattern
+				addPatternToSchema(schema, regexes.MAC(delim).String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
 // CIDR NOTATION VALIDATION
 // =============================================================================
 
@@ -321,6 +378,17 @@ func Base64URL(params ...any) core.ZodCheck {
 // JWT creates a JWT token validation check with JSON Schema support
 // Supports: JWT("invalid JWT") or JWT(CheckParams{Error: "invalid JWT token"})
 func JWT(params ...any) core.ZodCheck {
+	return JWTWithOptions(validate.JWTOptions{}, params...)
+}
+
+// JWTWithAlgorithm creates a JWT token validation check with algorithm constraint
+// Supports: JWTWithAlgorithm("HS256", "invalid JWT") or JWTWithAlgorithm("RS256", CheckParams{Error: "invalid JWT token"})
+func JWTWithAlgorithm(algorithm string, params ...any) core.ZodCheck {
+	return JWTWithOptions(validate.JWTOptions{Algorithm: &algorithm}, params...)
+}
+
+// JWTWithOptions creates a JWT token validation check with full configuration options
+func JWTWithOptions(options validate.JWTOptions, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "jwt"}
 	ApplyCheckParams(def, checkParams)
@@ -328,31 +396,6 @@ func JWT(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.JWT(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.GetValue(), nil))
-			}
-		},
-		OnAttach: []func(any){
-			func(schema any) {
-				// Set custom format for JSON Schema
-				SetBagProperty(schema, "format", "jwt")
-				SetBagProperty(schema, "type", "string")
-			},
-		},
-	}
-}
-
-// JWTWithAlgorithm creates a JWT token validation check with algorithm constraint
-// Supports: JWTWithAlgorithm("HS256", "invalid JWT") or JWTWithAlgorithm("RS256", CheckParams{Error: "invalid JWT token"})
-func JWTWithAlgorithm(algorithm string, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "jwt_with_algorithm"}
-	ApplyCheckParams(def, checkParams)
-
-	return &core.ZodCheckInternals{
-		Def: def,
-		Check: func(payload *core.ParsePayload) {
-			options := validate.JWTOptions{Algorithm: &algorithm}
 			if !validate.JWTWithOptions(payload.GetValue(), options) {
 				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.GetValue(), nil))
 			}
@@ -401,18 +444,7 @@ func E164(params ...any) core.ZodCheck {
 // =============================================================================
 
 // ISODateTimeOptions defines configuration for ISO DateTime validation
-type ISODateTimeOptions struct {
-	// Precision specifies number of decimal places for seconds
-	// If nil, matches any number of decimal places
-	// If 0 or negative, no decimal places allowed
-	Precision *int
-
-	// Offset if true, allows timezone offsets like +01:00
-	Offset bool
-
-	// Local if true, makes the 'Z' timezone marker optional
-	Local bool
-}
+type ISODateTimeOptions = validate.ISODateTimeOptions
 
 // ISODateTimeWithOptions creates an ISO 8601 datetime validation check with options
 // Supports: ISODateTimeWithOptions(options, "invalid datetime") or ISODateTimeWithOptions(options, CheckParams{Error: "invalid datetime"})
@@ -424,11 +456,7 @@ func ISODateTimeWithOptions(options ISODateTimeOptions, params ...any) core.ZodC
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODateTimeWithOptions(payload.GetValue(), validate.ISODateTimeOptions{
-				Precision: options.Precision,
-				Offset:    options.Offset,
-				Local:     options.Local,
-			}) {
+			if !validate.ISODateTimeWithOptions(payload.GetValue(), options) {
 				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil))
 			}
 		},
@@ -548,13 +576,7 @@ func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 }
 
 // ISOTimeOptions contains configuration for ISO Time validation
-type ISOTimeOptions struct {
-	// Precision specifies number of decimal places for seconds
-	// If nil, matches any number of decimal places
-	// If 0 or negative, no decimal places allowed
-	// Special case: -1 means minute precision only (no seconds)
-	Precision *int
-}
+type ISOTimeOptions = validate.ISOTimeOptions
 
 // ISOTimeWithOptions creates an ISO 8601 time validation check with configuration options
 // Supports: ISOTimeWithOptions(options, "invalid time") or ISOTimeWithOptions(options, CheckParams{Error: "invalid ISO time"})
@@ -567,9 +589,7 @@ func ISOTimeWithOptions(options ISOTimeOptions, params ...any) core.ZodCheck {
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISOTimeWithOptions(payload.GetValue(), validate.ISOTimeOptions{
-				Precision: options.Precision,
-			}) {
+			if !validate.ISOTimeWithOptions(payload.GetValue(), options) {
 				iss := issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil)
 				iss.Inst = check
 				payload.AddIssue(iss)

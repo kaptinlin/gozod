@@ -9,6 +9,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
 // =============================================================================
@@ -324,6 +325,144 @@ func (z *ZodString[T]) Email(params ...any) *ZodString[T] {
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// MAC adds MAC address format validation with flexible parameter support.
+// Aligns with Zod TypeScript implementation using case-sensitive matching.
+//
+// Usage forms:
+//
+//	MAC() - uses default colon delimiter ":"
+//	MAC("-") - uses specified delimiter
+//	MAC(validate.MACOptions{Delimiter: "."}) - full options
+//	MAC("invalid MAC address") - custom error message
+//
+// Examples:
+//
+//	z.String().MAC().Parse("00:1A:2B:3C:4D:5E") // valid with default ":"
+//	z.String().MAC("-").Parse("00-1a-2b-3c-4d-5e") // valid with "-"
+//	z.String().MAC(".").Parse("00.1A.2B.3C.4D.5E") // valid with "."
+func (z *ZodString[T]) MAC(params ...any) *ZodString[T] {
+	var check core.ZodCheck
+
+	// Parse parameters to support multiple forms
+	switch len(params) {
+	case 0:
+		// MAC() - use default
+		check = checks.MAC()
+	case 1:
+		// Check if first param is a delimiter string or MACOptions
+		switch v := params[0].(type) {
+		case string:
+			// Could be delimiter or error message
+			// If it's a single character or common delimiter, treat as delimiter
+			if len(v) == 1 || v == ":" || v == "-" || v == "." {
+				check = checks.MACWithDelimiter(v)
+			} else {
+				// Otherwise treat as error message with default delimiter
+				check = checks.MAC(v)
+			}
+		case validate.MACOptions:
+			// MAC(MACOptions{...})
+			check = checks.MACWithOptions(v)
+		default:
+			// Pass through to checks (for CheckParams, etc.)
+			check = checks.MAC(params...)
+		}
+	default:
+		// Multiple params - check if first is delimiter
+		if delim, ok := params[0].(string); ok && (len(delim) == 1 || delim == ":" || delim == "-" || delim == ".") {
+			// MAC("-", "error message") or MAC("-", CheckParams{...})
+			check = checks.MACWithDelimiter(delim, params[1:]...)
+		} else {
+			// Pass all params to checks
+			check = checks.MAC(params...)
+		}
+	}
+
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// JWT adds JWT token format validation.
+// Supports validating the JWT structure and optionally checking the "alg" header.
+//
+// Usage forms:
+//
+//	JWT() - validates standard JWT format
+//	JWT("HS256") - validates format and requires "alg": "HS256" header
+//	JWT(validate.JWTOptions{Algorithm: "RS256"}) - full options
+//	JWT("invalid token") - custom error message
+func (z *ZodString[T]) JWT(params ...any) *ZodString[T] {
+	var check core.ZodCheck
+
+	switch len(params) {
+	case 0:
+		check = checks.JWT()
+	case 1:
+		switch v := params[0].(type) {
+		case string:
+			// Determine if it's an algorithm or an error message
+			// Common JWT algorithms are uppercase and start with HS, RS, ES, PS, Ed
+			// E.g. HS256, RS512, EdDSA. Usually 5-6 chars.
+			// Error messages are likely longer sentences or lower case.
+			// Simplistic heuristic: if it looks like an algorithm, treat as alg.
+			// Zod v4 uses object { alg: "..." } so there is no ambiguity.
+			// Here we support convenience shortcuts.
+			if isLikelyAlg(v) {
+				check = checks.JWTWithAlgorithm(v)
+			} else {
+				check = checks.JWT(v)
+			}
+		case validate.JWTOptions:
+			check = checks.JWTWithOptions(v)
+		default:
+			check = checks.JWT(params...)
+		}
+	default:
+		if alg, ok := params[0].(string); ok && isLikelyAlg(alg) {
+			// JWT("HS256", "error message")
+			check = checks.JWTWithAlgorithm(alg, params[1:]...)
+		} else {
+			check = checks.JWT(params...)
+		}
+	}
+
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+func isLikelyAlg(s string) bool {
+	// Common JWA algorithms
+	return len(s) > 0 && len(s) <= 10 && (strings.HasPrefix(s, "HS") || strings.HasPrefix(s, "RS") ||
+		strings.HasPrefix(s, "ES") || strings.HasPrefix(s, "PS") ||
+		strings.HasPrefix(s, "Ed") || s == "none")
+}
+
+// Describe adds a description to the schema.
+// This description is stored in the GlobalRegistry and can be used for documentation or JSON Schema generation.
+//
+// Example:
+//
+//	schema := gozod.String().Describe("User's email address")
+func (z *ZodString[T]) Describe(description string) *ZodString[T] {
+	// Follow Enhanced Copy-on-Write pattern
+	newInternals := z.internals.Clone()
+
+	// Get existing metadata or create new
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	// Create new schema instance with cloned internals
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================
