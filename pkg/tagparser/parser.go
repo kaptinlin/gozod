@@ -212,9 +212,9 @@ func parseTagRule(part string) TagRule {
 	}
 
 	// Check if rule has parameters (contains =)
-	if idx := strings.Index(part, "="); idx != -1 {
-		name := strings.TrimSpace(part[:idx])
-		paramStr := strings.TrimSpace(part[idx+1:])
+	if name, paramStr, found := strings.Cut(part, "="); found {
+		name = strings.TrimSpace(name)
+		paramStr = strings.TrimSpace(paramStr)
 
 		// Parse parameters - split by space for multi-value params
 		var params []string
@@ -270,10 +270,9 @@ func getJSONFieldName(field reflect.StructField) string {
 	}
 
 	// Extract name before first comma
-	if idx := strings.Index(jsonTag, ","); idx != -1 {
-		jsonName := strings.TrimSpace(jsonTag[:idx])
-		if jsonName != "" {
-			return jsonName
+	if name, _, found := strings.Cut(jsonTag, ","); found {
+		if name = strings.TrimSpace(name); name != "" {
+			return name
 		}
 	} else {
 		return strings.TrimSpace(jsonTag)

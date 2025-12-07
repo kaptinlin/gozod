@@ -326,9 +326,7 @@ func Reverse(slice any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-	for i, j := 0, len(sliceAny)-1; i < j; i, j = i+1, j-1 {
-		sliceAny[i], sliceAny[j] = sliceAny[j], sliceAny[i]
-	}
+	slices.Reverse(sliceAny)
 	return convertToOriginalType(sliceAny, slice, nil)
 }
 

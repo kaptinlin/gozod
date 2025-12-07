@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCustomValidator is an example custom validator for testing
@@ -66,35 +68,22 @@ func TestValidatorRegistration(t *testing.T) {
 
 	// Register test validator
 	testValidator := &TestCustomValidator{}
-	if err := Register(testValidator); err != nil {
-		t.Fatalf("Failed to register test validator: %v", err)
-	}
+	err := Register(testValidator)
+	require.NoError(t, err)
 
 	// Test retrieval
 	validator, exists := Get[string]("test_validator")
-	if !exists {
-		t.Fatal("test_validator not found after registration")
-	}
+	require.True(t, exists, "test_validator not found after registration")
 
 	// Test validation
-	if !validator.Validate("valid") {
-		t.Error("Expected 'valid' to pass validation")
-	}
-
-	if validator.Validate("invalid") {
-		t.Error("Expected 'invalid' to fail validation")
-	}
-
-	if validator.Validate("") {
-		t.Error("Expected empty string to fail validation")
-	}
+	assert.True(t, validator.Validate("valid"))
+	assert.False(t, validator.Validate("invalid"))
+	assert.False(t, validator.Validate(""))
 
 	// Test error message
 	ctx := &core.ParseContext{}
 	msg := validator.ErrorMessage(ctx)
-	if msg != "Value failed test validation" {
-		t.Errorf("Unexpected error message: %s", msg)
-	}
+	assert.Equal(t, "Value failed test validation", msg)
 }
 
 func TestParameterizedValidator(t *testing.T) {
@@ -105,59 +94,31 @@ func TestParameterizedValidator(t *testing.T) {
 
 	// Register parameterized validator
 	paramValidator := &TestParamValidator{}
-	if err := Register(paramValidator); err != nil {
-		t.Fatalf("Failed to register parameterized validator: %v", err)
-	}
+	err := Register(paramValidator)
+	require.NoError(t, err)
 
 	// Get validator
 	validatorAny, exists := GetAny("test_param_validator")
-	if !exists {
-		t.Fatal("test_param_validator not found after registration")
-	}
+	require.True(t, exists, "test_param_validator not found after registration")
 
 	validator, ok := validatorAny.(ZodParameterizedValidator[int])
-	if !ok {
-		t.Fatal("test_param_validator should implement ZodParameterizedValidator")
-	}
+	require.True(t, ok, "test_param_validator should implement ZodParameterizedValidator")
 
 	ctx := &core.ParseContext{}
 
 	// Test basic validation
-	if !validator.Validate(5) {
-		t.Error("Expected 5 to pass basic validation")
-	}
-
-	if validator.Validate(-1) {
-		t.Error("Expected -1 to fail basic validation")
-	}
+	assert.True(t, validator.Validate(5))
+	assert.False(t, validator.Validate(-1))
 
 	// Test parameterized validation
-	if !validator.ValidateParam(4, "even") {
-		t.Error("Expected 4 to pass even validation")
-	}
-
-	if validator.ValidateParam(3, "even") {
-		t.Error("Expected 3 to fail even validation")
-	}
-
-	if !validator.ValidateParam(3, "odd") {
-		t.Error("Expected 3 to pass odd validation")
-	}
-
-	if validator.ValidateParam(4, "odd") {
-		t.Error("Expected 4 to fail odd validation")
-	}
+	assert.True(t, validator.ValidateParam(4, "even"))
+	assert.False(t, validator.ValidateParam(3, "even"))
+	assert.True(t, validator.ValidateParam(3, "odd"))
+	assert.False(t, validator.ValidateParam(4, "odd"))
 
 	// Test error messages
-	msg := validator.ErrorMessageWithParam(ctx, "even")
-	if msg != "Value must be even" {
-		t.Errorf("Unexpected error message for even: %s", msg)
-	}
-
-	msg = validator.ErrorMessageWithParam(ctx, "odd")
-	if msg != "Value must be odd" {
-		t.Errorf("Unexpected error message for odd: %s", msg)
-	}
+	assert.Equal(t, "Value must be even", validator.ErrorMessageWithParam(ctx, "even"))
+	assert.Equal(t, "Value must be odd", validator.ErrorMessageWithParam(ctx, "odd"))
 }
 
 func TestDuplicateRegistration(t *testing.T) {
@@ -169,14 +130,12 @@ func TestDuplicateRegistration(t *testing.T) {
 	validator := &TestCustomValidator{}
 
 	// First registration should succeed
-	if err := Register(validator); err != nil {
-		t.Fatalf("First registration failed: %v", err)
-	}
+	err := Register(validator)
+	require.NoError(t, err)
 
 	// Second registration should fail
-	if err := Register(validator); err == nil {
-		t.Error("Expected duplicate registration to fail")
-	}
+	err = Register(validator)
+	assert.Error(t, err)
 }
 
 func TestListValidators(t *testing.T) {
@@ -189,39 +148,19 @@ func TestListValidators(t *testing.T) {
 	stringValidator := &TestCustomValidator{}
 	intValidator := &TestParamValidator{}
 
-	if err := Register(stringValidator); err != nil {
-		t.Fatalf("Failed to register string validator: %v", err)
-	}
+	err := Register(stringValidator)
+	require.NoError(t, err)
 
-	if err := Register(intValidator); err != nil {
-		t.Fatalf("Failed to register int validator: %v", err)
-	}
+	err = Register(intValidator)
+	require.NoError(t, err)
 
 	// List validators
 	names := ListValidators()
-	if len(names) != 2 {
-		t.Errorf("Expected 2 validators, got %d", len(names))
-	}
+	assert.Len(t, names, 2)
 
 	// Check that both validators are in the list
-	hasTestValidator := false
-	hasParamValidator := false
-	for _, name := range names {
-		if name == "test_validator" {
-			hasTestValidator = true
-		}
-		if name == "test_param_validator" {
-			hasParamValidator = true
-		}
-	}
-
-	if !hasTestValidator {
-		t.Error("test_validator not found in list")
-	}
-
-	if !hasParamValidator {
-		t.Error("test_param_validator not found in list")
-	}
+	assert.Contains(t, names, "test_validator")
+	assert.Contains(t, names, "test_param_validator")
 }
 
 func TestConverterFunctions(t *testing.T) {
@@ -230,12 +169,8 @@ func TestConverterFunctions(t *testing.T) {
 
 	// Test ToRefineFn
 	refineFn := ToRefineFn(validator)
-	if !refineFn("valid") {
-		t.Error("RefineFn should return true for valid input")
-	}
-	if refineFn("invalid") {
-		t.Error("RefineFn should return false for invalid input")
-	}
+	assert.True(t, refineFn("valid"))
+	assert.False(t, refineFn("invalid"))
 
 	// Test ToCheckFn
 	checkFn := ToCheckFn[string](validator, ctx)
@@ -267,4 +202,50 @@ func TestParameterizedConverterFunctions(t *testing.T) {
 	payload.SetValue(3)
 	checkFn(payload)
 	// In a real test, we would check that an issue was added for odd number
+}
+
+func TestUnregister(t *testing.T) {
+	// Clear any existing validators
+	registry = &ValidatorRegistry{
+		validators: make(map[string]any),
+	}
+
+	validator := &TestCustomValidator{}
+	err := Register(validator)
+	require.NoError(t, err)
+
+	// Verify it exists
+	_, exists := Get[string]("test_validator")
+	assert.True(t, exists)
+
+	// Unregister
+	Unregister("test_validator")
+
+	// Verify it no longer exists
+	_, exists = Get[string]("test_validator")
+	assert.False(t, exists)
+}
+
+func TestClear(t *testing.T) {
+	// Clear any existing validators
+	registry = &ValidatorRegistry{
+		validators: make(map[string]any),
+	}
+
+	// Register multiple validators
+	err := Register(&TestCustomValidator{})
+	require.NoError(t, err)
+	err = Register(&TestParamValidator{})
+	require.NoError(t, err)
+
+	// Verify they exist
+	names := ListValidators()
+	assert.Len(t, names, 2)
+
+	// Clear all
+	Clear()
+
+	// Verify all gone
+	names = ListValidators()
+	assert.Empty(t, names)
 }

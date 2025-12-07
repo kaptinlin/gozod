@@ -108,10 +108,8 @@ func MinLength(value any, minimum int) bool {
 	if !reflectx.HasLength(value) {
 		return false
 	}
-	if l, _ := reflectx.GetLength(value); l >= minimum {
-		return true
-	}
-	return false
+	l, _ := reflectx.GetLength(value)
+	return l >= minimum
 }
 
 // Length validates if value's length equals exactly the expected length
@@ -119,10 +117,8 @@ func Length(value any, expected int) bool {
 	if !reflectx.HasLength(value) {
 		return false
 	}
-	if l, _ := reflectx.GetLength(value); l == expected {
-		return true
-	}
-	return false
+	l, _ := reflectx.GetLength(value)
+	return l == expected
 }
 
 // =============================================================================

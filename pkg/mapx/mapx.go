@@ -54,12 +54,7 @@ func Copy(props map[string]any) map[string]any {
 	if props == nil {
 		return nil
 	}
-
-	result := make(map[string]any)
-	for key, value := range props {
-		result[key] = value
-	}
-	return result
+	return maps.Clone(props)
 }
 
 // Merge merges two properties maps, with the second taking precedence
@@ -68,16 +63,13 @@ func Merge(props1, props2 map[string]any) map[string]any {
 		return nil
 	}
 	if props1 == nil {
-		return Copy(props2)
+		return maps.Clone(props2)
 	}
 	if props2 == nil {
-		return Copy(props1)
+		return maps.Clone(props1)
 	}
-
-	result := Copy(props1)
-	for key, value := range props2 {
-		result[key] = value
-	}
+	result := maps.Clone(props1)
+	maps.Copy(result, props2)
 	return result
 }
 

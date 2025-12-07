@@ -117,9 +117,8 @@ func Unmarshal(data map[string]any, structType reflect.Type) (any, error) {
 func getFieldName(field reflect.StructField) string {
 	// Check for json tag
 	if tag := field.Tag.Get("json"); tag != "" {
-		parts := strings.Split(tag, ",")
-		if parts[0] != "" {
-			return parts[0]
+		if name, _, _ := strings.Cut(tag, ","); name != "" {
+			return name
 		}
 	}
 	return field.Name

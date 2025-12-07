@@ -69,3 +69,17 @@ func ListValidators() []string {
 	}
 	return names
 }
+
+// Unregister removes a validator by name
+func Unregister(name string) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	delete(registry.validators, name)
+}
+
+// Clear removes all registered validators
+func Clear() {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	clear(registry.validators)
+}
