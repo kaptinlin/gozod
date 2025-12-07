@@ -13,7 +13,7 @@ import (
 	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/pkg/regex"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
@@ -241,7 +241,7 @@ func EndsWith(value any, suffix string) bool {
 // Email validates if string is a valid email format
 func Email(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.Email.MatchString(str)
+		return regex.Email.MatchString(str)
 	}
 	return false
 }
@@ -249,7 +249,7 @@ func Email(value any) bool {
 // URL validates if string is a valid URL format
 func URL(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.URL.MatchString(str)
+		return regex.URL.MatchString(str)
 	}
 	return false
 }
@@ -257,7 +257,7 @@ func URL(value any) bool {
 // UUID validates if string is a valid UUID format
 func UUID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.UUID.MatchString(str)
+		return regex.UUID.MatchString(str)
 	}
 	return false
 }
@@ -265,7 +265,7 @@ func UUID(value any) bool {
 // GUID validates if string is a valid GUID format
 func GUID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.GUID.MatchString(str)
+		return regex.GUID.MatchString(str)
 	}
 	return false
 }
@@ -273,7 +273,7 @@ func GUID(value any) bool {
 // CUID validates if string is a valid CUID format
 func CUID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.CUID.MatchString(str)
+		return regex.CUID.MatchString(str)
 	}
 	return false
 }
@@ -281,7 +281,7 @@ func CUID(value any) bool {
 // CUID2 validates if string is a valid CUID2 format
 func CUID2(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.CUID2.MatchString(str)
+		return regex.CUID2.MatchString(str)
 	}
 	return false
 }
@@ -289,7 +289,7 @@ func CUID2(value any) bool {
 // NanoID validates if string is a valid NanoID format
 func NanoID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.NanoID.MatchString(str)
+		return regex.NanoID.MatchString(str)
 	}
 	return false
 }
@@ -297,7 +297,7 @@ func NanoID(value any) bool {
 // ULID validates if string is a valid ULID format
 func ULID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.ULID.MatchString(str)
+		return regex.ULID.MatchString(str)
 	}
 	return false
 }
@@ -305,7 +305,7 @@ func ULID(value any) bool {
 // XID validates if string is a valid XID format
 func XID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.XID.MatchString(str)
+		return regex.XID.MatchString(str)
 	}
 	return false
 }
@@ -313,7 +313,7 @@ func XID(value any) bool {
 // KSUID validates if string is a valid KSUID format
 func KSUID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.KSUID.MatchString(str)
+		return regex.KSUID.MatchString(str)
 	}
 	return false
 }
@@ -321,7 +321,7 @@ func KSUID(value any) bool {
 // IPv4 validates if string is a valid IPv4 address
 func IPv4(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.IPv4.MatchString(str)
+		return regex.IPv4.MatchString(str)
 	}
 	return false
 }
@@ -329,7 +329,7 @@ func IPv4(value any) bool {
 // IPv6 validates if string is a valid IPv6 address
 func IPv6(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.IPv6.MatchString(str)
+		return regex.IPv6.MatchString(str)
 	}
 	return false
 }
@@ -381,7 +381,7 @@ func CIDRv6(value any) bool {
 // Base64 validates if string is valid Base64 encoding
 func Base64(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.Base64.MatchString(str)
+		return regex.Base64.MatchString(str)
 	}
 	return false
 }
@@ -389,7 +389,7 @@ func Base64(value any) bool {
 // Base64URL validates if string is valid Base64URL encoding
 func Base64URL(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.Base64URL.MatchString(str)
+		return regex.Base64URL.MatchString(str)
 	}
 	return false
 }
@@ -397,7 +397,7 @@ func Base64URL(value any) bool {
 // E164 validates if string is a valid E.164 phone number format
 func E164(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.E164.MatchString(str)
+		return regex.E164.MatchString(str)
 	}
 	return false
 }
@@ -455,7 +455,7 @@ func MACWithOptions(value any, opts MACOptions) bool {
 		delim = ":"
 	}
 
-	return regexes.MAC(delim).MatchString(str)
+	return regex.MAC(delim).MatchString(str)
 }
 
 // =============================================================================
@@ -550,7 +550,7 @@ func validateJWTHeaderWithGolangJWT(header map[string]interface{}, expectedAlgor
 // Emoji validates if string is valid emoji
 func Emoji(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return regexes.Emoji.MatchString(str)
+		return regex.Emoji.MatchString(str)
 	}
 	return false
 }
@@ -572,7 +572,7 @@ type ISODateTimeOptions struct {
 // ISODateTimeWithOptions validates if string is a valid ISO datetime format with options
 func ISODateTimeWithOptions(value any, options ISODateTimeOptions) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		datetimeRegex := regexes.Datetime(regexes.DatetimeOptions{
+		datetimeRegex := regex.Datetime(regex.DatetimeOptions{
 			Precision: options.Precision,
 			Offset:    options.Offset,
 			Local:     options.Local,
@@ -612,7 +612,7 @@ type ISOTimeOptions struct {
 // ISOTimeWithOptions validates if string is a valid ISO time format with options
 func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		timeRegex := regexes.Time(regexes.TimeOptions{
+		timeRegex := regex.Time(regex.TimeOptions{
 			Precision: options.Precision,
 		})
 		return timeRegex.MatchString(str)
@@ -779,7 +779,7 @@ func URLWithOptions(value any, options URLOptions) bool {
 	}
 
 	// First check basic URL format using regex
-	if !regexes.URL.MatchString(str) {
+	if !regex.URL.MatchString(str) {
 		return false
 	}
 

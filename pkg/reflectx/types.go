@@ -128,11 +128,6 @@ func IsBigInt(v any) bool {
 	}
 }
 
-// IsNumber checks if a value is any numeric type (alias for IsNumeric)
-func IsNumber(v any) bool {
-	return IsNumeric(v)
-}
-
 // IsNumeric checks if a value is any numeric type
 func IsNumeric(v any) bool {
 	return IsInt(v) || IsUint(v) || IsFloat(v) || IsComplex(v) || IsBigInt(v)

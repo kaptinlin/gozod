@@ -14,7 +14,6 @@
 - **Parse vs StrictParse** - Runtime flexibility or compile-time type safety for optimal performance
 - **Native Go Struct Support** - First-class struct validation with field-level validation and JSON tag mapping
 - **Automatic Circular Reference Handling** - Lazy evaluation prevents stack overflow in recursive structures
-- **Custom Validator System** - User-defined validators with registry and struct tag integration
 - **Maximum Performance** - Zero-overhead validation with optional code generation (5-10x faster)
 - **Zero Dependencies** - Pure Go implementation, no external libraries
 - **Rich Validation Methods** - Comprehensive built-in validators for all Go types
@@ -193,9 +192,9 @@ result, err = schema.StrictParse(str)       // ✅ Compile-time guarantee, optim
 // result, err := schema.StrictParse(42)    // ❌ Compile-time error
 ```
 
-### Custom Validators
+### Custom Validation with Refine
 
-Create and register your own validators:
+Use `.Refine()` for custom validation logic:
 
 ```go
 package main
@@ -203,47 +202,40 @@ package main
 import (
     "strings"
     "github.com/kaptinlin/gozod"
-    "github.com/kaptinlin/gozod/core"
-    "github.com/kaptinlin/gozod/pkg/validators"
 )
 
-// Custom validator implementation
-type UniqueUsernameValidator struct{}
-
-func (v *UniqueUsernameValidator) Name() string {
-    return "unique_username"
-}
-
-func (v *UniqueUsernameValidator) Validate(username string) bool {
-    // Check against database/blacklist
-    blacklist := map[string]bool{"admin": true, "root": true}
-    return !blacklist[strings.ToLower(username)]
-}
-
-func (v *UniqueUsernameValidator) ErrorMessage(ctx *core.ParseContext) string {
-    return "Username is already taken"
-}
-
 func main() {
-    // Register custom validator
-    validators.Register(&UniqueUsernameValidator{})
+    // Custom validation with Refine
+    usernameSchema := gozod.String().
+        Min(3).
+        Max(20).
+        Refine(func(username string) bool {
+            // Check against blacklist
+            blacklist := map[string]bool{"admin": true, "root": true}
+            return !blacklist[strings.ToLower(username)]
+        }, "Username is not allowed")
     
-    // Use in struct tags
-    type User struct {
-        Username string `gozod:"required,unique_username"`
-        Email    string `gozod:"required,email"`
-    }
+    // Valid username
+    result, err := usernameSchema.Parse("johndoe")  // ✅ Valid
     
-    schema := gozod.FromStruct[User]()
-    
-    user := User{Username: "admin", Email: "admin@example.com"}
-    _, err := schema.Parse(user) // ❌ Username validation fails
-    
+    // Invalid username  
+    _, err = usernameSchema.Parse("admin")  // ❌ Validation fails
     if err != nil {
         fmt.Printf("Validation failed: %v\n", err)
     }
+    
+    // Struct validation with custom logic
+    type User struct {
+        Name  string `gozod:"required,min=2"`
+        Email string `gozod:"required,email"`
+        Age   int    `gozod:"min=18"`
+    }
+    
+    schema := gozod.FromStruct[User]().Refine(func(user User) bool {
+        // Cross-field validation
+        return user.Age >= 21 || !strings.Contains(user.Email, "company.com")
+    }, "Users under 21 cannot have company emails")
 }
-```
 
 ### Automatic Circular Reference Handling
 
@@ -412,14 +404,13 @@ if zodErr, ok := err.(*issues.ZodError); ok {
 - `nonempty` - At least one element
 - `length=N` - Exact element count
 
-### Custom Tags
-Register your own validators and use them in struct tags:
+### Custom Validation
+Use `.Refine()` for custom validation logic on any schema:
 
 ```go
-type Product struct {
-    SKU  string `gozod:"required,custom_sku"`
-    Name string `gozod:"required,min=3"`
-}
+schema := gozod.FromStruct[Product]().Refine(func(p Product) bool {
+    return strings.HasPrefix(p.SKU, "PROD-")
+}, "SKU must start with PROD-")
 ```
 
 ## 🌟 Real-World Examples

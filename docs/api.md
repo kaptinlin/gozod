@@ -12,7 +12,7 @@ GoZod provides comprehensive data validation with:
 - **Rich Validation**: Built-in validators for strings, numbers, objects, arrays, and more
 - **Flexible Modifiers**: Optional, Nilable, Default, and Prefault handling for complex scenarios
 - **Advanced Types**: Union, Intersection, and Discriminated Union support
-- **Custom Validators**: User-defined validation with registry system
+- **Custom Validation**: Use `.Refine()` and `.Check()` for custom validation logic
 - **Struct Tags**: Declarative validation with `gozod:"required,min=2,email"` syntax
 
 ## 🔧 Core Concepts
@@ -111,7 +111,7 @@ schema = gozod.Int().Check(func(v int, p *core.ParsePayload) {
 - [Transform Types](#-transform-types)
 
 ### Custom Validation
-- [Custom Validators](#-custom-validators)
+- [Custom Validation](#-custom-validation)
 - [Struct Tags](#-struct-tags)
 
 ---
@@ -714,80 +714,70 @@ result, err = transformSchema.Parse("abc")  // ❌ Invalid regex
 
 ---
 
-## 🎨 Custom Validators
+## 🎨 Custom Validation
 
-### Creating Custom Validators
+### Using Refine for Custom Logic
+
+Use `.Refine()` for custom validation that returns a boolean:
 
 ```go
-// Basic validator
-type EmailValidator struct{}
+// Simple custom validation
+schema := gozod.String().Refine(func(s string) bool {
+    return len(s) > 5 && strings.Contains(s, "@")
+}, "Invalid format")
 
-func (v *EmailValidator) Name() string {
-    return "custom_email"
-}
-
-func (v *EmailValidator) Validate(email string) bool {
-    // Custom email validation logic
-    return strings.Contains(email, "@") && len(email) > 5
-}
-
-func (v *EmailValidator) ErrorMessage(ctx *core.ParseContext) string {
-    return "Invalid email format"
-}
-
-// Register validator
-validators.Register(&EmailValidator{})
+result, err := schema.Parse("user@example.com")  // ✅
+result, err = schema.Parse("hi")                  // ❌
 ```
 
-### Parameterized Validators
+### Multiple Custom Validations
+
+Chain multiple `.Refine()` calls for complex validation:
 
 ```go
-// Validator with parameters
-type MinLengthValidator struct{}
+schema := gozod.String().
+    Min(3).
+    Refine(func(s string) bool {
+        return !strings.Contains(s, " ")
+    }, "No spaces allowed").
+    Refine(func(s string) bool {
+        return strings.ToLower(s) == s
+    }, "Must be lowercase")
 
-func (v *MinLengthValidator) Name() string {
-    return "min_length"
-}
+result, err := schema.Parse("hello")    // ✅
+result, err = schema.Parse("Hello")     // ❌ Not lowercase
+```
 
-func (v *MinLengthValidator) Validate(s string) bool {
-    return len(s) >= 3 // Default minimum
-}
+### Using Check for Detailed Validation
 
-func (v *MinLengthValidator) ValidateParam(s string, param string) bool {
-    if minLen, err := strconv.Atoi(param); err == nil {
-        return len(s) >= minLen
+Use `.Check()` when you need to add multiple issues:
+
+```go
+schema := gozod.Int().Check(func(v int, p *core.ParsePayload) {
+    if v%2 != 0 {
+        p.AddIssueWithMessage("number must be even")
     }
-    return false
-}
-
-func (v *MinLengthValidator) ErrorMessage(ctx *core.ParseContext) string {
-    return "String too short"
-}
-
-func (v *MinLengthValidator) ErrorMessageWithParam(ctx *core.ParseContext, param string) string {
-    return fmt.Sprintf("String must be at least %s characters", param)
-}
-
-// Register and use
-validators.Register(&MinLengthValidator{})
+    if v < 0 {
+        p.AddIssueWithCode(core.TooSmall, "number must be positive")
+    }
+})
 ```
 
-### Using Custom Validators
+### Cross-Field Validation on Structs
 
 ```go
-// Programmatic usage
-// For a custom email validator, you would typically register it once
-// and then use gozod.String().Refine(validators.ToRefineFn(validators.Get[string]("custom_email")))
-// or simply use gozod.Email() if it's a standard email validation.
-// The example below shows how to use the registered custom_email validator.
-validator, _ := validators.Get[string]("custom_email")
-schema := gozod.String().Refine(validators.ToRefineFn(validator))
-
-// Struct tag usage
-type User struct {
-    Email string `gozod:"required,custom_email"`
-    Name  string `gozod:"required,min_length=5"`
+type PasswordForm struct {
+    Password        string `gozod:"required,min=8"`
+    ConfirmPassword string `gozod:"required"`
 }
+
+// Create schema with cross-field validation
+schema := gozod.FromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
+    return form.Password == form.ConfirmPassword
+}, "Passwords must match")
+
+form := PasswordForm{Password: "secret123", ConfirmPassword: "secret123"}
+result, err := schema.Parse(form)  // ✅
 ```
 
 ---

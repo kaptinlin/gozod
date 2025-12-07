@@ -3,7 +3,7 @@ package types
 import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
 // =============================================================================
@@ -275,25 +275,25 @@ func Uuid(params ...any) *ZodUUID[string] {
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID4)
+		base = base.Regex(regex.UUID4)
 	case "6":
 		base = StringTyped[string](rest...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID6)
+		base = base.Regex(regex.UUID6)
 	case "7":
 		base = StringTyped[string](rest...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID7)
+		base = base.Regex(regex.UUID7)
 	default:
 		base = StringTyped[string](params...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(params...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID)
+		base = base.Regex(regex.UUID)
 	}
 	return &ZodUUID[string]{base}
 }
@@ -329,25 +329,25 @@ func UuidPtr(params ...any) *ZodUUID[*string] {
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID4)
+		base = base.Regex(regex.UUID4)
 	case "6":
 		base = StringPtr(rest...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID6)
+		base = base.Regex(regex.UUID6)
 	case "7":
 		base = StringPtr(rest...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(rest...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID7)
+		base = base.Regex(regex.UUID7)
 	default:
 		base = StringPtr(params...)
 		in := base.GetInternals().Clone()
 		in.AddCheck(checks.UUID(params...))
 		base = base.withInternals(in)
-		base = base.Regex(regexes.UUID)
+		base = base.Regex(regex.UUID)
 	}
 	return &ZodUUID[*string]{base}
 }

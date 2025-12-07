@@ -314,72 +314,63 @@ schema := gozod.FromStruct[Project]()
 
 ## 🎯 Advanced Tag Features
 
-### Custom Validators
+### Custom Validation with Refine
 
-First, register custom validators in your application:
+For custom validation logic beyond built-in tags, use `.Refine()` after creating the schema:
 
 ```go
 package main
 
 import (
-    "github.com/kaptinlin/gozod/pkg/validators"
+    "strings"
+    "github.com/kaptinlin/gozod"
 )
 
-// Custom validator implementation
-type DomainValidator struct{}
-
-func (v *DomainValidator) Name() string {
-    return "company_domain"
-}
-
-func (v *DomainValidator) Validate(domain string) bool {
-    return strings.HasSuffix(domain, ".com") || strings.HasSuffix(domain, ".org")
-}
-
-func (v *DomainValidator) ErrorMessage(ctx *core.ParseContext) string {
-    return "Domain must end with .com or .org"
-}
-
-func init() {
-    // Register custom validator
-    validators.Register(&DomainValidator{})
-}
-
-// Use in struct tags
 type Company struct {
     Name   string `gozod:"required,min=2"`
-    Domain string `gozod:"required,company_domain"`  // Custom validator
+    Domain string `gozod:"required"`
     Email  string `gozod:"required,email"`
+}
+
+func main() {
+    // Create schema from struct tags
+    schema := gozod.FromStruct[Company]()
+    
+    // Add custom validation with Refine
+    schemaWithCustomValidation := schema.Refine(func(c Company) bool {
+        // Domain must end with .com or .org
+        return strings.HasSuffix(c.Domain, ".com") || strings.HasSuffix(c.Domain, ".org")
+    }, "Domain must end with .com or .org")
+    
+    // Valid company
+    validCompany := Company{
+        Name:   "Acme Corp",
+        Domain: "acme.com",
+        Email:  "contact@acme.com",
+    }
+    result, err := schemaWithCustomValidation.Parse(validCompany)  // ✅ Success
+    
+    // Invalid company
+    invalidCompany := Company{
+        Name:   "Tech Inc",
+        Domain: "tech.io",  // ❌ Not .com or .org
+        Email:  "info@tech.io",
+    }
+    _, err = schemaWithCustomValidation.Parse(invalidCompany)  // ❌ Validation fails
 }
 ```
 
-### Parameterized Custom Validators
+### Cross-Field Validation
 
 ```go
-// Parameterized validator
-type PrefixValidator struct{}
-
-func (v *PrefixValidator) Name() string {
-    return "prefix"
+type PasswordForm struct {
+    Password        string `gozod:"required,min=8"`
+    ConfirmPassword string `gozod:"required"`
 }
 
-func (v *PrefixValidator) ValidateParam(s string, prefix string) bool {
-    return strings.HasPrefix(s, prefix)
-}
-
-func (v *PrefixValidator) ErrorMessageWithParam(ctx *core.ParseContext, param string) string {
-    return fmt.Sprintf("Must start with '%s'", param)
-}
-
-func init() {
-    validators.Register(&PrefixValidator{})
-}
-
-// Usage in struct
-type Product struct {
-    Name string `gozod:"required"`
-    SKU  string `gozod:"required,prefix=PROD"`  // Must start with "PROD"
-}
+schema := gozod.FromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
+    return form.Password == form.ConfirmPassword
+}, "Passwords must match")
 ```
 
 ---

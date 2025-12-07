@@ -3,7 +3,7 @@ package types
 import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
 // =============================================================================
@@ -27,12 +27,12 @@ func (z *ZodEmoji[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 }
 
 func Emoji(params ...any) *ZodEmoji[string] {
-	base := StringTyped[string](params...).Regex(regexes.Emoji)
+	base := StringTyped[string](params...).Regex(regex.Emoji)
 	return &ZodEmoji[string]{base}
 }
 
 func EmojiPtr(params ...any) *ZodEmoji[*string] {
-	base := StringPtr(params...).Regex(regexes.Emoji)
+	base := StringPtr(params...).Regex(regex.Emoji)
 	return &ZodEmoji[*string]{base}
 }
 

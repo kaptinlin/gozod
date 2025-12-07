@@ -1602,6 +1602,73 @@ func TestString_Modifiers_TrimAndCaseTransforms(t *testing.T) {
 		require.NoError(t, errUpper)
 		assert.Equal(t, "ASDF", resUpper)
 	})
+
+	t.Run("slugify transformations", func(t *testing.T) {
+		schema := String().Slugify()
+
+		// Basic slugify
+		result, err := schema.Parse("Hello World")
+		require.NoError(t, err)
+		assert.Equal(t, "hello-world", result)
+
+		// Trim spaces
+		result2, err2 := schema.Parse("  Hello   World  ")
+		require.NoError(t, err2)
+		assert.Equal(t, "hello-world", result2)
+
+		// Remove special characters
+		result3, err3 := schema.Parse("Hello@World#123")
+		require.NoError(t, err3)
+		assert.Equal(t, "helloworld123", result3)
+
+		// Preserve hyphens
+		result4, err4 := schema.Parse("Hello-World")
+		require.NoError(t, err4)
+		assert.Equal(t, "hello-world", result4)
+
+		// Convert underscores to hyphens
+		result5, err5 := schema.Parse("Hello_World")
+		require.NoError(t, err5)
+		assert.Equal(t, "hello-world", result5)
+
+		// Collapse multiple hyphens
+		result6, err6 := schema.Parse("---Hello---World---")
+		require.NoError(t, err6)
+		assert.Equal(t, "hello-world", result6)
+
+		// Multiple spaces
+		result7, err7 := schema.Parse("Hello  World")
+		require.NoError(t, err7)
+		assert.Equal(t, "hello-world", result7)
+
+		// Special characters only
+		result8, err8 := schema.Parse("Hello!@#$%^&*()World")
+		require.NoError(t, err8)
+		assert.Equal(t, "helloworld", result8)
+	})
+
+	t.Run("slugify with min validation (matches Zod)", func(t *testing.T) {
+		// z.string().slugify().min(5) - should slugify first, then validate length
+		schema := String().Slugify().Min(5)
+
+		result, err := schema.Parse("Hello World")
+		require.NoError(t, err)
+		assert.Equal(t, "hello-world", result) // 11 chars, passes min(5)
+
+		// Fail validation after slugify
+		_, err2 := schema.Parse("Hi")
+		assert.Error(t, err2) // "hi" is only 2 chars
+	})
+
+	t.Run("slugify with pointer type", func(t *testing.T) {
+		schema := StringPtr().Slugify()
+
+		input := "Hello World"
+		result, err := schema.Parse(&input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "hello-world", *result)
+	})
 }
 
 // =============================================================================

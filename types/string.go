@@ -9,6 +9,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/transform"
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -787,6 +788,38 @@ func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
 		}
 	}
 	return z.Overwrite(transform, params...)
+}
+
+// Slugify transforms the string to a URL-friendly slug.
+// Matches Zod v4's z.string().slugify() implementation:
+// 1. Lowercase the string
+// 2. Trim whitespace
+// 3. Remove non-word/non-space/non-hyphen characters
+// 4. Replace spaces and underscores with hyphens
+// 5. Trim leading/trailing hyphens
+//
+// Example:
+//
+//	z.String().Slugify().Parse("Hello World")      // -> "hello-world"
+//	z.String().Slugify().Parse("  Hello   World  ") // -> "hello-world"
+//	z.String().Slugify().Parse("Hello@World#123")  // -> "helloworld123"
+func (z *ZodString[T]) Slugify(params ...any) *ZodString[T] {
+	tx := func(val T) T {
+		switch v := any(val).(type) {
+		case string:
+			return any(transform.Slugify(v)).(T)
+		case *string:
+			if v == nil {
+				return val
+			}
+			slugified := transform.Slugify(*v)
+			ptr := &slugified
+			return any(ptr).(T)
+		default:
+			return val
+		}
+	}
+	return z.Overwrite(tx, params...)
 }
 
 // NonOptional removes the optional flag and returns a new schema with string value type

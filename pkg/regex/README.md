@@ -10,7 +10,7 @@ package main
 import (
 	"fmt"
 	"regexp"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
 func main() {
@@ -52,7 +52,7 @@ func main() {
 ```go
 import (
 	"regexp"
-	"github.com/kaptinlin/gozod/pkg/regexes"
+	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
 // Identifiers

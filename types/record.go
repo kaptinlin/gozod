@@ -789,7 +789,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 			// Pre-emptive check for obviously wrong types for numeric schemas to prevent panics.
 			if vs, ok := z.internals.ValueType.(core.ZodType[any]); ok {
 				internals := vs.GetInternals()
-				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumber(val) {
+				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumeric(val) {
 					return nil, issues.CreateInvalidTypeError(core.ZodTypeFloat, val, ctx)
 				}
 			}

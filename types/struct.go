@@ -18,7 +18,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/tagparser"
-	"github.com/kaptinlin/gozod/pkg/validators"
 )
 
 // Static error variables
@@ -2289,11 +2288,8 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 				schema = applyPrefaultValue(schema, rule.Params[0])
 			}
 		default:
-			// Try to handle as custom validator first
-			if customSchema := tryApplyCustomValidator(schema, rule.Name, rule.Params); customSchema != nil {
-				schema = customSchema
-			} else if len(rule.Params) > 0 && rule.Name != "enum" && rule.Name != "literal" {
-				// Handle parameterized rules (pass only first parameter)
+			// Handle parameterized rules (pass only first parameter)
+			if len(rule.Params) > 0 && rule.Name != "enum" && rule.Name != "literal" {
 				schema = applyParameterizedRule(schema, rule.Name, rule.Params[0])
 			}
 		}
@@ -3083,65 +3079,6 @@ func createNestedStructSchema(structType reflect.Type) core.ZodSchema {
 	}
 	// For structs without tags, use Any() for now
 	return Any()
-}
-
-// tryApplyCustomValidator attempts to apply a custom validator from the registry
-func tryApplyCustomValidator(schema core.ZodSchema, ruleName string, params []string) core.ZodSchema {
-	// Try different type-specific validator lookups based on schema type
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		// Look for string validators
-		if validator, exists := validators.Get[string](ruleName); exists {
-			if len(params) > 0 {
-				// Check if it's a parameterized validator
-				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[string]); ok {
-					// Create a refined schema with parameterized validation
-					return s.Refine(func(val string) bool {
-						return paramValidator.ValidateParam(val, params[0])
-					})
-				}
-			}
-			// Apply basic validator without parameters
-			return s.Refine(validators.ToRefineFn(validator))
-		}
-
-	case *ZodIntegerTyped[int, int]:
-		// Look for int validators
-		if validator, exists := validators.Get[int](ruleName); exists {
-			if len(params) > 0 {
-				// Check if it's a parameterized validator
-				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[int]); ok {
-					// Create a refined schema with parameterized validation
-					return s.Refine(func(val int) bool {
-						return paramValidator.ValidateParam(val, params[0])
-					})
-				}
-			}
-			// Apply basic validator without parameters
-			return s.Refine(validators.ToRefineFn(validator))
-		}
-
-	case *ZodIntegerTyped[int64, int64]:
-		// Look for int64 validators by trying int validators
-		if validator, exists := validators.Get[int](ruleName); exists {
-			if len(params) > 0 {
-				// Check if it's a parameterized validator
-				if paramValidator, ok := validator.(validators.ZodParameterizedValidator[int]); ok {
-					// Create a refined schema with parameterized validation
-					return s.Refine(func(val int64) bool {
-						return paramValidator.ValidateParam(int(val), params[0])
-					})
-				}
-			}
-			// Apply basic validator without parameters
-			return s.Refine(func(val int64) bool {
-				return validator.Validate(int(val))
-			})
-		}
-	}
-
-	// Custom validator not found or not applicable
-	return nil
 }
 
 // applyOptionalToSchema applies the Optional() method to the schema using a type switch

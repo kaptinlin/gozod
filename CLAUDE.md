@@ -345,7 +345,7 @@ result2, _ := schema2.Parse(nil) // => 5 ("hello" goes through transform)
 - **Balanced Approach**: 10-20% performance gains with maintained code quality
 
 #### Memory & Runtime Optimization
-- **Pre-compile regex patterns** at package level in `pkg/regexes`
+- **Pre-compile regex patterns** at package level in `pkg/regex`
 - **Minimize reflection usage** (relegated to `pkg/reflectx`)
 - **Zero-overhead validation paths** with optimal execution
 - **Object pools** for frequently allocated objects (`sync.Pool`)
