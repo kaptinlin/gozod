@@ -237,27 +237,24 @@ func StringLte(maxValue string, params ...any) core.ZodCheck {
 
 // addPatternToSchema adds a regex pattern to schema, combining with existing patterns
 func addPatternToSchema(schema any, pattern string) {
-	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		internals := s.GetInternals()
-		if internals.Bag == nil {
-			internals.Bag = make(map[string]any)
-		}
-
-		var patterns []string
-		if existing, ok := internals.Bag["patterns"]; ok {
-			if existingPatterns, ok := existing.([]string); ok {
-				patterns = existingPatterns
-			}
-		}
-		// Avoid duplicate patterns
-		for _, existingPattern := range patterns {
-			if existingPattern == pattern {
-				// Pattern already exists; no need to add again
-				internals.Bag["patterns"] = patterns
-				return
-			}
-		}
-		patterns = append(patterns, pattern)
-		internals.Bag["patterns"] = patterns
+	bag := ensureBag(schema)
+	if bag == nil {
+		return
 	}
+
+	var patterns []string
+	if existing, ok := bag["patterns"]; ok {
+		if existingPatterns, ok := existing.([]string); ok {
+			patterns = existingPatterns
+		}
+	}
+	// Avoid duplicate patterns
+	for _, existingPattern := range patterns {
+		if existingPattern == pattern {
+			// Pattern already exists; no need to add again
+			return
+		}
+	}
+	patterns = append(patterns, pattern)
+	bag["patterns"] = patterns
 }

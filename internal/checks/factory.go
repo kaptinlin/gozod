@@ -70,31 +70,34 @@ func ApplySchemaParamsToCheck(def *core.ZodCheckDef, params *core.SchemaParams) 
 // JSON SCHEMA BAG OPERATIONS
 // =============================================================================
 
-// SetBagProperty sets a property in the schema's bag for JSON Schema generation
-// Used to store metadata that will be included in generated JSON Schema
-func SetBagProperty(schema any, key string, value any) {
+// ensureBag ensures the schema's Bag is initialized and returns it
+func ensureBag(schema any) map[string]any {
 	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
 		internals := s.GetInternals()
 		if internals.Bag == nil {
 			internals.Bag = make(map[string]any)
 		}
-		internals.Bag[key] = value
+		return internals.Bag
+	}
+	return nil
+}
+
+// SetBagProperty sets a property in the schema's bag for JSON Schema generation
+// Used to store metadata that will be included in generated JSON Schema
+func SetBagProperty(schema any, key string, value any) {
+	if bag := ensureBag(schema); bag != nil {
+		bag[key] = value
 	}
 }
 
 // mergeConstraint merges a constraint into the schema's bag with conflict resolution
 // Uses merge function to handle conflicts when the same constraint exists
 func mergeConstraint(schema any, key string, value any, merge func(old, new any) any) {
-	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		internals := s.GetInternals()
-		if internals.Bag == nil {
-			internals.Bag = make(map[string]any)
-		}
-
-		if existing, exists := internals.Bag[key]; exists {
-			internals.Bag[key] = merge(existing, value)
+	if bag := ensureBag(schema); bag != nil {
+		if existing, exists := bag[key]; exists {
+			bag[key] = merge(existing, value)
 		} else {
-			internals.Bag[key] = value
+			bag[key] = value
 		}
 	}
 }

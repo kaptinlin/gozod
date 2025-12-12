@@ -223,8 +223,3 @@ func (p *ParsePayload) GetValue() any {
 func (p *ParsePayload) GetIssues() []ZodRawIssue {
 	return slices.Clone(p.issues)
 }
-
-// ClonePath returns a copy of the current validation path
-func (p *ParsePayload) ClonePath() []any {
-	return p.GetPath()
-}

@@ -443,12 +443,9 @@ func E164(params ...any) core.ZodCheck {
 // DATE AND TIME VALIDATION
 // =============================================================================
 
-// ISODateTimeOptions defines configuration for ISO DateTime validation
-type ISODateTimeOptions = validate.ISODateTimeOptions
-
 // ISODateTimeWithOptions creates an ISO 8601 datetime validation check with options
 // Supports: ISODateTimeWithOptions(options, "invalid datetime") or ISODateTimeWithOptions(options, CheckParams{Error: "invalid datetime"})
-func ISODateTimeWithOptions(options ISODateTimeOptions, params ...any) core.ZodCheck {
+func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_datetime"}
 	ApplyCheckParams(def, checkParams)
@@ -575,12 +572,9 @@ func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 	}
 }
 
-// ISOTimeOptions contains configuration for ISO Time validation
-type ISOTimeOptions = validate.ISOTimeOptions
-
 // ISOTimeWithOptions creates an ISO 8601 time validation check with configuration options
 // Supports: ISOTimeWithOptions(options, "invalid time") or ISOTimeWithOptions(options, CheckParams{Error: "invalid ISO time"})
-func ISOTimeWithOptions(options ISOTimeOptions, params ...any) core.ZodCheck {
+func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_time"}
 	ApplyCheckParams(def, checkParams)

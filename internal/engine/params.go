@@ -45,18 +45,6 @@ func ProcessSchemaParams(params ...core.SchemaParams) map[string]any {
 	return config
 }
 
-// ApplySchemaParamsMultiple applies multiple schema parameters to a type definition
-// This is an enhanced version that can handle multiple parameters at once
-func ApplySchemaParamsMultiple(def *core.ZodTypeDef, params ...core.SchemaParams) {
-	for _, param := range params {
-		// Use the central params package for parameter application
-		// Note: We need to import internal/params but avoid circular dependencies
-		// For now, this function is a placeholder that could be enhanced later
-		_ = def
-		_ = param
-	}
-}
-
 // IsValidSchemaType checks if a value implements the core ZodType interface
 // Useful for runtime type checking and validation
 func IsValidSchemaType(value any) bool {

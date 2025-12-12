@@ -207,47 +207,34 @@ func (r ZodRawIssue) GetIncludes() string {
 	return getStringProperty(r.Properties, "includes")
 }
 
-// GetMinimum returns the minimum value from properties map
-func (r ZodRawIssue) GetMinimum() any {
+// getProperty safely gets a property from the properties map
+func (r ZodRawIssue) getProperty(key string) any {
 	if r.Properties == nil {
 		return nil
 	}
-	return r.Properties["minimum"]
+	return r.Properties[key]
 }
 
+// GetMinimum returns the minimum value from properties map
+func (r ZodRawIssue) GetMinimum() any { return r.getProperty("minimum") }
+
 // GetMaximum returns the maximum value from properties map
-func (r ZodRawIssue) GetMaximum() any {
-	if r.Properties == nil {
-		return nil
-	}
-	return r.Properties["maximum"]
-}
+func (r ZodRawIssue) GetMaximum() any { return r.getProperty("maximum") }
 
 // GetInclusive returns the inclusive value from properties map
 func (r ZodRawIssue) GetInclusive() bool {
-	if r.Properties == nil {
-		return false
-	}
-	if val, ok := r.Properties["inclusive"].(bool); ok {
+	if val, ok := r.getProperty("inclusive").(bool); ok {
 		return val
 	}
 	return false
 }
 
 // GetDivisor returns the divisor value from properties map
-func (r ZodRawIssue) GetDivisor() any {
-	if r.Properties == nil {
-		return nil
-	}
-	return r.Properties["divisor"]
-}
+func (r ZodRawIssue) GetDivisor() any { return r.getProperty("divisor") }
 
 // GetKeys returns the keys value from properties map
 func (r ZodRawIssue) GetKeys() []string {
-	if r.Properties == nil {
-		return nil
-	}
-	if val, ok := r.Properties["keys"].([]string); ok {
+	if val, ok := r.getProperty("keys").([]string); ok {
 		return val
 	}
 	return nil
@@ -255,10 +242,7 @@ func (r ZodRawIssue) GetKeys() []string {
 
 // GetValues returns the values from properties map
 func (r ZodRawIssue) GetValues() []any {
-	if r.Properties == nil {
-		return nil
-	}
-	if val, ok := r.Properties["values"].([]any); ok {
+	if val, ok := r.getProperty("values").([]any); ok {
 		return val
 	}
 	return nil

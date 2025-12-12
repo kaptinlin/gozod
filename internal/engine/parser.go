@@ -1088,19 +1088,6 @@ func handleNilComplex[T any](internals *core.ZodTypeInternals, expectedType core
 // ERROR HANDLING LAYER
 // =============================================================================
 
-// ApplyChecks provides universal validation and transformation for any type.
-// This function handles validation logic that is common across all types.
-// It returns the potentially modified value after running checks (e.g., overwrite transforms).
-//
-// Renamed from ApplyChecks to better reflect its dual purpose:
-// - Validates input according to schema rules
-// - Applies transformations (like Overwrite) that modify the value
-//
-//	T         – any type (primitive, complex, composite, etc.)
-//	value     – the value to validate and potentially transform
-//	checks    – validation checks to run (including transformations)
-//	ctx       – parse context for error reporting
-//
 // convertResultToType performs optimized type conversion with minimal reflection usage.
 func convertResultToType[T any](result any) (T, error) {
 	var zero T

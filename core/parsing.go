@@ -64,7 +64,7 @@ type ParsePayload struct {
 	issues []ZodRawIssue
 
 	// path is the current validation path - tracks location in nested structures.
-	// Private field - use GetPath()/ClonePath() methods for access.
+	// Private field - use GetPath() method for access.
 	path []any
 }
 

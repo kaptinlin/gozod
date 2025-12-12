@@ -312,50 +312,46 @@ func mergeMaximumLengthConstraint(schema any, length int) {
 
 // setMinSizeProperty sets appropriate min size property based on type
 func setMinSizeProperty(schema any, size int) {
-	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		internals := s.GetInternals()
-		if internals.Bag == nil {
-			internals.Bag = make(map[string]any)
-		}
+	bag := ensureBag(schema)
+	if bag == nil {
+		return
+	}
 
-		// Determine property name based on schema type
-		if typeStr, exists := internals.Bag["type"]; exists {
-			switch typeStr {
-			case "array":
-				internals.Bag["minItems"] = size
-			case "object":
-				internals.Bag["minProperties"] = size
-			default:
-				internals.Bag["minLength"] = size
-			}
-		} else {
-			// Default to minItems for collections
-			internals.Bag["minItems"] = size
+	// Determine property name based on schema type
+	if typeStr, exists := bag["type"]; exists {
+		switch typeStr {
+		case "array":
+			bag["minItems"] = size
+		case "object":
+			bag["minProperties"] = size
+		default:
+			bag["minLength"] = size
 		}
+	} else {
+		// Default to minItems for collections
+		bag["minItems"] = size
 	}
 }
 
 // setMaxSizeProperty sets appropriate max size property based on type
 func setMaxSizeProperty(schema any, size int) {
-	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		internals := s.GetInternals()
-		if internals.Bag == nil {
-			internals.Bag = make(map[string]any)
-		}
+	bag := ensureBag(schema)
+	if bag == nil {
+		return
+	}
 
-		// Determine property name based on schema type
-		if typeStr, exists := internals.Bag["type"]; exists {
-			switch typeStr {
-			case "array":
-				internals.Bag["maxItems"] = size
-			case "object":
-				internals.Bag["maxProperties"] = size
-			default:
-				internals.Bag["maxLength"] = size
-			}
-		} else {
-			// Default to maxItems for collections
-			internals.Bag["maxItems"] = size
+	// Determine property name based on schema type
+	if typeStr, exists := bag["type"]; exists {
+		switch typeStr {
+		case "array":
+			bag["maxItems"] = size
+		case "object":
+			bag["maxProperties"] = size
+		default:
+			bag["maxLength"] = size
 		}
+	} else {
+		// Default to maxItems for collections
+		bag["maxItems"] = size
 	}
 }

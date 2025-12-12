@@ -24,6 +24,17 @@ func (c *ZodConfig) GetLocaleError() ZodErrorMap {
 	return c.LocaleError
 }
 
+// clone creates a copy of the ZodConfig
+func (c *ZodConfig) clone() *ZodConfig {
+	if c == nil {
+		return &ZodConfig{}
+	}
+	return &ZodConfig{
+		CustomError: c.CustomError,
+		LocaleError: c.LocaleError,
+	}
+}
+
 var globalConfig atomic.Pointer[ZodConfig]
 
 func init() {
@@ -61,18 +72,10 @@ func Config(config *ZodConfig) *ZodConfig {
 	globalConfig.Store(newConfig)
 
 	// Return copy
-	return &ZodConfig{
-		CustomError: newConfig.CustomError,
-		LocaleError: newConfig.LocaleError,
-	}
+	return newConfig.clone()
 }
 
 // GetConfig returns a read-only copy of the current global configuration
 func GetConfig() *ZodConfig {
-	cfg := globalConfig.Load()
-	// Return a copy to prevent external mutation
-	return &ZodConfig{
-		CustomError: cfg.CustomError,
-		LocaleError: cfg.LocaleError,
-	}
+	return globalConfig.Load().clone()
 }

@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
+	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
 // =============================================================================
@@ -86,7 +87,7 @@ func (z *ZodIso[T]) Max(maxVal string, params ...any) *ZodIso[T] {
 func (z *ZodIso[T]) DateTime(opts ...IsoDatetimeOptions) *ZodIso[T] {
 	if len(opts) > 0 {
 		o := opts[0]
-		c := checks.ISODateTimeOptions{Precision: o.Precision, Offset: o.Offset, Local: o.Local}
+		c := validate.ISODateTimeOptions{Precision: o.Precision, Offset: o.Offset, Local: o.Local}
 		return z.cloneWithCheck(checks.ISODateTimeWithOptions(c))
 	}
 	return z.cloneWithCheck(checks.ISODateTime())
@@ -99,7 +100,7 @@ func (z *ZodIso[T]) Date(params ...any) *ZodIso[T] {
 func (z *ZodIso[T]) Time(opts ...IsoTimeOptions) *ZodIso[T] {
 	if len(opts) > 0 {
 		o := opts[0]
-		c := checks.ISOTimeOptions{Precision: o.Precision}
+		c := validate.ISOTimeOptions{Precision: o.Precision}
 		return z.cloneWithCheck(checks.ISOTimeWithOptions(c))
 	}
 	return z.cloneWithCheck(checks.ISOTime())

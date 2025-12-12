@@ -101,9 +101,8 @@ func processModifiersInternal[T any](
 	// 4. Optional/Nilable - allows nil values, lowest priority
 	if internals.Optional || internals.Nilable {
 		// Apply only overwrite and refine checks to nil input, not format checks
-		if hasNilApplicableCheck(internals.Checks) {
-			nilApplicableChecks := filterNilApplicableChecks(internals.Checks)
-			result, err := ApplyChecks[any](nil, nilApplicableChecks, ctx)
+		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
+			result, err := ApplyChecks[any](nil, nilChecks, ctx)
 			return result, true, err
 		}
 		return nil, true, nil
@@ -112,15 +111,14 @@ func processModifiersInternal[T any](
 	// 5. Special handling for pointer types - pointer types naturally allow nil
 	if isPointerType {
 		// This is a pointer type, nil should be allowed
-		if hasNilApplicableCheck(internals.Checks) {
-			nilApplicableChecks := filterNilApplicableChecks(internals.Checks)
-			result, err := ApplyChecks[any](nil, nilApplicableChecks, ctx)
+		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
+			result, err := ApplyChecks[any](nil, nilChecks, ctx)
 			return result, true, err
 		}
 		return nil, true, nil
 	}
 
-	// 5. Special handling for Unknown type
+	// 6. Special handling for Unknown type
 	if expectedType == core.ZodTypeUnknown {
 		return nil, true, nil
 	}
@@ -143,27 +141,6 @@ func applyTransformIfPresent(result any, internals *core.ZodTypeInternals, ctx *
 // =============================================================================
 // HELPERS
 // =============================================================================
-
-// hasNilApplicableCheck checks if there are any checks that should be applied to nil values
-// Only overwrite, refine, and custom checks should be applied to nil values, not format checks
-func hasNilApplicableCheck(checks []core.ZodCheck) bool {
-	for _, check := range checks {
-		if check == nil {
-			continue
-		}
-		checkInternals := check.GetZod()
-		if checkInternals == nil || checkInternals.Def == nil {
-			continue
-		}
-
-		// Check if this is an overwrite, refine, or custom check
-		checkType := checkInternals.Def.Check
-		if checkType == "overwrite" || checkType == "refine" || checkType == "custom" {
-			return true
-		}
-	}
-	return false
-}
 
 // filterNilApplicableChecks filters checks to only include those that should be applied to nil values
 // Only overwrite, refine, and custom checks should be applied to nil values, not format checks
