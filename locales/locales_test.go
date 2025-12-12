@@ -1,6 +1,7 @@
 package locales
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -288,24 +289,8 @@ func TestJoinLocalizedMessages(t *testing.T) {
 		}
 
 		// Should contain the separator
-		if !contains(joined, "; ") {
+		if !strings.Contains(joined, "; ") {
 			t.Error("Expected joined message to contain separator")
 		}
 	})
-}
-
-// Helper function to check if string contains substring
-func contains(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

@@ -14,11 +14,6 @@ import (
 // TYPE DEFINITIONS
 //////////////////////////
 
-// NeverConstraint defines the types that can be used with ZodNever
-type NeverConstraint interface {
-	any
-}
-
 // ZodNeverDef defines the structure for never validation schemas
 type ZodNeverDef struct {
 	core.ZodTypeDef

@@ -43,16 +43,6 @@ func CreateInvalidTypeIssue(expected core.ZodTypeCode, input any) core.ZodRawIss
 	return CreateIssue(core.InvalidType, "", properties, input)
 }
 
-// CreateInvalidTypeIssueFromCode creates an invalid type issue using ZodTypeCode
-func CreateInvalidTypeIssueFromCode(expected core.ZodTypeCode, input any) core.ZodRawIssue {
-	properties := map[string]any{
-		"expected": string(expected),
-		"received": string(reflectx.ParsedType(input)),
-	}
-
-	return CreateIssue(core.InvalidType, "", properties, input)
-}
-
 // CreateInvalidValueIssue creates an invalid value issue
 func CreateInvalidValueIssue(validValues []any, input any) core.ZodRawIssue {
 	// Apply unique operation only for small slices to balance deduplication vs performance

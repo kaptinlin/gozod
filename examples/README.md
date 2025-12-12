@@ -15,3 +15,6 @@ A curated set of examples to help you explore GoZod quickly without feeling over
 | `error_handling` | Structured error inspection & pretty printing |
 | `i18n` | Multilingual errors – switch to Simplified Chinese locale |
 | `config` | Real-world JSON config validation using `MustParse` |
+| `struct_tags` | Declarative struct tag validation with `gozod:"required,min=2"` |
+| `circular_references` | Automatic circular reference detection and handling |
+| `code_generation` | Zero-overhead code generation with `go generate` |
