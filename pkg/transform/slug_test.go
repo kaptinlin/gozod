@@ -15,7 +15,7 @@ func BenchmarkSlugify(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, tc := range testCases {
 			_ = Slugify(tc)
 		}
@@ -26,7 +26,7 @@ func BenchmarkSlugify(b *testing.B) {
 func BenchmarkSlugifyShort(b *testing.B) {
 	input := "Hello World"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Slugify(input)
 	}
 }
@@ -35,7 +35,7 @@ func BenchmarkSlugifyShort(b *testing.B) {
 func BenchmarkSlugifyLong(b *testing.B) {
 	input := "This Is A Very Long String With Many Words That Needs To Be Slugified For URL Usage"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Slugify(input)
 	}
 }
@@ -44,7 +44,7 @@ func BenchmarkSlugifyLong(b *testing.B) {
 func BenchmarkSlugifyComplex(b *testing.B) {
 	input := "Special!@#$%^&*()Characters___And---Multiple---Delimiters"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Slugify(input)
 	}
 }

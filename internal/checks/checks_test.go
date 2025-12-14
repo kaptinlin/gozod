@@ -126,7 +126,7 @@ func BenchmarkDirectCheckCreation(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		check := &core.ZodCheckInternals{
 			Def: def,
 			Check: func(payload *core.ParsePayload) {
@@ -150,7 +150,7 @@ func BenchmarkCheckExecution(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		newPayload := core.NewParsePayload("test")
 		executeCheck(check, newPayload)
 	}

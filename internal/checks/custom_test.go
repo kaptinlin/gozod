@@ -522,7 +522,7 @@ func BenchmarkCustomCheck_StringRefine(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
 		if len(payload.GetIssues()) > 0 {
@@ -543,7 +543,7 @@ func BenchmarkCustomCheck_MapRefine(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
 		if len(payload.GetIssues()) > 0 {
@@ -566,7 +566,7 @@ func BenchmarkCustomCheck_Overwrite(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
 		// Transform should never generate issues

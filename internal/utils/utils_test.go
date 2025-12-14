@@ -480,7 +480,7 @@ func BenchmarkEscapeRegex(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, input := range inputs {
 			_ = EscapeRegex(input)
 		}
@@ -497,7 +497,7 @@ func BenchmarkToDotPath(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, path := range paths {
 			_ = ToDotPath(path)
 		}
@@ -516,7 +516,7 @@ func BenchmarkGetParsedType(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, value := range values {
 			_ = GetParsedType(value)
 		}
@@ -531,7 +531,7 @@ func BenchmarkMergeStringSlices(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = MergeStringSlices(slices...)
 	}
 }

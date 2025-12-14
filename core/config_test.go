@@ -140,7 +140,7 @@ func BenchmarkGetConfig(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = GetConfig()
 	}
 }
@@ -165,7 +165,7 @@ func BenchmarkConfig(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Config(&ZodConfig{CustomError: customErr})
 	}
 }

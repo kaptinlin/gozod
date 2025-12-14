@@ -1155,7 +1155,7 @@ func BenchmarkTagValidation_SimpleStruct(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := schema.Parse(user)
 		if err != nil {
 			b.Fatal(err)
@@ -1188,7 +1188,7 @@ func BenchmarkTagValidation_ComplexStruct(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := schema.Parse(user)
 		if err != nil {
 			b.Fatal(err)

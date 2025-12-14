@@ -634,7 +634,7 @@ func BenchmarkParseStrict(b *testing.B) {
 		internals := &core.ZodTypeInternals{}
 		input := "test"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _ = ParsePrimitiveStrict[string, string](input, internals, core.ZodTypeString, validator)
 		}
 	})
@@ -646,7 +646,7 @@ func BenchmarkParseStrict(b *testing.B) {
 		}
 		input := "test"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _ = ParsePrimitiveStrict[string, string](input, internals, core.ZodTypeString, validator)
 		}
 	})
@@ -658,7 +658,7 @@ func BenchmarkParseStrict(b *testing.B) {
 		}
 		var input *string
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _ = ParsePrimitiveStrict[string, *string](input, internals, core.ZodTypeString, validator)
 		}
 	})
@@ -673,7 +673,7 @@ func BenchmarkProcessModifiers(b *testing.B) {
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, _ = processModifiers[string](nil, internals, core.ZodTypeString, parseCore, ctx)
 		}
 	})
@@ -685,7 +685,7 @@ func BenchmarkProcessModifiers(b *testing.B) {
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, _ = processModifiers[string](nil, internals, core.ZodTypeString, parseCore, ctx)
 		}
 	})
@@ -697,7 +697,7 @@ func BenchmarkProcessModifiers(b *testing.B) {
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, _ = processModifiers[*string](nil, internals, core.ZodTypeString, parseCore, ctx)
 		}
 	})
