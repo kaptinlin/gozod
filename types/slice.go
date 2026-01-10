@@ -635,7 +635,7 @@ func convertToSliceType[T any, R any](v any) (R, bool) {
 		// Try to convert each element
 		elemType := reflect.TypeOf((*T)(nil)).Elem()
 		slice := make([]T, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
+		for i := range rv.Len() {
 			elem := rv.Index(i).Interface()
 			if reflect.TypeOf(elem).ConvertibleTo(elemType) {
 				slice[i] = reflect.ValueOf(elem).Convert(elemType).Interface().(T)

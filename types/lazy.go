@@ -562,9 +562,8 @@ func (z *ZodLazy[T]) validateLazy(value any, checks []core.ZodCheck, ctx *core.P
 		// Recursive reference case – treat current value as already validated
 		if isExpectedLazyError(err) {
 			return engine.ApplyChecks[any](value, checks, ctx)
-		} else {
-			return nil, err
 		}
+		return nil, err
 	}
 
 	// Run standard checks validation on the result

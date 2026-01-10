@@ -45,19 +45,16 @@ type SizingInfo struct {
 	Verb string // The verb to use (e.g., "to have")
 }
 
-// Sizable maps type names to their sizing terminology using mapx for better type safety
-var Sizable = func() map[string]SizingInfo {
-	sizableData := map[string]SizingInfo{
-		"string": {Unit: "characters", Verb: "to have"},
-		"file":   {Unit: "bytes", Verb: "to have"},
-		"array":  {Unit: "items", Verb: "to have"},
-		"slice":  {Unit: "items", Verb: "to have"},
-		"set":    {Unit: "items", Verb: "to have"},
-		"object": {Unit: "keys", Verb: "to have"},
-		"map":    {Unit: "keys", Verb: "to have"},
-	}
-	return sizableData
-}()
+// Sizable maps type names to their sizing terminology
+var Sizable = map[string]SizingInfo{
+	"string": {Unit: "characters", Verb: "to have"},
+	"file":   {Unit: "bytes", Verb: "to have"},
+	"array":  {Unit: "items", Verb: "to have"},
+	"slice":  {Unit: "items", Verb: "to have"},
+	"set":    {Unit: "items", Verb: "to have"},
+	"object": {Unit: "keys", Verb: "to have"},
+	"map":    {Unit: "keys", Verb: "to have"},
+}
 
 // GetSizing returns the appropriate sizing information for a given type
 func GetSizing(origin string) *SizingInfo {

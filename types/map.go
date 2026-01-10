@@ -58,7 +58,6 @@ func (z *ZodMap[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input using direct validation approach
 // Parse validates input using map-specific parsing logic with engine.ParseComplex
 func (z *ZodMap[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	result, err := engine.ParseComplex[map[any]any](
