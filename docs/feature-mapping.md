@@ -17,8 +17,10 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.tuple([...])` | `gozod.Tuple([...])` | `[]any` | ✅ Fixed-length tuple validation with type inference | ✅ Fully implemented |
 | `z.object({})` | `gozod.Object({})` | `map[string]any` | ✅ Dynamic object validation for JSON-like data | ✅ Fully implemented |
 | `z.record(T)` | `gozod.Record(keySchema, valueSchema)` | `map[string]T` | ✅ Typed key-value record validation with generic keys | ✅ Fully implemented |
+| `z.looseRecord(K, V)` | `gozod.LooseRecord(keySchema, valueSchema)` | `map[string]V` | ✅ Record that passes through non-matching keys | ✅ Fully implemented |
 | `z.map(K, V)` | `gozod.Map(valueSchema)` | `map[string]V` | ✅ Go native map validation with typed values | ✅ Fully implemented |
 | `z.union([...])` | `gozod.Union([...])` | `any` | ✅ Type-safe union validation with Go interfaces | ✅ Fully implemented |
+| `z.xor([...])` | `gozod.Xor([...])` | `any` | ✅ Exclusive union - exactly one must match | ✅ Fully implemented |
 | `z.discriminatedUnion(key, [...])` | `gozod.DiscriminatedUnion(key, [...])` | `any` | ✅ Optimized discriminated union with key-based lookup | ✅ Fully implemented |
 | `z.intersection(A, B)` | `gozod.Intersection(A, B)` | `any` | ✅ Intersection type validation with Go type system | ✅ Fully implemented |
 | `z.literal(value)` | `gozod.Literal(value)` | `T` | ✅ Type-safe literal value validation | ✅ Fully implemented |
@@ -84,6 +86,16 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | - | `.Check(fn)` | - | `func(T, *core.ParsePayload)` | ✅ **Go enhancement**: Multi-issue validation |
 | - | `.Overwrite(fn)` | - | `func(T) T` | ✅ **Go enhancement**: In-place transformation |
 
+### Metadata Method Mapping
+
+| TypeScript Zod v4 | GoZod Method | Status | Description |
+|-------------------|-------------|--------|-------------|
+| `.describe(desc)` | `.Describe(desc)` | ✅ | Instance method on all 26 schema types |
+| `z.describe(desc)` | `gozod.Describe(desc)` | ✅ | Check factory for use with `.Check()` |
+| `.meta(meta)` | `.Meta(meta)` | ✅ | Instance method on all 26 schema types |
+| `z.meta(meta)` | `gozod.Meta(meta)` | ✅ | Check factory for use with `.Check()` |
+| `z.fromJSONSchema(schema)` | `gozod.FromJSONSchema(schema)` | ✅ | Create GoZod schema from JSON Schema (supports prefixItems → Tuple) |
+
 ### Coercion Method Mapping
 
 | TypeScript Zod v4 | GoZod Method | Status | Description |
@@ -145,11 +157,14 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 
 | TypeScript Zod v4 | GoZod Method | Status | Go-Specific Features |
 |-------------------|-------------|--------|-------------------|
-| `.pick({...})` | `.Pick([...])` | ✅ | JSON tag-aware field selection |
-| `.omit({...})` | `.Omit([...])` | ✅ | JSON tag-aware field exclusion |
+| `.pick({...})` | `.Pick([...])` | ✅ | Returns `(*ZodObject, error)` - errors if schema has refinements |
+| - | `.MustPick([...])` | ✅ | **Go-specific**: Panics on error |
+| `.omit({...})` | `.Omit([...])` | ✅ | Returns `(*ZodObject, error)` - errors if schema has refinements |
+| - | `.MustOmit([...])` | ✅ | **Go-specific**: Panics on error |
 | `.partial()` | `.Partial()` | ✅ | All fields optional |
 | `.required()` | `.Required([...])` | ✅ | Specified fields required |
-| `.extend({...})` | `.Extend({...})` | ✅ | Schema extension with type safety |
+| `.extend({...})` | `.Extend({...})` | ✅ | Returns `(*ZodObject, error)` - errors if schema has refinements |
+| - | `.SafeExtend({...})` | ✅ | **Go-specific**: Extends without refinement check |
 | `.merge(schema)` | `.Merge(schema)` | ✅ | Schema merging with conflict resolution |
 | `.keyof()` | `.Keyof()` | ✅ | Key type extraction |
 | `.strict()` | Default behavior | ✅ | Objects are strict by default |
@@ -438,6 +453,11 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | **Custom validator system** | Registry-based with struct tag integration | Limited to refinements |
 | **Circular reference handling** | Automatic detection with lazy evaluation | Manual lazy schemas |
 | **JSON tag mapping** | Automatic field mapping | Manual specification |
+| **Apply function** | `gozod.Apply(schema, fn)` for composable schema modifiers | No equivalent |
+| **Tuple with Rest** | `gozod.TupleWithRest([items], rest)` for variadic tuples | `z.tuple([...]).rest(schema)` |
+| **LooseRecord** | `gozod.LooseRecord(keySchema, valueSchema)` passes non-matching keys | `z.looseRecord()` |
+| **Map NonEmpty** | `gozod.Map(...).NonEmpty()` ensures at least one entry | `z.map().nonempty()` |
+| **SafeExtend** | `.SafeExtend()` extends object without refinement check | No equivalent |
 
 ## Performance Comparison
 

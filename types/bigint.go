@@ -239,6 +239,20 @@ func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
 	return z
 }
 
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodBigInt[T]) Describe(description string) *ZodBigInt[T] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================

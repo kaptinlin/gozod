@@ -771,7 +771,8 @@ func TestObject_TypeSpecificMethods(t *testing.T) {
 			"address": String().Optional(),
 		})
 
-		pickedObject := originalObject.Pick([]string{"name", "email"})
+		pickedObject, err := originalObject.Pick([]string{"name", "email"})
+		require.NoError(t, err)
 
 		// Should accept objects with only picked fields
 		input := map[string]any{
@@ -799,7 +800,8 @@ func TestObject_TypeSpecificMethods(t *testing.T) {
 			"password": String().Min(8),
 		})
 
-		publicObject := originalObject.Omit([]string{"password"})
+		publicObject, err := originalObject.Omit([]string{"password"})
+		require.NoError(t, err)
 
 		// Should accept objects without omitted field
 		input := map[string]any{
@@ -827,10 +829,11 @@ func TestObject_TypeSpecificMethods(t *testing.T) {
 			"age":  Int(),
 		})
 
-		extendedObject := baseObject.Extend(core.ObjectSchema{
+		extendedObject, err := baseObject.Extend(core.ObjectSchema{
 			"email":   String().Email(),
 			"country": String(),
 		})
+		require.NoError(t, err)
 
 		// Should accept objects with all fields
 		input := map[string]any{
@@ -984,38 +987,158 @@ func TestObject_TypeSpecificMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("Pick with invalid key silently ignores", func(t *testing.T) {
+	// Pick returns error on invalid key (Go convention: default methods return error)
+	t.Run("Pick with invalid key returns error", func(t *testing.T) {
 		object := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
 		})
 
-		// Pick with one valid key and one invalid key
-		pickedObject := object.Pick([]string{"name", "invalid"})
-
-		// Should only contain the valid key
-		shape := pickedObject.Shape()
-		assert.Len(t, shape, 1)
-		assert.NotNil(t, shape["name"])
-		_, exists := shape["invalid"]
-		assert.False(t, exists)
+		_, err := object.Pick([]string{"name", "invalid"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unrecognized key")
+		assert.Contains(t, err.Error(), "invalid")
 	})
 
-	t.Run("Omit with invalid key silently ignores", func(t *testing.T) {
+	t.Run("Pick with all invalid keys returns error", func(t *testing.T) {
 		object := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
 		})
 
-		// Omit with one valid key and one invalid key
-		omittedObject := object.Omit([]string{"name", "invalid"})
+		_, err := object.Pick([]string{"unknown"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unrecognized key")
+		assert.Contains(t, err.Error(), "unknown")
+	})
 
-		// Should only omit the valid key
-		shape := omittedObject.Shape()
-		assert.Len(t, shape, 1)
-		assert.NotNil(t, shape["age"])
-		_, exists := shape["name"]
-		assert.False(t, exists)
+	t.Run("Omit with invalid key returns error", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		_, err := object.Omit([]string{"name", "invalid"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unrecognized key")
+		assert.Contains(t, err.Error(), "invalid")
+	})
+
+	t.Run("Omit with all invalid keys returns error", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		_, err := object.Omit([]string{"unknown"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unrecognized key")
+		assert.Contains(t, err.Error(), "unknown")
+	})
+
+	t.Run("Pick on refined schema returns error", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(v map[string]any) bool {
+			return v["age"].(int) >= 18
+		})
+
+		_, err := object.Pick([]string{"name"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "refinements")
+	})
+
+	t.Run("Omit on refined schema returns error", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(v map[string]any) bool {
+			return v["age"].(int) >= 18
+		})
+
+		_, err := object.Omit([]string{"name"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "refinements")
+	})
+
+	// MustPick/MustOmit tests - panic on error (Go convention: Must prefix panics)
+	t.Run("MustPick with valid keys succeeds", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String(),
+		})
+
+		picked := object.MustPick([]string{"name", "email"})
+		require.NotNil(t, picked)
+
+		result, err := picked.Parse(map[string]any{"name": "John", "email": "john@example.com"})
+		require.NoError(t, err)
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("MustPick with invalid key panics", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		assert.Panics(t, func() {
+			object.MustPick([]string{"name", "invalid"})
+		})
+	})
+
+	t.Run("MustPick on refined schema panics", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(v map[string]any) bool {
+			return v["age"].(int) >= 18
+		})
+
+		assert.Panics(t, func() {
+			object.MustPick([]string{"name"})
+		})
+	})
+
+	t.Run("MustOmit with valid keys succeeds", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name":  String(),
+			"age":   Int(),
+			"email": String(),
+		})
+
+		omitted := object.MustOmit([]string{"email"})
+		require.NotNil(t, omitted)
+
+		result, err := omitted.Parse(map[string]any{"name": "John", "age": 25})
+		require.NoError(t, err)
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("MustOmit with invalid key panics", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		})
+
+		assert.Panics(t, func() {
+			object.MustOmit([]string{"unknown"})
+		})
+	})
+
+	t.Run("MustOmit on refined schema panics", func(t *testing.T) {
+		object := Object(core.ObjectSchema{
+			"name": String(),
+			"age":  Int(),
+		}).Refine(func(v map[string]any) bool {
+			return v["age"].(int) >= 18
+		})
+
+		assert.Panics(t, func() {
+			object.MustOmit([]string{"name"})
+		})
 	})
 }
 
@@ -1657,6 +1780,118 @@ func TestObject_NonOptional(t *testing.T) {
 }
 
 // =============================================================================
+// ExactOptional tests (TypeScript Zod v4: accepts absent keys, rejects explicit nil)
+// =============================================================================
+
+func TestObject_ExactOptional(t *testing.T) {
+	t.Run("exactOptional accepts absent keys", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"a": String().ExactOptional(),
+		})
+
+		// Absent key should pass
+		result, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{}, result)
+	})
+
+	t.Run("exactOptional accepts valid values", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"a": String().ExactOptional(),
+		})
+
+		// Present key with valid value should pass
+		result, err := schema.Parse(map[string]any{"a": "hello"})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{"a": "hello"}, result)
+	})
+
+	t.Run("exactOptional rejects explicit nil", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"a": String().ExactOptional(),
+		})
+
+		// Explicit nil should fail
+		_, err := schema.Parse(map[string]any{"a": nil})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nil")
+	})
+
+	t.Run("exactOptional vs optional comparison", func(t *testing.T) {
+		optionalSchema := Object(core.ObjectSchema{"a": String().Optional()})
+		exactOptionalSchema := Object(core.ObjectSchema{"a": String().ExactOptional()})
+
+		// Both accept absent keys
+		_, err1 := optionalSchema.Parse(map[string]any{})
+		require.NoError(t, err1)
+		_, err2 := exactOptionalSchema.Parse(map[string]any{})
+		require.NoError(t, err2)
+
+		// Both accept valid values
+		_, err3 := optionalSchema.Parse(map[string]any{"a": "hi"})
+		require.NoError(t, err3)
+		_, err4 := exactOptionalSchema.Parse(map[string]any{"a": "hi"})
+		require.NoError(t, err4)
+
+		// optional() accepts explicit nil
+		result, err5 := optionalSchema.Parse(map[string]any{"a": nil})
+		require.NoError(t, err5)
+		assert.Nil(t, result["a"])
+
+		// exactOptional() rejects explicit nil
+		_, err6 := exactOptionalSchema.Parse(map[string]any{"a": nil})
+		require.Error(t, err6)
+	})
+
+	t.Run("exactOptional type inference", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"a": String().ExactOptional(),
+			"b": String().Optional(),
+		})
+
+		// Test with both present
+		result, err := schema.Parse(map[string]any{
+			"a": "hello",
+			"b": "world",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result["a"])
+		assert.Equal(t, "world", result["b"])
+
+		// Test with only optional present as nil
+		result2, err := schema.Parse(map[string]any{
+			"b": nil, // optional accepts nil
+		})
+		require.NoError(t, err)
+		assert.Nil(t, result2["b"])
+	})
+
+	t.Run("exactOptional with validation constraints", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().Min(3).ExactOptional(),
+		})
+
+		// Absent key should pass (no validation needed)
+		_, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+
+		// Valid value should pass
+		_, err = schema.Parse(map[string]any{"name": "John"})
+		require.NoError(t, err)
+
+		// Invalid value should fail validation
+		_, err = schema.Parse(map[string]any{"name": "Jo"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at least 3")
+
+		// Explicit nil should fail (exactOptional rejects nil)
+		_, err = schema.Parse(map[string]any{"name": nil})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nil")
+	})
+}
+
+// =============================================================================
 // Multiple Error Collection tests (TypeScript Zod v4 object behavior)
 // =============================================================================
 
@@ -1827,5 +2062,141 @@ func TestObject_MultipleErrorCollection(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "John", result["name"])
 		assert.Equal(t, 25, result["age"])
+	})
+}
+
+// =============================================================================
+// SafeExtend tests - Zod v4 Compatible
+// =============================================================================
+
+func TestObject_SafeExtend(t *testing.T) {
+	t.Run("SafeExtend allows overwriting existing keys", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"email": String(),
+		})
+
+		// SafeExtend with more specific validation
+		extended := schema.SafeExtend(core.ObjectSchema{
+			"email": String().Email(), // Override with more specific validation
+		})
+
+		// Invalid email should now fail
+		_, err := extended.Parse(map[string]any{"email": "not-an-email"})
+		require.Error(t, err)
+
+		// Valid email should pass
+		result, err := extended.Parse(map[string]any{"email": "test@example.com"})
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", result["email"])
+	})
+
+	t.Run("SafeExtend chaining preserves and overrides properties", func(t *testing.T) {
+		// From Zod v4 test: safeExtend chaining preserves and overrides properties
+		schema1 := Object(core.ObjectSchema{
+			"email": String(),
+		})
+
+		schema2 := schema1.SafeExtend(core.ObjectSchema{
+			"email": String().Email(),
+		})
+
+		schema3 := schema2.SafeExtend(core.ObjectSchema{
+			"name": String(),
+		})
+
+		result, err := schema3.Parse(map[string]any{
+			"email": "test@example.com",
+			"name":  "John",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "test@example.com", result["email"])
+		assert.Equal(t, "John", result["name"])
+	})
+
+	t.Run("SafeExtend works with refined schemas", func(t *testing.T) {
+		// Unlike Extend, SafeExtend should work with refined schemas
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		}).Refine(func(m map[string]any) bool {
+			return m["name"] != ""
+		})
+
+		// SafeExtend should not return error for refined schemas
+		extended := schema.SafeExtend(core.ObjectSchema{
+			"age": Int(),
+		})
+
+		result, err := extended.Parse(map[string]any{
+			"name": "John",
+			"age":  30,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 30, result["age"])
+	})
+
+	t.Run("SafeExtend adds new fields", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		})
+
+		extended := schema.SafeExtend(core.ObjectSchema{
+			"age":   Int(),
+			"email": String().Email(),
+		})
+
+		result, err := extended.Parse(map[string]any{
+			"name":  "John",
+			"age":   30,
+			"email": "john@example.com",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 30, result["age"])
+		assert.Equal(t, "john@example.com", result["email"])
+	})
+
+	t.Run("SafeExtend preserves immutability", func(t *testing.T) {
+		original := Object(core.ObjectSchema{
+			"name": String(),
+		})
+
+		extended := original.SafeExtend(core.ObjectSchema{
+			"age": Int(),
+		})
+
+		// Original should not be affected
+		originalShape := original.Shape()
+		assert.Len(t, originalShape, 1)
+		assert.Contains(t, originalShape, "name")
+		assert.NotContains(t, originalShape, "age")
+
+		// Extended should have both fields
+		extendedShape := extended.Shape()
+		assert.Len(t, extendedShape, 2)
+		assert.Contains(t, extendedShape, "name")
+		assert.Contains(t, extendedShape, "age")
+	})
+
+	t.Run("SafeExtend with constructor field in shape", func(t *testing.T) {
+		// From Zod v4 test: extend with constructor field in shape
+		baseSchema := Object(core.ObjectSchema{
+			"name": String(),
+		})
+
+		extendedSchema := baseSchema.SafeExtend(core.ObjectSchema{
+			"constructor": String(),
+			"age":         Int(),
+		})
+
+		result, err := extendedSchema.Parse(map[string]any{
+			"name":        "John",
+			"constructor": "Person",
+			"age":         30,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, "Person", result["constructor"])
+		assert.Equal(t, 30, result["age"])
 	})
 }

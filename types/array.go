@@ -178,6 +178,15 @@ func (z *ZodArray[T, R]) Optional() *ZodArray[T, *T] {
 	return z.withPtrInternals(in)
 }
 
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional(), which accepts both absent keys AND nil values,
+// ExactOptional() only accepts absent keys in object fields.
+func (z *ZodArray[T, R]) ExactOptional() *ZodArray[T, R] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
 // Nilable always returns *[]any constraint because the value may be nil.
 func (z *ZodArray[T, R]) Nilable() *ZodArray[T, *T] {
 	in := z.internals.Clone()
@@ -247,6 +256,23 @@ func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
 func (z *ZodArray[T, R]) Meta(meta core.GlobalMeta) *ZodArray[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodArray[T, R]) Describe(description string) *ZodArray[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================

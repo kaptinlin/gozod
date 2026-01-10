@@ -433,6 +433,8 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		jsonSchema = &lib.Schema{Not: emptyNotSchema}
 	case core.ZodTypeUnion:
 		jsonSchema, err = c.convertUnion(schema)
+	case core.ZodTypeXor:
+		jsonSchema, err = c.convertXor(schema)
 	case core.ZodTypePipe, core.ZodTypePipeline:
 		// Handle pipeline schemas differently depending on IO mode.
 		if c.opts.IO == "input" {
@@ -473,6 +475,8 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		jsonSchema, err = c.convertObject(schema)
 	case core.ZodTypeSlice, core.ZodTypeArray:
 		jsonSchema, err = c.convertArray(schema)
+	case core.ZodTypeTuple:
+		jsonSchema, err = c.convertTuple(schema)
 	case core.ZodTypeEnum:
 		jsonSchema, err = c.convertEnum(schema)
 	case core.ZodTypeLiteral:
@@ -778,6 +782,73 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 	return jsonSchema, nil
 }
 
+// convertTuple handles ZodTuple -> JSON Schema array with prefixItems
+func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
+	tupleSchema, ok := schema.(interface {
+		GetItems() []core.ZodSchema
+		GetRest() core.ZodSchema
+	})
+	if !ok {
+		return nil, fmt.Errorf("%w: expected tuple schema with GetItems/GetRest methods", ErrUnhandledArrayLike)
+	}
+
+	items := tupleSchema.GetItems()
+	rest := tupleSchema.GetRest()
+
+	jsonSchema := &lib.Schema{Type: []string{"array"}}
+
+	// Convert each item schema to prefixItems
+	if len(items) > 0 {
+		jsonSchema.PrefixItems = make([]*lib.Schema, len(items))
+		for i, itemSchema := range items {
+			c.path = append(c.path, fmt.Sprintf("prefixItems[%d]", i))
+			converted, err := c.convert(itemSchema)
+			if err != nil {
+				return nil, err
+			}
+			jsonSchema.PrefixItems[i] = converted
+			c.path = c.path[:len(c.path)-1]
+		}
+	}
+
+	// Handle rest element schema
+	if rest != nil {
+		c.path = append(c.path, "items")
+		restConverted, err := c.convert(rest)
+		if err != nil {
+			return nil, err
+		}
+		jsonSchema.Items = restConverted
+		c.path = c.path[:len(c.path)-1]
+	} else {
+		// No rest element - fixed length tuple
+		// Set min/max items to enforce exact length
+		itemCount := float64(len(items))
+		// Calculate required count (items that are not optional)
+		requiredCount := 0
+		for _, item := range items {
+			if !item.GetInternals().IsOptional() {
+				requiredCount++
+			} else {
+				break // Stop at first optional item
+			}
+		}
+		// Actually, we need to find the last required item
+		lastRequired := -1
+		for i := len(items) - 1; i >= 0; i-- {
+			if !items[i].GetInternals().IsOptional() {
+				lastRequired = i
+				break
+			}
+		}
+		minItems := float64(lastRequired + 1)
+		jsonSchema.MinItems = &minItems
+		jsonSchema.MaxItems = &itemCount
+	}
+
+	return jsonSchema, nil
+}
+
 // applyMeta copies GlobalMeta fields from registry onto the generated JSON Schema node.
 func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 	if jsonSchema == nil || schema == nil {
@@ -1062,6 +1133,32 @@ func (c *converter) convertUnion(schema core.ZodSchema) (*lib.Schema, error) {
 	}
 
 	return &lib.Schema{AnyOf: anyOf}, nil
+}
+
+// convertXor handles ZodXor -> JSON Schema oneOf (exclusive union - exactly one must match)
+func (c *converter) convertXor(schema core.ZodSchema) (*lib.Schema, error) {
+	x, ok := schema.(interface{ Options() []core.ZodSchema })
+	if !ok {
+		return nil, ErrUnionInvalid
+	}
+	opts := x.Options()
+	if len(opts) == 0 {
+		return nil, ErrUnionNoMembers
+	}
+
+	// Xor uses oneOf (exactly one must match)
+	oneOf := make([]*lib.Schema, 0, len(opts))
+	for i, opt := range opts {
+		c.path = append(c.path, fmt.Sprintf("oneOf[%d]", i))
+		converted, err := c.convert(opt)
+		if err != nil {
+			return nil, err
+		}
+		oneOf = append(oneOf, converted)
+		c.path = c.path[:len(c.path)-1]
+	}
+
+	return &lib.Schema{OneOf: oneOf}, nil
 }
 
 // isNullSchema checks if a schema represents null/nil type

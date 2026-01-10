@@ -31,21 +31,17 @@ Decision flow  `▶`  Native? → Comparable? → Composite.
 
 ---
 
-## 3  Mandatory 8-Section File Layout
+## 3  Mandatory 5-Section File Layout
 
-Every schema file *must* keep sections in this exact order so automated tooling can
-inject code safely:
+Every schema file *must* keep sections in this exact order for consistency:
 
-1. **TYPE CONSTRAINTS**   – union constraints (`StringConstraint interface { string | *string }`)
-2. **TYPE DEFINITIONS**   – `ZodTypeDef`, `ZodTypeInternals`, public `ZodType[T]`
-3. **CORE METHODS**       – `GetInternals`, `IsOptional`, `IsNilable`, `Parse`, `MustParse`, `StrictParse`, `MustStrictParse`, `Coerce`
-4. **MODIFIER METHODS**   – `Optional`, `Nilable`, `Default`, `Prefault`, `Overwrite`, etc.
-5. **VALIDATION METHODS** – Type-specific validations (`Min`, `Max`, `Email`, etc.)
-6. **TRANSFORM & PIPE**   – `Transform`, `Pipe`, `Overwrite`
-7. **REFINEMENT METHODS** – `Refine`, `RefineAny`, `Check`
-8. **CONSTRUCTORS**       – `Type()`, `TypePtr()`, `CoercedType()`, constructor helpers
+1. **TYPE DEFINITIONS**       – Constraints, `ZodTypeDef`, `ZodTypeInternals`, public `ZodType[T]`
+2. **CORE METHODS**           – `GetInternals`, `IsOptional`, `IsNilable`, `Parse`, `StrictParse`, `MustParse`, `MustStrictParse`, `Coerce`
+3. **MODIFIER METHODS**       – `Optional`, `Nilable`, `Default`, `Prefault`, `Overwrite`, `Transform`, `Pipe`
+4. **VALIDATION & REFINEMENT** – Type-specific validations (`Min`, `Max`, `Email`, etc.), `Refine`, `RefineAny`, `Check`
+5. **CONSTRUCTORS**           – `Type()`, `TypePtr()`, `CoercedType()`, constructor helpers
 
-> Keep the section banners – Cursor relies on them when autofilling code.
+> Keep the section banners – tools rely on them for code navigation.
 
 ---
 
@@ -150,13 +146,13 @@ func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 
 ## 6  Copy-on-Write Modifier Rules
 
-1. Modifiers **never** mutate `z.internals` – always `Clone()` first.
-2. Pointer-returning modifiers (`Optional`, `Nilable`, `Nullish`) switch **only**
-   the **constraint** type, not the base type.
-3. `Default`, `Prefault` keep the original generic `T` and accept value types for compile-time safety.
-4. `Transform` changes the output type to the transformed type.
-5. `withInternals` / `withPtrInternals` must preserve `Def` to share immutable
-   data.
+> See `coding-standards.mdc` Section 3.3 for detailed explanation.
+
+Key points:
+1. **Never mutate** `z.internals` – always `Clone()` first
+2. **Pointer modifiers** (`Optional`, `Nilable`) switch constraint type only
+3. **Default/Prefault** keep original generic `T`
+4. **Transform** changes output type
 
 ---
 
@@ -584,9 +580,54 @@ func init() {
 
 ---
 
-## 15  Implementation → PR Checklist
+## 15  Numeric String Keys in Record (Zod v4 PR #5585)
 
-- [ ] File respects 8-section order & headings.  
+Record schemas support numeric key schemas for validating string keys as numbers:
+
+```go
+// Basic numeric key validation
+schema := Record(Float64(), String())
+schema.Parse(map[string]any{"1.5": "value"})  // ✓ Valid
+
+// Integer constraint - rejects floats
+schema := Record(Int(), String())
+schema.Parse(map[string]any{"1": "ok"})       // ✓ Valid
+schema.Parse(map[string]any{"1.5": "fail"})   // ✗ Error: not an integer
+
+// Unsigned integer constraint
+schema := Record(Uint(), String())
+schema.Parse(map[string]any{"-1": "fail"})    // ✗ Error: negative
+
+// Key transformation with Overwrite
+schema := Record(
+    Float64().Overwrite(func(n float64) float64 { return n * 2 }),
+    String(),
+)
+// {"5": "five"} → {"10": "five"} (key doubled)
+
+// LooseRecord passes through non-matching keys
+schema := LooseRecord(Float64(), String())
+result, _ := schema.Parse(map[string]any{
+    "1": "one",
+    "abc": "text",  // Non-numeric, passed through unchanged
+})
+```
+
+**Implementation Details:**
+- `isNumericKeySchema()` - Detects if key schema expects numeric type
+- `convertToSchemaNumericType()` - Converts float64 to appropriate Go type (int, uint, etc.)
+- `parseKeyWithSchema()` - Tries string first, falls back to numeric parsing
+- Key transformations are tracked and applied to output map
+
+**Go-Specific Behavior:**
+- Scientific notation keys may be normalized: `"1e10"` → `"1e+10"`
+- All output keys remain strings (Go map constraint)
+
+---
+
+## 16  Implementation → PR Checklist
+
+- [ ] File respects 5-section order & headings.  
 - [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).  
 - [ ] Both `Parse(any)` and `StrictParse(T)` implemented using engine helpers.
 - [ ] `Parse` method handles `any` input with runtime type checking.

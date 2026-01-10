@@ -160,6 +160,8 @@ func ParsedTypeToString(input any) string {
 		return "complex" // Complex number type in Go
 	case core.ParsedTypeEnum:
 		return "enum" // Enumeration type maps to enum in Go semantic types
+	case core.ParsedTypeTuple:
+		return "tuple" // Tuple type
 	case core.ParsedTypeFloat:
 		// Check for special float values
 		switch v := input.(type) {

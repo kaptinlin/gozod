@@ -581,6 +581,71 @@ result, err := schema.Parse([]string{"a", "b", "c"})  // Length: 3 ✅
 
 ---
 
+## 📐 Tuple Validation
+
+Tuples represent fixed-length arrays with typed elements at each position:
+
+```go
+// Fixed positions with specific types
+schema := gozod.Tuple(gozod.String(), gozod.Int(), gozod.Bool())
+result, err := schema.Parse([]any{"hello", 42, true})
+// result: []any{"hello", 42, true}
+
+// Fails on wrong length
+_, err = schema.Parse([]any{"hello"})
+// Error: Tuple must have at least 3 element(s)
+
+// Fails on wrong type
+_, err = schema.Parse([]any{"hello", "not-int", true})
+// Error: Invalid input: expected int, received string
+```
+
+### Tuple with Rest Element
+
+```go
+// Fixed positions + variadic rest elements
+schema := gozod.TupleWithRest(
+    []core.ZodSchema{gozod.String(), gozod.Int()},
+    gozod.Bool(),  // additional elements must be booleans
+)
+result, err := schema.Parse([]any{"hello", 42, true, false, true})
+// result: []any{"hello", 42, true, false, true}
+
+// Chain with Rest method
+schema = gozod.Tuple(gozod.String(), gozod.Int()).Rest(gozod.Bool())
+```
+
+### Tuple with Optional Elements
+
+```go
+// Optional elements at the end
+schema := gozod.Tuple(
+    gozod.String(),
+    gozod.Int().Optional(),
+)
+
+// All elements provided
+result, _ := schema.Parse([]any{"hello", 42})  // ✅
+
+// Optional element omitted
+result, _ = schema.Parse([]any{"hello"})       // ✅
+```
+
+### Tuple Methods
+
+| Method | Description |
+|--------|-------------|
+| `.Rest(schema)` | Add rest element schema for variadic elements |
+| `.Min(n)` | Minimum length validation |
+| `.Max(n)` | Maximum length validation |
+| `.Length(n)` | Exact length validation |
+| `.NonEmpty()` | At least one element |
+| `.Optional()` | Returns `*[]any` |
+| `.Describe(desc)` | Add description metadata |
+| `.Meta(meta)` | Add rich metadata |
+
+---
+
 ## 🗺️ Map Validation
 
 ```go
@@ -588,7 +653,7 @@ result, err := schema.Parse([]string{"a", "b", "c"})  // Length: 3 ✅
 stringMapSchema := gozod.Map(gozod.String())  // map[string]string
 result, err := stringMapSchema.Parse(map[string]string{
     "key1": "value1",
-    "key2": "value2", 
+    "key2": "value2",
 })  // ✅
 
 // Map with validated values
@@ -598,6 +663,33 @@ userMap := map[string]User{
     "bob":   {Name: "Bob", Age: 30},
 }
 result, err = userMapSchema.Parse(userMap)         // ✅ Validates each value
+
+// Map with NonEmpty validation
+schema := gozod.Map(gozod.String()).NonEmpty()
+_, err = schema.Parse(map[string]string{})         // ❌ Map must have at least 1 entry
+```
+
+### Record with Key Validation
+
+```go
+// Record validates both keys and values
+schema := gozod.Record(
+    gozod.String().Regex(`^[a-z]+$`),  // lowercase keys only
+    gozod.Int(),
+)
+result, err := schema.Parse(map[string]any{"name": 42})  // ✅
+_, err = schema.Parse(map[string]any{"Name": 42})        // ❌ key not lowercase
+
+// LooseRecord passes through non-matching keys unchanged
+looseSchema := gozod.LooseRecord(
+    gozod.String().Regex(`^S_`),  // only validate keys starting with "S_"
+    gozod.String(),
+)
+result, _ = looseSchema.Parse(map[string]any{
+    "S_name": "John",
+    "other": 123,  // passed through unchanged
+})
+// Result: {"S_name": "John", "other": 123}
 ```
 
 ---
@@ -639,6 +731,37 @@ animalSchema := gozod.DiscriminatedUnion("type", map[string]any{
 
 dog := Dog{Type: "dog", Breed: "Golden Retriever"}
 result, err := animalSchema.Parse(dog)     // ✅ Matches dog schema
+```
+
+### Xor (Exclusive Union)
+
+Xor validates that **exactly one** schema matches. Unlike Union which succeeds when any option matches, Xor fails if zero or multiple options match:
+
+```go
+// Exactly one must match
+schema := gozod.Xor([]any{
+    gozod.String().Email(),
+    gozod.String().URL(),
+})
+
+// ✅ Matches email only
+result, err := schema.Parse("user@example.com")
+
+// ✅ Matches URL only
+result, err = schema.Parse("https://example.com")
+
+// ❌ Matches neither
+_, err = schema.Parse("invalid")
+```
+
+Xor schemas convert to JSON Schema `oneOf`:
+```json
+{
+  "oneOf": [
+    {"type": "string", "format": "email"},
+    {"type": "string", "format": "uri"}
+  ]
+}
 ```
 
 ---

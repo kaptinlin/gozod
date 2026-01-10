@@ -25,6 +25,24 @@ GoZod uses the actual TypeScript Zod v4 source code as reference material locate
 - **Custom Validator System** - User-defined validators with registry and struct tag integration
 - **Automatic Circular Reference Handling** - Lazy evaluation prevents stack overflow
 - **Rich Validation Methods** - Comprehensive built-in validators for all Go types
+- **Tuple Types** - Fixed-length arrays with per-position type validation and optional rest elements
+- **Exclusive Unions (Xor)** - Exactly-one-match validation for mutually exclusive schemas
+- **Schema Metadata** - Built-in `.Describe()` and `.Meta()` methods on all 26 schema types
+
+### Cursor Rules Index
+
+Detailed implementation guides are available in `.cursor/rules/`:
+
+| File | Purpose |
+|------|---------|
+| `coding-standards.mdc` | Core coding standards, design patterns (Parse/StrictParse, Copy-on-Write, Metadata) |
+| `schema_implementation_guide.mdc` | 5-section file layout, type templates, engine integration |
+| `schema_test_implementation_guide.mdc` | Test architecture, StrictParse testing, Default/Prefault semantics |
+| `checks_implementation_guide.mdc` | Validation check factories, JSON Schema integration |
+| `performance-optimization.mdc` | Go 1.25+ optimizations, benchmark patterns (`b.Loop()`) |
+| `project-structure.mdc` | Layered architecture, package responsibilities, file organization |
+| `naming_guide.md` | Go naming conventions, receiver naming, error naming |
+| `module_organization_guide.md` | Package design, dependency injection, testing organization |
 
 ## Commands
 
@@ -95,7 +113,7 @@ gozod/
 - `types/` never import each other; all cross-type logic lives in `internal/`, `pkg/`, or `coerce/`
 - Core layer contains zero business logic; only defines contracts and helpers
 - Strict separation of concerns: parsing, checking, issue creation, and error formatting live in separate packages
-- Root-level files: `gozod.go` (main API), `json_schema.go` (JSON Schema generation), `Makefile` (build automation)
+- Root-level files: `gozod.go` (main API), `json_schema.go` (JSON Schema generation), `from_json_schema.go` (JSON Schema → GoZod conversion), `Makefile` (build automation)
 
 ### Key Components
 
@@ -153,9 +171,9 @@ func (z *ZodString[T]) Nilable() *ZodString[*string]
 - Schema types organized by category:
   - **Primitives**: `string.go`, `bool.go`, `integer.go`, `float.go`, `bigint.go`, `complex.go`
   - **Special Types**: `any.go`, `unknown.go`, `never.go`, `nil.go`
-  - **Collections**: `array.go`, `slice.go`, `map.go`, `record.go`
+  - **Collections**: `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go`
   - **Objects**: `object.go`, `struct.go`
-  - **Composition**: `union.go`, `discriminated_union.go`, `intersection.go`
+  - **Composition**: `union.go` (includes Xor), `discriminated_union.go`, `intersection.go`
   - **Functions**: `function.go`
   - **Formats**: `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go`
   - **Text**: `text.go`, `stringbool.go`
@@ -165,8 +183,8 @@ func (z *ZodString[T]) Nilable() *ZodString[*string]
 #### Internal Engine (`internal/`) - Runtime Engine (Private)
 - `engine/` - Generic parser, coercion and check runner
   - `parser.go`, `checker.go`, `types.go`, `errors.go`, `params.go`
-- `checks/` - Concrete check factories (length, numeric, format)
-  - `checks.go`, `custom.go`, `format.go`, `length.go`, `numeric.go`, `strings.go`, `file.go`
+- `checks/` - Concrete check factories (length, numeric, format, metadata)
+  - `checks.go`, `custom.go`, `format.go`, `length.go`, `numeric.go`, `strings.go`, `file.go`, `metadata.go`
 - `issues/` - Raw issue builders, finalisers & formatters
   - `creators.go`, `formatters.go`, `finalize.go`, `errors.go`, `types.go`, `raw.go`, `accessors.go`
 - `utils/` - Low-level helpers used only by the engine
@@ -511,6 +529,8 @@ See `docs/feature-mapping.md` for complete Zod v4 ↔ GoZod API mapping table.
 8. **Zero Dependencies** - Pure Go implementation, no external libraries
 9. **User-Controlled Custom Validators** - No pre-registered validators, users register their own
 10. **Enhanced Error Information** - Pre-calculated type information in errors (Go enhancement)
+11. **Schema Metadata on All Types** - Every schema type has `.Describe()` and `.Meta()` methods
+12. **Safe Error-Returning APIs** - Pick/Omit/Extend return `(*ZodObject, error)` with Must variants available
 
 ## Error Handling
 
@@ -537,13 +557,14 @@ if err != nil {
 
 ## Integration Points
 
-- **JSON Schema Generation** - Convert GoZod schemas to JSON Schema format
+- **JSON Schema Generation** - Convert GoZod schemas to JSON Schema format (supports Tuple, Xor, all types)
 - **Internationalization** - Built-in i18n bundles in `locales/` packages
 - **Custom Error Formatting** - Flexible error output via `internal/issues`
-- **Metadata System** - Attach custom metadata to schemas via Registry
+- **Metadata System** - Built-in `.Describe()` and `.Meta()` methods on all schema types, plus Registry API
 - **Transform & Pipeline Support** - Composable data transformation
 - **Custom Validator System** - User-defined validators with registry and struct tag integration
 - **Code Generation** - Optional zero-reflection performance optimization
+- **Apply Function** - Composable schema modifiers for clean method chaining
 
 ## API Consistency Requirements
 
@@ -556,6 +577,8 @@ if err != nil {
 - `GetInternals() *core.ZodTypeInternals` - Access internal schema state
 - `IsOptional() bool` - Check if schema accepts missing values
 - `IsNilable() bool` - Check if schema allows explicit nil values
+- `Describe(description string) *Schema` - Add description metadata (returns same schema type)
+- `Meta(meta GlobalMeta) *Schema` - Add full metadata object (returns same schema type)
 
 **Method Implementation Requirements:**
 - Parse and StrictParse must use identical validation pipelines

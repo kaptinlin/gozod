@@ -49,6 +49,63 @@ Each method returns the registry itself so you can chain calls if desired.
 
 ---
 
+## Instance Methods (Recommended)
+
+All 26 GoZod schema types now include built-in `.Describe()` and `.Meta()` methods:
+
+```go
+// Describe - shorthand for description only
+schema := gozod.String().Min(3).Describe("Username")
+
+// Meta - full metadata object
+schema := gozod.Object(core.ObjectSchema{
+    "name":  gozod.String().Describe("Full name"),
+    "email": gozod.String().Email().Meta(gozod.GlobalMeta{
+        Title:       "Email Address",
+        Description: "Primary contact email",
+        Examples:    []any{"user@example.com"},
+    }),
+})
+
+// Retrieve metadata
+meta, ok := gozod.GlobalRegistry.Get(schema)
+if ok {
+    fmt.Println(meta.Description)  // "Primary contact email"
+}
+```
+
+### Supported Types
+
+All schema types support `.Describe()` and `.Meta()`:
+
+- **Primitives**: String, Int, Float, Bool, BigInt, Complex, Time
+- **Collections**: Array, Slice, Tuple, Map, Record, Object, Struct
+- **Composites**: Union, Xor, DiscriminatedUnion, Intersection
+- **Special**: Any, Unknown, Never, Nil, Lazy, Function, Enum
+- **Format**: StringBool, File
+
+---
+
+## Check Factories (Zod v4 Compatible)
+
+For Zod v4 API compatibility, GoZod also provides check factory functions:
+
+```go
+import "github.com/kaptinlin/gozod"
+
+// These are equivalent:
+schema1 := gozod.String().Describe("Username")
+schema2 := gozod.String().Check(gozod.Describe("Username"))
+
+// Check factories allow composition with other checks
+schema := gozod.String().Check(
+    gozod.Describe("Username"),
+    gozod.Meta(gozod.GlobalMeta{Title: "User Name"}),
+)
+```
+
+---
+
 ## Global Registry
 
 For convenience GoZod exposes a *global* registry so you don't have to pass a registry around everywhere.

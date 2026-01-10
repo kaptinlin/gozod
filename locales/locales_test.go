@@ -69,14 +69,35 @@ func TestGetLocaleFormatter(t *testing.T) {
 	})
 
 	t.Run("handles language-only codes", func(t *testing.T) {
-		// Test that "zh-TW" falls back to "zh"
-		formatter := GetLocaleFormatter("zh-TW")
-		zhFormatter := GetLocaleFormatter("zh")
+		// Test that an unknown regional variant falls back to the base language
+		// e.g., "de-AT" (Austrian German) should fall back to "de" (German)
+		formatter := GetLocaleFormatter("de-AT")
+		deFormatter := GetLocaleFormatter("de")
 
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
-		if formatter(issue) != zhFormatter(issue) {
+		if formatter(issue) != deFormatter(issue) {
 			t.Error("Expected language-only fallback to work")
+		}
+	})
+
+	t.Run("zh-TW has its own formatter", func(t *testing.T) {
+		// Test that zh-TW now has its own formatter (Traditional Chinese)
+		zhTwFormatter := GetLocaleFormatter("zh-TW")
+		zhCnFormatter := GetLocaleFormatter("zh-CN")
+
+		issue := core.ZodRawIssue{
+			Code:       core.InvalidType,
+			Properties: map[string]any{"expected": "string"},
+			Input:      123,
+		}
+
+		zhTwMessage := zhTwFormatter(issue)
+		zhCnMessage := zhCnFormatter(issue)
+
+		// Traditional and Simplified Chinese should have different messages
+		if zhTwMessage == zhCnMessage {
+			t.Error("Expected zh-TW and zh-CN to have different messages")
 		}
 	})
 }

@@ -24,9 +24,47 @@ type LocaleErrorMap map[string]func(core.ZodRawIssue) string
 // Supports both full locale codes (zh-CN) and short codes (zh, en)
 // Following TypeScript Zod v4's pattern of mapping locales to formatter functions
 var DefaultLocales = LocaleErrorMap{
-	"en":    formatEn,   // English
+	// English
+	"en": formatEn,
+
+	// Chinese
 	"zh-CN": formatZhCN, // Simplified Chinese (China)
-	"zh":    formatZhCN, // Chinese fallback
+	"zh-TW": formatZhTw, // Traditional Chinese (Taiwan)
+	"zh":    formatZhCN, // Chinese fallback to Simplified
+
+	// European Languages
+	"de": formatDe, // German
+	"fr": formatFr, // French
+	"es": formatEs, // Spanish
+	"it": formatIt, // Italian
+	"pt": formatPt, // Portuguese
+	"nl": formatNl, // Dutch
+	"pl": formatPl, // Polish
+	"ru": formatRu, // Russian
+	"uk": formatUk, // Ukrainian
+	"cs": formatCs, // Czech
+	"da": formatDa, // Danish
+	"sv": formatSv, // Swedish
+	"tr": formatTr, // Turkish
+	"hu": formatHu, // Hungarian
+	"fi": formatFi, // Finnish
+	"no": formatNo, // Norwegian
+	"bg": formatBg, // Bulgarian
+
+	// Asian Languages
+	"ja": formatJa, // Japanese
+	"ko": formatKo, // Korean
+	"vi": formatVi, // Vietnamese
+	"th": formatTh, // Thai
+	"id": formatId, // Indonesian
+	"ms": formatMs, // Malay
+	"ta": formatTa, // Tamil
+
+	// Middle Eastern Languages
+	"ar": formatAr, // Arabic
+	"fa": formatFa, // Persian (Farsi)
+	"he": formatHe, // Hebrew
+	"ur": formatUr, // Urdu
 }
 
 // GetLocaleFormatter returns a formatter function for the given locale

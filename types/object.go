@@ -16,6 +16,13 @@ import (
 // Static error variables
 var (
 	ErrNilPointerCannotConvertToObject = errors.New("nil pointer cannot be converted to object")
+
+	// Pick/Omit/Extend errors - Zod v4 compatible error messages
+	// See: .reference/zod/packages/zod/src/v4/core/util.ts:599, 628, 664
+	ErrPickRefinements   = errors.New(".pick() cannot be used on object schemas containing refinements")
+	ErrOmitRefinements   = errors.New(".omit() cannot be used on object schemas containing refinements")
+	ErrExtendRefinements = errors.New(".extend() cannot overwrite keys on object schemas containing refinements. Use .SafeExtend() instead")
+	ErrUnrecognizedKey   = errors.New("unrecognized key")
 )
 
 // =============================================================================
@@ -42,12 +49,13 @@ type ZodObjectDef struct {
 // ZodObjectInternals contains the internal state for object schema
 type ZodObjectInternals struct {
 	core.ZodTypeInternals
-	Def               *ZodObjectDef     // Schema definition reference
-	Shape             core.ObjectSchema // Field schemas for runtime validation
-	Catchall          core.ZodSchema    // Catchall schema for unknown fields
-	UnknownKeys       ObjectMode        // Validation mode
-	IsPartial         bool              // Whether this is a partial object (all fields optional)
-	PartialExceptions map[string]bool   // Fields that should remain required in partial mode
+	Def                *ZodObjectDef     // Schema definition reference
+	Shape              core.ObjectSchema // Field schemas for runtime validation
+	Catchall           core.ZodSchema    // Catchall schema for unknown fields
+	UnknownKeys        ObjectMode        // Validation mode
+	IsPartial          bool              // Whether this is a partial object (all fields optional)
+	PartialExceptions  map[string]bool   // Fields that should remain required in partial mode
+	HasUserRefinements bool              // Whether user has added refinements via Refine/RefineAny/SuperRefine
 }
 
 // ZodObject represents a type-safe object validation schema
@@ -214,13 +222,14 @@ func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
 
 	return &ZodObject[T, T]{
 		internals: &ZodObjectInternals{
-			ZodTypeInternals:  *in,
-			Def:               z.internals.Def,
-			Shape:             z.internals.Shape,
-			Catchall:          z.internals.Catchall,
-			UnknownKeys:       z.internals.UnknownKeys,
-			IsPartial:         z.internals.IsPartial,
-			PartialExceptions: z.internals.PartialExceptions,
+			ZodTypeInternals:   *in,
+			Def:                z.internals.Def,
+			Shape:              z.internals.Shape,
+			Catchall:           z.internals.Catchall,
+			UnknownKeys:        z.internals.UnknownKeys,
+			IsPartial:          z.internals.IsPartial,
+			PartialExceptions:  z.internals.PartialExceptions,
+			HasUserRefinements: z.internals.HasUserRefinements,
 		},
 	}
 }
@@ -261,6 +270,23 @@ func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
 func (z *ZodObject[T, R]) Meta(meta core.GlobalMeta) *ZodObject[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodObject[T, R]) Describe(description string) *ZodObject[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================
@@ -318,25 +344,51 @@ func (z *ZodObject[T, R]) Properties() core.ObjectSchema {
 	return z.Shape()
 }
 
-// Pick creates a new object with only specified keys
-// Non-existent keys are silently ignored to maintain fluent interface design
-func (z *ZodObject[T, R]) Pick(keys []string, params ...any) *ZodObject[T, R] {
+// Pick creates a new object with only specified keys.
+// Returns error if any key does not exist or schema contains refinements.
+// Zod v4 compatible: throws on refinements or unrecognized keys.
+func (z *ZodObject[T, R]) Pick(keys []string, params ...any) (*ZodObject[T, R], error) {
+	if z.hasRefinements() {
+		return nil, ErrPickRefinements
+	}
+
 	newShape := make(core.ObjectSchema)
 	for _, key := range keys {
-		if schema, exists := z.internals.Shape[key]; exists {
-			newShape[key] = schema
+		schema, exists := z.internals.Shape[key]
+		if !exists {
+			return nil, fmt.Errorf("%w: %q", ErrUnrecognizedKey, key)
 		}
-		// Silently ignore non-existent keys for chainability
+		newShape[key] = schema
 	}
-	return ObjectTyped[T, R](newShape, params...)
+	return ObjectTyped[T, R](newShape, params...), nil
 }
 
-// Omit creates a new object excluding specified keys
-// Non-existent keys are silently ignored to maintain fluent interface design
-func (z *ZodObject[T, R]) Omit(keys []string, params ...any) *ZodObject[T, R] {
+// MustPick is like Pick but panics on error.
+func (z *ZodObject[T, R]) MustPick(keys []string, params ...any) *ZodObject[T, R] {
+	result, err := z.Pick(keys, params...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// Omit creates a new object excluding specified keys.
+// Returns error if any key does not exist or schema contains refinements.
+// Zod v4 compatible: throws on refinements or unrecognized keys.
+func (z *ZodObject[T, R]) Omit(keys []string, params ...any) (*ZodObject[T, R], error) {
+	if z.hasRefinements() {
+		return nil, ErrOmitRefinements
+	}
+
+	// Validate all keys exist first
+	for _, key := range keys {
+		if _, exists := z.internals.Shape[key]; !exists {
+			return nil, fmt.Errorf("%w: %q", ErrUnrecognizedKey, key)
+		}
+	}
+
 	excludeSet := make(map[string]bool)
 	for _, key := range keys {
-		// Silently ignore non-existent keys for chainability
 		excludeSet[key] = true
 	}
 
@@ -346,11 +398,59 @@ func (z *ZodObject[T, R]) Omit(keys []string, params ...any) *ZodObject[T, R] {
 			newShape[key] = schema
 		}
 	}
-	return ObjectTyped[T, R](newShape, params...)
+	return ObjectTyped[T, R](newShape, params...), nil
 }
 
-// Extend creates a new object by extending with additional fields
-func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) *ZodObject[T, R] {
+// MustOmit is like Omit but panics on error.
+func (z *ZodObject[T, R]) MustOmit(keys []string, params ...any) *ZodObject[T, R] {
+	result, err := z.Omit(keys, params...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// hasRefinements checks if the schema has user-defined refinements applied.
+// This distinguishes between internal checks (like alwaysPassCheck) and user-added refinements.
+func (z *ZodObject[T, R]) hasRefinements() bool {
+	return z.internals.HasUserRefinements
+}
+
+// Extend creates a new object by extending with additional fields.
+// Returns error if the schema has refinements AND augmentation overlaps existing keys.
+// Zod v4 compatible: .extend() throws when overwriting keys on refined schemas.
+// See: .reference/zod/packages/zod/src/v4/core/util.ts:651-677
+func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) (*ZodObject[T, R], error) {
+	// Check for refinement + overlapping key conflict (Zod v4 behavior)
+	if z.internals.HasUserRefinements {
+		for k := range augmentation {
+			if _, exists := z.internals.Shape[k]; exists {
+				return nil, ErrExtendRefinements
+			}
+		}
+	}
+
+	// Create new shape combining existing + extension fields
+	newShape := make(core.ObjectSchema)
+
+	// Copy existing shape
+	for k, v := range z.internals.Shape {
+		newShape[k] = v
+	}
+
+	// Add augmentation fields
+	for k, schema := range augmentation {
+		newShape[k] = schema
+	}
+
+	return ObjectTyped[T, R](newShape, params...), nil
+}
+
+// SafeExtend creates a new object by extending with additional fields without checking refinements.
+// Use this when you explicitly want to overwrite fields on a refined schema.
+// Zod v4 compatible: .safeExtend() bypasses the refinement check.
+// See: .reference/zod/packages/zod/src/v4/core/util.ts:679-691
+func (z *ZodObject[T, R]) SafeExtend(augmentation core.ObjectSchema, params ...any) *ZodObject[T, R] {
 	// Create new shape combining existing + extension fields
 	newShape := make(core.ObjectSchema)
 
@@ -367,9 +467,26 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 	return ObjectTyped[T, R](newShape, params...)
 }
 
-// Merge combines two object schemas
+// Merge combines two object schemas.
+// Zod v4 compatible: .merge() clears all checks/refinements.
+// See: .reference/zod/packages/zod/src/v4/core/util.ts:693-707
 func (z *ZodObject[T, R]) Merge(other *ZodObject[T, R], params ...any) *ZodObject[T, R] {
-	return z.Extend(other.internals.Shape, params...)
+	// Create new shape combining existing + other fields
+	newShape := make(core.ObjectSchema)
+
+	// Copy existing shape
+	for k, v := range z.internals.Shape {
+		newShape[k] = v
+	}
+
+	// Add other schema's fields
+	for k, schema := range other.internals.Shape {
+		newShape[k] = schema
+	}
+
+	// Zod v4: merge() clears checks, so we create a fresh schema
+	// HasUserRefinements will be false on the new schema
+	return ObjectTyped[T, R](newShape, params...)
 }
 
 // Partial makes all fields optional
@@ -391,13 +508,14 @@ func (z *ZodObject[T, R]) Partial(keys ...[]string) *ZodObject[T, R] {
 	}
 
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
-		ZodTypeInternals:  *newInternals,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		Catchall:          z.internals.Catchall,
-		UnknownKeys:       z.internals.UnknownKeys,
-		IsPartial:         true,
-		PartialExceptions: partialExceptions,
+		ZodTypeInternals:   *newInternals,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           z.internals.Catchall,
+		UnknownKeys:        z.internals.UnknownKeys,
+		IsPartial:          true,
+		PartialExceptions:  partialExceptions,
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
@@ -415,13 +533,14 @@ func (z *ZodObject[T, R]) Required(fields ...[]string) *ZodObject[T, R] {
 	}
 
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
-		ZodTypeInternals:  *newInternals,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		Catchall:          z.internals.Catchall,
-		UnknownKeys:       z.internals.UnknownKeys,
-		IsPartial:         true,              // Keep as partial, but with specific required fields
-		PartialExceptions: partialExceptions, // Fields in this map are required
+		ZodTypeInternals:   *newInternals,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           z.internals.Catchall,
+		UnknownKeys:        z.internals.UnknownKeys,
+		IsPartial:          true,              // Keep as partial, but with specific required fields
+		PartialExceptions:  partialExceptions, // Fields in this map are required
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
@@ -444,11 +563,14 @@ func (z *ZodObject[T, R]) Passthrough() *ZodObject[T, R] {
 func (z *ZodObject[T, R]) Catchall(catchallSchema core.ZodSchema) *ZodObject[T, R] {
 	newInternals := z.internals.Clone()
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
-		ZodTypeInternals: *newInternals,
-		Def:              z.internals.Def,
-		Shape:            z.internals.Shape,
-		Catchall:         catchallSchema,
-		UnknownKeys:      z.internals.UnknownKeys,
+		ZodTypeInternals:   *newInternals,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           catchallSchema,
+		UnknownKeys:        z.internals.UnknownKeys,
+		IsPartial:          z.internals.IsPartial,
+		PartialExceptions:  z.internals.PartialExceptions,
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
@@ -510,7 +632,8 @@ func (z *ZodObject[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies type-safe validation using constraint type
+// Refine applies type-safe validation using constraint type.
+// Schemas with refinements cannot use Pick/Omit (Zod v4 compatible).
 func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R] {
 	wrapper := func(v any) bool {
 		if v == nil {
@@ -529,10 +652,13 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	result := z.withInternals(newInternals)
+	result.internals.HasUserRefinements = true // Mark as having user refinements
+	return result
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny provides flexible validation without type conversion.
+// Schemas with refinements cannot use Pick/Omit (Zod v4 compatible).
 func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject[T, R] {
 	// Use unified parameter handling
 	param := utils.GetFirstParam(params...)
@@ -540,7 +666,9 @@ func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject
 	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	result := z.withInternals(newInternals)
+	result.internals.HasUserRefinements = true // Mark as having user refinements
+	return result
 }
 
 // =============================================================================
@@ -550,26 +678,28 @@ func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject
 // withPtrInternals creates new instance with pointer constraint type
 func (z *ZodObject[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodObject[T, *T] {
 	return &ZodObject[T, *T]{internals: &ZodObjectInternals{
-		ZodTypeInternals:  *in,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		Catchall:          z.internals.Catchall,
-		UnknownKeys:       z.internals.UnknownKeys,
-		IsPartial:         z.internals.IsPartial,
-		PartialExceptions: z.internals.PartialExceptions,
+		ZodTypeInternals:   *in,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           z.internals.Catchall,
+		UnknownKeys:        z.internals.UnknownKeys,
+		IsPartial:          z.internals.IsPartial,
+		PartialExceptions:  z.internals.PartialExceptions,
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
 // withInternals creates new instance preserving type
 func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T, R] {
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
-		ZodTypeInternals:  *in,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		Catchall:          z.internals.Catchall,
-		UnknownKeys:       z.internals.UnknownKeys,
-		IsPartial:         z.internals.IsPartial,
-		PartialExceptions: z.internals.PartialExceptions,
+		ZodTypeInternals:   *in,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           z.internals.Catchall,
+		UnknownKeys:        z.internals.UnknownKeys,
+		IsPartial:          z.internals.IsPartial,
+		PartialExceptions:  z.internals.PartialExceptions,
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
@@ -577,13 +707,14 @@ func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T,
 func (z *ZodObject[T, R]) withUnknownKeys(mode ObjectMode) *ZodObject[T, R] {
 	newInternals := z.internals.Clone()
 	return &ZodObject[T, R]{internals: &ZodObjectInternals{
-		ZodTypeInternals:  *newInternals,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		Catchall:          z.internals.Catchall,
-		UnknownKeys:       mode,
-		IsPartial:         z.internals.IsPartial,
-		PartialExceptions: z.internals.PartialExceptions,
+		ZodTypeInternals:   *newInternals,
+		Def:                z.internals.Def,
+		Shape:              z.internals.Shape,
+		Catchall:           z.internals.Catchall,
+		UnknownKeys:        mode,
+		IsPartial:          z.internals.IsPartial,
+		PartialExceptions:  z.internals.PartialExceptions,
+		HasUserRefinements: z.internals.HasUserRefinements,
 	}}
 }
 
@@ -770,6 +901,17 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 				rawIssue.Path = []any{fieldName}
 				collectedIssues = append(collectedIssues, rawIssue)
 			}
+			continue
+		}
+
+		// Check for explicit nil on ExactOptional fields (Zod v4: exactOptional rejects undefined/nil)
+		if fieldValue == nil && z.isFieldExactOptional(fieldSchema) {
+			rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Field %s cannot be explicitly nil (use absent key instead)", fieldName), map[string]any{
+				"expected": "string", // or the actual expected type
+				"received": "nil",
+			}, nil)
+			rawIssue.Path = []any{fieldName}
+			collectedIssues = append(collectedIssues, rawIssue)
 			continue
 		}
 
@@ -1001,6 +1143,31 @@ func (z *ZodObject[T, R]) isFieldOptional(schema any, fieldName string) bool {
 	return false
 }
 
+// isFieldExactOptional checks if a field schema has ExactOptional set
+// ExactOptional accepts absent keys but rejects explicit nil values
+func (z *ZodObject[T, R]) isFieldExactOptional(schema any) bool {
+	if schema == nil {
+		return false
+	}
+
+	schemaValue := reflect.ValueOf(schema)
+	if !schemaValue.IsValid() || schemaValue.IsNil() {
+		return false
+	}
+
+	// Try to get internals to check if ExactOptional
+	if internalsMethod := schemaValue.MethodByName("GetInternals"); internalsMethod.IsValid() {
+		results := internalsMethod.Call(nil)
+		if len(results) > 0 {
+			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
+				return internals.ExactOptional
+			}
+		}
+	}
+
+	return false
+}
+
 // newZodObjectFromDef constructs new ZodObject from definition
 func newZodObjectFromDef[T any, R any](def *ZodObjectDef) *ZodObject[T, R] {
 	internals := &ZodObjectInternals{
@@ -1137,6 +1304,12 @@ func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+func (z *ZodObject[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodObject[T, R] {
+	return z.Check(fn, params...)
 }
 
 // extractObjectForEngine extracts map[string]any from input for engine.ParseComplex

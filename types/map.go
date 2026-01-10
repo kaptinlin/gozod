@@ -257,6 +257,23 @@ func (z *ZodMap[T, R]) Meta(meta core.GlobalMeta) *ZodMap[T, R] {
 	return z
 }
 
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodMap[T, R]) Describe(description string) *ZodMap[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
+}
+
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
@@ -298,6 +315,12 @@ func (z *ZodMap[T, R]) Size(exactLen int, params ...any) *ZodMap[T, R] {
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// NonEmpty ensures map has at least one entry.
+// This is a convenience method equivalent to Min(1).
+func (z *ZodMap[T, R]) NonEmpty(params ...any) *ZodMap[T, R] {
+	return z.Min(1, params...)
 }
 
 // =============================================================================
@@ -910,6 +933,12 @@ func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+func (z *ZodMap[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
+	return z.Check(fn, params...)
 }
 
 // extractMapForEngine extracts map[any]any from input for engine.ParseComplex

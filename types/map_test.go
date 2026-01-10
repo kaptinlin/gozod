@@ -316,6 +316,38 @@ func TestMap_ValidationMethods(t *testing.T) {
 		_, err = mapSchema.Parse(invalidMap2)
 		assert.Error(t, err)
 	})
+
+	t.Run("NonEmpty validation", func(t *testing.T) {
+		mapSchema := Map(String(), Int()).NonEmpty()
+
+		// Should pass with 1+ entries
+		validMap := map[any]any{"key1": 1}
+		result, err := mapSchema.Parse(validMap)
+		require.NoError(t, err)
+		assert.Equal(t, validMap, result)
+
+		// Should pass with multiple entries
+		multiMap := map[any]any{"key1": 1, "key2": 2, "key3": 3}
+		result, err = mapSchema.Parse(multiMap)
+		require.NoError(t, err)
+		assert.Equal(t, multiMap, result)
+
+		// Should fail with empty map
+		emptyMap := map[any]any{}
+		_, err = mapSchema.Parse(emptyMap)
+		assert.Error(t, err)
+	})
+
+	t.Run("NonEmpty with custom error message", func(t *testing.T) {
+		customError := "Map cannot be empty"
+		mapSchema := Map(String(), Int()).NonEmpty(customError)
+
+		// Should fail with custom error message
+		emptyMap := map[any]any{}
+		_, err := mapSchema.Parse(emptyMap)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), customError)
+	})
 }
 
 // =============================================================================

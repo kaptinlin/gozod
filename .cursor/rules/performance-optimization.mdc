@@ -65,12 +65,12 @@ func processValidatedData(users []User) error {
 
 ---
 
-## 🔧 Go 1.24+ Advanced Optimization Patterns
+## 🔧 Go 1.25+ Advanced Optimization Patterns
 
 ### 1. Enhanced Generic Type Inference
 
 ```go
-// Go 1.24 Enhanced Pattern - Type inference optimization
+// Go 1.25 Enhanced Pattern - Type inference optimization
 func NewString[T StringConstraint]() *ZodString[T] {
     // Compiler optimizes constraint type inference
     var zero T
@@ -80,19 +80,19 @@ func NewString[T StringConstraint]() *ZodString[T] {
     return createStringSchema[T](core.ZodTypeString)
 }
 
-// Advanced constraint with Go 1.24 comparable enhancement
+// Advanced constraint with Go 1.25 comparable enhancement
 type EnumConstraint[T comparable] interface {
     T | *T
-    comparable  // Go 1.24 enhanced comparable interface
+    comparable  // Go 1.25 enhanced comparable interface
 }
 ```
 
 ### 2. Optimized Type Assertion Patterns
 
 ```go
-// Go 1.24 Optimized type switch pattern
+// Go 1.25 Optimized type switch pattern
 func (z *ZodString[T]) fastPath(input any) (T, bool) {
-    // Compiler optimizations for type switches in Go 1.24
+    // Compiler optimizations for type switches in Go 1.25
     switch v := input.(type) {
     case string:
         // Direct type conversion - zero overhead
@@ -112,7 +112,7 @@ func (z *ZodString[T]) fastPath(input any) (T, bool) {
 ### 3. Memory Layout Optimizations
 
 ```go
-// Go 1.24 Memory-optimized internal structure
+// Go 1.25 Memory-optimized internal structure
 type ZodStringInternals struct {
     core.ZodTypeInternals
     
@@ -354,16 +354,17 @@ func (z *ZodStruct[T, R]) validateInPlace(ptr *T) error {
 
 ## 🔍 Performance Testing and Benchmarking
 
-### 1. Required Benchmark Patterns
+### 1. Required Benchmark Patterns (Go 1.25+)
+
+Use `for b.Loop()` instead of the legacy `for i := 0; i < b.N; i++` pattern:
 
 ```go
 // Benchmark Parse vs StrictParse performance
 func BenchmarkStringParse(b *testing.B) {
     schema := gozod.String().Min(5).Max(100)
     input := "test string value"
-    
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
+
+    for b.Loop() {
         _, err := schema.Parse(input)
         if err != nil {
             b.Fatal(err)
@@ -374,9 +375,8 @@ func BenchmarkStringParse(b *testing.B) {
 func BenchmarkStringStrictParse(b *testing.B) {
     schema := gozod.String().Min(5).Max(100)
     input := "test string value"
-    
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
+
+    for b.Loop() {
         _, err := schema.StrictParse(input)
         if err != nil {
             b.Fatal(err)
@@ -388,11 +388,10 @@ func BenchmarkStringStrictParse(b *testing.B) {
 func BenchmarkStringParseAllocs(b *testing.B) {
     schema := gozod.String().Min(5)
     input := "test"
-    
+
     b.ReportAllocs()
-    b.ResetTimer()
-    
-    for i := 0; i < b.N; i++ {
+
+    for b.Loop() {
         schema.Parse(input)
     }
 }
@@ -405,21 +404,21 @@ func BenchmarkStringParseAllocs(b *testing.B) {
 func TestPerformanceRegression(t *testing.T) {
     schema := gozod.String().Min(5).Max(100)
     input := "test string value"
-    
+
     // Baseline measurement
     baseline := testing.Benchmark(func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
+        for b.Loop() {
             schema.Parse(input)
         }
     })
-    
+
     // StrictParse should be significantly faster
     strictResult := testing.Benchmark(func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
+        for b.Loop() {
             schema.StrictParse(input)
         }
     })
-    
+
     // Assert performance improvement
     speedup := float64(baseline.NsPerOp()) / float64(strictResult.NsPerOp())
     if speedup < 2.0 {
@@ -518,10 +517,11 @@ func (c *BoundedCache[K, V]) Set(key K, value V) {
 - [ ] Real-world scenario benchmarks with representative data
 - [ ] Race detection tests pass with -race flag
 
-### Go 1.24+ Specific
+### Go 1.25+ Specific
 - [ ] Enhanced generic type inference patterns utilized
 - [ ] Advanced comparable interface constraints implemented
 - [ ] Memory layout optimized for cache locality
 - [ ] Compile-time optimizations leveraged for known types
+- [ ] Use `for b.Loop()` instead of `for i := 0; i < b.N; i++` in benchmarks
 
 This guide ensures that GoZod maintains excellent performance while providing both flexibility (Parse) and type safety (StrictParse) for different use cases.

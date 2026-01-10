@@ -643,3 +643,232 @@ func TestUnion_NonOptional(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+// =============================================================================
+// XOR (EXCLUSIVE UNION) TESTS - Zod v4 Compatible
+// =============================================================================
+
+func TestZodXor_ExactlyOneMatchSucceeds(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	// String matches exactly one option
+	result, err := schema.Parse("hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", result)
+
+	// Integer matches exactly one option
+	result, err = schema.Parse(42)
+	require.NoError(t, err)
+	assert.Equal(t, 42, result)
+}
+
+func TestZodXor_ZeroMatchesFails(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	// Boolean doesn't match any option
+	_, err := schema.Parse(true)
+	assert.Error(t, err)
+}
+
+func TestZodXor_MultipleMatchesFails(t *testing.T) {
+	// Create overlapping schemas: string() and any() both match strings
+	schema := Xor([]any{String(), Unknown()})
+
+	// "hello" matches both string and any - should fail
+	_, err := schema.Parse("hello")
+	assert.Error(t, err)
+	// Zod v4 compatible: uses InvalidUnion code, formatted as "Invalid input" by locale
+	assert.Contains(t, err.Error(), "Invalid input")
+}
+
+func TestZodXor_WithCustomErrorMessage(t *testing.T) {
+	schema := Xor([]any{String(), Int()}, "Expected exactly one of string or number")
+
+	// Boolean doesn't match any option
+	_, err := schema.Parse(true)
+	assert.Error(t, err)
+}
+
+func TestZodXor_XorOf_VariadicSyntax(t *testing.T) {
+	schema := XorOf(String(), Int(), Bool())
+
+	// String matches exactly one
+	result, err := schema.Parse("hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", result)
+
+	// Integer matches exactly one
+	result, err = schema.Parse(42)
+	require.NoError(t, err)
+	assert.Equal(t, 42, result)
+
+	// Boolean matches exactly one
+	result, err = schema.Parse(true)
+	require.NoError(t, err)
+	assert.Equal(t, true, result)
+}
+
+func TestZodXor_StrictParse(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	// StrictParse with valid string
+	result, err := schema.StrictParse("hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", result)
+}
+
+func TestZodXor_MustParse_Success(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	// MustParse with valid input should not panic
+	result := schema.MustParse("hello")
+	assert.Equal(t, "hello", result)
+}
+
+func TestZodXor_MustParse_Panic(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	// MustParse with invalid input should panic
+	assert.Panics(t, func() {
+		schema.MustParse(true)
+	})
+}
+
+func TestZodXor_ParseAny(t *testing.T) {
+	schema := Xor([]any{String(), Int()})
+
+	result, err := schema.ParseAny("hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", result)
+}
+
+// =============================================================================
+// Enhanced XOR Tests - Zod v4 Compatibility
+// =============================================================================
+
+func TestZodXor_EnhancedCoverage(t *testing.T) {
+	t.Run("Xor with complex object schemas", func(t *testing.T) {
+		dogSchema := Object(core.ObjectSchema{
+			"type": Literal("dog"),
+			"bark": String(),
+		})
+		catSchema := Object(core.ObjectSchema{
+			"type": Literal("cat"),
+			"meow": String(),
+		})
+
+		schema := Xor([]any{dogSchema, catSchema})
+
+		// Dog should match
+		result, err := schema.Parse(map[string]any{"type": "dog", "bark": "woof"})
+		require.NoError(t, err)
+		resultMap := result.(map[string]any)
+		assert.Equal(t, "dog", resultMap["type"])
+
+		// Cat should match
+		result, err = schema.Parse(map[string]any{"type": "cat", "meow": "meow"})
+		require.NoError(t, err)
+		resultMap = result.(map[string]any)
+		assert.Equal(t, "cat", resultMap["type"])
+	})
+
+	t.Run("Xor error message for multiple matches is clear", func(t *testing.T) {
+		// Schema where both could match
+		schema := Xor([]any{String(), Unknown()})
+
+		_, err := schema.Parse("hello") // Matches both
+		require.Error(t, err)
+		// Verify error indicates multiple matches
+		assert.Contains(t, err.Error(), "Invalid input")
+	})
+
+	t.Run("Xor with MustParse", func(t *testing.T) {
+		schema := Xor([]any{String(), Int()})
+
+		// Valid value should not panic
+		result := schema.MustParse("hello")
+		assert.Equal(t, "hello", result)
+
+		// Invalid value should panic
+		assert.Panics(t, func() {
+			schema.MustParse(true) // bool matches neither string nor int
+		})
+	})
+
+	t.Run("Xor with MustStrictParse", func(t *testing.T) {
+		schema := Xor([]any{String(), Int()})
+
+		// Valid value should not panic
+		result := schema.MustStrictParse("hello")
+		assert.Equal(t, "hello", result)
+
+		// Invalid value should panic
+		assert.Panics(t, func() {
+			schema.MustStrictParse(true) // bool matches neither string nor int
+		})
+	})
+
+	t.Run("Xor preserves immutability with schema modifications", func(t *testing.T) {
+		// Create two separate xor schemas
+		schema1 := Xor([]any{String(), Int()})
+		schema2 := Xor([]any{Bool(), Float64()})
+
+		// They should be independent
+		result1, err := schema1.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result1)
+
+		result2, err := schema2.Parse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result2)
+
+		// schema1 should not accept bool
+		_, err = schema1.Parse(true)
+		require.Error(t, err)
+
+		// schema2 should not accept string
+		_, err = schema2.Parse("hello")
+		require.Error(t, err)
+	})
+
+	t.Run("Xor with nested unions", func(t *testing.T) {
+		innerXor := XorOf(String(), Bool())
+		outerXor := XorOf(innerXor, Int())
+
+		// String matches through inner
+		result, err := outerXor.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		// Int matches directly
+		result, err = outerXor.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		// Bool matches through inner
+		result, err = outerXor.Parse(true)
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+
+	t.Run("Xor Options method returns member schemas", func(t *testing.T) {
+		stringSchema := String()
+		intSchema := Int()
+		boolSchema := Bool()
+
+		xor := Xor([]any{stringSchema, intSchema, boolSchema})
+
+		options := xor.Options()
+		assert.Len(t, options, 3)
+
+		// Verify all options are present and functional
+		_, err1 := options[0].ParseAny("test")
+		assert.NoError(t, err1, "First option should accept strings")
+
+		_, err2 := options[1].ParseAny(123)
+		assert.NoError(t, err2, "Second option should accept ints")
+
+		_, err3 := options[2].ParseAny(true)
+		assert.NoError(t, err3, "Third option should accept bools")
+	})
+}

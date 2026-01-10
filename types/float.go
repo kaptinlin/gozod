@@ -194,6 +194,15 @@ func (z *ZodFloatTyped[T, R]) Optional() *ZodFloatTyped[T, *T] {
 	return z.withPtrInternals(in)
 }
 
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional(), which accepts both absent keys AND nil values,
+// ExactOptional() only accepts absent keys in object fields.
+func (z *ZodFloatTyped[T, R]) ExactOptional() *ZodFloatTyped[T, R] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
 // Nilable returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodFloatTyped[T, R]) Nilable() *ZodFloatTyped[T, *T] {
 	in := z.internals.Clone()
@@ -318,6 +327,23 @@ func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, 
 func (z *ZodFloatTyped[T, R]) Meta(meta core.GlobalMeta) *ZodFloatTyped[T, R] {
 	clone := z.withInternals(&z.internals.ZodTypeInternals)
 	core.GlobalRegistry.Add(clone, meta)
+	return clone
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodFloatTyped[T, R]) Describe(description string) *ZodFloatTyped[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
 	return clone
 }
 
@@ -901,4 +927,13 @@ func (z *ZodFloatTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload)
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+//
+// This method exists for TypeScript Zod v4 API compatibility, where .with() is
+// simply an alias for .check().
+func (z *ZodFloatTyped[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodFloatTyped[T, R] {
+	return z.Check(fn, params...)
 }

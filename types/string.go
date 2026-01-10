@@ -149,6 +149,16 @@ func (z *ZodString[T]) Optional() *ZodString[*string] {
 	return z.withPtrInternals(in)
 }
 
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional(), which accepts both absent keys AND nil values,
+// ExactOptional() only accepts absent keys in object fields.
+// The output type remains the same as the input type (no | undefined).
+func (z *ZodString[T]) ExactOptional() *ZodString[T] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
 // Nilable always returns *string because the value may be nil.
 func (z *ZodString[T]) Nilable() *ZodString[*string] {
 	in := z.internals.Clone()
@@ -536,6 +546,15 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+//
+// This method exists for TypeScript Zod v4 API compatibility, where .with() is
+// simply an alias for .check().
+func (z *ZodString[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
+	return z.Check(fn, params...)
 }
 
 // =============================================================================

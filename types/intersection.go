@@ -102,30 +102,34 @@ func (z *ZodIntersection[T, R]) validateIntersectionValue(value any, checks []co
 	// Parse with right schema using ParseAny
 	rightResult, rightErr := z.internals.Right.ParseAny(value, ctx)
 
-	// Collect all errors
-	var allErrors []core.ZodIssue
+	// Collect issues from both sides
+	var leftIssues, rightIssues []core.ZodIssue
 	if leftErr != nil {
 		var zErr *issues.ZodError
 		if issues.IsZodError(leftErr, &zErr) {
-			allErrors = append(allErrors, zErr.Issues...)
+			leftIssues = zErr.Issues
 		} else {
 			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(leftErr.Error()))
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
+			leftIssues = append(leftIssues, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
 		}
 	}
 	if rightErr != nil {
 		var zErr *issues.ZodError
 		if issues.IsZodError(rightErr, &zErr) {
-			allErrors = append(allErrors, zErr.Issues...)
+			rightIssues = zErr.Issues
 		} else {
 			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(rightErr.Error()))
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
+			rightIssues = append(rightIssues, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
 		}
 	}
 
-	// If either side failed, return all errors
-	if len(allErrors) > 0 {
-		return nil, issues.NewZodError(allErrors)
+	// Merge unrecognized_keys issues (Zod v4 behavior)
+	// Keys recognized by either side should not be reported as unrecognized
+	mergedIssues := mergeUnrecognizedKeysIssues(leftIssues, rightIssues)
+
+	// If there are remaining issues after merge, return error
+	if len(mergedIssues) > 0 {
+		return nil, issues.NewZodError(mergedIssues)
 	}
 
 	// Both sides succeeded, attempt to merge results
@@ -142,6 +146,74 @@ func (z *ZodIntersection[T, R]) validateIntersectionValue(value any, checks []co
 	}
 
 	return merged, nil
+}
+
+// mergeUnrecognizedKeysIssues filters unrecognized_keys issues to only include
+// keys that both sides reported as unrecognized. This is Zod v4 compatible behavior.
+// For intersection of strict objects, a key is only truly unrecognized if BOTH sides reject it.
+func mergeUnrecognizedKeysIssues(leftIssues, rightIssues []core.ZodIssue) []core.ZodIssue {
+	// Track which keys each side reported as unrecognized
+	type keyFlag struct {
+		left, right bool
+	}
+	unrecKeys := make(map[string]*keyFlag)
+
+	// Collect left side unrecognized keys
+	var leftNonUnrecIssues []core.ZodIssue
+	for _, iss := range leftIssues {
+		if iss.Code == core.UnrecognizedKeys {
+			// Extract keys from issue (Keys is []string)
+			for _, k := range iss.Keys {
+				if unrecKeys[k] == nil {
+					unrecKeys[k] = &keyFlag{}
+				}
+				unrecKeys[k].left = true
+			}
+		} else {
+			leftNonUnrecIssues = append(leftNonUnrecIssues, iss)
+		}
+	}
+
+	// Collect right side unrecognized keys
+	var rightNonUnrecIssues []core.ZodIssue
+	for _, iss := range rightIssues {
+		if iss.Code == core.UnrecognizedKeys {
+			for _, k := range iss.Keys {
+				if unrecKeys[k] == nil {
+					unrecKeys[k] = &keyFlag{}
+				}
+				unrecKeys[k].right = true
+			}
+		} else {
+			rightNonUnrecIssues = append(rightNonUnrecIssues, iss)
+		}
+	}
+
+	// Find keys that BOTH sides reported as unrecognized
+	var bothUnrecKeys []string
+	for k, flags := range unrecKeys {
+		if flags.left && flags.right {
+			bothUnrecKeys = append(bothUnrecKeys, k)
+		}
+	}
+
+	// Combine non-unrecognized issues
+	mergedIssues := leftNonUnrecIssues
+	mergedIssues = append(mergedIssues, rightNonUnrecIssues...)
+
+	// Add merged unrecognized_keys issue if any
+	if len(bothUnrecKeys) > 0 {
+		unrecIssue := core.ZodIssue{
+			ZodIssueBase: core.ZodIssueBase{
+				Code:    core.UnrecognizedKeys,
+				Message: fmt.Sprintf("Unrecognized key(s) in object: %s", strings.Join(bothUnrecKeys, ", ")),
+			},
+			Keys: bothUnrecKeys,
+		}
+		mergedIssues = append(mergedIssues, unrecIssue)
+	}
+
+	return mergedIssues
 }
 
 // MustParse validates the input value and panics on failure
@@ -176,31 +248,35 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 	// Parse with right schema using ParseAny
 	rightResult, rightErr := z.internals.Right.ParseAny(convertedInput, parseCtx)
 
-	// Collect all errors
-	var allErrors []core.ZodIssue
+	// Collect issues from both sides
+	var leftIssues, rightIssues []core.ZodIssue
 	if leftErr != nil {
 		var zErr *issues.ZodError
 		if issues.IsZodError(leftErr, &zErr) {
-			allErrors = append(allErrors, zErr.Issues...)
+			leftIssues = zErr.Issues
 		} else {
 			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(leftErr.Error()))
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+			leftIssues = append(leftIssues, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
 		}
 	}
 	if rightErr != nil {
 		var zErr *issues.ZodError
 		if issues.IsZodError(rightErr, &zErr) {
-			allErrors = append(allErrors, zErr.Issues...)
+			rightIssues = zErr.Issues
 		} else {
 			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(rightErr.Error()))
-			allErrors = append(allErrors, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
+			rightIssues = append(rightIssues, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
 		}
 	}
 
-	// If either side failed, return all errors
-	if len(allErrors) > 0 {
+	// Merge unrecognized_keys issues (Zod v4 behavior)
+	// Keys recognized by either side should not be reported as unrecognized
+	mergedIssues := mergeUnrecognizedKeysIssues(leftIssues, rightIssues)
+
+	// If there are remaining issues after merge, return error
+	if len(mergedIssues) > 0 {
 		var zero R
-		return zero, issues.NewZodError(allErrors)
+		return zero, issues.NewZodError(mergedIssues)
 	}
 
 	// Both sides succeeded, attempt to merge results
@@ -311,6 +387,23 @@ func (z *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R]
 func (z *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodIntersection[T, R]) Describe(description string) *ZodIntersection[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================

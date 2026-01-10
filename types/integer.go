@@ -447,6 +447,15 @@ func (z *ZodIntegerTyped[T, R]) Optional() *ZodIntegerTyped[T, *T] {
 	return z.withPtrInternals(in)
 }
 
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional(), which accepts both absent keys AND nil values,
+// ExactOptional() only accepts absent keys in object fields.
+func (z *ZodIntegerTyped[T, R]) ExactOptional() *ZodIntegerTyped[T, R] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
 // Nilable returns a schema that accepts the base type T or nil, with constraint type *T.
 func (z *ZodIntegerTyped[T, R]) Nilable() *ZodIntegerTyped[T, *T] {
 	in := z.internals.Clone()
@@ -569,6 +578,23 @@ func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R]
 func (z *ZodIntegerTyped[T, R]) Meta(meta core.GlobalMeta) *ZodIntegerTyped[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodIntegerTyped[T, R]) Describe(description string) *ZodIntegerTyped[T, R] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================
@@ -1468,4 +1494,13 @@ func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayloa
 	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+//
+// This method exists for TypeScript Zod v4 API compatibility, where .with() is
+// simply an alias for .check().
+func (z *ZodIntegerTyped[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodIntegerTyped[T, R] {
+	return z.Check(fn, params...)
 }

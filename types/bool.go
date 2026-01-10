@@ -138,6 +138,15 @@ func (z *ZodBool[T]) Optional() *ZodBool[*bool] {
 	return z.withPtrInternals(in)
 }
 
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional(), which accepts both absent keys AND nil values,
+// ExactOptional() only accepts absent keys in object fields.
+func (z *ZodBool[T]) ExactOptional() *ZodBool[T] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
 // Nilable always returns *bool because the value may be nil.
 func (z *ZodBool[T]) Nilable() *ZodBool[*bool] {
 	in := z.internals.Clone()
@@ -208,6 +217,23 @@ func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
 func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
+}
+
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodBool[T]) Describe(description string) *ZodBool[T] {
+	newInternals := z.internals.Clone()
+
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+
+	return clone
 }
 
 // =============================================================================
@@ -533,6 +559,15 @@ func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check - adds a custom validation function.
+// TypeScript Zod v4 equivalent: schema.with(...)
+//
+// This method exists for TypeScript Zod v4 API compatibility, where .with() is
+// simply an alias for .check().
+func (z *ZodBool[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodBool[T] {
+	return z.Check(fn, params...)
 }
 
 // NonOptional removes the optional flag and forces return type to bool.

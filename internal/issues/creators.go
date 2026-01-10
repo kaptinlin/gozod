@@ -525,6 +525,21 @@ func CreateInvalidUnionError(unionErrors []error, input any, ctx *core.ParseCont
 	return NewZodError([]core.ZodIssue{final})
 }
 
+// CreateInvalidXorError creates a standardized exclusive union error when multiple options match
+// Zod v4 xor semantics: exactly one option must match
+// Uses InvalidUnion code with inclusive=false to indicate exclusive union (xor) failure
+// See: .reference/zod/packages/zod/src/v4/core/schemas.ts:2185-2192
+func CreateInvalidXorError(matchCount int, input any, ctx *core.ParseContext) error {
+	properties := map[string]any{
+		"errors":      []core.ZodRawIssue{}, // Empty errors array for multiple match case
+		"inclusive":   false,                // Zod v4: inclusive=false indicates xor (exclusive union)
+		"match_count": matchCount,           // Additional context for debugging
+	}
+	raw := CreateIssue(core.InvalidUnion, "", properties, input)
+	final := FinalizeIssue(raw, ctx, nil)
+	return NewZodError([]core.ZodIssue{final})
+}
+
 // CreateMissingRequiredError creates a standardized missing required field error with proper context
 func CreateMissingRequiredError(fieldName string, fieldType string, input any, ctx *core.ParseContext) error {
 	raw := CreateMissingRequiredIssue(fieldName, fieldType)

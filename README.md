@@ -258,10 +258,10 @@ alice.Friends = []*User{bob} // Circular reference
 result, err := schema.Parse(*alice) // ✅ Handles circular reference safely
 ```
 
-### Union and Intersection Types
+### Union, Xor, and Intersection Types
 
 ```go
-// Union types - accepts one of multiple schemas
+// Union types - accepts one of multiple schemas (any match succeeds)
 unionSchema := gozod.Union(
     gozod.String(),
     gozod.Int(),
@@ -270,11 +270,20 @@ result, _ := unionSchema.Parse("hello") // ✅ Matches string
 result, _ = unionSchema.Parse(42)       // ✅ Matches int
 result, _ = unionSchema.Parse(true)     // ❌ No union member matched
 
+// Xor types - exactly one schema must match (exclusive union)
+xorSchema := gozod.Xor([]any{
+    gozod.Email(),  // Email format validator
+    gozod.URL(),    // URL format validator
+})
+result, _ = xorSchema.Parse("user@example.com")  // ✅ Matches email only
+result, _ = xorSchema.Parse("https://site.com")  // ✅ Matches URL only
+result, _ = xorSchema.Parse("invalid")           // ❌ Matches neither
+
 // Intersection types - must satisfy all schemas
 intersectionSchema := gozod.Intersection(
-    gozod.String().Min(3),           // At least 3 chars
-    gozod.String().Max(10),          // At most 10 chars
-    gozod.String().Regex(`^[a-z]+$`), // Only lowercase
+    gozod.String().Min(3),              // At least 3 chars
+    gozod.String().Max(10),             // At most 10 chars
+    gozod.String().RegexString(`^[a-z]+$`), // Only lowercase
 )
 result, _ = intersectionSchema.Parse("hello")  // ✅ Satisfies all constraints
 result, _ = intersectionSchema.Parse("HELLO")  // ❌ Not lowercase
@@ -309,7 +318,9 @@ func main() {
 ```go
 // Strings with format validation
 gozod.String().Min(3).Max(100).Email()
-gozod.String().URL().UUID().Regex(`^\d+$`)
+gozod.String().RegexString(`^\d+$`)
+gozod.Uuid()  // UUID format validator
+gozod.URL()   // URL format validator
 
 // Numbers with range validation  
 gozod.Int().Min(0).Max(120).Positive()
@@ -329,9 +340,25 @@ gozod.Time().After(startDate).Before(endDate)
 gozod.Array(gozod.String()).Min(1).Max(10)
 gozod.Slice(gozod.Int()).NonEmpty()
 
+// Tuples - Fixed-length arrays with typed elements
+tuple := gozod.Tuple(gozod.String(), gozod.Int(), gozod.Bool())
+result, _ := tuple.Parse([]any{"hello", 42, true})
+
+// Tuple with rest element for variadic trailing elements
+tupleWithRest := gozod.TupleWithRest(
+    []core.ZodSchema{gozod.String(), gozod.Int()},
+    gozod.Bool(), // additional elements must be booleans
+)
+
 // Maps
-gozod.Map(gozod.String()) // map[string]string
+gozod.Map(gozod.String()).NonEmpty() // map[string]string, at least one entry
 gozod.Map(gozod.Struct[User]()) // map[string]User
+
+// Records with key validation
+gozod.Record(gozod.String().Regex(`^[a-z]+$`), gozod.Int()) // lowercase keys only
+
+// LooseRecord - passes through non-matching keys unchanged
+gozod.LooseRecord(gozod.String().Regex(`^S_`), gozod.String())
 
 // Objects (map[string]any)
 gozod.Object(gozod.ObjectSchema{
@@ -358,6 +385,19 @@ nodeSchema = gozod.Lazy(func() gozod.ZodType[Node] {
         "children": gozod.Array(nodeSchema), // Self-reference
     })
 })
+
+// Schema metadata
+schema := gozod.String().Email().Describe("User's primary email")
+schema = gozod.Int().Meta(gozod.GlobalMeta{
+    Title:       "Age",
+    Description: "User's age in years",
+})
+
+// Apply - Compose reusable schema modifiers
+func addCommonChecks[T types.StringConstraint](s *gozod.ZodString[T]) *gozod.ZodString[T] {
+    return s.Min(1).Max(100).Trim()
+}
+schema := gozod.Apply(gozod.String(), addCommonChecks)
 ```
 
 ## 🔧 Error Handling

@@ -73,13 +73,15 @@ const (
 	// Collection types
 	ZodTypeArray  ZodTypeCode = "array"  // Fixed-length array
 	ZodTypeSlice  ZodTypeCode = "slice"  // Dynamic array/slice
+	ZodTypeTuple  ZodTypeCode = "tuple"  // Fixed-length tuple with heterogeneous types
 	ZodTypeObject ZodTypeCode = "object" // Object with known shape
 	ZodTypeStruct ZodTypeCode = "struct" // Go struct validation
 	ZodTypeRecord ZodTypeCode = "record" // Key-value record
 	ZodTypeMap    ZodTypeCode = "map"    // Go map validation
 
 	// Composite types
-	ZodTypeUnion         ZodTypeCode = "union"               // Union of multiple types
+	ZodTypeUnion         ZodTypeCode = "union"               // Union of multiple types (anyOf)
+	ZodTypeXor           ZodTypeCode = "xor"                 // Exclusive union (oneOf) - exactly one must match
 	ZodTypeDiscriminated ZodTypeCode = "discriminated_union" // Discriminated union
 	ZodTypeIntersection  ZodTypeCode = "intersection"        // Intersection of types
 
@@ -171,6 +173,7 @@ const (
 	ParsedTypeDate     ParsedType = "date"     // Date/time data type
 	ParsedTypeArray    ParsedType = "array"    // Fixed-size array data type
 	ParsedTypeSlice    ParsedType = "slice"    // Dynamic slice data type
+	ParsedTypeTuple    ParsedType = "tuple"    // Fixed-length tuple data type
 	ParsedTypeMap      ParsedType = "map"      // Map data type
 	ParsedTypeNaN      ParsedType = "nan"      // Not-a-Number data type
 	ParsedTypeNil      ParsedType = "nil"      // Nil/null data type

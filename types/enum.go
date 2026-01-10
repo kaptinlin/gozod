@@ -179,6 +179,20 @@ func (z *ZodEnum[T, R]) Meta(meta core.GlobalMeta) *ZodEnum[T, R] {
 	return z
 }
 
+// Describe registers a description in the global registry.
+// TypeScript Zod v4 equivalent: schema.describe(description)
+func (z *ZodEnum[T, R]) Describe(description string) *ZodEnum[T, R] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
 // =============================================================================
 // ENUM SPECIFIC METHODS
 // =============================================================================

@@ -146,6 +146,77 @@ gozod.Int32()    // => {"type": "integer", "minimum": ..., "maximum": ...}
 gozod.Int64()    // => {"type": "integer", "minimum": ..., "maximum": ...}
 ```
 
+## Tuple Types
+
+GoZod tuples convert to JSON Schema arrays with `prefixItems`:
+
+```go
+schema := gozod.Tuple(gozod.String(), gozod.Int(), gozod.Bool())
+jsonSchema, _ := gozod.ToJSONSchema(schema)
+```
+
+Result:
+```json
+{
+  "type": "array",
+  "prefixItems": [
+    {"type": "string"},
+    {"type": "integer"},
+    {"type": "boolean"}
+  ],
+  "minItems": 3,
+  "maxItems": 3
+}
+```
+
+### Tuple with Rest
+
+Tuples with rest elements use `items` for the rest schema:
+
+```go
+schema := gozod.TupleWithRest(
+    []core.ZodSchema{gozod.String(), gozod.Int()},
+    gozod.Bool(),
+)
+jsonSchema, _ := gozod.ToJSONSchema(schema)
+```
+
+Result:
+```json
+{
+  "type": "array",
+  "prefixItems": [
+    {"type": "string"},
+    {"type": "integer"}
+  ],
+  "items": {"type": "boolean"}
+}
+```
+
+## Xor (Exclusive Union)
+
+Xor schemas convert to JSON Schema `oneOf` (exactly one must match):
+
+```go
+schema := gozod.Xor([]any{
+    gozod.String().Email(),
+    gozod.String().URL(),
+})
+jsonSchema, _ := gozod.ToJSONSchema(schema)
+```
+
+Result:
+```json
+{
+  "oneOf": [
+    {"type": "string", "format": "email"},
+    {"type": "string", "format": "uri"}
+  ]
+}
+```
+
+> **Note:** Both Xor and DiscriminatedUnion generate `oneOf` in JSON Schema.
+
 ## Nullability
 
 GoZod distinguishes between optional and nullable fields, which affects how they are represented in JSON Schema.
@@ -390,3 +461,111 @@ registry.Add(postSchema)
 // Schemas with IDs will be defined in `$defs` and can be referenced.
 rootSchema, _ := gozod.ToJSONSchema(registry)
 ```
+
+## Converting JSON Schema to GoZod
+
+GoZod also supports converting JSON Schema to GoZod schemas using `FromJSONSchema()`:
+
+```go
+import (
+    "github.com/kaptinlin/gozod"
+    lib "github.com/kaptinlin/jsonschema"
+)
+
+// Create a JSON Schema
+jsonSchema := &lib.Schema{}
+jsonSchema.Type = []string{"object"}
+props := lib.SchemaMap{
+    "name": &lib.Schema{Type: []string{"string"}},
+    "age":  &lib.Schema{Type: []string{"integer"}},
+}
+jsonSchema.Properties = &props
+jsonSchema.Required = []string{"name"}
+
+// Convert to GoZod schema
+zodSchema, err := gozod.FromJSONSchema(jsonSchema)
+if err != nil {
+    panic(err)
+}
+
+// Use the schema for validation
+result, err := zodSchema.ParseAny(map[string]any{
+    "name": "John",
+    "age":  30,
+})
+```
+
+### Tuple Conversion (prefixItems)
+
+JSON Schema Draft 2020-12 `prefixItems` are automatically converted to GoZod Tuple schemas:
+
+```go
+// JSON Schema with prefixItems
+schema := &lib.Schema{}
+schema.Type = []string{"array"}
+schema.PrefixItems = []*lib.Schema{
+    {Type: []string{"string"}},
+    {Type: []string{"integer"}},
+}
+
+zodSchema, _ := gozod.FromJSONSchema(schema)
+// Equivalent to: gozod.Tuple(gozod.String(), gozod.Int())
+
+result, _ := zodSchema.ParseAny([]any{"hello", 42})
+```
+
+With rest elements:
+
+```go
+// JSON Schema with prefixItems and items (rest)
+schema := &lib.Schema{}
+schema.Type = []string{"array"}
+schema.PrefixItems = []*lib.Schema{
+    {Type: []string{"string"}},
+}
+schema.Items = &lib.Schema{Type: []string{"boolean"}}
+
+zodSchema, _ := gozod.FromJSONSchema(schema)
+// Equivalent to: gozod.TupleWithRest([]core.ZodSchema{gozod.String()}, gozod.Bool())
+
+result, _ := zodSchema.ParseAny([]any{"hello", true, false})
+```
+
+### Strict Mode
+
+Use `StrictMode: true` to fail on unsupported JSON Schema features:
+
+```go
+zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
+    StrictMode: true,
+})
+if err != nil {
+    // Handle unsupported features
+}
+```
+
+### Supported Conversions
+
+| JSON Schema | GoZod Schema |
+|-------------|--------------|
+| `type: "string"` | `gozod.String()` |
+| `type: "number"` | `gozod.Number()` |
+| `type: "integer"` | `gozod.Int()` |
+| `type: "boolean"` | `gozod.Bool()` |
+| `type: "null"` | `gozod.Nil()` |
+| `type: "array"` | `gozod.Slice()` |
+| `type: "object"` | `gozod.Object()` |
+| `prefixItems` | `gozod.Tuple()` |
+| `anyOf` | `gozod.Union()` |
+| `oneOf` | `gozod.Xor()` |
+| `allOf` | `gozod.Intersection()` |
+| `const` | `gozod.Literal()` |
+| `enum` | `gozod.Enum()` |
+| `format: "email"` | `gozod.Email()` |
+| `format: "uuid"` | `gozod.Uuid()` |
+| `format: "uri"` | `gozod.URL()` |
+| `format: "date-time"` | `gozod.IsoDateTime()` |
+| `format: "date"` | `gozod.IsoDate()` |
+| `format: "time"` | `gozod.IsoTime()` |
+| `format: "ipv4"` | `gozod.IPv4()` |
+| `format: "ipv6"` | `gozod.IPv6()` |

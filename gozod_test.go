@@ -594,3 +594,241 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		t.Fatalf("registry lost metadata under concurrent access")
 	}
 }
+
+// =============================================================================
+// APPLY FUNCTION TESTS
+// =============================================================================
+
+func TestApply(t *testing.T) {
+	t.Run("basic apply with same schema type", func(t *testing.T) {
+		// Define a reusable modifier function
+		addMinMax := func(s *ZodString[string]) *ZodString[string] {
+			return s.Min(1).Max(100)
+		}
+
+		// Apply it to a schema
+		schema := Apply(String(), addMinMax)
+
+		// Test validation
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		// Test min constraint
+		_, err = schema.Parse("")
+		require.Error(t, err)
+
+		// Test max constraint (should fail for string over 100 chars)
+		longStr := make([]byte, 101)
+		for i := range longStr {
+			longStr[i] = 'a'
+		}
+		_, err = schema.Parse(string(longStr))
+		require.Error(t, err)
+	})
+
+	t.Run("apply with type transformation", func(t *testing.T) {
+		// Function that converts string schema to optional
+		makeOptional := func(s *ZodString[string]) *ZodString[*string] {
+			return s.Optional()
+		}
+
+		// Apply it
+		schema := Apply(String().Min(1), makeOptional)
+
+		// nil should be accepted for optional
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid string should work
+		result, err = schema.Parse("test")
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, "test", *result)
+	})
+
+	t.Run("apply with integer schema", func(t *testing.T) {
+		// Define common integer checks
+		addIntChecks := func(s *ZodInteger[int64, int64]) *ZodInteger[int64, int64] {
+			return s.Min(0).Max(100)
+		}
+
+		schema := Apply(Int64(), addIntChecks)
+
+		result, err := schema.Parse(int64(50))
+		require.NoError(t, err)
+		assert.Equal(t, int64(50), result)
+
+		// Negative should fail
+		_, err = schema.Parse(int64(-1))
+		require.Error(t, err)
+
+		// Over 100 should fail
+		_, err = schema.Parse(int64(101))
+		require.Error(t, err)
+	})
+
+	t.Run("chained apply calls", func(t *testing.T) {
+		addMin := func(s *ZodString[string]) *ZodString[string] {
+			return s.Min(2)
+		}
+
+		addMax := func(s *ZodString[string]) *ZodString[string] {
+			return s.Max(10)
+		}
+
+		// Chain multiple apply calls
+		schema := Apply(Apply(String(), addMin), addMax)
+
+		// Valid string
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+
+		// Too short
+		_, err = schema.Parse("a")
+		require.Error(t, err)
+
+		// Too long
+		_, err = schema.Parse("this is way too long")
+		require.Error(t, err)
+	})
+
+	t.Run("apply followed by method chaining", func(t *testing.T) {
+		addBase := func(s *ZodString[string]) *ZodString[string] {
+			return s.Min(1)
+		}
+
+		// Apply then chain additional methods
+		schema := Apply(String(), addBase).Max(50).Trim()
+
+		result, err := schema.Parse("  hello  ")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result) // Trimmed
+
+		_, err = schema.Parse("")
+		require.Error(t, err)
+	})
+
+	t.Run("apply returns callback result type", func(t *testing.T) {
+		// Function that returns a completely different type
+		convertToInt := func(_ *ZodString[string]) *ZodInteger[int, int] {
+			return Int().Min(0)
+		}
+
+		// The return type is now ZodInteger, not ZodString
+		schema := Apply(String(), convertToInt)
+
+		result, err := schema.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		_, err = schema.Parse(-1)
+		require.Error(t, err)
+	})
+
+	t.Run("apply with object schema", func(t *testing.T) {
+		addStrict := func(s *ZodObject[map[string]any, map[string]any]) *ZodObject[map[string]any, map[string]any] {
+			return s.Strict()
+		}
+
+		schema := Apply(Object(ObjectSchema{
+			"name": String(),
+		}), addStrict)
+
+		// Valid object
+		result, err := schema.Parse(map[string]any{"name": "Alice"})
+		require.NoError(t, err)
+		assert.Equal(t, "Alice", result["name"])
+
+		// Extra key should fail (strict mode)
+		_, err = schema.Parse(map[string]any{"name": "Alice", "extra": "value"})
+		require.Error(t, err)
+	})
+
+	t.Run("apply combined with nullable wrapper", func(t *testing.T) {
+		// Zod v4 pattern: z.nullable(z.number().apply(setCommonNumberChecks))
+		setChecks := func(s *ZodInteger[int, int]) *ZodInteger[int, int] {
+			return s.Min(0).Max(100)
+		}
+
+		// Apply first, then make nilable
+		schema := Apply(Int(), setChecks).Nilable()
+
+		// Valid range
+		result, err := schema.Parse(50)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 50, *result)
+
+		// nil is accepted
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Out of range fails
+		_, err = schema.Parse(-1)
+		require.Error(t, err)
+
+		_, err = schema.Parse(101)
+		require.Error(t, err)
+	})
+
+	t.Run("apply callback return value is the result", func(t *testing.T) {
+		// Zod v4: The callback's return value becomes the apply's return value
+		// This tests that Apply returns exactly what the callback returns
+
+		// Create a distinct schema via callback
+		distinctSchema := Int().Min(10)
+		getDistinctSchema := func(_ *ZodString[string]) *ZodInteger[int, int] {
+			return distinctSchema
+		}
+
+		result := Apply(String(), getDistinctSchema)
+
+		// The result should be the same schema instance from callback
+		assert.Equal(t, distinctSchema.GetInternals(), result.GetInternals())
+	})
+
+	t.Run("apply with slice schema", func(t *testing.T) {
+		addNonEmpty := func(s *ZodSlice[string, []string]) *ZodSlice[string, []string] {
+			return s.NonEmpty().Max(5)
+		}
+
+		schema := Apply(Slice[string](String()), addNonEmpty)
+
+		// Valid: non-empty within max
+		result, err := schema.Parse([]any{"a", "b", "c"})
+		require.NoError(t, err)
+		assert.Len(t, result, 3)
+
+		// Invalid: empty
+		_, err = schema.Parse([]any{})
+		require.Error(t, err)
+
+		// Invalid: too many
+		_, err = schema.Parse([]any{"1", "2", "3", "4", "5", "6"})
+		require.Error(t, err)
+	})
+
+	t.Run("apply preserves schema immutability", func(t *testing.T) {
+		addMin := func(s *ZodString[string]) *ZodString[string] {
+			return s.Min(5)
+		}
+
+		original := String()
+		applied := Apply(original, addMin)
+
+		// Original should not have min constraint
+		_, err := original.Parse("hi")
+		require.NoError(t, err)
+
+		// Applied should have min constraint
+		_, err = applied.Parse("hi")
+		require.Error(t, err)
+
+		_, err = applied.Parse("hello")
+		require.NoError(t, err)
+	})
+}

@@ -104,10 +104,11 @@ type ZodTypeInternals struct {
 	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload // The core parsing function for the type
 
 	// Core validation flags
-	Coerce      bool // Whether to enable type coercion
-	Optional    bool // Whether the field is optional
-	Nilable     bool // Whether nil values are allowed
-	NonOptional bool // True if .NonOptional() was applied, for error reporting
+	Coerce        bool // Whether to enable type coercion
+	Optional      bool // Whether the field is optional
+	Nilable       bool // Whether nil values are allowed
+	NonOptional   bool // True if .NonOptional() was applied, for error reporting
+	ExactOptional bool // True if .ExactOptional() was applied - accepts absent keys but rejects explicit nil
 
 	// Default/Prefault values
 	DefaultValue  any
@@ -192,6 +193,12 @@ func (z *ZodTypeInternals) IsNonOptional() bool {
 	return z.NonOptional
 }
 
+// IsExactOptional returns true if exact optional mode is enabled.
+// ExactOptional accepts absent keys but rejects explicit nil values.
+func (z *ZodTypeInternals) IsExactOptional() bool {
+	return z.ExactOptional
+}
+
 // SetOptional marks the field as optional.
 func (z *ZodTypeInternals) SetOptional(value bool) {
 	z.Optional = value
@@ -211,6 +218,21 @@ func (z *ZodTypeInternals) SetNilable(value bool) {
 // SetNonOptional marks the field as nonoptional (disallow nil with custom expected tag).
 func (z *ZodTypeInternals) SetNonOptional(value bool) {
 	z.NonOptional = value
+}
+
+// SetExactOptional enables exact optional mode.
+// ExactOptional accepts absent keys but rejects explicit nil values.
+//
+// Note: This also sets Optional=true because ExactOptional implies Optional
+// semantics for absent key handling. The difference between ExactOptional and
+// Optional is only in nil rejection - ExactOptional rejects explicit nil values
+// while Optional accepts them.
+func (z *ZodTypeInternals) SetExactOptional(value bool) {
+	z.ExactOptional = value
+	if value {
+		z.Optional = true // ExactOptional implies Optional for absent key handling
+		z.OptionalPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
+	}
 }
 
 // SetCoerce enables type coercion for this field.

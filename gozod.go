@@ -2,6 +2,7 @@ package gozod
 
 import (
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/types"
@@ -118,6 +119,7 @@ type (
 type (
 	ZodArray[T any, R any]  = types.ZodArray[T, R]
 	ZodSlice[T any, R any]  = types.ZodSlice[T, R]
+	ZodTuple[T any, R any]  = types.ZodTuple[T, R]
 	ZodMap[T any, R any]    = types.ZodMap[T, R]
 	ZodRecord[T any, R any] = types.ZodRecord[T, R]
 	ZodObject[T any, R any] = types.ZodObject[T, R]
@@ -319,6 +321,19 @@ var (
 	MapPtr   = types.MapPtr
 )
 
+// Tuple creates a tuple schema with fixed positional items
+// TypeScript Zod v4 equivalent: z.tuple([...])
+//
+// Usage:
+//
+//	tuple := gozod.Tuple(gozod.String(), gozod.Int())
+//	result, err := tuple.Parse([]any{"hello", 42})
+var (
+	Tuple         = types.Tuple
+	TupleWithRest = types.TupleWithRest
+	TuplePtr      = types.TuplePtr
+)
+
 // Record creates a record schema with the specified key schema and value schema.
 // Example: Record(String(), Int()) parses map[string]int.
 func Record[K any, V any](keySchema any, valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, map[string]V] {
@@ -329,6 +344,23 @@ func Record[K any, V any](keySchema any, valueSchema core.ZodType[V], paramArgs 
 func RecordPtr[K any, V any](keySchema any, valueSchema core.ZodType[V], paramArgs ...any) *ZodRecord[map[string]V, *map[string]V] {
 	return types.RecordTyped[map[string]V, *map[string]V](keySchema, valueSchema, paramArgs...)
 }
+
+// LooseRecord creates a record schema that passes through non-matching keys unchanged.
+// Unlike regular Record which errors on keys that don't match the key schema,
+// LooseRecord preserves non-matching keys without validation.
+//
+// TypeScript Zod v4 equivalent: z.looseRecord(keySchema, valueSchema)
+//
+// Example:
+//
+//	// Only validate keys starting with "S_"
+//	schema := LooseRecord(String().Regex(`^S_`), String())
+//	result, _ := schema.Parse(map[string]any{"S_name": "John", "other": 123})
+//	// Result: {"S_name": "John", "other": 123} - "other" key is preserved
+var (
+	LooseRecord    = types.LooseRecord
+	LooseRecordPtr = types.LooseRecordPtr
+)
 
 func Slice[T any](elementSchema any, paramArgs ...any) *ZodSlice[T, []T] {
 	return types.Slice[T](elementSchema, paramArgs...)
@@ -361,6 +393,9 @@ func StructPtr[T any](params ...any) *ZodStruct[T, *T] {
 var (
 	Union                 = types.Union
 	UnionPtr              = types.UnionPtr
+	Xor                   = types.Xor
+	XorPtr                = types.XorPtr
+	XorOf                 = types.XorOf
 	Intersection          = types.Intersection
 	IntersectionPtr       = types.IntersectionPtr
 	DiscriminatedUnion    = types.DiscriminatedUnion
@@ -554,3 +589,66 @@ func FromStruct[T any]() *types.ZodStruct[T, T] {
 func FromStructPtr[T any]() *types.ZodStruct[T, *T] {
 	return types.FromStructPtr[T]()
 }
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// Apply integrates external functions into schema chains.
+// It takes a schema and a function that receives the schema and returns
+// a potentially different schema type. This enables modular composition
+// of common validation patterns.
+//
+// TypeScript Zod v4 equivalent: schema.apply(fn)
+// In Go, this is a standalone generic function due to language constraints.
+//
+// Example:
+//
+//	// Define a reusable modifier
+//	func addCommonStringChecks[T types.StringConstraint](s *gozod.ZodString[T]) *gozod.ZodString[T] {
+//	    return s.Min(1).Max(100).Trim()
+//	}
+//
+//	// Apply it to a schema
+//	schema := gozod.Apply(gozod.String(), addCommonStringChecks)
+//
+//	// Chain with other modifiers
+//	optionalSchema := gozod.Apply(gozod.String(), addCommonStringChecks).Optional()
+func Apply[S any, R any](schema S, fn func(S) R) R {
+	return fn(schema)
+}
+
+// =============================================================================
+// METADATA CHECK FACTORIES
+// TypeScript Zod v4 compatible check factories for schema metadata
+// =============================================================================
+
+// Describe creates a check that registers a description in the global registry.
+// This is a no-op validation check that only attaches metadata when the check
+// is added to a schema.
+//
+// TypeScript Zod v4 equivalent: z.describe(description)
+//
+// Example:
+//
+//	schema := gozod.String().Check(gozod.Describe("User email address"))
+//	meta, _ := gozod.GlobalRegistry.Get(schema)
+//	// meta.Description == "User email address"
+var Describe = checks.Describe
+
+// Meta creates a check that registers metadata in the global registry.
+// This is a no-op validation check that only attaches metadata when the check
+// is added to a schema.
+//
+// TypeScript Zod v4 equivalent: z.meta(metadata)
+//
+// Example:
+//
+//	schema := gozod.Number().Check(gozod.Meta(gozod.GlobalMeta{
+//	    Title: "Age",
+//	    Description: "User's age in years",
+//	}))
+//	meta, _ := gozod.GlobalRegistry.Get(schema)
+//	// meta.Title == "Age"
+//	// meta.Description == "User's age in years"
+var Meta = checks.Meta
