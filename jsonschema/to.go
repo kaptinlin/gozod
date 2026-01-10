@@ -487,6 +487,9 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		jsonSchema, err = c.convertLazy(schema)
 	case core.ZodTypeMap:
 		jsonSchema, err = c.convertMap(schema)
+	case core.ZodTypeSet:
+		// Set cannot be represented in JSON Schema (similar to Map)
+		return nil, fmt.Errorf("%w: %s", ErrUnrepresentableType, core.ZodTypeSet)
 	case core.ZodTypeNumber:
 		jsonSchema = &lib.Schema{Type: []string{"number"}}
 	case core.ZodTypeBigInt:

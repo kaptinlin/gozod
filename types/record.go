@@ -226,6 +226,31 @@ func (z *ZodRecord[T, R]) NonOptional() *ZodRecord[T, T] {
 	}
 }
 
+// Partial makes all record values optional by skipping exhaustive key checks.
+// When a record has an exhaustive key schema (like Enum or Literal), Partial()
+// allows missing keys instead of requiring all keys to be present.
+//
+// TypeScript Zod v4 equivalent: z.partialRecord(keySchema, valueSchema)
+//
+// Example:
+//
+//	keys := gozod.Enum([]string{"id", "name", "email"})
+//	// Regular record requires all keys
+//	schema := gozod.Record(keys, gozod.String())
+//	_, err := schema.Parse(map[string]any{"id": "1"}) // Error: missing "name" and "email"
+//
+//	// Partial record allows missing keys
+//	partialSchema := schema.Partial()
+//	result, _ := partialSchema.Parse(map[string]any{"id": "1"}) // OK
+func (z *ZodRecord[T, R]) Partial() *ZodRecord[T, R] {
+	newInternals := z.internals.Clone()
+	if newInternals.Bag == nil {
+		newInternals.Bag = make(map[string]any)
+	}
+	newInternals.Bag["partial"] = true
+	return z.withInternals(newInternals)
+}
+
 // Default preserves current constraint type R
 func (z *ZodRecord[T, R]) Default(v T) *ZodRecord[T, R] {
 	in := z.internals.Clone()
@@ -521,14 +546,14 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		// Use reflection to convert T to map[string]any
 		valueReflect := reflect.ValueOf(value)
 		if valueReflect.Kind() != reflect.Map {
-			return value, fmt.Errorf("%w", ErrInternalMapType)
+			return value, ErrInternalMapType
 		}
 
 		recordValue = make(map[string]any)
 		for _, key := range valueReflect.MapKeys() {
 			keyStr, ok := key.Interface().(string)
 			if !ok {
-				return value, fmt.Errorf("%w", ErrInternalMapKeyNotString)
+				return value, ErrInternalMapKeyNotString
 			}
 			recordValue[keyStr] = valueReflect.MapIndex(key).Interface()
 		}
@@ -547,7 +572,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		// Use reflection to convert map[string]any back to T
 		targetType := reflect.TypeOf(value)
 		if targetType.Kind() != reflect.Map {
-			return value, fmt.Errorf("%w", ErrInternalMapType)
+			return value, ErrInternalMapType
 		}
 
 		newMap := reflect.MakeMap(targetType)
@@ -562,7 +587,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 				if valValue.CanConvert(valueType) {
 					valValue = valValue.Convert(valueType)
 				} else {
-					return value, fmt.Errorf("%w", ErrInternalCannotConvertValue)
+					return value, ErrInternalCannotConvertValue
 				}
 			}
 
@@ -572,7 +597,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 		if result, ok := newMap.Interface().(T); ok {
 			return result, nil
 		}
-		return value, fmt.Errorf("%w", ErrInternalCannotConvertRecord)
+		return value, ErrInternalCannotConvertRecord
 	}
 }
 
@@ -708,7 +733,7 @@ func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 		if recordPtr != nil {
 			return *recordPtr, nil
 		}
-		return nil, fmt.Errorf("%w", ErrNilPointerToRecord)
+		return nil, ErrNilPointerToRecord
 	}
 
 	// Handle map[any]any and convert to map[string]any

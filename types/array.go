@@ -650,7 +650,7 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		if v != nil {
 			return *v, nil
 		}
-		return nil, fmt.Errorf("%w", ErrNilPointerToArray)
+		return nil, ErrNilPointerToArray
 	default:
 		// Try to convert using reflection
 		rv := reflect.ValueOf(value)
@@ -658,7 +658,7 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		// Handle pointer to slice/array
 		if rv.Kind() == reflect.Ptr {
 			if rv.IsNil() {
-				return nil, fmt.Errorf("%w", ErrNilPointer)
+				return nil, ErrNilPointer
 			}
 			rv = rv.Elem()
 		}
@@ -724,7 +724,8 @@ func (z *ZodArray[T, R]) validateArrayWithIssues(value []any, checks []core.ZodC
 
 	// Length is correct, now validate all elements and collect multiple errors
 	// Validate fixed part - collect all element errors instead of stopping at first
-	for i := 0; i < fixedLen && i < actualLen; i++ {
+	// Use min() (Go 1.21+) for cleaner bounds calculation
+	for i := range min(fixedLen, actualLen) {
 		if err := z.validateElement(value[i], z.internals.Items[i], ctx, i); err != nil {
 			issue := issues.CreateElementValidationIssue(i, "array", value[i], err)
 			collectedIssues = append(collectedIssues, issue)

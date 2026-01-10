@@ -128,12 +128,16 @@ func Length(value any, expected int) bool {
 // MaxSize validates if collection's size is at most maximum
 func MaxSize(value any, maximum int) bool {
 	if reflectx.IsMap(value) {
-		// Support both map[string]any and map[any]any
+		// Support both map[string]any and map[any]any first
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) <= maximum
 		}
 		if m, ok := value.(map[any]any); ok {
 			return len(m) <= maximum
+		}
+		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
+		if size, ok := reflectx.GetSize(value); ok {
+			return size <= maximum
 		}
 	}
 	if reflectx.HasLength(value) {
@@ -147,12 +151,16 @@ func MaxSize(value any, maximum int) bool {
 // MinSize validates if collection's size is at least minimum
 func MinSize(value any, minimum int) bool {
 	if reflectx.IsMap(value) {
-		// Support both map[string]any and map[any]any
+		// Support both map[string]any and map[any]any first
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) >= minimum
 		}
 		if m, ok := value.(map[any]any); ok {
 			return len(m) >= minimum
+		}
+		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
+		if size, ok := reflectx.GetSize(value); ok {
+			return size >= minimum
 		}
 	}
 	if reflectx.HasLength(value) {
@@ -166,12 +174,16 @@ func MinSize(value any, minimum int) bool {
 // Size validates if collection's size equals exactly the expected size
 func Size(value any, expected int) bool {
 	if reflectx.IsMap(value) {
-		// Support both map[string]any and map[any]any
+		// Support both map[string]any and map[any]any first
 		if m, ok := value.(map[string]any); ok {
 			return mapx.Count(m) == expected
 		}
 		if m, ok := value.(map[any]any); ok {
 			return len(m) == expected
+		}
+		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
+		if size, ok := reflectx.GetSize(value); ok {
+			return size == expected
 		}
 	}
 	if reflectx.HasLength(value) {
@@ -194,18 +206,22 @@ func Regex(value any, pattern *regexp.Regexp) bool {
 	return false
 }
 
-// Lowercase validates if string is all lowercase
+// Lowercase validates if string contains no uppercase letters.
+// Matches Zod v4's lowercase check: /^[^A-Z]*$/
+// Note: Empty strings pass (as in Zod v4), only uppercase A-Z fails.
 func Lowercase(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return str == strings.ToLower(str) && str != ""
+		return regex.Lowercase.MatchString(str)
 	}
 	return false
 }
 
-// Uppercase validates if string is all uppercase
+// Uppercase validates if string contains no lowercase letters.
+// Matches Zod v4's uppercase check: /^[^a-z]*$/
+// Note: Empty strings pass (as in Zod v4), only lowercase a-z fails.
 func Uppercase(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return str == strings.ToUpper(str) && str != ""
+		return regex.Uppercase.MatchString(str)
 	}
 	return false
 }

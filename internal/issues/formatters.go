@@ -152,6 +152,8 @@ func ParsedTypeToString(input any) string {
 		return "array"
 	case core.ParsedTypeMap:
 		return "map" // Go language map type
+	case core.ParsedTypeSet:
+		return "set" // Go language set type (map[T]struct{})
 	case core.ParsedTypeObject:
 		return "object"
 	case core.ParsedTypeStruct:

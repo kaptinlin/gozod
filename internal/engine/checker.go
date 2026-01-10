@@ -69,8 +69,8 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 	// Track the current value as it may be modified by overwrite checks
 	currentValue := value
 
-	// Execute each check sequentially
-	for i := 0; i < checksLen; i++ {
+	// Execute each check sequentially (Go 1.22+ range over int)
+	for i := range checksLen {
 		check := checks[i]
 		if check == nil {
 			continue

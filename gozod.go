@@ -109,6 +109,7 @@ type (
 	// Unique identifier formats
 	ZodCUID[T types.StringConstraint]   = types.ZodCUID[T]
 	ZodCUID2[T types.StringConstraint]  = types.ZodCUID2[T]
+	ZodGUID[T types.StringConstraint]   = types.ZodGUID[T]
 	ZodULID[T types.StringConstraint]   = types.ZodULID[T]
 	ZodXID[T types.StringConstraint]    = types.ZodXID[T]
 	ZodKSUID[T types.StringConstraint]  = types.ZodKSUID[T]
@@ -122,13 +123,14 @@ type (
 // Collection Types
 // -----------------------------------------------------------------------------
 type (
-	ZodArray[T any, R any]  = types.ZodArray[T, R]
-	ZodSlice[T any, R any]  = types.ZodSlice[T, R]
-	ZodTuple[T any, R any]  = types.ZodTuple[T, R]
-	ZodMap[T any, R any]    = types.ZodMap[T, R]
-	ZodRecord[T any, R any] = types.ZodRecord[T, R]
-	ZodObject[T any, R any] = types.ZodObject[T, R]
-	ZodStruct[T any, R any] = types.ZodStruct[T, R]
+	ZodArray[T any, R any]      = types.ZodArray[T, R]
+	ZodSlice[T any, R any]      = types.ZodSlice[T, R]
+	ZodTuple[T any, R any]      = types.ZodTuple[T, R]
+	ZodMap[T any, R any]        = types.ZodMap[T, R]
+	ZodSet[T comparable, R any] = types.ZodSet[T, R]
+	ZodRecord[T any, R any]     = types.ZodRecord[T, R]
+	ZodObject[T any, R any]     = types.ZodObject[T, R]
+	ZodStruct[T any, R any]     = types.ZodStruct[T, R]
 )
 
 // -----------------------------------------------------------------------------
@@ -306,6 +308,8 @@ var (
 	CuidPtr   = types.CuidPtr
 	Cuid2     = types.Cuid2
 	Cuid2Ptr  = types.Cuid2Ptr
+	Guid      = types.Guid
+	GuidPtr   = types.GuidPtr
 	Ulid      = types.Ulid
 	UlidPtr   = types.UlidPtr
 	Xid       = types.Xid
@@ -336,6 +340,23 @@ var (
 	Map      = types.Map
 	MapPtr   = types.MapPtr
 )
+
+// Set creates a set schema with element validation (returns value constraint).
+// In Go, sets are represented as map[T]struct{} where T must be comparable.
+// TypeScript Zod v4 equivalent: z.set(schema)
+//
+// Example:
+//
+//	schema := Set[string](String())
+//	result, _ := schema.Parse(map[string]struct{}{"a": {}, "b": {}})
+func Set[T comparable](valueSchema any, paramArgs ...any) *ZodSet[T, map[T]struct{}] {
+	return types.Set[T](valueSchema, paramArgs...)
+}
+
+// SetPtr creates a set schema with pointer constraint (returns pointer constraint).
+func SetPtr[T comparable](valueSchema any, paramArgs ...any) *ZodSet[T, *map[T]struct{}] {
+	return types.SetPtr[T](valueSchema, paramArgs...)
+}
 
 // Tuple creates a tuple schema with fixed positional items
 // TypeScript Zod v4 equivalent: z.tuple([...])

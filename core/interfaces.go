@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"sync/atomic"
 )
@@ -154,20 +155,14 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 		copy(cp.Checks, z.Checks)
 	}
 
-	// Deep copy Values map
+	// Deep copy Values map using maps.Clone (Go 1.21+)
 	if len(z.Values) > 0 {
-		cp.Values = make(map[any]struct{}, len(z.Values))
-		for k, v := range z.Values {
-			cp.Values[k] = v
-		}
+		cp.Values = maps.Clone(z.Values)
 	}
 
-	// Deep copy Bag map
+	// Deep copy Bag map using maps.Clone (Go 1.21+)
 	if len(z.Bag) > 0 {
-		cp.Bag = make(map[string]any, len(z.Bag))
-		for k, v := range z.Bag {
-			cp.Bag[k] = v
-		}
+		cp.Bag = maps.Clone(z.Bag)
 	}
 
 	return &cp

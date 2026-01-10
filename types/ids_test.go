@@ -9,6 +9,114 @@ import (
 )
 
 // =============================================================================
+// GUID Tests
+// =============================================================================
+
+func TestGUID(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		schema := Guid()
+		// GUID accepts any 8-4-4-4-12 hex pattern regardless of version
+		validGUIDs := []string{
+			"123e4567-e89b-12d3-a456-426655440000",
+			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+			"d9428888-122b-469b-84de-d6e0a77858b7",
+			"00000000-0000-0000-0000-000000000000",
+			"FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+			"aBcDeF01-1234-5678-90Ab-CdEf12345678", // Mixed case
+		}
+		for _, guid := range validGUIDs {
+			result, err := schema.Parse(guid)
+			require.NoError(t, err, "should accept: %v", guid)
+			assert.Equal(t, guid, result)
+			assert.IsType(t, "", result)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		schema := Guid()
+		invalidInputs := []any{
+			"not-a-guid",
+			123,
+			true,
+			"",
+			"123e4567-e89b-12d3-a456",              // Too short
+			"123e4567-e89b-12d3-a456-42665544",     // Too short last segment
+			"123e4567e89b12d3a456426655440000",     // No dashes
+			"g23e4567-e89b-12d3-a456-426655440000", // Invalid hex char
+		}
+		for _, input := range invalidInputs {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "should reject: %v", input)
+		}
+	})
+
+	t.Run("pointer", func(t *testing.T) {
+		schema := GuidPtr()
+		guidStr := "123e4567-e89b-12d3-a456-426655440000"
+		result, err := schema.Parse(guidStr)
+		require.NoError(t, err)
+		assert.IsType(t, (*string)(nil), result)
+		require.NotNil(t, result)
+		assert.Equal(t, guidStr, *result)
+	})
+
+	t.Run("optional", func(t *testing.T) {
+		schema := Guid().Optional()
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("default", func(t *testing.T) {
+		defaultValue := "123e4567-e89b-12d3-a456-426655440000"
+		schema := Guid().Default(defaultValue)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, defaultValue, result)
+	})
+
+	t.Run("StrictParse", func(t *testing.T) {
+		schema := Guid()
+		validGUID := "123e4567-e89b-12d3-a456-426655440000"
+
+		result, err := schema.StrictParse(validGUID)
+		require.NoError(t, err)
+		assert.Equal(t, validGUID, result)
+	})
+
+	t.Run("MustStrictParse", func(t *testing.T) {
+		schema := Guid()
+		validGUID := "123e4567-e89b-12d3-a456-426655440000"
+
+		result := schema.MustStrictParse(validGUID)
+		assert.Equal(t, validGUID, result)
+
+		// Test panic on invalid
+		assert.Panics(t, func() {
+			schema.MustStrictParse("invalid")
+		})
+	})
+
+	t.Run("custom error", func(t *testing.T) {
+		customError := "Invalid GUID format"
+		schema := Guid(core.SchemaParams{Error: customError})
+		_, err := schema.Parse("invalid")
+		assert.Error(t, err)
+	})
+
+	t.Run("chaining with min length", func(t *testing.T) {
+		// A GUID is 36 chars long (8-4-4-4-12 with dashes)
+		schema := Guid().Min(36)
+		result, err := schema.Parse("123e4567-e89b-12d3-a456-426655440000")
+		require.NoError(t, err)
+		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", result)
+
+		_, err = Guid().Min(37).Parse("123e4567-e89b-12d3-a456-426655440000")
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
 // CUID Tests
 // =============================================================================
 

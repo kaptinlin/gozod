@@ -487,13 +487,13 @@ func convertToDiscriminatedUnionConstraintValue[T any, R any](value any) (R, boo
 // getDiscriminatorValues extracts discriminator values from a schema
 func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([]any, error) {
 	if schema == nil {
-		return nil, fmt.Errorf("%w", ErrSchemaIsNil)
+		return nil, ErrSchemaIsNil
 	}
 
 	// Get schema internals
 	internals := schema.GetInternals()
 	if internals == nil {
-		return nil, fmt.Errorf("%w", ErrSchemaInternalsIsNil)
+		return nil, ErrSchemaInternalsIsNil
 	}
 
 	// Try to extract discriminator values from internals
@@ -509,7 +509,7 @@ func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([
 // getDiscriminatorValuesFromAnySchema extracts discriminator values from any schema using type assertion
 func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) ([]any, error) {
 	if schema == nil {
-		return nil, fmt.Errorf("%w", ErrSchemaIsNil)
+		return nil, ErrSchemaIsNil
 	}
 
 	// Try to get internals directly

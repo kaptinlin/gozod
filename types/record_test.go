@@ -270,6 +270,87 @@ func TestRecord_Modifiers(t *testing.T) {
 		assert.Equal(t, testRecord, result)
 		assert.IsType(t, map[string]any{}, result)
 	})
+
+	t.Run("Partial instance method allows missing keys", func(t *testing.T) {
+		// Create a record with enum key schema (exhaustive keys)
+		keySchema := Enum("id", "name", "email")
+		recordSchema := Record(keySchema, String())
+
+		// Without Partial, missing keys should fail
+		partialInput := map[string]any{"id": "user-123"}
+		_, err := recordSchema.Parse(partialInput)
+		require.Error(t, err, "Regular record should fail with missing keys")
+
+		// With Partial() instance method, missing keys should be allowed
+		partialSchema := recordSchema.Partial()
+		result, err := partialSchema.Parse(partialInput)
+		require.NoError(t, err, "Partial record should allow missing keys")
+		assert.Equal(t, partialInput, result)
+	})
+
+	t.Run("Partial instance method still validates present keys", func(t *testing.T) {
+		keySchema := Enum("id", "name", "email")
+		partialSchema := Record(keySchema, String()).Partial()
+
+		// Present keys should still be validated
+		invalidInput := map[string]any{"id": 123} // Wrong type for value
+		_, err := partialSchema.Parse(invalidInput)
+		require.Error(t, err, "Partial record should still validate present values")
+	})
+
+	t.Run("Partial instance method still rejects unrecognized keys", func(t *testing.T) {
+		keySchema := Enum("id", "name", "email")
+		partialSchema := Record(keySchema, String()).Partial()
+
+		// Unrecognized keys should still fail
+		invalidInput := map[string]any{
+			"id":    "user-123",
+			"extra": "not allowed",
+		}
+		_, err := partialSchema.Parse(invalidInput)
+		require.Error(t, err, "Partial record should reject unrecognized keys")
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
+	})
+
+	t.Run("Partial instance method is chainable", func(t *testing.T) {
+		keySchema := Enum("id", "name", "email")
+		partialSchema := Record(keySchema, String()).
+			Partial().
+			Min(1).
+			Max(3)
+
+		// Should allow partial record with 1-3 entries
+		result, err := partialSchema.Parse(map[string]any{"id": "123"})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]any{"id": "123"}, result)
+
+		// Should fail with 0 entries (Min(1))
+		_, err = partialSchema.Parse(map[string]any{})
+		require.Error(t, err)
+	})
+
+	t.Run("Partial vs PartialRecord equivalence", func(t *testing.T) {
+		keySchema := Enum("id", "name", "email")
+
+		// Using PartialRecord constructor
+		schema1 := PartialRecord(keySchema, String())
+
+		// Using .Partial() instance method
+		schema2 := Record(keySchema, String()).Partial()
+
+		testInput := map[string]any{"id": "123"}
+
+		// Both should behave identically
+		result1, err1 := schema1.Parse(testInput)
+		require.NoError(t, err1)
+
+		result2, err2 := schema2.Parse(testInput)
+		require.NoError(t, err2)
+
+		assert.Equal(t, result1, result2)
+	})
 }
 
 // =============================================================================

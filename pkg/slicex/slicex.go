@@ -140,7 +140,7 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 	case reflect.Slice, reflect.Array:
 		length := rv.Len()
 		result := make([]any, length)
-		for i := 0; i < length; i++ {
+		for i := range length {
 			result[i] = rv.Index(i).Interface()
 		}
 		return result, nil

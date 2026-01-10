@@ -78,6 +78,7 @@ const (
 	ZodTypeStruct ZodTypeCode = "struct" // Go struct validation
 	ZodTypeRecord ZodTypeCode = "record" // Key-value record
 	ZodTypeMap    ZodTypeCode = "map"    // Go map validation
+	ZodTypeSet    ZodTypeCode = "set"    // Set validation (map[T]struct{})
 
 	// Composite types
 	ZodTypeUnion         ZodTypeCode = "union"               // Union of multiple types (anyOf)
@@ -178,6 +179,7 @@ const (
 	ParsedTypeSlice    ParsedType = "slice"    // Dynamic slice data type
 	ParsedTypeTuple    ParsedType = "tuple"    // Fixed-length tuple data type
 	ParsedTypeMap      ParsedType = "map"      // Map data type
+	ParsedTypeSet      ParsedType = "set"      // Set data type (map[T]struct{})
 	ParsedTypeNaN      ParsedType = "nan"      // Not-a-Number data type
 	ParsedTypeNil      ParsedType = "nil"      // Nil/null data type
 	ParsedTypeComplex  ParsedType = "complex"  // Complex number data type

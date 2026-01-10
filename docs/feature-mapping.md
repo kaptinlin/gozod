@@ -17,8 +17,10 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.tuple([...])` | `gozod.Tuple([...])` | `[]any` | ✅ Fixed-length tuple validation with type inference | ✅ Fully implemented |
 | `z.object({})` | `gozod.Object({})` | `map[string]any` | ✅ Dynamic object validation for JSON-like data | ✅ Fully implemented |
 | `z.record(T)` | `gozod.Record(keySchema, valueSchema)` | `map[string]T` | ✅ Typed key-value record validation with generic keys | ✅ Fully implemented |
+| `z.partialRecord(K, V)` | `gozod.PartialRecord(keySchema, valueSchema)`, `.Partial()` | `map[string]V` | ✅ Record with optional keys (skips exhaustiveness check) | ✅ Fully implemented |
 | `z.looseRecord(K, V)` | `gozod.LooseRecord(keySchema, valueSchema)` | `map[string]V` | ✅ Record that passes through non-matching keys | ✅ Fully implemented |
 | `z.map(K, V)` | `gozod.Map(valueSchema)` | `map[string]V` | ✅ Go native map validation with typed values | ✅ Fully implemented |
+| `z.set(T)` | `gozod.Set(elementSchema)` | `map[T]struct{}` | ✅ Go idiomatic set pattern with element validation | ✅ Fully implemented |
 | `z.union([...])` | `gozod.Union([...])` | `any` | ✅ Type-safe union validation with Go interfaces | ✅ Fully implemented |
 | `z.xor([...])` | `gozod.Xor([...])` | `any` | ✅ Exclusive union - exactly one must match | ✅ Fully implemented |
 | `z.discriminatedUnion(key, [...])` | `gozod.DiscriminatedUnion(key, [...])` | `any` | ✅ Optimized discriminated union with key-based lookup | ✅ Fully implemented |
@@ -124,6 +126,9 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.trim()` | `.Trim()` | ✅ | Whitespace trimming transformation |
 | `.toLowerCase()` | `.ToLower()` | ✅ | Unicode-aware case conversion |
 | `.toUpperCase()` | `.ToUpper()` | ✅ | Unicode-aware case conversion |
+| `.lowercase()` | `.Lowercase()` | ✅ | Validates string has no uppercase letters |
+| `.uppercase()` | `.Uppercase()` | ✅ | Validates string has no lowercase letters |
+| `.normalize(form?)` | `.Normalize(form?)` | ✅ | Unicode normalization (NFC, NFD, NFKC, NFKD) |
 
 ### Network & Format Type Mapping
 
@@ -135,6 +140,7 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.mac()` | `gozod.MAC()` | ✅ | MAC address validation (colon/hyphen/dot separators) |
 | `z.e164()` | `gozod.E164()` | ✅ | E.164 phone number validation |
 | `z.cidr()` | `gozod.CIDRv4()`, `gozod.CIDRv6()` | ✅ | IPv4/IPv6 CIDR notation validation |
+| `z.guid()` | `gozod.Guid()` | ✅ | GUID format validation (8-4-4-4-12 hex pattern) |
 | - | `gozod.HttpURL()` | ✅ | **Go enhancement**: HTTP/HTTPS URL only |
 | - | `gozod.Hex()` | ✅ | **Go enhancement**: Hexadecimal string validation |
 

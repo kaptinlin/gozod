@@ -11,6 +11,7 @@ import (
 	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/transform"
 	"github.com/kaptinlin/gozod/pkg/validate"
+	"golang.org/x/text/unicode/norm"
 )
 
 // =============================================================================
@@ -798,6 +799,36 @@ func CoercedStringPtr(params ...any) *ZodString[*string] {
 	return schema
 }
 
+// =============================================================================
+// CASE VALIDATION METHODS
+// =============================================================================
+
+// Lowercase validates that the string contains no uppercase letters.
+// TypeScript Zod v4 equivalent: z.string().lowercase()
+// Matches Zod v4's regex: /^[^A-Z]*$/
+// Empty strings pass validation (consistent with Zod v4).
+func (z *ZodString[T]) Lowercase(params ...any) *ZodString[T] {
+	check := checks.Lowercase(params...)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// Uppercase validates that the string contains no lowercase letters.
+// TypeScript Zod v4 equivalent: z.string().uppercase()
+// Matches Zod v4's regex: /^[^a-z]*$/
+// Empty strings pass validation (consistent with Zod v4).
+func (z *ZodString[T]) Uppercase(params ...any) *ZodString[T] {
+	check := checks.Uppercase(params...)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
+// STRING TRANSFORMATION METHODS
+// =============================================================================
+
 // ToLowerCase transforms the string to lower case
 func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {
 	transform := func(val T) T {
@@ -836,6 +867,57 @@ func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
 		}
 	}
 	return z.Overwrite(transform, params...)
+}
+
+// Normalize transforms the string using Unicode normalization.
+// TypeScript Zod v4 equivalent: z.string().normalize(form?)
+// Supported normalization forms:
+//   - "NFC"  - Canonical Decomposition, followed by Canonical Composition (default)
+//   - "NFD"  - Canonical Decomposition
+//   - "NFKC" - Compatibility Decomposition, followed by Canonical Composition
+//   - "NFKD" - Compatibility Decomposition
+//
+// Example:
+//
+//	z.String().Normalize().Parse("café")      // Uses NFC by default
+//	z.String().Normalize("NFD").Parse("café") // Uses NFD
+func (z *ZodString[T]) Normalize(form ...string) *ZodString[T] {
+	// Default to NFC if no form specified
+	normForm := "NFC"
+	if len(form) > 0 && form[0] != "" {
+		normForm = form[0]
+	}
+
+	tx := func(val T) T {
+		switch v := any(val).(type) {
+		case string:
+			return any(normalizeUnicode(v, normForm)).(T)
+		case *string:
+			if v == nil {
+				return val
+			}
+			normalized := normalizeUnicode(*v, normForm)
+			ptr := &normalized
+			return any(ptr).(T)
+		default:
+			return val
+		}
+	}
+	return z.Overwrite(tx)
+}
+
+// normalizeUnicode normalizes a string using the specified Unicode form.
+func normalizeUnicode(s string, form string) string {
+	switch form {
+	case "NFD":
+		return norm.NFD.String(s)
+	case "NFKC":
+		return norm.NFKC.String(s)
+	case "NFKD":
+		return norm.NFKD.String(s)
+	default: // "NFC" is the default
+		return norm.NFC.String(s)
+	}
 }
 
 // Slugify transforms the string to a URL-friendly slug.

@@ -323,7 +323,11 @@ func main() {
 // Strings with format validation
 gozod.String().Min(3).Max(100).Email()
 gozod.String().RegexString(`^\d+$`)
+gozod.String().Lowercase()  // Validates no uppercase letters
+gozod.String().Uppercase()  // Validates no lowercase letters
+gozod.String().Normalize()  // Unicode NFC normalization
 gozod.Uuid()     // UUID format validator
+gozod.Guid()     // GUID format validator (8-4-4-4-12 hex)
 gozod.URL()      // URL format validator
 gozod.HttpURL()  // HTTP/HTTPS URL only
 gozod.Email()    // Email format validator
@@ -378,6 +382,13 @@ gozod.Record(gozod.String().Regex(`^[a-z]+$`), gozod.Int()) // lowercase keys on
 
 // LooseRecord - passes through non-matching keys unchanged
 gozod.LooseRecord(gozod.String().Regex(`^S_`), gozod.String())
+
+// PartialRecord - allows missing keys for exhaustive key schemas
+keys := gozod.Enum("id", "name", "email")
+gozod.Record(keys, gozod.String()).Partial() // Missing keys allowed
+
+// Sets - Go idiomatic set pattern with element validation
+gozod.Set[string](gozod.String()).Min(1).Max(10) // map[string]struct{}
 
 // Objects (map[string]any)
 gozod.Object(gozod.ObjectSchema{

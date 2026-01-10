@@ -31,6 +31,11 @@ GoZod uses the actual TypeScript Zod v4 source code as reference material locate
 - **And/Or Methods** - Fluent `.And()` and `.Or()` methods on schema types for composition
 - **Network Validators** - Hostname, MAC, E164, HttpURL schema types
 - **Encoding Validators** - Hex, Base64, Base64URL, and hash validation checks (MD5, SHA256, etc.)
+- **Set Type** - Go idiomatic set pattern (`map[T]struct{}`) with element validation and size constraints
+- **String Normalization** - Unicode normalization via `.Normalize()` (NFC, NFD, NFKC, NFKD)
+- **Case Validation** - `.Lowercase()` and `.Uppercase()` validation methods for string schemas
+- **GUID Type** - GUID format validation via `gozod.Guid()` (8-4-4-4-12 hex pattern)
+- **Record Partial** - `.Partial()` instance method for records with exhaustive key schemas
 
 ### Cursor Rules Index
 
@@ -174,7 +179,7 @@ func (z *ZodString[T]) Nilable() *ZodString[*string]
 - Schema types organized by category:
   - **Primitives**: `string.go`, `bool.go`, `integer.go`, `float.go`, `bigint.go`, `complex.go`
   - **Special Types**: `any.go`, `unknown.go`, `never.go`, `nil.go`
-  - **Collections**: `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go`
+  - **Collections**: `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go`, `set.go`
   - **Objects**: `object.go`, `struct.go`
   - **Composition**: `union.go` (includes Xor), `discriminated_union.go`, `intersection.go`
   - **Functions**: `function.go`

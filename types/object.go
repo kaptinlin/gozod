@@ -876,7 +876,7 @@ func (z *ZodObject[T, R]) extractObject(value any) (map[string]any, error) {
 	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
-			return nil, fmt.Errorf("%w", ErrNilPointerCannotConvertToObject)
+			return nil, ErrNilPointerCannotConvertToObject
 		}
 		rv = rv.Elem()
 	}

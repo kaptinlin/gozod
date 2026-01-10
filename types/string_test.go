@@ -1669,6 +1669,121 @@ func TestString_Modifiers_TrimAndCaseTransforms(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, "hello-world", *result)
 	})
+
+	t.Run("lowercase validation", func(t *testing.T) {
+		schema := String().Lowercase()
+
+		// Valid: all lowercase
+		result, err := schema.Parse("hello world")
+		require.NoError(t, err)
+		assert.Equal(t, "hello world", result)
+
+		// Valid: empty string (Zod v4 behavior)
+		result2, err2 := schema.Parse("")
+		require.NoError(t, err2)
+		assert.Equal(t, "", result2)
+
+		// Valid: numbers and symbols only (no uppercase letters)
+		result3, err3 := schema.Parse("123!@#$%")
+		require.NoError(t, err3)
+		assert.Equal(t, "123!@#$%", result3)
+
+		// Invalid: contains uppercase letters
+		_, err4 := schema.Parse("Hello")
+		assert.Error(t, err4)
+
+		// Invalid: all uppercase
+		_, err5 := schema.Parse("HELLO")
+		assert.Error(t, err5)
+	})
+
+	t.Run("uppercase validation", func(t *testing.T) {
+		schema := String().Uppercase()
+
+		// Valid: all uppercase
+		result, err := schema.Parse("HELLO WORLD")
+		require.NoError(t, err)
+		assert.Equal(t, "HELLO WORLD", result)
+
+		// Valid: empty string (Zod v4 behavior)
+		result2, err2 := schema.Parse("")
+		require.NoError(t, err2)
+		assert.Equal(t, "", result2)
+
+		// Valid: numbers and symbols only (no lowercase letters)
+		result3, err3 := schema.Parse("123!@#$%")
+		require.NoError(t, err3)
+		assert.Equal(t, "123!@#$%", result3)
+
+		// Invalid: contains lowercase letters
+		_, err4 := schema.Parse("Hello")
+		assert.Error(t, err4)
+
+		// Invalid: all lowercase
+		_, err5 := schema.Parse("hello")
+		assert.Error(t, err5)
+	})
+
+	t.Run("normalize transformation", func(t *testing.T) {
+		// Default (NFC)
+		schema := String().Normalize()
+
+		// Test with NFD composed and decomposed forms
+		// é can be represented as:
+		// - NFC (composed): U+00E9 (single character)
+		// - NFD (decomposed): U+0065 U+0301 (e + combining acute accent)
+		composedE := "caf\u00e9"    // café with precomposed é
+		decomposedE := "cafe\u0301" // café with e + combining accent
+
+		// Both should normalize to the same NFC form
+		result1, err1 := schema.Parse(composedE)
+		require.NoError(t, err1)
+		result2, err2 := schema.Parse(decomposedE)
+		require.NoError(t, err2)
+		assert.Equal(t, result1, result2)
+
+		// Test specific form (NFD)
+		schemaNFD := String().Normalize("NFD")
+		resultNFD, errNFD := schemaNFD.Parse(composedE)
+		require.NoError(t, errNFD)
+		// NFD should decompose the character
+		assert.NotEqual(t, composedE, resultNFD) // Different representation
+	})
+
+	t.Run("normalize with pointer type", func(t *testing.T) {
+		schema := StringPtr().Normalize()
+
+		input := "caf\u00e9"
+		result, err := schema.Parse(&input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+
+	t.Run("lowercase vs toLowerCase", func(t *testing.T) {
+		// lowercase() validates that string has no uppercase - validation
+		lcValidate := String().Lowercase()
+		_, err := lcValidate.Parse("Hello")
+		assert.Error(t, err) // Fails because 'H' is uppercase
+
+		// toLowerCase() transforms string to lowercase - transformation
+		lcTransform := String().ToLowerCase()
+		result, err2 := lcTransform.Parse("Hello")
+		require.NoError(t, err2)
+		assert.Equal(t, "hello", result) // Transformed to lowercase
+	})
+
+	t.Run("uppercase vs toUpperCase", func(t *testing.T) {
+		// uppercase() validates that string has no lowercase - validation
+		ucValidate := String().Uppercase()
+		_, err := ucValidate.Parse("Hello")
+		assert.Error(t, err) // Fails because 'e', 'l', 'l', 'o' are lowercase
+
+		// toUpperCase() transforms string to uppercase - transformation
+		ucTransform := String().ToUpperCase()
+		result, err2 := ucTransform.Parse("Hello")
+		require.NoError(t, err2)
+		assert.Equal(t, "HELLO", result) // Transformed to uppercase
+	})
 }
 
 // =============================================================================

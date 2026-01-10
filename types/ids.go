@@ -7,6 +7,45 @@ import (
 )
 
 // =============================================================================
+// GUID
+// =============================================================================
+
+type ZodGUID[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodGUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodGUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// Guid creates a GUID schema that validates strings in GUID format (8-4-4-4-12 hex pattern).
+// GUID is similar to UUID but accepts any hex characters regardless of version.
+func Guid(params ...any) *ZodGUID[string] {
+	base := StringTyped[string](params...)
+	check := checks.GUID(params...)
+	in := base.GetInternals().Clone()
+	in.AddCheck(check)
+	return &ZodGUID[string]{base.withInternals(in)}
+}
+
+// GuidPtr creates a pointer GUID schema.
+func GuidPtr(params ...any) *ZodGUID[*string] {
+	base := StringPtr(params...)
+	check := checks.GUID(params...)
+	in := base.GetInternals().Clone()
+	in.AddCheck(check)
+	return &ZodGUID[*string]{base.withInternals(in)}
+}
+
+// =============================================================================
 // CUID
 // =============================================================================
 
