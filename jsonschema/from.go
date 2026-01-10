@@ -1,4 +1,4 @@
-package gozod
+package jsonschema
 
 import (
 	"errors"
@@ -59,7 +59,7 @@ type fromJSONSchemaContext struct {
 // convert dispatches to the appropriate converter based on schema type.
 func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error) {
 	if s == nil {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 
 	// Handle circular references
@@ -70,9 +70,9 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 	// Handle boolean schema
 	if s.Boolean != nil {
 		if *s.Boolean {
-			return Unknown(), nil // true schema accepts anything
+			return types.Unknown(), nil // true schema accepts anything
 		}
-		return Never(), nil // false schema rejects everything
+		return types.Never(), nil // false schema rejects everything
 	}
 
 	// Handle $ref (already pre-resolved by kaptinlin/jsonschema)
@@ -158,9 +158,9 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 		case slices.Contains(s.Type, "integer"):
 			return ctx.convertInteger(s)
 		case slices.Contains(s.Type, "boolean"):
-			return Bool(), nil
+			return types.Bool(), nil
 		case slices.Contains(s.Type, "null"):
-			return Nil(), nil
+			return types.Nil(), nil
 		case slices.Contains(s.Type, "array"):
 			return ctx.convertArray(s)
 		case slices.Contains(s.Type, "object"):
@@ -169,7 +169,7 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 	}
 
 	// No type specified - return Unknown (accepts anything)
-	return Unknown(), nil
+	return types.Unknown(), nil
 }
 
 // convertMultiType handles schemas with multiple types like ["string", "null"].
@@ -184,8 +184,8 @@ func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchem
 		{"string", ctx.convertString},
 		{"number", ctx.convertNumber},
 		{"integer", ctx.convertInteger},
-		{"boolean", func(_ *lib.Schema) (core.ZodSchema, error) { return Bool(), nil }},
-		{"null", func(_ *lib.Schema) (core.ZodSchema, error) { return Nil(), nil }},
+		{"boolean", func(_ *lib.Schema) (core.ZodSchema, error) { return types.Bool(), nil }},
+		{"null", func(_ *lib.Schema) (core.ZodSchema, error) { return types.Nil(), nil }},
 		{"array", ctx.convertArray},
 		{"object", ctx.convertObject},
 	}
@@ -201,7 +201,7 @@ func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchem
 	}
 
 	if len(schemas) == 0 {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 	if len(schemas) == 1 {
 		return schemas[0], nil
@@ -212,7 +212,7 @@ func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchem
 	for i, s := range schemas {
 		options[i] = s
 	}
-	return Union(options), nil
+	return types.Union(options), nil
 }
 
 // convertString converts a string type schema.
@@ -228,7 +228,7 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 	}
 
 	// Standard string schema
-	schema := String()
+	schema := types.String()
 
 	// Apply constraints
 	if s.MinLength != nil {
@@ -252,21 +252,21 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 func (ctx *fromJSONSchemaContext) getFormatSchema(format string) core.ZodSchema {
 	switch format {
 	case "email":
-		return Email()
+		return types.Email()
 	case "uuid":
-		return Uuid()
+		return types.Uuid()
 	case "uri", "url":
-		return URL()
+		return types.URL()
 	case "date-time":
-		return IsoDateTime()
+		return types.IsoDateTime()
 	case "date":
-		return IsoDate()
+		return types.IsoDate()
 	case "time":
-		return IsoTime()
+		return types.IsoTime()
 	case "ipv4":
-		return IPv4()
+		return types.IPv4()
 	case "ipv6":
-		return IPv6()
+		return types.IPv6()
 	default:
 		// Unknown format - return nil to fall back to basic string
 		return nil
@@ -275,7 +275,7 @@ func (ctx *fromJSONSchemaContext) getFormatSchema(format string) core.ZodSchema 
 
 // convertNumber converts a number type schema.
 func (ctx *fromJSONSchemaContext) convertNumber(s *lib.Schema) (core.ZodSchema, error) {
-	schema := Number()
+	schema := types.Number()
 
 	// Apply constraints
 	if s.Minimum != nil {
@@ -304,7 +304,7 @@ func (ctx *fromJSONSchemaContext) convertNumber(s *lib.Schema) (core.ZodSchema, 
 
 // convertInteger converts an integer type schema.
 func (ctx *fromJSONSchemaContext) convertInteger(s *lib.Schema) (core.ZodSchema, error) {
-	schema := Int()
+	schema := types.Int()
 
 	// Apply constraints
 	if s.Minimum != nil {
@@ -338,7 +338,7 @@ func (ctx *fromJSONSchemaContext) convertArray(s *lib.Schema) (core.ZodSchema, e
 		return ctx.convertTuple(s)
 	}
 
-	var itemSchema core.ZodSchema = Unknown()
+	var itemSchema core.ZodSchema = types.Unknown()
 
 	// Handle items schema
 	if s.Items != nil {
@@ -399,10 +399,10 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 			if err != nil {
 				return nil, err
 			}
-			return types.Record(String(), valueSchema), nil
+			return types.Record(types.String(), valueSchema), nil
 		}
 		// Empty object with no constraints
-		return Object(core.ObjectSchema{}), nil
+		return types.Object(core.ObjectSchema{}), nil
 	}
 
 	// Build object shape
@@ -413,7 +413,7 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 	}
 
 	// Mark schema for circular reference detection
-	placeholder := Object(core.ObjectSchema{})
+	placeholder := types.Object(core.ObjectSchema{})
 	ctx.seen[s] = placeholder
 
 	// Convert each property
@@ -431,7 +431,7 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 		shape[key] = propZodSchema
 	}
 
-	result := Object(shape)
+	result := types.Object(shape)
 
 	// Handle additionalProperties
 	if s.AdditionalProperties != nil {
@@ -479,15 +479,15 @@ func makeOptional(schema core.ZodSchema) core.ZodSchema {
 // convertConst converts a const value.
 func (ctx *fromJSONSchemaContext) convertConst(s *lib.Schema) (core.ZodSchema, error) {
 	if s.Const == nil {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
-	return Literal(s.Const.Value), nil
+	return types.Literal(s.Const.Value), nil
 }
 
 // convertEnum converts an enum schema.
 func (ctx *fromJSONSchemaContext) convertEnum(s *lib.Schema) (core.ZodSchema, error) {
 	if len(s.Enum) == 0 {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 
 	// Check if all values are strings
@@ -503,15 +503,15 @@ func (ctx *fromJSONSchemaContext) convertEnum(s *lib.Schema) (core.ZodSchema, er
 	}
 
 	if allStrings {
-		return Enum(stringVals...), nil
+		return types.Enum(stringVals...), nil
 	}
 
 	// Mixed types - use union of literals
 	literals := make([]any, len(s.Enum))
 	for i, v := range s.Enum {
-		literals[i] = Literal(v)
+		literals[i] = types.Literal(v)
 	}
-	return Union(literals), nil
+	return types.Union(literals), nil
 }
 
 // convertAllOf converts allOf (intersection).
@@ -526,16 +526,16 @@ func (ctx *fromJSONSchemaContext) convertAllOf(s *lib.Schema) (core.ZodSchema, e
 	}
 
 	if len(schemas) == 0 {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 	if len(schemas) == 1 {
 		return schemas[0], nil
 	}
 
 	// Chain intersections: A & B & C => Intersection(Intersection(A, B), C)
-	result := Intersection(schemas[0], schemas[1])
+	result := types.Intersection(schemas[0], schemas[1])
 	for i := 2; i < len(schemas); i++ {
-		result = Intersection(result, schemas[i])
+		result = types.Intersection(result, schemas[i])
 	}
 	return result, nil
 }
@@ -552,7 +552,7 @@ func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, e
 	}
 
 	if len(schemas) == 0 {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 	if len(schemas) == 1 {
 		return schemas[0], nil
@@ -563,7 +563,7 @@ func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, e
 	for i, s := range schemas {
 		options[i] = s
 	}
-	return Union(options), nil
+	return types.Union(options), nil
 }
 
 // convertOneOf converts oneOf (exclusive union).
@@ -579,7 +579,7 @@ func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, e
 	}
 
 	if len(schemas) == 0 {
-		return Unknown(), nil
+		return types.Unknown(), nil
 	}
 	if len(schemas) == 1 {
 		return schemas[0], nil
@@ -590,5 +590,5 @@ func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, e
 	for i, s := range schemas {
 		options[i] = s
 	}
-	return Xor(options), nil
+	return types.Xor(options), nil
 }

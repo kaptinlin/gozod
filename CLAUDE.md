@@ -28,6 +28,9 @@ GoZod uses the actual TypeScript Zod v4 source code as reference material locate
 - **Tuple Types** - Fixed-length arrays with per-position type validation and optional rest elements
 - **Exclusive Unions (Xor)** - Exactly-one-match validation for mutually exclusive schemas
 - **Schema Metadata** - Built-in `.Describe()` and `.Meta()` methods on all 26 schema types
+- **And/Or Methods** - Fluent `.And()` and `.Or()` methods on schema types for composition
+- **Network Validators** - Hostname, MAC, E164, HttpURL schema types
+- **Encoding Validators** - Hex, Base64, Base64URL, and hash validation checks (MD5, SHA256, etc.)
 
 ### Cursor Rules Index
 
@@ -175,8 +178,8 @@ func (z *ZodString[T]) Nilable() *ZodString[*string]
   - **Objects**: `object.go`, `struct.go`
   - **Composition**: `union.go` (includes Xor), `discriminated_union.go`, `intersection.go`
   - **Functions**: `function.go`
-  - **Formats**: `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go`
-  - **Text**: `text.go`, `stringbool.go`
+  - **Formats**: `email.go`, `network.go` (IPv4, IPv6, Hostname, MAC, E164, URL, HttpURL, CIDR), `ids.go`, `iso.go`, `time.go`, `file.go`
+  - **Text**: `text.go` (Base64, Base64URL, Hex, Emoji, JWT), `stringbool.go`
   - **Advanced**: `lazy.go`, `literal.go`, `enum.go`, `transform.go`
 - All schema files include comprehensive test counterparts (`*_test.go`)
 

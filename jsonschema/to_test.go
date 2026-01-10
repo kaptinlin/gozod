@@ -1,4 +1,4 @@
-package gozod
+package jsonschema
 
 import (
 	"reflect"
@@ -76,97 +76,97 @@ func TestToJSONSchema_PrimitiveTypes(t *testing.T) {
 	}{
 		{
 			name:     "String",
-			schema:   String(),
+			schema:   types.String(),
 			expected: `{"type":"string"}`,
 		},
 		{
 			name:     "Number",
-			schema:   Float(),
+			schema:   types.Float(),
 			expected: `{"type":"number"}`,
 		},
 		{
 			name:     "Boolean",
-			schema:   Bool(),
+			schema:   types.Bool(),
 			expected: `{"type":"boolean"}`,
 		},
 		{
 			name:     "Null",
-			schema:   Nil(),
+			schema:   types.Nil(),
 			expected: `{"type":"null"}`,
 		},
 		{
 			name:     "Any",
-			schema:   Any(),
+			schema:   types.Any(),
 			expected: `{}`,
 		},
 		{
 			name:     "Unknown",
-			schema:   Unknown(),
+			schema:   types.Unknown(),
 			expected: `{}`,
 		},
 		{
 			name:     "Never",
-			schema:   Never(),
+			schema:   types.Never(),
 			expected: `{"not":true}`,
 		},
 		{
 			name:     "Integer",
-			schema:   Int(),
+			schema:   types.Int(),
 			expected: `{"type":"integer","minimum":-9.223372036854776e+18,"maximum":9.223372036854776e+18}`,
 		},
 		{
 			name:     "Int8",
-			schema:   Int8(),
+			schema:   types.Int8(),
 			expected: `{"type":"integer","minimum":-128,"maximum":127}`,
 		},
 		{
 			name:     "Int16",
-			schema:   Int16(),
+			schema:   types.Int16(),
 			expected: `{"type":"integer","minimum":-32768,"maximum":32767}`,
 		},
 		{
 			name:     "Int32",
-			schema:   Int32(),
+			schema:   types.Int32(),
 			expected: `{"type":"integer","minimum":-2147483648,"maximum":2147483647}`,
 		},
 		{
 			name:     "Int64",
-			schema:   Int64(),
+			schema:   types.Int64(),
 			expected: `{"type":"integer","minimum":-9.223372036854776e+18,"maximum":9.223372036854776e+18}`,
 		},
 		{
 			name:     "Uint",
-			schema:   Uint(),
+			schema:   types.Uint(),
 			expected: `{"type":"integer","minimum":0,"maximum":1.8446744073709552e+19}`,
 		},
 		{
 			name:     "Uint8",
-			schema:   Uint8(),
+			schema:   types.Uint8(),
 			expected: `{"type":"integer","minimum":0,"maximum":255}`,
 		},
 		{
 			name:     "Uint16",
-			schema:   Uint16(),
+			schema:   types.Uint16(),
 			expected: `{"type":"integer","minimum":0,"maximum":65535}`,
 		},
 		{
 			name:     "Uint32",
-			schema:   Uint32(),
+			schema:   types.Uint32(),
 			expected: `{"type":"integer","minimum":0,"maximum":4294967295}`,
 		},
 		{
 			name:     "Uint64",
-			schema:   Uint64(),
+			schema:   types.Uint64(),
 			expected: `{"type":"integer","minimum":0,"maximum":1.844674407371e+19}`,
 		},
 		{
 			name:     "Float32",
-			schema:   Float32(),
+			schema:   types.Float32(),
 			expected: `{"type":"number","minimum":-3.4028234663852886e+38,"maximum":3.4028234663852886e+38}`,
 		},
 		{
 			name:     "Float64",
-			schema:   Float64(),
+			schema:   types.Float64(),
 			expected: `{"type":"number","minimum":-1.7976931348623157e+308,"maximum":1.7976931348623157e+308}`,
 		},
 	}
@@ -194,77 +194,77 @@ func TestToJSONSchema_StringFormats(t *testing.T) {
 	}{
 		{
 			name:     "Email",
-			schema:   Email(),
+			schema:   types.Email(),
 			expected: `{"type":"string", "format":"email", "pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
 		},
 		{
 			name:     "UUID",
-			schema:   Uuid(),
+			schema:   types.Uuid(),
 			expected: `{"type":"string","format":"uuid","pattern":"^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"}`,
 		},
 		{
 			name:     "UUIDv4",
-			schema:   Uuidv4(),
+			schema:   types.Uuidv4(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv6",
-			schema:   Uuidv6(),
+			schema:   types.Uuidv6(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv7",
-			schema:   Uuidv7(),
+			schema:   types.Uuidv7(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "URL",
-			schema:   URL(),
+			schema:   types.URL(),
 			expected: `{"type":"string","format":"uri","pattern":"^[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/$.?#].[^\\s]*$"}`,
 		},
 		{
 			name:     "Base64",
-			schema:   Base64(),
+			schema:   types.Base64(),
 			expected: `{"type":"string","format":"base64","contentEncoding":"base64","pattern":"^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"}`,
 		},
 		{
 			name:     "Base64URL",
-			schema:   Base64URL(),
+			schema:   types.Base64URL(),
 			expected: `{"type":"string","format":"base64url","contentEncoding":"base64url","pattern":"^[A-Za-z0-9_-]*={0,2}$"}`,
 		},
 		{
 			name:     "CUID",
-			schema:   Cuid(),
+			schema:   types.Cuid(),
 			expected: `{"type":"string","format":"cuid","pattern":"^[cC][^\\s-]{8,}$"}`,
 		},
 		{
 			name:     "CUID2",
-			schema:   Cuid2(),
+			schema:   types.Cuid2(),
 			expected: `{"type":"string","format":"cuid2","pattern":"^[0-9a-z]+$"}`,
 		},
 		{
 			name:     "ULID",
-			schema:   Ulid(),
+			schema:   types.Ulid(),
 			expected: `{"type":"string","format":"ulid","pattern":"^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$"}`,
 		},
 		{
 			name:     "XID",
-			schema:   Xid(),
+			schema:   types.Xid(),
 			expected: `{"type":"string","format":"xid","pattern":"^[0-9a-vA-V]{20}$"}`,
 		},
 		{
 			name:     "KSUID",
-			schema:   Ksuid(),
+			schema:   types.Ksuid(),
 			expected: `{"type":"string","format":"ksuid","pattern":"^[A-Za-z0-9]{27}$"}`,
 		},
 		{
 			name:     "NanoID",
-			schema:   Nanoid(),
+			schema:   types.Nanoid(),
 			expected: `{"type":"string","format":"nanoid","pattern":"^[a-zA-Z0-9_-]{21}$"}`,
 		},
 		{
 			name:     "JWT",
-			schema:   JWT(),
+			schema:   types.JWT(),
 			expected: `{"type":"string","format":"jwt"}`,
 		},
 	}
@@ -292,22 +292,22 @@ func TestToJSONSchema_NetworkFormats(t *testing.T) {
 	}{
 		{
 			name:     "IPv4",
-			schema:   IPv4(),
+			schema:   types.IPv4(),
 			expected: `{"type":"string","format":"ipv4","pattern":"^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"}`,
 		},
 		{
 			name:     "IPv6",
-			schema:   IPv6(),
+			schema:   types.IPv6(),
 			expected: `{"type":"string","format":"ipv6","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$"}`,
 		},
 		{
 			name:     "CIDRv4",
-			schema:   CIDRv4(),
+			schema:   types.CIDRv4(),
 			expected: `{"type":"string","format":"cidrv4","pattern":"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"}`,
 		},
 		{
 			name:     "CIDRv6",
-			schema:   CIDRv6(),
+			schema:   types.CIDRv6(),
 			expected: `{"type":"string","format":"cidrv6","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"}`,
 		},
 	}
@@ -335,22 +335,22 @@ func TestToJSONSchema_ISOFormats(t *testing.T) {
 	}{
 		{
 			name:     "ISO DateTime",
-			schema:   IsoDateTime(),
+			schema:   types.IsoDateTime(),
 			expected: `{"type":"string","format":"iso_datetime","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d))$"}`,
 		},
 		{
 			name:     "ISO Date",
-			schema:   IsoDate(),
+			schema:   types.IsoDate(),
 			expected: `{"type":"string","format":"iso_date","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"}`,
 		},
 		{
 			name:     "ISO Time",
-			schema:   IsoTime(),
+			schema:   types.IsoTime(),
 			expected: `{"type":"string","format":"iso_time","pattern":"^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?$"}`,
 		},
 		{
 			name:     "ISO Duration",
-			schema:   IsoDuration(),
+			schema:   types.IsoDuration(),
 			expected: `{"type":"string","format":"iso_duration","pattern":"^P(?:(\\d+W)|(\\d+Y)?(\\d+M)?(\\d+D)?(?:T(\\d+H)?(\\d+M)?(\\d+(?:[.,]\\d+)?S)?)?)$"}`,
 		},
 	}
@@ -378,17 +378,17 @@ func TestToJSONSchema_FileTypes(t *testing.T) {
 	}{
 		{
 			name:     "File",
-			schema:   File(),
+			schema:   types.File(),
 			expected: `{"type":"string","format":"binary","contentEncoding":"binary"}`,
 		},
 		{
 			name:     "File with Mime and Size",
-			schema:   File().Mime([]string{"image/png"}).Min(1000).Max(10000),
+			schema:   types.File().Mime([]string{"image/png"}).Min(1000).Max(10000),
 			expected: `{"type":"string","format":"binary","contentEncoding":"binary","contentMediaType":"image/png","minLength":1000,"maxLength":10000}`,
 		},
 		{
 			name:   "File with multiple Mime types",
-			schema: File().Mime([]string{"image/png", "image/jpeg"}).Min(1000).Max(10000),
+			schema: types.File().Mime([]string{"image/png", "image/jpeg"}).Min(1000).Max(10000),
 			expected: `{
 				"anyOf": [
 					{
@@ -432,19 +432,19 @@ func TestToJSONSchema_UnsupportedTypes(t *testing.T) {
 		name   string
 		schema core.ZodSchema
 	}{
-		{"BigInt", BigInt()},
-		{"BigIntPtr", BigIntPtr()},
-		{"Complex", Complex()},
-		{"ComplexPtr", ComplexPtr()},
-		{"Complex64", Complex64()},
-		{"Complex64Ptr", Complex64Ptr()},
-		{"Complex128", Complex128()},
-		{"Complex128Ptr", Complex128Ptr()},
-		{"Function", Function()},
-		{"FunctionPtr", FunctionPtr()},
+		{"BigInt", types.BigInt()},
+		{"BigIntPtr", types.BigIntPtr()},
+		{"Complex", types.Complex()},
+		{"ComplexPtr", types.ComplexPtr()},
+		{"Complex64", types.Complex64()},
+		{"Complex64Ptr", types.Complex64Ptr()},
+		{"Complex128", types.Complex128()},
+		{"Complex128Ptr", types.Complex128Ptr()},
+		{"Function", types.Function()},
+		{"FunctionPtr", types.FunctionPtr()},
 		{
 			"Transform",
-			String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			types.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
 				return len(s), nil
 			}),
 		},
@@ -464,10 +464,10 @@ func TestToJSONSchema_SupportedTypes(t *testing.T) {
 		schema   core.ZodSchema
 		expected string
 	}{
-		{"Time", Time(), `{"type":"string", "format":"time"}`},
-		{"TimePtr", TimePtr(), `{"type":"string", "format":"time"}`},
-		{"Map", Map(String(), Int()), `{"type":"object", "additionalProperties":{"type":"integer"}}`},
-		{"MapPtr", MapPtr(String(), Int()), `{"type":"object", "additionalProperties":{"type":"integer"}}`},
+		{"Time", types.Time(), `{"type":"string", "format":"time"}`},
+		{"TimePtr", types.TimePtr(), `{"type":"string", "format":"time"}`},
+		{"Map", types.Map(types.String(), types.Int()), `{"type":"object", "additionalProperties":{"type":"integer"}}`},
+		{"MapPtr", types.MapPtr(types.String(), types.Int()), `{"type":"object", "additionalProperties":{"type":"integer"}}`},
 	}
 
 	for _, u := range supported {
@@ -492,73 +492,73 @@ func TestToJSONSchema_NumberConstraints(t *testing.T) {
 		expected string
 	}{
 		// Basic Float constraints (matching TypeScript z.number())
-		{"MinMax", Float().Min(5).Max(10), `{"type":"number","minimum":5,"maximum":10}`},
-		{"GtGt", Float().Gt(5).Gt(10), `{"type":"number","exclusiveMinimum":10}`},
-		{"GtGte", Float().Gt(5).Gte(10), `{"type":"number","minimum":10}`},
-		{"LtLt", Float().Lt(5).Lt(3), `{"type":"number","exclusiveMaximum":3}`},
-		{"LtLtLte", Float().Lt(5).Lt(3).Lte(2), `{"type":"number","maximum":2}`},
-		{"LtLte", Float().Lt(5).Lte(3), `{"type":"number","maximum":3}`},
-		{"GtLt", Float().Gt(5).Lt(10), `{"type":"number","exclusiveMinimum":5,"exclusiveMaximum":10}`},
-		{"GteLte", Float().Gte(5).Lte(10), `{"type":"number","minimum":5,"maximum":10}`},
-		{"Positive", Float().Positive(), `{"type":"number","exclusiveMinimum":0}`},
-		{"Negative", Float().Negative(), `{"type":"number","exclusiveMaximum":0}`},
-		{"NonPositive", Float().NonPositive(), `{"type":"number","maximum":0}`},
-		{"NonNegative", Float().NonNegative(), `{"type":"number","minimum":0}`},
+		{"MinMax", types.Float().Min(5).Max(10), `{"type":"number","minimum":5,"maximum":10}`},
+		{"GtGt", types.Float().Gt(5).Gt(10), `{"type":"number","exclusiveMinimum":10}`},
+		{"GtGte", types.Float().Gt(5).Gte(10), `{"type":"number","minimum":10}`},
+		{"LtLt", types.Float().Lt(5).Lt(3), `{"type":"number","exclusiveMaximum":3}`},
+		{"LtLtLte", types.Float().Lt(5).Lt(3).Lte(2), `{"type":"number","maximum":2}`},
+		{"LtLte", types.Float().Lt(5).Lte(3), `{"type":"number","maximum":3}`},
+		{"GtLt", types.Float().Gt(5).Lt(10), `{"type":"number","exclusiveMinimum":5,"exclusiveMaximum":10}`},
+		{"GteLte", types.Float().Gte(5).Lte(10), `{"type":"number","minimum":5,"maximum":10}`},
+		{"Positive", types.Float().Positive(), `{"type":"number","exclusiveMinimum":0}`},
+		{"Negative", types.Float().Negative(), `{"type":"number","exclusiveMaximum":0}`},
+		{"NonPositive", types.Float().NonPositive(), `{"type":"number","maximum":0}`},
+		{"NonNegative", types.Float().NonNegative(), `{"type":"number","minimum":0}`},
 
 		// Integer constraints (matching TypeScript z.int())
-		{"IntegerMinMax", Int().Min(5).Max(10), `{"type":"integer","minimum":5,"maximum":10}`},
-		{"IntegerGtGt", Int().Gt(5).Gt(10), `{"type":"integer","exclusiveMinimum":10}`},
-		{"IntegerGtGte", Int().Gt(5).Gte(10), `{"type":"integer","minimum":10}`},
-		{"IntegerLtLt", Int().Lt(5).Lt(3), `{"type":"integer","exclusiveMaximum":3}`},
-		{"IntegerLtLtLte", Int().Lt(5).Lt(3).Lte(2), `{"type":"integer","maximum":2}`},
-		{"IntegerLtLte", Int().Lt(5).Lte(3), `{"type":"integer","maximum":3}`},
-		{"IntegerGtLt", Int().Gt(5).Lt(10), `{"type":"integer","exclusiveMinimum":5,"exclusiveMaximum":10}`},
-		{"IntegerGteLte", Int().Gte(5).Lte(10), `{"type":"integer","minimum":5,"maximum":10}`},
-		{"IntegerPositive", Int().Positive(), `{"type":"integer","exclusiveMinimum":0}`},
-		{"IntegerNegative", Int().Negative(), `{"type":"integer","exclusiveMaximum":0}`},
-		{"IntegerNonPositive", Int().NonPositive(), `{"type":"integer","maximum":0}`},
-		{"IntegerNonNegative", Int().NonNegative(), `{"type":"integer","minimum":0}`},
+		{"IntegerMinMax", types.Int().Min(5).Max(10), `{"type":"integer","minimum":5,"maximum":10}`},
+		{"IntegerGtGt", types.Int().Gt(5).Gt(10), `{"type":"integer","exclusiveMinimum":10}`},
+		{"IntegerGtGte", types.Int().Gt(5).Gte(10), `{"type":"integer","minimum":10}`},
+		{"IntegerLtLt", types.Int().Lt(5).Lt(3), `{"type":"integer","exclusiveMaximum":3}`},
+		{"IntegerLtLtLte", types.Int().Lt(5).Lt(3).Lte(2), `{"type":"integer","maximum":2}`},
+		{"IntegerLtLte", types.Int().Lt(5).Lte(3), `{"type":"integer","maximum":3}`},
+		{"IntegerGtLt", types.Int().Gt(5).Lt(10), `{"type":"integer","exclusiveMinimum":5,"exclusiveMaximum":10}`},
+		{"IntegerGteLte", types.Int().Gte(5).Lte(10), `{"type":"integer","minimum":5,"maximum":10}`},
+		{"IntegerPositive", types.Int().Positive(), `{"type":"integer","exclusiveMinimum":0}`},
+		{"IntegerNegative", types.Int().Negative(), `{"type":"integer","exclusiveMaximum":0}`},
+		{"IntegerNonPositive", types.Int().NonPositive(), `{"type":"integer","maximum":0}`},
+		{"IntegerNonNegative", types.Int().NonNegative(), `{"type":"integer","minimum":0}`},
 
 		// MultipleOf constraints
-		{"IntegerMultipleOf", Int().MultipleOf(5), `{"type":"integer","multipleOf":5}`},
-		{"FloatMultipleOf", Float().MultipleOf(2.5), `{"type":"number","multipleOf":2.5}`},
-		{"IntegerStep", Int().Step(3), `{"type":"integer","multipleOf":3}`},
+		{"IntegerMultipleOf", types.Int().MultipleOf(5), `{"type":"integer","multipleOf":5}`},
+		{"FloatMultipleOf", types.Float().MultipleOf(2.5), `{"type":"number","multipleOf":2.5}`},
+		{"IntegerStep", types.Int().Step(3), `{"type":"integer","multipleOf":3}`},
 
 		// Safe integer constraints
-		{"IntegerSafe", Int().Safe(), `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`},
+		{"IntegerSafe", types.Int().Safe(), `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`},
 
 		// Specific integer types with their ranges
-		{"Int8Constraints", Int8().Min(10).Max(100), `{"type":"integer","minimum":10,"maximum":100}`},
-		{"Int16Constraints", Int16().Min(1000).Max(30000), `{"type":"integer","minimum":1000,"maximum":30000}`},
-		{"Int32Constraints", Int32().Min(100000).Max(2000000), `{"type":"integer","minimum":100000,"maximum":2000000}`},
-		{"Int64Constraints", Int64().Min(1000000).Max(9000000000000000), `{"type":"integer","minimum":1000000,"maximum":9000000000000000}`},
+		{"Int8Constraints", types.Int8().Min(10).Max(100), `{"type":"integer","minimum":10,"maximum":100}`},
+		{"Int16Constraints", types.Int16().Min(1000).Max(30000), `{"type":"integer","minimum":1000,"maximum":30000}`},
+		{"Int32Constraints", types.Int32().Min(100000).Max(2000000), `{"type":"integer","minimum":100000,"maximum":2000000}`},
+		{"Int64Constraints", types.Int64().Min(1000000).Max(9000000000000000), `{"type":"integer","minimum":1000000,"maximum":9000000000000000}`},
 
 		// Unsigned integer types
-		{"UintConstraints", Uint().Min(10).Max(1000), `{"type":"integer","minimum":10,"maximum":1000}`},
-		{"Uint8Constraints", Uint8().Min(50).Max(200), `{"type":"integer","minimum":50,"maximum":200}`},
-		{"Uint16Constraints", Uint16().Min(1000).Max(60000), `{"type":"integer","minimum":1000,"maximum":60000}`},
-		{"Uint32Constraints", Uint32().Min(100000).Max(4000000000), `{"type":"integer","minimum":100000,"maximum":4000000000}`},
-		{"Uint64Constraints", Uint64().Min(1000000).Max(9223372036854775807), `{"type":"integer","minimum":1000000,"maximum":9.223372036854776e+18}`},
+		{"UintConstraints", types.Uint().Min(10).Max(1000), `{"type":"integer","minimum":10,"maximum":1000}`},
+		{"Uint8Constraints", types.Uint8().Min(50).Max(200), `{"type":"integer","minimum":50,"maximum":200}`},
+		{"Uint16Constraints", types.Uint16().Min(1000).Max(60000), `{"type":"integer","minimum":1000,"maximum":60000}`},
+		{"Uint32Constraints", types.Uint32().Min(100000).Max(4000000000), `{"type":"integer","minimum":100000,"maximum":4000000000}`},
+		{"Uint64Constraints", types.Uint64().Min(1000000).Max(9223372036854775807), `{"type":"integer","minimum":1000000,"maximum":9.223372036854776e+18}`},
 
 		// Float types with constraints
-		{"Float32Constraints", Float32().Min(-1000.5).Max(1000.5), `{"type":"number","minimum":-1000.5,"maximum":1000.5}`},
-		{"Float64Constraints", Float64().Min(-999999.999).Max(999999.999), `{"type":"number","minimum":-999999.999,"maximum":999999.999}`},
+		{"Float32Constraints", types.Float32().Min(-1000.5).Max(1000.5), `{"type":"number","minimum":-1000.5,"maximum":1000.5}`},
+		{"Float64Constraints", types.Float64().Min(-999999.999).Max(999999.999), `{"type":"number","minimum":-999999.999,"maximum":999999.999}`},
 
 		// Complex constraint combinations
-		{"ComplexIntegerConstraints", Int().Min(1).Max(100).MultipleOf(5).Positive(), `{"type":"integer","minimum":1,"maximum":100,"multipleOf":5}`},
-		{"ComplexFloatConstraints", Float().Min(0.1).Max(99.9).NonNegative(), `{"type":"number","minimum":0.1,"maximum":99.9}`},
+		{"ComplexIntegerConstraints", types.Int().Min(1).Max(100).MultipleOf(5).Positive(), `{"type":"integer","minimum":1,"maximum":100,"multipleOf":5}`},
+		{"ComplexFloatConstraints", types.Float().Min(0.1).Max(99.9).NonNegative(), `{"type":"number","minimum":0.1,"maximum":99.9}`},
 
 		// Edge cases with zero
-		{"ZeroMinimum", Float().Min(0), `{"type":"number","minimum":0}`},
-		{"ZeroMaximum", Float().Max(0), `{"type":"number","maximum":0}`},
-		{"ZeroExclusiveMinimum", Float().Gt(0), `{"type":"number","exclusiveMinimum":0}`},
-		{"ZeroExclusiveMaximum", Float().Lt(0), `{"type":"number","exclusiveMaximum":0}`},
+		{"ZeroMinimum", types.Float().Min(0), `{"type":"number","minimum":0}`},
+		{"ZeroMaximum", types.Float().Max(0), `{"type":"number","maximum":0}`},
+		{"ZeroExclusiveMinimum", types.Float().Gt(0), `{"type":"number","exclusiveMinimum":0}`},
+		{"ZeroExclusiveMaximum", types.Float().Lt(0), `{"type":"number","exclusiveMaximum":0}`},
 
 		// Constraint precedence tests (mimicking TypeScript behavior)
-		{"GtOverridesGt", Float().Gt(5).Gt(10), `{"type":"number","exclusiveMinimum":10}`},
-		{"LtOverridesLt", Float().Lt(10).Lt(5), `{"type":"number","exclusiveMaximum":5}`},
-		{"GteOverridesGt", Float().Gt(5).Gte(10), `{"type":"number","minimum":10}`},
-		{"LteOverridesLt", Float().Lt(10).Lte(5), `{"type":"number","maximum":5}`},
+		{"GtOverridesGt", types.Float().Gt(5).Gt(10), `{"type":"number","exclusiveMinimum":10}`},
+		{"LtOverridesLt", types.Float().Lt(10).Lt(5), `{"type":"number","exclusiveMaximum":5}`},
+		{"GteOverridesGt", types.Float().Gt(5).Gte(10), `{"type":"number","minimum":10}`},
+		{"LteOverridesLt", types.Float().Lt(10).Lte(5), `{"type":"number","maximum":5}`},
 	}
 
 	for _, c := range cases {
@@ -578,7 +578,7 @@ func TestToJSONSchema_NumberConstraints(t *testing.T) {
 
 func TestToJSONSchema_Slices(t *testing.T) {
 	t.Run("Simple Array", func(t *testing.T) {
-		schema := Slice[string](String())
+		schema := types.Slice[string](types.String())
 		expected := `{"type":"array","items":{"type":"string"}}`
 		js, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -588,7 +588,7 @@ func TestToJSONSchema_Slices(t *testing.T) {
 	})
 
 	t.Run("Array of Numbers", func(t *testing.T) {
-		schema := Slice[int](Int())
+		schema := types.Slice[int](types.Int())
 		expected := `{"type":"array","items":{"type":"integer"}}`
 		js, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -605,7 +605,7 @@ func TestToJSONSchema_Slices(t *testing.T) {
 func TestToJSONSchema_Arrays(t *testing.T) {
 	t.Run("Tuple with Rest", func(t *testing.T) {
 		// Tuple: [string, number] followed by boolean rest
-		tupleSchema := Array([]any{String(), Float()}, Bool())
+		tupleSchema := types.Array([]any{types.String(), types.Float()}, types.Bool())
 		expected := `{"type":"array","prefixItems":[{"type":"string"},{"type":"number"}],"items":{"type":"boolean"}}`
 		js, err := ToJSONSchema(tupleSchema)
 		assert.NoError(t, err)
@@ -616,7 +616,7 @@ func TestToJSONSchema_Arrays(t *testing.T) {
 
 	t.Run("Fixed Tuple", func(t *testing.T) {
 		// Fixed tuple: [string, number]
-		tupleSchema := Array([]any{String(), Float()})
+		tupleSchema := types.Array([]any{types.String(), types.Float()})
 		expected := `{"type":"array","prefixItems":[{"type":"string"},{"type":"number"}],"minItems":2,"maxItems":2}`
 		js, err := ToJSONSchema(tupleSchema)
 		assert.NoError(t, err)
@@ -632,7 +632,7 @@ func TestToJSONSchema_Arrays(t *testing.T) {
 
 func TestToJSONSchema_Unions(t *testing.T) {
 	t.Run("String or Number", func(t *testing.T) {
-		schema := Union([]any{String(), Float()})
+		schema := types.Union([]any{types.String(), types.Float()})
 		expected := `{"anyOf":[{"type":"string"},{"type":"number"}]}`
 		js, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -642,7 +642,7 @@ func TestToJSONSchema_Unions(t *testing.T) {
 	})
 
 	t.Run("Multiple Types", func(t *testing.T) {
-		schema := Union([]any{String(), Int(), Bool()})
+		schema := types.Union([]any{types.String(), types.Int(), types.Bool()})
 		expected := `{"anyOf":[{"type":"string"},{"type":"integer"},{"type":"boolean"}]}`
 		js, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -658,9 +658,9 @@ func TestToJSONSchema_Unions(t *testing.T) {
 
 func TestToJSONSchema_Intersections(t *testing.T) {
 	t.Run("Object Intersection", func(t *testing.T) {
-		schema := Intersection(
-			Object(ObjectSchema{"name": String()}),
-			Object(ObjectSchema{"age": Float()}),
+		schema := types.Intersection(
+			types.Object(core.ObjectSchema{"name": types.String()}),
+			types.Object(core.ObjectSchema{"age": types.Float()}),
 		)
 		expected := `{"allOf":[{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false},{"type":"object","properties":{"age":{"type":"number"}},"required":["age"],"additionalProperties":false}]}`
 		js, err := ToJSONSchema(schema)
@@ -677,7 +677,7 @@ func TestToJSONSchema_Intersections(t *testing.T) {
 
 func TestToJSONSchema_Records(t *testing.T) {
 	t.Run("String to Boolean Record", func(t *testing.T) {
-		schema := Record[string, bool](String(), Bool())
+		schema := types.RecordTyped[map[string]bool, map[string]bool](types.String(), types.Bool())
 		expected := `{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"boolean"}}`
 		jsonSchema, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -687,7 +687,7 @@ func TestToJSONSchema_Records(t *testing.T) {
 	})
 
 	t.Run("String to Number Record", func(t *testing.T) {
-		schema := Record[string, float64](String(), Float())
+		schema := types.RecordTyped[map[string]float64, map[string]float64](types.String(), types.Float())
 		expected := `{"type":"object","propertyNames":{"type":"string"},"additionalProperties":{"type":"number"}}`
 		jsonSchema, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -703,7 +703,7 @@ func TestToJSONSchema_Records(t *testing.T) {
 
 func TestToJSONSchema_Enums(t *testing.T) {
 	t.Run("String Enum", func(t *testing.T) {
-		schema := Enum("a", "b", "c")
+		schema := types.Enum("a", "b", "c")
 		expected := `{"type":"string","enum":["a","b","c"]}`
 		jsonSchema, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -713,7 +713,7 @@ func TestToJSONSchema_Enums(t *testing.T) {
 	})
 
 	t.Run("Number Enum", func(t *testing.T) {
-		schema := Enum(1, 2, 3)
+		schema := types.Enum(1, 2, 3)
 		expected := `{"type":"number","enum":[1,2,3]}`
 		jsonSchema, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
@@ -735,22 +735,22 @@ func TestToJSONSchema_Literals(t *testing.T) {
 	}{
 		{
 			name:     "String Literal",
-			schema:   Literal("hello"),
+			schema:   types.Literal("hello"),
 			expected: `{"type":"string","const":"hello"}`,
 		},
 		{
 			name:     "Number Literal",
-			schema:   Literal(7),
+			schema:   types.Literal(7),
 			expected: `{"type":"number","const":7}`,
 		},
 		{
 			name:     "Boolean Literal",
-			schema:   Literal(true),
+			schema:   types.Literal(true),
 			expected: `{"type":"boolean","const":true}`,
 		},
 		{
 			name:     "False Literal",
-			schema:   Literal(false),
+			schema:   types.Literal(false),
 			expected: `{"type":"boolean","const":false}`,
 		},
 	}
@@ -772,9 +772,9 @@ func TestToJSONSchema_Literals(t *testing.T) {
 
 func TestToJSONSchema_Objects(t *testing.T) {
 	t.Run("Simple Object", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"name": String(),
-			"age":  Float(),
+		schema := types.Object(core.ObjectSchema{
+			"name": types.String(),
+			"age":  types.Float(),
 		})
 		expected := `{
 			"type": "object",
@@ -793,10 +793,10 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Object with Optional Fields", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"required":    String(),
-			"optional":    String().Optional(),
-			"nonoptional": String().Optional().NonOptional(),
+		schema := types.Object(core.ObjectSchema{
+			"required":    types.String(),
+			"optional":    types.String().Optional(),
+			"nonoptional": types.String().Optional().NonOptional(),
 		})
 		expected := `{
 			"type": "object",
@@ -816,9 +816,9 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Nested Objects", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"user": Object(ObjectSchema{
-				"name": String(),
+		schema := types.Object(core.ObjectSchema{
+			"user": types.Object(core.ObjectSchema{
+				"name": types.String(),
 			}),
 		})
 		expected := `{
@@ -844,9 +844,9 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Object with Catchall", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"name": String(),
-		}).Catchall(String())
+		schema := types.Object(core.ObjectSchema{
+			"name": types.String(),
+		}).Catchall(types.String())
 		expected := `{
 			"type": "object",
 			"properties": {
@@ -865,9 +865,9 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Strict Object", func(t *testing.T) {
-		schema := StrictObject(ObjectSchema{
-			"name": String(),
-			"age":  Float(),
+		schema := types.StrictObject(core.ObjectSchema{
+			"name": types.String(),
+			"age":  types.Float(),
 		})
 		expected := `{
 			"type": "object",
@@ -886,8 +886,8 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Loose Object", func(t *testing.T) {
-		schema := LooseObject(ObjectSchema{
-			"name": String(),
+		schema := types.LooseObject(core.ObjectSchema{
+			"name": types.String(),
 		})
 		expected := `{
 			"type": "object",
@@ -905,16 +905,16 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	})
 
 	t.Run("Object with Mixed Field Types", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"id":     Int(),
-			"name":   String(),
-			"email":  String().Email(),
-			"age":    Float().Optional(),
-			"active": Bool(),
-			"tags":   Slice[string](String()),
-			"metadata": Object(ObjectSchema{
-				"created": String(),
-				"updated": String().Optional(),
+		schema := types.Object(core.ObjectSchema{
+			"id":     types.Int(),
+			"name":   types.String(),
+			"email":  types.String().Email(),
+			"age":    types.Float().Optional(),
+			"active": types.Bool(),
+			"tags":   types.Slice[string](types.String()),
+			"metadata": types.Object(core.ObjectSchema{
+				"created": types.String(),
+				"updated": types.String().Optional(),
 			}),
 		})
 		expected := `{
@@ -960,8 +960,8 @@ func TestToJSONSchema_Objects(t *testing.T) {
 
 func TestToJSONSchema_ArrayOfObjects(t *testing.T) {
 	t.Run("Array of Objects", func(t *testing.T) {
-		schema := Slice[map[string]any](Object(ObjectSchema{
-			"id": Int(),
+		schema := types.Slice[map[string]any](types.Object(core.ObjectSchema{
+			"id": types.Int(),
 		}))
 		expected := `{
 			"type": "array",
@@ -988,7 +988,7 @@ func TestToJSONSchema_ArrayOfObjects(t *testing.T) {
 
 func TestToJSONSchema_LazySchemas(t *testing.T) {
 	t.Run("Lazy String", func(t *testing.T) {
-		lazySchema := LazyAny(func() any { return String() })
+		lazySchema := types.LazyAny(func() any { return types.String() })
 		expected := `{"type":"string"}`
 		js, err := ToJSONSchema(lazySchema)
 		assert.NoError(t, err)
@@ -998,9 +998,9 @@ func TestToJSONSchema_LazySchemas(t *testing.T) {
 	})
 
 	t.Run("Lazy Object", func(t *testing.T) {
-		lazySchema := LazyAny(func() any {
-			return Object(ObjectSchema{
-				"name": String(),
+		lazySchema := types.LazyAny(func() any {
+			return types.Object(core.ObjectSchema{
+				"name": types.String(),
 			})
 		})
 		expected := `{
@@ -1031,14 +1031,14 @@ func TestToJSONSchema_OptionalAndNilable(t *testing.T) {
 	}{
 		{
 			name:   "Optional String",
-			schema: String().Optional(),
+			schema: types.String().Optional(),
 			expected: `{
 				"type": "string"
 			}`,
 		},
 		{
 			name:   "Nilable Integer",
-			schema: Int().Nilable(),
+			schema: types.Int().Nilable(),
 			expected: `{
 				"anyOf": [
 					{"type": "integer"},
@@ -1048,7 +1048,7 @@ func TestToJSONSchema_OptionalAndNilable(t *testing.T) {
 		},
 		{
 			name:   "Optional and Nilable String",
-			schema: String().Optional().Nilable(),
+			schema: types.String().Optional().Nilable(),
 			expected: `{
 				"anyOf": [
 					{"type": "string"},
@@ -1081,27 +1081,27 @@ func TestToJSONSchema_AdvancedSlices(t *testing.T) {
 	}{
 		{
 			name:     "Array with Min Items",
-			schema:   Slice[string](String()).Min(2),
+			schema:   types.Slice[string](types.String()).Min(2),
 			expected: `{"type":"array","items":{"type":"string"},"minItems":2}`,
 		},
 		{
 			name:     "Array with Max Items",
-			schema:   Slice[string](String()).Max(5),
+			schema:   types.Slice[string](types.String()).Max(5),
 			expected: `{"type":"array","items":{"type":"string"},"maxItems":5}`,
 		},
 		{
 			name:     "Array with Min and Max Items",
-			schema:   Slice[string](String()).Min(2).Max(5),
+			schema:   types.Slice[string](types.String()).Min(2).Max(5),
 			expected: `{"type":"array","items":{"type":"string"},"minItems":2,"maxItems":5}`,
 		},
 		{
 			name:     "Array with Exact Length",
-			schema:   Slice[string](String()).Length(3),
+			schema:   types.Slice[string](types.String()).Length(3),
 			expected: `{"type":"array","items":{"type":"string"},"minItems":3,"maxItems":3}`,
 		},
 		{
 			name:     "Non-empty Array",
-			schema:   Slice[string](String()).NonEmpty(),
+			schema:   types.Slice[string](types.String()).NonEmpty(),
 			expected: `{"type":"array","items":{"type":"string"},"minItems":1}`,
 		},
 	}
@@ -1129,32 +1129,32 @@ func TestToJSONSchema_StringConstraints(t *testing.T) {
 	}{
 		{
 			name:     "String with StartsWith",
-			schema:   String().StartsWith("hello"),
+			schema:   types.String().StartsWith("hello"),
 			expected: `{"type":"string","pattern":"^hello.*"}`,
 		},
 		{
 			name:     "String with EndsWith",
-			schema:   String().EndsWith("world"),
+			schema:   types.String().EndsWith("world"),
 			expected: `{"type":"string","pattern":".*world$"}`,
 		},
 		{
 			name:     "String with Includes",
-			schema:   String().Includes("foo"),
+			schema:   types.String().Includes("foo"),
 			expected: `{"type":"string","pattern":"foo"}`,
 		},
 		{
 			name:     "String with Includes - Special Chars",
-			schema:   String().Includes("foo.bar?"),
+			schema:   types.String().Includes("foo.bar?"),
 			expected: `{"type":"string","pattern":"foo\\.bar\\?"}`,
 		},
 		{
 			name:     "String with Regex",
-			schema:   String().RegexString("^[a-z]+$"),
+			schema:   types.String().RegexString("^[a-z]+$"),
 			expected: `{"type":"string","pattern":"^[a-z]+$"}`,
 		},
 		{
 			name: "Combined String Constraints",
-			schema: String().
+			schema: types.String().
 				StartsWith("h").
 				EndsWith("d").
 				Includes("ell"),
@@ -1192,22 +1192,22 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 	}{
 		{
 			name:     "String Email",
-			schema:   String().Email(),
+			schema:   types.String().Email(),
 			expected: `{"type":"string","format":"email","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
 		},
 		{
 			name:     "String with Length and Email",
-			schema:   String().Email().Min(10).Max(50),
+			schema:   types.String().Email().Min(10).Max(50),
 			expected: `{"type":"string","format":"email","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$","minLength":10,"maxLength":50}`,
 		},
 		{
 			name:     "String with JSON validation",
-			schema:   String().JSON(),
+			schema:   types.String().JSON(),
 			expected: `{"type":"string","contentMediaType":"application/json","pattern":"^[\\s\\S]*$"}`,
 		},
 		{
 			name:   "String with Multiple Pattern Constraints",
-			schema: String().StartsWith("test").EndsWith(".com").Includes("@"),
+			schema: types.String().StartsWith("test").EndsWith(".com").Includes("@"),
 			expected: `{
 				"type": "string",
 				"allOf": [
@@ -1219,7 +1219,7 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 		},
 		{
 			name:   "String Email with Pattern Constraints",
-			schema: String().Email().StartsWith("test"),
+			schema: types.String().Email().StartsWith("test"),
 			expected: `{
 				"type": "string",
 				"format": "email",
@@ -1231,17 +1231,17 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 		},
 		{
 			name:     "String with Min/Max Length",
-			schema:   String().Min(5).Max(20),
+			schema:   types.String().Min(5).Max(20),
 			expected: `{"type":"string","minLength":5,"maxLength":20}`,
 		},
 		{
 			name:     "String with Exact Length",
-			schema:   String().Length(10),
+			schema:   types.String().Length(10),
 			expected: `{"type":"string","minLength":10,"maxLength":10}`,
 		},
 		{
 			name:     "String with Custom Regex",
-			schema:   String().RegexString("^[a-zA-Z0-9]+$"),
+			schema:   types.String().RegexString("^[a-zA-Z0-9]+$"),
 			expected: `{"type":"string","pattern":"^[a-zA-Z0-9]+$"}`,
 		},
 	}
@@ -1259,14 +1259,14 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 
 func TestToJSONSchema_DiscriminatedUnionsAdvanced(t *testing.T) {
 	t.Run("Discriminated Union", func(t *testing.T) {
-		schema := DiscriminatedUnion("type", []any{
-			Object(core.ObjectSchema{
-				"type": Literal("a"),
-				"a":    String(),
+		schema := types.DiscriminatedUnion("type", []any{
+			types.Object(core.ObjectSchema{
+				"type": types.Literal("a"),
+				"a":    types.String(),
 			}),
-			Object(core.ObjectSchema{
-				"type": Literal("b"),
-				"b":    Int(),
+			types.Object(core.ObjectSchema{
+				"type": types.Literal("b"),
+				"b":    types.Int(),
 			}),
 		})
 
@@ -1329,7 +1329,7 @@ func TestToJSONSchema_Structs(t *testing.T) {
 	}
 
 	t.Run("Simple Struct", func(t *testing.T) {
-		schema := Struct[User]()
+		schema := types.Struct[User]()
 		expected := `{
 			"type": "object",
 			"additionalProperties": false
@@ -1342,10 +1342,10 @@ func TestToJSONSchema_Structs(t *testing.T) {
 	})
 
 	t.Run("Struct with Field Schema", func(t *testing.T) {
-		schema := Struct[User](core.StructSchema{
-			"name":  String().Min(2),
-			"age":   Int().Min(0).Max(150),
-			"email": String().Email(),
+		schema := types.Struct[User](core.StructSchema{
+			"name":  types.String().Min(2),
+			"age":   types.Int().Min(0).Max(150),
+			"email": types.String().Email(),
 		})
 		expected := `{
 			"type": "object",
@@ -1376,11 +1376,11 @@ func TestToJSONSchema_Structs(t *testing.T) {
 	})
 
 	t.Run("Struct with Optional Fields", func(t *testing.T) {
-		schema := Struct[Profile](core.StructSchema{
-			"id":       Int().Min(1),
-			"username": String().Min(3),
-			"bio":      String().Optional(),
-			"active":   Bool(),
+		schema := types.Struct[Profile](core.StructSchema{
+			"id":       types.Int().Min(1),
+			"username": types.String().Min(3),
+			"bio":      types.String().Optional(),
+			"active":   types.Bool(),
 		})
 		expected := `{
 			"type": "object",
@@ -1411,10 +1411,10 @@ func TestToJSONSchema_Structs(t *testing.T) {
 	})
 
 	t.Run("StructPtr", func(t *testing.T) {
-		schema := StructPtr[User](core.StructSchema{
-			"name":  String().Min(1),
-			"age":   Int().Min(0),
-			"email": String().Email(),
+		schema := types.StructPtr[User](core.StructSchema{
+			"name":  types.String().Min(1),
+			"age":   types.Int().Min(0),
+			"email": types.String().Email(),
 		})
 		expected := `{
 			"type": "object",
@@ -1444,16 +1444,16 @@ func TestToJSONSchema_Structs(t *testing.T) {
 	})
 
 	t.Run("Nested Struct", func(t *testing.T) {
-		schema := Struct[Company](core.StructSchema{
-			"name": String().Min(1),
-			"employees": Slice[User](Struct[User](core.StructSchema{
-				"name":  String(),
-				"age":   Int(),
-				"email": String().Email(),
+		schema := types.Struct[Company](core.StructSchema{
+			"name": types.String().Min(1),
+			"employees": types.Slice[User](types.Struct[User](core.StructSchema{
+				"name":  types.String(),
+				"age":   types.Int(),
+				"email": types.String().Email(),
 			})),
-			"founded": Int().Min(1800).Max(2100),
-			"public":  Bool(),
-			"tags":    Slice[string](String()),
+			"founded": types.Int().Min(1800).Max(2100),
+			"public":  types.Bool(),
+			"tags":    types.Slice[string](types.String()),
 		})
 		expected := `{
 			"type": "object",
@@ -1515,9 +1515,9 @@ func TestToJSONSchema_RecursiveSchemas(t *testing.T) {
 		}
 
 		var categorySchema core.ZodSchema
-		categorySchema = Struct[Category](core.StructSchema{
-			"name": String(),
-			"subcategories": Slice[Category](LazyAny(func() any {
+		categorySchema = types.Struct[Category](core.StructSchema{
+			"name": types.String(),
+			"subcategories": types.Slice[Category](types.LazyAny(func() any {
 				return categorySchema
 			})),
 		})
@@ -1550,9 +1550,9 @@ func TestToJSONSchema_RecursiveSchemas(t *testing.T) {
 		}
 
 		var treeSchema core.ZodSchema
-		treeSchema = Struct[TreeNode](core.StructSchema{
-			"id": String(),
-			"children": LazyAny(func() any {
+		treeSchema = types.Struct[TreeNode](core.StructSchema{
+			"id": types.String(),
+			"children": types.LazyAny(func() any {
 				return treeSchema
 			}),
 		})
@@ -1582,9 +1582,9 @@ func TestToJSONSchema_RecursiveSchemas(t *testing.T) {
 
 func TestToJSONSchema_AdvancedObjectPatterns(t *testing.T) {
 	t.Run("Object with Union Fields", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"value": Union([]any{String(), Int(), Bool()}),
-			"type":  Enum("string", "number", "boolean"),
+		schema := types.Object(core.ObjectSchema{
+			"value": types.Union([]any{types.String(), types.Int(), types.Bool()}),
+			"type":  types.Enum("string", "number", "boolean"),
 		})
 		expected := `{
 			"type": "object",
@@ -1612,10 +1612,10 @@ func TestToJSONSchema_AdvancedObjectPatterns(t *testing.T) {
 	})
 
 	t.Run("Object with Nilable Fields", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"name":        String(),
-			"description": String().Nilable(),
-			"count":       Int().Optional().Nilable(),
+		schema := types.Object(core.ObjectSchema{
+			"name":        types.String(),
+			"description": types.String().Nilable(),
+			"count":       types.Int().Optional().Nilable(),
 		})
 		expected := `{
 			"type": "object",
@@ -1645,12 +1645,12 @@ func TestToJSONSchema_AdvancedObjectPatterns(t *testing.T) {
 	})
 
 	t.Run("Object with Array of Objects", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"users": Slice[map[string]any](Object(ObjectSchema{
-				"id":   Int(),
-				"name": String(),
+		schema := types.Object(core.ObjectSchema{
+			"users": types.Slice[map[string]any](types.Object(core.ObjectSchema{
+				"id":   types.Int(),
+				"name": types.String(),
 			})),
-			"total": Int(),
+			"total": types.Int(),
 		})
 		expected := `{
 			"type": "object",
@@ -1680,9 +1680,9 @@ func TestToJSONSchema_AdvancedObjectPatterns(t *testing.T) {
 	})
 
 	t.Run("Object with Record Fields", func(t *testing.T) {
-		schema := Object(ObjectSchema{
-			"metadata": Record[string, string](String(), String()),
-			"name":     String(),
+		schema := types.Object(core.ObjectSchema{
+			"metadata": types.RecordTyped[map[string]string, map[string]string](types.String(), types.String()),
+			"name":     types.String(),
 		})
 		expected := `{
 			"type": "object",
@@ -1706,8 +1706,8 @@ func TestToJSONSchema_AdvancedObjectPatterns(t *testing.T) {
 }
 
 func TestToJSONSchemaOverride(t *testing.T) {
-	schema := String()
-	opts := JSONSchemaOptions{
+	schema := types.String()
+	opts := Options{
 		Override: func(ctx OverrideContext) {
 			ctx.JSONSchema.Title = stringPtr("overridden")
 		},
@@ -1720,8 +1720,8 @@ func TestToJSONSchemaOverride(t *testing.T) {
 }
 
 func TestToJSONSchemaOverrideWithRefs(t *testing.T) {
-	a := String().Optional()
-	opts := JSONSchemaOptions{
+	a := types.String().Optional()
+	opts := Options{
 		Override: func(ctx OverrideContext) {
 			// Optional string returns a *ZodString[*string]
 			if _, ok := ctx.ZodSchema.(*types.ZodString[*string]); ok {
@@ -1737,19 +1737,19 @@ func TestToJSONSchemaOverrideWithRefs(t *testing.T) {
 }
 
 func TestToJSONSchemaTransformIO(t *testing.T) {
-	mySchema := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+	mySchema := types.String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
 		return len(s), nil
 	})
 
 	// For IO:"output", transform is unrepresentable. With "any", it should be an empty schema.
-	outputSchema, err := ToJSONSchema(mySchema, JSONSchemaOptions{Unrepresentable: "any", IO: "output"})
+	outputSchema, err := ToJSONSchema(mySchema, Options{Unrepresentable: "any", IO: "output"})
 	assert.NoError(t, err)
 	outputJSON, err := json.Marshal(outputSchema)
 	assert.NoError(t, err)
 	assert.JSONEq(t, `{}`, string(outputJSON), "output of transform should be an empty schema with unrepresentable:any")
 
 	// For IO:"input", it should represent the input schema (string).
-	inputSchema, err := ToJSONSchema(mySchema, JSONSchemaOptions{IO: "input"})
+	inputSchema, err := ToJSONSchema(mySchema, Options{IO: "input"})
 	assert.NoError(t, err)
 	inputJSON, err := json.Marshal(inputSchema)
 	assert.NoError(t, err)
@@ -1757,18 +1757,18 @@ func TestToJSONSchemaTransformIO(t *testing.T) {
 }
 
 func TestToJSONSchemaPassthroughSchemas(t *testing.T) {
-	Internal := Struct[map[string]any](ObjectSchema{
-		"num": Number(),
-		"str": String(),
+	Internal := types.Struct[map[string]any](core.ObjectSchema{
+		"num": types.Number(),
+		"str": types.String(),
 	})
 
-	External := Struct[map[string]any](ObjectSchema{
+	External := types.Struct[map[string]any](core.ObjectSchema{
 		"a": Internal,
 		"b": Internal.Optional(),
-		"c": Lazy(func() core.ZodSchema { return Internal }),
+		"c": types.Lazy(func() core.ZodSchema { return Internal }),
 	})
 
-	result, err := ToJSONSchema(External, JSONSchemaOptions{
+	result, err := ToJSONSchema(External, Options{
 		Reused: "ref",
 	})
 	assert.NoError(t, err)
@@ -1783,10 +1783,10 @@ func TestToJSONSchemaPassthroughSchemas(t *testing.T) {
 }
 
 func TestToJSONSchemaExtractSchemasWithID(t *testing.T) {
-	name := String().Meta(core.GlobalMeta{ID: "name"})
-	age := Number().Meta(core.GlobalMeta{ID: "age"})
+	name := types.String().Meta(core.GlobalMeta{ID: "name"})
+	age := types.Number().Meta(core.GlobalMeta{ID: "age"})
 
-	schema := Struct[map[string]any](ObjectSchema{
+	schema := types.Struct[map[string]any](core.ObjectSchema{
 		"first_name":  name,
 		"last_name":   name.Nilable(),
 		"middle_name": name.Optional(),
@@ -1807,9 +1807,9 @@ func TestToJSONSchemaExtractSchemasWithID(t *testing.T) {
 }
 
 func TestToJSONSchemaUnrepresentableLiteral(t *testing.T) {
-	schema := Literal[any]([]any{"hello", "world"})
+	schema := types.Literal[any]([]any{"hello", "world"})
 
-	result, err := ToJSONSchema(schema, JSONSchemaOptions{Unrepresentable: "any"})
+	result, err := ToJSONSchema(schema, Options{Unrepresentable: "any"})
 	assert.NoError(t, err)
 	var data map[string]any
 	resultBytes, err := json.Marshal(result)
@@ -1823,9 +1823,9 @@ func TestToJSONSchemaUnrepresentableLiteral(t *testing.T) {
 }
 
 func TestToJSONSchemaDescribeWithID(t *testing.T) {
-	jobId := String().Meta(core.GlobalMeta{ID: "jobId"})
+	jobId := types.String().Meta(core.GlobalMeta{ID: "jobId"})
 
-	schema := Struct[map[string]any](ObjectSchema{
+	schema := types.Struct[map[string]any](core.ObjectSchema{
 		"current":  jobId.Meta(core.GlobalMeta{Description: "Current job"}),
 		"previous": jobId.Meta(core.GlobalMeta{Description: "Previous job"}),
 	})
@@ -1844,9 +1844,9 @@ func TestToJSONSchemaDescribeWithID(t *testing.T) {
 }
 
 func TestToJSONSchemaOverwriteID(t *testing.T) {
-	jobId := String().Meta(core.GlobalMeta{ID: "aaa"})
+	jobId := types.String().Meta(core.GlobalMeta{ID: "aaa"})
 
-	schema := Struct[map[string]any](ObjectSchema{
+	schema := types.Struct[map[string]any](core.ObjectSchema{
 		"current":  jobId,
 		"previous": jobId.Meta(core.GlobalMeta{ID: "bbb"}),
 	})
@@ -1864,14 +1864,14 @@ func TestToJSONSchemaOverwriteID(t *testing.T) {
 }
 
 func TestToJSONSchemaInputOutputType(t *testing.T) {
-	schema := Struct[map[string]any](ObjectSchema{
-		"a": String(),
-		"b": String().Optional(),
-		"c": String().Default("hello"),
-		"d": String().Nilable(),
+	schema := types.Struct[map[string]any](core.ObjectSchema{
+		"a": types.String(),
+		"b": types.String().Optional(),
+		"c": types.String().Default("hello"),
+		"d": types.String().Nilable(),
 	})
 
-	inputResult, err := ToJSONSchema(schema, JSONSchemaOptions{IO: "input"})
+	inputResult, err := ToJSONSchema(schema, Options{IO: "input"})
 	assert.NoError(t, err)
 	var inputData map[string]any
 	inputResultBytes, err := json.Marshal(inputResult)
@@ -1881,7 +1881,7 @@ func TestToJSONSchemaInputOutputType(t *testing.T) {
 	inputRequired := inputData["required"].([]any)
 	assert.ElementsMatch(t, []string{"a", "d"}, inputRequired)
 
-	outputResult, err := ToJSONSchema(schema, JSONSchemaOptions{IO: "output"})
+	outputResult, err := ToJSONSchema(schema, Options{IO: "output"})
 	assert.NoError(t, err)
 	var outputData map[string]any
 	outputResultBytes, err := json.Marshal(outputResult)
@@ -1897,17 +1897,17 @@ func TestToJSONSchemaBasicRegistry(t *testing.T) {
 
 	var User, Post core.ZodSchema
 
-	User = Struct[map[string]any](ObjectSchema{
-		"name": String(),
-		"posts": Lazy(func() core.ZodSchema {
-			return Array(Post)
+	User = types.Struct[map[string]any](core.ObjectSchema{
+		"name": types.String(),
+		"posts": types.Lazy(func() core.ZodSchema {
+			return types.Array(Post)
 		}),
 	})
 
-	Post = Struct[map[string]any](ObjectSchema{
-		"title":   String(),
-		"content": String(),
-		"author": Lazy(func() core.ZodSchema {
+	Post = types.Struct[map[string]any](core.ObjectSchema{
+		"title":   types.String(),
+		"content": types.String(),
+		"author": types.Lazy(func() core.ZodSchema {
 			return User
 		}),
 	})
@@ -1938,11 +1938,11 @@ func stringPtr(s string) *string {
 // =============================================================================
 
 func TestToJSONSchema_OverwriteDescriptions(t *testing.T) {
-	field := String().Meta(core.GlobalMeta{Description: "a"}).
+	field := types.String().Meta(core.GlobalMeta{Description: "a"}).
 		Meta(core.GlobalMeta{Description: "b"}).
 		Meta(core.GlobalMeta{Description: "c"})
 
-	schema := Object(ObjectSchema{
+	schema := types.Object(core.ObjectSchema{
 		"d": field.Meta(core.GlobalMeta{Description: "d"}),
 		"e": field.Meta(core.GlobalMeta{Description: "e"}),
 	})

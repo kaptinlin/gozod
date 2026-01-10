@@ -34,15 +34,26 @@ var CIDRv6 = regexp.MustCompile(`^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a
 // export const ip: RegExp = new RegExp(`(${ipv4.source})|(${ipv6.source})`);
 var IP = regexp.MustCompile(`((?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))|((?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::|(?:[0-9a-fA-F]{1,4})?::(?:[0-9a-fA-F]{1,4}:?){0,6}))`)
 
-// Hostname matches DNS hostnames
-// TypeScript original code:
-// export const hostname: RegExp = /^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/;
-var Hostname = regexp.MustCompile(`^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$`)
+// Hostname matches valid DNS hostnames according to RFC 1123
+// Based on Zod v4: /^(?=.{1,253}\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$/
+// Note: Go's regex doesn't support lookahead, so length check (1-253 chars) must be done in validation code
+// Rules:
+// - Labels must start and end with alphanumeric characters
+// - Labels can contain hyphens but not at start/end
+// - Each label is 1-63 characters
+// - Optional trailing dot allowed (FQDN format)
+// - IP addresses ARE valid hostnames per Zod v4 tests
+var Hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$`)
 
 // Domain matches valid domain names with TLD
 // TypeScript original code:
 // export const domain: RegExp = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 var Domain = regexp.MustCompile(`^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+
+// HTTPProtocol matches http or https protocol
+// Used by HttpURL schema to restrict to HTTP/HTTPS only
+// TypeScript Zod v4: /^https?$/
+var HTTPProtocol = regexp.MustCompile(`^https?$`)
 
 // MAC returns a regex for validating MAC addresses with the specified delimiter.
 // Matches Zod TypeScript implementation using two branches for case-sensitive matching.

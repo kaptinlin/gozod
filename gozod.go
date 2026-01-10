@@ -5,6 +5,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/jsonschema"
 	"github.com/kaptinlin/gozod/types"
 )
 
@@ -87,14 +88,18 @@ type (
 	ZodEmoji[T types.StringConstraint]     = types.ZodEmoji[T]
 	ZodBase64[T types.StringConstraint]    = types.ZodBase64[T]
 	ZodBase64URL[T types.StringConstraint] = types.ZodBase64URL[T]
+	ZodHex[T types.StringConstraint]       = types.ZodHex[T]
 
 	// Network formats
-	ZodIPv4[T types.NetworkConstraint]   = types.ZodIPv4[T]
-	ZodIPv6[T types.NetworkConstraint]   = types.ZodIPv6[T]
-	ZodCIDRv4[T types.NetworkConstraint] = types.ZodCIDRv4[T]
-	ZodCIDRv6[T types.NetworkConstraint] = types.ZodCIDRv6[T]
-	ZodURL[T types.NetworkConstraint]    = types.ZodURL[T]
-	URLOptions                           = types.URLOptions
+	ZodIPv4[T types.NetworkConstraint]     = types.ZodIPv4[T]
+	ZodIPv6[T types.NetworkConstraint]     = types.ZodIPv6[T]
+	ZodCIDRv4[T types.NetworkConstraint]   = types.ZodCIDRv4[T]
+	ZodCIDRv6[T types.NetworkConstraint]   = types.ZodCIDRv6[T]
+	ZodURL[T types.NetworkConstraint]      = types.ZodURL[T]
+	ZodHostname[T types.NetworkConstraint] = types.ZodHostname[T]
+	ZodMAC[T types.NetworkConstraint]      = types.ZodMAC[T]
+	ZodE164[T types.NetworkConstraint]     = types.ZodE164[T]
+	URLOptions                             = types.URLOptions
 
 	// ISO 8601 formats
 	ZodIso[T types.IsoConstraint] = types.ZodIso[T]
@@ -171,6 +176,8 @@ var (
 	Base64Ptr    = types.Base64Ptr
 	Base64URL    = types.Base64URL
 	Base64URLPtr = types.Base64URLPtr
+	Hex          = types.Hex
+	HexPtr       = types.HexPtr
 )
 
 // Boolean constructors
@@ -247,16 +254,25 @@ var (
 
 // Network type constructors
 var (
-	IPv4      = types.IPv4
-	IPv4Ptr   = types.IPv4Ptr
-	IPv6      = types.IPv6
-	IPv6Ptr   = types.IPv6Ptr
-	CIDRv4    = types.CIDRv4
-	CIDRv4Ptr = types.CIDRv4Ptr
-	CIDRv6    = types.CIDRv6
-	CIDRv6Ptr = types.CIDRv6Ptr
-	URL       = types.URL
-	URLPtr    = types.URLPtr
+	IPv4             = types.IPv4
+	IPv4Ptr          = types.IPv4Ptr
+	IPv6             = types.IPv6
+	IPv6Ptr          = types.IPv6Ptr
+	CIDRv4           = types.CIDRv4
+	CIDRv4Ptr        = types.CIDRv4Ptr
+	CIDRv6           = types.CIDRv6
+	CIDRv6Ptr        = types.CIDRv6Ptr
+	URL              = types.URL
+	URLPtr           = types.URLPtr
+	Hostname         = types.Hostname
+	HostnamePtr      = types.HostnamePtr
+	MAC              = types.MAC
+	MACPtr           = types.MACPtr
+	MACWithDelimiter = types.MACWithDelimiter
+	E164             = types.E164
+	E164Ptr          = types.E164Ptr
+	HttpURL          = types.HttpURL
+	HttpURLPtr       = types.HttpURLPtr
 )
 
 // ISO 8601 format constructors
@@ -652,3 +668,80 @@ var Describe = checks.Describe
 //	// meta.Title == "Age"
 //	// meta.Description == "User's age in years"
 var Meta = checks.Meta
+
+// =============================================================================
+// JSON SCHEMA CONVERSION
+// =============================================================================
+
+// JSONSchemaOptions configures the ToJSONSchema conversion.
+// Re-exported from jsonschema subpackage for convenience.
+type JSONSchemaOptions = jsonschema.Options
+
+// OverrideContext provides context for the Override function in JSON Schema conversion.
+// Re-exported from jsonschema subpackage for convenience.
+type OverrideContext = jsonschema.OverrideContext
+
+// FromJSONSchemaOptions configures the FromJSONSchema conversion.
+// Re-exported from jsonschema subpackage for convenience.
+type FromJSONSchemaOptions = jsonschema.FromJSONSchemaOptions
+
+// ToJSONSchema converts a GoZod schema or registry into a JSON Schema instance.
+//
+// TypeScript Zod v4 equivalent: zodToJsonSchema(schema)
+//
+// Example:
+//
+//	schema := gozod.Object(gozod.ObjectSchema{
+//	    "name": gozod.String().Min(1),
+//	    "age":  gozod.Int().Min(0),
+//	})
+//	jsonSchema, err := gozod.ToJSONSchema(schema)
+var ToJSONSchema = jsonschema.ToJSONSchema
+
+// FromJSONSchema converts a kaptinlin/jsonschema Schema to a GoZod schema.
+//
+// Example:
+//
+//	jsonSchema := &lib.Schema{Type: []string{"string"}}
+//	zodSchema, err := gozod.FromJSONSchema(jsonSchema)
+var FromJSONSchema = jsonschema.FromJSONSchema
+
+// JSON Schema conversion error variables re-exported for convenience.
+var (
+	// ToJSONSchema errors
+	ErrUnsupportedInputType          = jsonschema.ErrUnsupportedInputType
+	ErrCircularReference             = jsonschema.ErrCircularReference
+	ErrUnrepresentableType           = jsonschema.ErrUnrepresentableType
+	ErrSchemaNotObjectOrStruct       = jsonschema.ErrSchemaNotObjectOrStruct
+	ErrSliceElementNotSchema         = jsonschema.ErrSliceElementNotSchema
+	ErrArrayItemNotSchema            = jsonschema.ErrArrayItemNotSchema
+	ErrUnhandledArrayLike            = jsonschema.ErrUnhandledArrayLike
+	ErrUnionInvalid                  = jsonschema.ErrUnionInvalid
+	ErrUnionNoMembers                = jsonschema.ErrUnionNoMembers
+	ErrIntersectionInvalid           = jsonschema.ErrIntersectionInvalid
+	ErrInvalidEnumSchema             = jsonschema.ErrInvalidEnumSchema
+	ErrEnumExtractValues             = jsonschema.ErrEnumExtractValues
+	ErrLiteralNoValuesMethod         = jsonschema.ErrLiteralNoValuesMethod
+	ErrLiteralUnexpectedReturnValues = jsonschema.ErrLiteralUnexpectedReturnValues
+	ErrExpectedDiscriminatedUnion    = jsonschema.ErrExpectedDiscriminatedUnion
+	ErrExpectedRecord                = jsonschema.ErrExpectedRecord
+	ErrRecordValueNotSchema          = jsonschema.ErrRecordValueNotSchema
+	ErrMapNoMethods                  = jsonschema.ErrMapNoMethods
+	ErrMapKeyNotSchema               = jsonschema.ErrMapKeyNotSchema
+	ErrMapValueNotSchema             = jsonschema.ErrMapValueNotSchema
+
+	// FromJSONSchema errors
+	ErrUnsupportedJSONSchemaType    = jsonschema.ErrUnsupportedJSONSchemaType
+	ErrUnsupportedJSONSchemaKeyword = jsonschema.ErrUnsupportedJSONSchemaKeyword
+	ErrInvalidJSONSchema            = jsonschema.ErrInvalidJSONSchema
+	ErrJSONSchemaCircularRef        = jsonschema.ErrJSONSchemaCircularRef
+	ErrJSONSchemaPatternCompile     = jsonschema.ErrJSONSchemaPatternCompile
+	ErrJSONSchemaIfThenElse         = jsonschema.ErrJSONSchemaIfThenElse
+	ErrJSONSchemaPatternProperties  = jsonschema.ErrJSONSchemaPatternProperties
+	ErrJSONSchemaDynamicRef         = jsonschema.ErrJSONSchemaDynamicRef
+	ErrJSONSchemaUnevaluatedProps   = jsonschema.ErrJSONSchemaUnevaluatedProps
+	ErrJSONSchemaUnevaluatedItems   = jsonschema.ErrJSONSchemaUnevaluatedItems
+	ErrJSONSchemaDependentSchemas   = jsonschema.ErrJSONSchemaDependentSchemas
+	ErrJSONSchemaPropertyNames      = jsonschema.ErrJSONSchemaPropertyNames
+	ErrJSONSchemaContains           = jsonschema.ErrJSONSchemaContains
+)

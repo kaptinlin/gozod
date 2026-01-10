@@ -125,6 +125,29 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.toLowerCase()` | `.ToLower()` | ✅ | Unicode-aware case conversion |
 | `.toUpperCase()` | `.ToUpper()` | ✅ | Unicode-aware case conversion |
 
+### Network & Format Type Mapping
+
+| TypeScript Zod v4 | GoZod Constructor | Status | Description |
+|-------------------|------------------|--------|-------------|
+| `z.ipv4()` | `gozod.IPv4()` | ✅ | IPv4 address validation |
+| `z.ipv6()` | `gozod.IPv6()` | ✅ | IPv6 address validation |
+| `z.hostname()` | `gozod.Hostname()` | ✅ | DNS hostname validation (1-253 chars) |
+| `z.mac()` | `gozod.MAC()` | ✅ | MAC address validation (colon/hyphen/dot separators) |
+| `z.e164()` | `gozod.E164()` | ✅ | E.164 phone number validation |
+| `z.cidr()` | `gozod.CIDRv4()`, `gozod.CIDRv6()` | ✅ | IPv4/IPv6 CIDR notation validation |
+| - | `gozod.HttpURL()` | ✅ | **Go enhancement**: HTTP/HTTPS URL only |
+| - | `gozod.Hex()` | ✅ | **Go enhancement**: Hexadecimal string validation |
+
+### Hash Validation Checks
+
+| Check Function | Description | Status |
+|----------------|-------------|--------|
+| `checks.MD5()` | MD5 hash validation (32 hex chars) | ✅ |
+| `checks.SHA1()` | SHA1 hash validation (40 hex chars) | ✅ |
+| `checks.SHA256()` | SHA256 hash validation (64 hex chars) | ✅ |
+| `checks.SHA384()` | SHA384 hash validation (96 hex chars) | ✅ |
+| `checks.SHA512()` | SHA512 hash validation (128 hex chars) | ✅ |
+
 ### Numeric Validation Method Mapping
 
 | TypeScript Zod v4 | GoZod Method | Status | Go-Specific Features |
@@ -458,6 +481,13 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | **LooseRecord** | `gozod.LooseRecord(keySchema, valueSchema)` passes non-matching keys | `z.looseRecord()` |
 | **Map NonEmpty** | `gozod.Map(...).NonEmpty()` ensures at least one entry | `z.map().nonempty()` |
 | **SafeExtend** | `.SafeExtend()` extends object without refinement check | No equivalent |
+| **And/Or methods** | `.And()` and `.Or()` fluent methods for schema composition | Use `z.intersection()` / `z.union()` |
+| **Hostname validation** | `gozod.Hostname()` DNS hostname validation | `z.hostname()` |
+| **MAC validation** | `gozod.MAC()` MAC address validation | `z.mac()` |
+| **E164 validation** | `gozod.E164()` E.164 phone validation | `z.e164()` |
+| **HttpURL** | `gozod.HttpURL()` HTTP/HTTPS only URL validation | No direct equivalent |
+| **Hex validation** | `gozod.Hex()` hexadecimal string validation | No direct equivalent |
+| **Hash checks** | `checks.MD5()`, `checks.SHA256()`, etc. | No direct equivalent |
 
 ## Performance Comparison
 

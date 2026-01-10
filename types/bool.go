@@ -413,6 +413,35 @@ func (z *ZodBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodBool[T] {
 }
 
 // =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+// Enables chaining: schema.And(other).And(another)
+// TypeScript Zod v4 equivalent: schema.and(other)
+//
+// Example:
+//
+//	schema := gozod.Bool().And(gozod.Bool().Refine(func(b bool) bool { return b }))
+//	result, _ := schema.Parse(true) // Must satisfy both constraints
+func (z *ZodBool[T]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+// Enables chaining: schema.Or(other).Or(another)
+// TypeScript Zod v4 equivalent: schema.or(other)
+//
+// Example:
+//
+//	schema := gozod.Bool().Or(gozod.String())
+//	result, _ := schema.Parse(true)    // Accepts bool
+//	result, _ = schema.Parse("hello")  // Accepts string
+func (z *ZodBool[T]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 

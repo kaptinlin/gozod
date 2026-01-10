@@ -254,6 +254,19 @@ func URL(value any) bool {
 	return false
 }
 
+// Hostname validates if string is a valid DNS hostname format
+// Matches Zod v4 behavior - validates RFC 1123 hostnames with length check (1-253 chars)
+func Hostname(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		// Check length: max 253 characters (including optional trailing dot)
+		if len(str) == 0 || len(str) > 253 {
+			return false
+		}
+		return regex.Hostname.MatchString(str)
+	}
+	return false
+}
+
 // UUID validates if string is a valid UUID format
 func UUID(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
@@ -390,6 +403,59 @@ func Base64(value any) bool {
 func Base64URL(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
 		return regex.Base64URL.MatchString(str)
+	}
+	return false
+}
+
+// Hex validates if string is a valid hexadecimal string
+// Empty string is considered valid (matches Zod v4 behavior)
+func Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.Hex.MatchString(str)
+	}
+	return false
+}
+
+// =============================================================================
+// HASH VALIDATION FUNCTIONS
+// =============================================================================
+
+// MD5Hex validates if string is a valid MD5 hash in hex format (32 chars)
+func MD5Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.MD5Hex.MatchString(str)
+	}
+	return false
+}
+
+// SHA1Hex validates if string is a valid SHA-1 hash in hex format (40 chars)
+func SHA1Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.SHA1Hex.MatchString(str)
+	}
+	return false
+}
+
+// SHA256Hex validates if string is a valid SHA-256 hash in hex format (64 chars)
+func SHA256Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.SHA256Hex.MatchString(str)
+	}
+	return false
+}
+
+// SHA384Hex validates if string is a valid SHA-384 hash in hex format (96 chars)
+func SHA384Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.SHA384Hex.MatchString(str)
+	}
+	return false
+}
+
+// SHA512Hex validates if string is a valid SHA-512 hash in hex format (128 chars)
+func SHA512Hex(value any) bool {
+	if str, ok := reflectx.ExtractString(value); ok {
+		return regex.SHA512Hex.MatchString(str)
 	}
 	return false
 }

@@ -205,6 +205,34 @@ func IPv6(params ...any) core.ZodCheck {
 }
 
 // =============================================================================
+// HOSTNAME VALIDATION
+// =============================================================================
+
+// Hostname creates a DNS hostname validation check with JSON Schema support.
+// Supports: Hostname("invalid hostname") or Hostname(CheckParams{Error: "invalid hostname"})
+func Hostname(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "hostname"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.Hostname(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("hostname", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "hostname")
+				addPatternToSchema(schema, regex.Hostname.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
 // MAC ADDRESS VALIDATION
 // =============================================================================
 
@@ -921,6 +949,153 @@ func buildUUIDCheck(checkID string, pattern *regexp.Regexp, params ...any) core.
 				// Set format - all UUID variants use "uuid" format
 				SetBagProperty(schema, "format", "uuid")
 				addPatternToSchema(schema, pattern.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
+// HEX VALIDATION
+// =============================================================================
+
+// Hex creates a hexadecimal string validation check
+// Supports: Hex("invalid hex") or Hex(CheckParams{Error: "invalid hex"})
+func Hex(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "hex"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("hex", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "hex")
+				addPatternToSchema(schema, regex.Hex.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// =============================================================================
+// HASH VALIDATION
+// =============================================================================
+
+// MD5 creates an MD5 hash validation check (32 hex chars)
+func MD5(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "md5"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.MD5Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("md5", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "md5")
+				addPatternToSchema(schema, regex.MD5Hex.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// SHA1 creates a SHA-1 hash validation check (40 hex chars)
+func SHA1(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "sha1"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.SHA1Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("sha1", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "sha1")
+				addPatternToSchema(schema, regex.SHA1Hex.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// SHA256 creates a SHA-256 hash validation check (64 hex chars)
+func SHA256(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "sha256"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.SHA256Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("sha256", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "sha256")
+				addPatternToSchema(schema, regex.SHA256Hex.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// SHA384 creates a SHA-384 hash validation check (96 hex chars)
+func SHA384(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "sha384"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.SHA384Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("sha384", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "sha384")
+				addPatternToSchema(schema, regex.SHA384Hex.String())
+				SetBagProperty(schema, "type", "string")
+			},
+		},
+	}
+}
+
+// SHA512 creates a SHA-512 hash validation check (128 hex chars)
+func SHA512(params ...any) core.ZodCheck {
+	checkParams := NormalizeCheckParams(params...)
+	def := &core.ZodCheckDef{Check: "sha512"}
+	ApplyCheckParams(def, checkParams)
+
+	return &core.ZodCheckInternals{
+		Def: def,
+		Check: func(payload *core.ParsePayload) {
+			if !validate.SHA512Hex(payload.GetValue()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("sha512", payload.GetValue(), nil))
+			}
+		},
+		OnAttach: []func(any){
+			func(schema any) {
+				SetBagProperty(schema, "format", "sha512")
+				addPatternToSchema(schema, regex.SHA512Hex.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},

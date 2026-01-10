@@ -1,4 +1,4 @@
-package gozod
+package jsonschema
 
 import (
 	"cmp"
@@ -43,8 +43,8 @@ type OverrideContext struct {
 	JSONSchema *lib.Schema
 }
 
-// JSONSchemaOptions defines the configuration options for JSON schema conversion.
-type JSONSchemaOptions struct {
+// Options defines the configuration options for JSON schema conversion.
+type Options struct {
 	// A registry used to look up metadata for each schema.
 	// Any schema with an ID property will be extracted as a $def.
 	Metadata *core.Registry[core.GlobalMeta]
@@ -80,8 +80,8 @@ type JSONSchemaOptions struct {
 }
 
 // ToJSONSchema converts a GoZod schema or registry into a JSON Schema instance.
-func ToJSONSchema(input any, opts ...JSONSchemaOptions) (*lib.Schema, error) {
-	var options JSONSchemaOptions
+func ToJSONSchema(input any, opts ...Options) (*lib.Schema, error) {
+	var options Options
 	if len(opts) > 0 {
 		options = opts[0]
 	}
@@ -97,7 +97,7 @@ func ToJSONSchema(input any, opts ...JSONSchemaOptions) (*lib.Schema, error) {
 }
 
 // toJSONSchemaSingle handles the conversion of a single ZodSchema.
-func toJSONSchemaSingle(schema core.ZodSchema, opts JSONSchemaOptions) (*lib.Schema, error) {
+func toJSONSchemaSingle(schema core.ZodSchema, opts Options) (*lib.Schema, error) {
 	c := newConverter(opts)
 	s, err := c.convert(schema)
 	if err != nil {
@@ -128,7 +128,7 @@ func toJSONSchemaSingle(schema core.ZodSchema, opts JSONSchemaOptions) (*lib.Sch
 }
 
 // toJSONSchemaRegistry handles the conversion of a schema Registry.
-func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts JSONSchemaOptions) (*lib.Schema, error) {
+func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*lib.Schema, error) {
 	// Ensure converter has access to registry metadata for ID extraction.
 	opts.Metadata = reg
 	c := newConverter(opts)
@@ -166,7 +166,7 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts JSONSchemaOp
 
 // converter holds the state for a single conversion run.
 type converter struct {
-	opts        JSONSchemaOptions
+	opts        Options
 	seen        map[core.ZodSchema]*lib.Schema
 	counts      map[core.ZodSchema]int
 	refs        map[core.ZodSchema]string
@@ -178,7 +178,7 @@ type converter struct {
 	unwrapCache map[core.ZodSchema]core.ZodSchema // cache for unwrapSchema results
 }
 
-func newConverter(opts JSONSchemaOptions) *converter {
+func newConverter(opts Options) *converter {
 	return &converter{
 		opts:        opts,
 		seen:        make(map[core.ZodSchema]*lib.Schema),
@@ -401,7 +401,7 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypeString:
 		jsonSchema = &lib.Schema{Type: []string{"string"}}
 		c.applyStringBag(jsonSchema, internals)
-	case core.ZodTypeIPv4, core.ZodTypeIPv6:
+	case core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeHostname, core.ZodTypeMAC, core.ZodTypeE164:
 		jsonSchema = &lib.Schema{Type: []string{"string"}}
 		c.applyStringBag(jsonSchema, internals)
 	case core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeURL:

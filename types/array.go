@@ -469,6 +469,35 @@ func (z *ZodArray[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodArray[T
 }
 
 // =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+// Enables chaining: schema.And(other).And(another)
+// TypeScript Zod v4 equivalent: schema.and(other)
+//
+// Example:
+//
+//	schema := gozod.Array(gozod.String()).Min(1).And(gozod.Array(gozod.String()).Max(10))
+//	result, _ := schema.Parse([]string{"a", "b"}) // Must satisfy both constraints
+func (z *ZodArray[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+// Enables chaining: schema.Or(other).Or(another)
+// TypeScript Zod v4 equivalent: schema.or(other)
+//
+// Example:
+//
+//	schema := gozod.Array(gozod.String()).Or(gozod.Array(gozod.Int()))
+//	result, _ := schema.Parse([]string{"a"})  // Accepts string array
+//	result, _ = schema.Parse([]int{1, 2})     // Accepts int array
+func (z *ZodArray[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 

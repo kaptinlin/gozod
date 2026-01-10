@@ -211,3 +211,56 @@ func Base64URLTyped[T StringConstraint](params ...any) *ZodBase64URL[T] {
 
 	return &ZodBase64URL[T]{base.withInternals(newInternals)}
 }
+
+// =============================================================================
+// Hex
+// =============================================================================
+
+// ZodHex represents a hexadecimal string validation schema
+type ZodHex[T StringConstraint] struct{ *ZodString[T] }
+
+// StrictParse validates the input using strict parsing rules
+func (z *ZodHex[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return z.ZodString.StrictParse(input, ctx...)
+}
+
+// MustStrictParse validates the input using strict parsing rules and panics on error
+func (z *ZodHex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// Hex creates a hexadecimal string validation schema
+// TypeScript Zod v4 equivalent: z.hex()
+//
+// Examples:
+//
+//	schema := Hex()
+//	schema.Parse("")           // valid (empty string is valid hex)
+//	schema.Parse("123abc")     // valid
+//	schema.Parse("DEADBEEF")   // valid
+//	schema.Parse("xyz")        // invalid
+func Hex(params ...any) *ZodHex[string] {
+	return HexTyped[string](params...)
+}
+
+// HexPtr creates a hexadecimal string validation schema for pointer types
+func HexPtr(params ...any) *ZodHex[*string] {
+	return HexTyped[*string](params...)
+}
+
+// HexTyped creates a hexadecimal string validation schema for a specific type
+func HexTyped[T StringConstraint](params ...any) *ZodHex[T] {
+	base := StringTyped[T](params...)
+
+	// Attach Hex format check
+	hexCheck := checks.Hex(params...)
+
+	newInternals := base.internals.Clone()
+	newInternals.AddCheck(hexCheck)
+
+	return &ZodHex[T]{base.withInternals(newInternals)}
+}

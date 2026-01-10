@@ -8,6 +8,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
+	"github.com/kaptinlin/gozod/pkg/regex"
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -1753,4 +1754,633 @@ func CoercedURL(params ...any) *ZodURL[string] {
 	schema := URLTyped[string](params...)
 	schema.internals.Coerce = true
 	return schema
+}
+
+// HttpURL creates an HTTP/HTTPS URL schema
+// This is a convenience function that creates a URL schema restricted to
+// http:// and https:// protocols with domain hostname validation.
+//
+// TypeScript Zod v4 equivalent: z.httpUrl()
+//
+// Examples:
+//
+//	schema := HttpURL()
+//	schema.Parse("https://example.com")      // valid
+//	schema.Parse("http://sub.example.com")   // valid
+//	schema.Parse("ftp://example.com")        // invalid - not http/https
+//	schema.Parse("http://localhost")         // invalid - not a domain
+func HttpURL(params ...any) *ZodURL[string] {
+	return HttpURLTyped[string](params...)
+}
+
+// HttpURLPtr creates an HTTP/HTTPS URL schema for pointer types
+func HttpURLPtr(params ...any) *ZodURL[*string] {
+	return HttpURLTyped[*string](params...)
+}
+
+// HttpURLTyped creates an HTTP/HTTPS URL schema with specific type
+func HttpURLTyped[T NetworkConstraint](params ...any) *ZodURL[T] {
+	// Create URL with http/https protocol and domain hostname restriction
+	httpOptions := URLOptions{
+		Protocol: regex.HTTPProtocol,
+		Hostname: regex.Domain,
+	}
+
+	// Prepend the HTTP options to user-provided params
+	allParams := append([]any{httpOptions}, params...)
+	return URLTyped[T](allParams...)
+}
+
+// =============================================================================
+// HOSTNAME TYPE DEFINITIONS
+// =============================================================================
+
+// ZodHostnameDef defines the configuration for hostname validation
+type ZodHostnameDef struct {
+	core.ZodTypeDef
+}
+
+// ZodHostnameInternals contains hostname validator internal state
+type ZodHostnameInternals struct {
+	core.ZodTypeInternals
+	Def *ZodHostnameDef
+}
+
+// ZodHostname represents a DNS hostname validation schema
+type ZodHostname[T NetworkConstraint] struct {
+	internals *ZodHostnameInternals
+}
+
+// =============================================================================
+// HOSTNAME CORE METHODS
+// =============================================================================
+
+// GetInternals returns the internal state of the schema
+func (z *ZodHostname[T]) GetInternals() *core.ZodTypeInternals {
+	return &z.internals.ZodTypeInternals
+}
+
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodHostname[T]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
+
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodHostname[T]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
+
+// Coerce implements type conversion interface
+func (z *ZodHostname[T]) Coerce(input any) (any, bool) {
+	result, err := coerce.ToString(input)
+	return result, err == nil
+}
+
+// Parse validates and returns a hostname string
+func (z *ZodHostname[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeHostname,
+		engine.ApplyChecks[string],
+		engine.ConvertToConstraintType[string, T],
+		ctx...,
+	)
+}
+
+// MustParse is the variant that panics on error
+func (z *ZodHostname[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// StrictParse provides compile-time type safety
+func (z *ZodHostname[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeHostname,
+		engine.ApplyChecks[string],
+		ctx...,
+	)
+}
+
+// MustStrictParse is the strict mode variant that panics on error
+func (z *ZodHostname[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// ParseAny validates input and returns untyped result
+func (z *ZodHostname[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
+// =============================================================================
+// HOSTNAME MODIFIER METHODS
+// =============================================================================
+
+// Optional returns a schema that accepts nil values
+func (z *ZodHostname[T]) Optional() *ZodHostname[*string] {
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+// Nilable returns a schema that accepts nil values
+func (z *ZodHostname[T]) Nilable() *ZodHostname[*string] {
+	in := z.internals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+// Default sets a default value
+func (z *ZodHostname[T]) Default(v string) *ZodHostname[T] {
+	in := z.internals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+// Describe adds a description to the schema
+func (z *ZodHostname[T]) Describe(description string) *ZodHostname[T] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
+// =============================================================================
+// HOSTNAME COMPOSITION METHODS
+// =============================================================================
+
+// And creates an intersection with another schema
+func (z *ZodHostname[T]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema
+func (z *ZodHostname[T]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
+// HOSTNAME HELPER METHODS
+// =============================================================================
+
+func (z *ZodHostname[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodHostname[*string] {
+	return &ZodHostname[*string]{internals: &ZodHostnameInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+func (z *ZodHostname[T]) withInternals(in *core.ZodTypeInternals) *ZodHostname[T] {
+	return &ZodHostname[T]{internals: &ZodHostnameInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// =============================================================================
+// HOSTNAME CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// Hostname creates a new hostname schema
+func Hostname(params ...any) *ZodHostname[string] {
+	return HostnameTyped[string](params...)
+}
+
+// HostnamePtr creates a new hostname schema with pointer type
+func HostnamePtr(params ...any) *ZodHostname[*string] {
+	return HostnameTyped[*string](params...)
+}
+
+// HostnameTyped creates a new hostname schema with specific type
+func HostnameTyped[T NetworkConstraint](params ...any) *ZodHostname[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	def := &ZodHostnameDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:     core.ZodTypeHostname,
+			Required: true,
+			Checks:   []core.ZodCheck{checks.Hostname()},
+		},
+	}
+
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	internals := &ZodHostnameInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   core.ZodTypeHostname,
+			Checks: def.Checks,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	return &ZodHostname[T]{internals: internals}
+}
+
+// =============================================================================
+// MAC ADDRESS VALIDATION
+// =============================================================================
+
+// ZodMACDef defines the configuration for MAC address validation
+type ZodMACDef struct {
+	core.ZodTypeDef
+	Delimiter string // MAC address delimiter (default ":")
+}
+
+// ZodMACInternals contains MAC address validator internal state
+type ZodMACInternals struct {
+	core.ZodTypeInternals
+	Def *ZodMACDef
+}
+
+// Clone creates a deep copy of internals
+func (i *ZodMACInternals) Clone() *core.ZodTypeInternals {
+	return i.ZodTypeInternals.Clone()
+}
+
+// ZodMAC represents a MAC address validation schema
+type ZodMAC[T NetworkConstraint] struct {
+	internals *ZodMACInternals
+}
+
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
+func (z *ZodMAC[T]) GetInternals() *core.ZodTypeInternals {
+	return &z.internals.ZodTypeInternals
+}
+
+func (z *ZodMAC[T]) IsOptional() bool {
+	return z.internals.Optional
+}
+
+func (z *ZodMAC[T]) IsNilable() bool {
+	return z.internals.Nilable
+}
+
+func (z *ZodMAC[T]) Coerce(input any) (any, bool) {
+	return input, false
+}
+
+func (z *ZodMAC[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeMAC,
+		engine.ApplyChecks[string],
+		engine.ConvertToConstraintType[string, T],
+		ctx...,
+	)
+}
+
+func (z *ZodMAC[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (z *ZodMAC[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeMAC,
+		engine.ApplyChecks[string],
+		ctx...,
+	)
+}
+
+func (z *ZodMAC[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (z *ZodMAC[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
+
+func (z *ZodMAC[T]) Optional() *ZodMAC[*string] {
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+func (z *ZodMAC[T]) Nilable() *ZodMAC[*string] {
+	in := z.internals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+func (z *ZodMAC[T]) Default(v string) *ZodMAC[T] {
+	in := z.internals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+func (z *ZodMAC[T]) Describe(description string) *ZodMAC[T] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
+// =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+func (z *ZodMAC[T]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+func (z *ZodMAC[T]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
+// HELPER METHODS
+// =============================================================================
+
+func (z *ZodMAC[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodMAC[*string] {
+	return &ZodMAC[*string]{internals: &ZodMACInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+func (z *ZodMAC[T]) withInternals(in *core.ZodTypeInternals) *ZodMAC[T] {
+	return &ZodMAC[T]{internals: &ZodMACInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// =============================================================================
+// CONSTRUCTORS
+// =============================================================================
+
+// MAC creates a MAC address schema with default colon delimiter
+func MAC(params ...any) *ZodMAC[string] {
+	return MACWithDelimiter(":", params...)
+}
+
+// MACPtr creates a MAC address schema for pointer types
+func MACPtr(params ...any) *ZodMAC[*string] {
+	return MACTyped[*string](":", params...)
+}
+
+// MACWithDelimiter creates a MAC address schema with custom delimiter
+func MACWithDelimiter(delimiter string, params ...any) *ZodMAC[string] {
+	return MACTyped[string](delimiter, params...)
+}
+
+// MACTyped creates a MAC address schema with custom delimiter and type
+func MACTyped[T NetworkConstraint](delimiter string, params ...any) *ZodMAC[T] {
+	if delimiter == "" {
+		delimiter = ":"
+	}
+	schemaParams := utils.NormalizeParams(params...)
+	def := &ZodMACDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:     core.ZodTypeMAC,
+			Required: true,
+			Checks:   []core.ZodCheck{checks.MACWithDelimiter(delimiter)},
+		},
+		Delimiter: delimiter,
+	}
+
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	internals := &ZodMACInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   core.ZodTypeMAC,
+			Checks: def.Checks,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	return &ZodMAC[T]{internals: internals}
+}
+
+// =============================================================================
+// E.164 PHONE NUMBER VALIDATION
+// =============================================================================
+
+// ZodE164Def defines the configuration for E.164 phone number validation
+type ZodE164Def struct {
+	core.ZodTypeDef
+}
+
+// ZodE164Internals contains E.164 validator internal state
+type ZodE164Internals struct {
+	core.ZodTypeInternals
+	Def *ZodE164Def
+}
+
+// Clone creates a deep copy of internals
+func (i *ZodE164Internals) Clone() *core.ZodTypeInternals {
+	return i.ZodTypeInternals.Clone()
+}
+
+// ZodE164 represents an E.164 phone number validation schema
+type ZodE164[T NetworkConstraint] struct {
+	internals *ZodE164Internals
+}
+
+// =============================================================================
+// E164 CORE METHODS
+// =============================================================================
+
+func (z *ZodE164[T]) GetInternals() *core.ZodTypeInternals {
+	return &z.internals.ZodTypeInternals
+}
+
+func (z *ZodE164[T]) IsOptional() bool {
+	return z.internals.Optional
+}
+
+func (z *ZodE164[T]) IsNilable() bool {
+	return z.internals.Nilable
+}
+
+func (z *ZodE164[T]) Coerce(input any) (any, bool) {
+	return input, false
+}
+
+func (z *ZodE164[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitive[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeE164,
+		engine.ApplyChecks[string],
+		engine.ConvertToConstraintType[string, T],
+		ctx...,
+	)
+}
+
+func (z *ZodE164[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (z *ZodE164[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
+	return engine.ParsePrimitiveStrict[string, T](
+		input,
+		&z.internals.ZodTypeInternals,
+		core.ZodTypeE164,
+		engine.ApplyChecks[string],
+		ctx...,
+	)
+}
+
+func (z *ZodE164[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (z *ZodE164[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
+}
+
+// =============================================================================
+// E164 MODIFIER METHODS
+// =============================================================================
+
+func (z *ZodE164[T]) Optional() *ZodE164[*string] {
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
+}
+
+func (z *ZodE164[T]) Nilable() *ZodE164[*string] {
+	in := z.internals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
+}
+
+func (z *ZodE164[T]) Default(v string) *ZodE164[T] {
+	in := z.internals.Clone()
+	in.SetDefaultValue(v)
+	return z.withInternals(in)
+}
+
+func (z *ZodE164[T]) Describe(description string) *ZodE164[T] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
+// =============================================================================
+// E164 COMPOSITION METHODS
+// =============================================================================
+
+func (z *ZodE164[T]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+func (z *ZodE164[T]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
+// E164 HELPER METHODS
+// =============================================================================
+
+func (z *ZodE164[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodE164[*string] {
+	return &ZodE164[*string]{internals: &ZodE164Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+func (z *ZodE164[T]) withInternals(in *core.ZodTypeInternals) *ZodE164[T] {
+	return &ZodE164[T]{internals: &ZodE164Internals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// =============================================================================
+// E164 CONSTRUCTOR FUNCTIONS
+// =============================================================================
+
+// E164 creates an E.164 phone number schema
+func E164(params ...any) *ZodE164[string] {
+	return E164Typed[string](params...)
+}
+
+// E164Ptr creates an E.164 phone number schema for pointer types
+func E164Ptr(params ...any) *ZodE164[*string] {
+	return E164Typed[*string](params...)
+}
+
+// E164Typed creates an E.164 phone number schema with specific type
+func E164Typed[T NetworkConstraint](params ...any) *ZodE164[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	def := &ZodE164Def{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:     core.ZodTypeE164,
+			Required: true,
+			Checks:   []core.ZodCheck{checks.E164()},
+		},
+	}
+
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	internals := &ZodE164Internals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   core.ZodTypeE164,
+			Checks: def.Checks,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
+	}
+
+	return &ZodE164[T]{internals: internals}
 }

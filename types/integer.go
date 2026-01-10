@@ -823,6 +823,35 @@ func (z *ZodIntegerTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodInteg
 	return z.withInternals(newInternals)
 }
 
+// =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+// Enables chaining: schema.And(other).And(another)
+// TypeScript Zod v4 equivalent: schema.and(other)
+//
+// Example:
+//
+//	schema := gozod.Int().Min(0).And(gozod.Int().Max(100))
+//	result, _ := schema.Parse(50) // Must satisfy both constraints
+func (z *ZodIntegerTyped[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+// Enables chaining: schema.Or(other).Or(another)
+// TypeScript Zod v4 equivalent: schema.or(other)
+//
+// Example:
+//
+//	schema := gozod.Int().Or(gozod.String())
+//	result, _ := schema.Parse(42)      // Accepts int
+//	result, _ = schema.Parse("hello")  // Accepts string
+func (z *ZodIntegerTyped[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
 // convertToIntegerType converts only matching integer values to the target integer type T with strict type checking
 func convertToIntegerType[T IntegerConstraint](v any) (T, bool) {
 	var zero T

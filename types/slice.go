@@ -368,6 +368,33 @@ func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T
 }
 
 // =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+// Enables chaining: schema.And(other).And(another)
+// TypeScript Zod v4 equivalent: schema.and(other)
+//
+// Example:
+//
+//	schema := gozod.Slice[string](gozod.String()).Min(1).And(gozod.Slice[string](gozod.String()).Max(10))
+//	result, _ := schema.Parse([]string{"a", "b"}) // Must satisfy both constraints
+func (z *ZodSlice[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+// Enables chaining: schema.Or(other).Or(another)
+// TypeScript Zod v4 equivalent: schema.or(other)
+//
+// Example:
+//
+//	schema := gozod.Slice[string](gozod.String()).Or(gozod.Slice[int](gozod.Int()))
+func (z *ZodSlice[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 

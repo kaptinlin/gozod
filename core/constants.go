@@ -111,12 +111,15 @@ const (
 	ZodTypeRefine    ZodTypeCode = "refine"    // Refinement validation
 
 	// Network and format types
-	ZodTypeIPv4   ZodTypeCode = "ipv4"   // IPv4 address validation
-	ZodTypeIPv6   ZodTypeCode = "ipv6"   // IPv6 address validation
-	ZodTypeCIDRv4 ZodTypeCode = "cidrv4" // IPv4 CIDR validation
-	ZodTypeCIDRv6 ZodTypeCode = "cidrv6" // IPv6 CIDR validation
-	ZodTypeEmail  ZodTypeCode = "email"  // Email address validation
-	ZodTypeURL    ZodTypeCode = "url"    // URL validation
+	ZodTypeIPv4     ZodTypeCode = "ipv4"     // IPv4 address validation
+	ZodTypeIPv6     ZodTypeCode = "ipv6"     // IPv6 address validation
+	ZodTypeCIDRv4   ZodTypeCode = "cidrv4"   // IPv4 CIDR validation
+	ZodTypeCIDRv6   ZodTypeCode = "cidrv6"   // IPv6 CIDR validation
+	ZodTypeEmail    ZodTypeCode = "email"    // Email address validation
+	ZodTypeURL      ZodTypeCode = "url"      // URL validation
+	ZodTypeHostname ZodTypeCode = "hostname" // DNS hostname validation
+	ZodTypeMAC      ZodTypeCode = "mac"      // MAC address validation
+	ZodTypeE164     ZodTypeCode = "e164"     // E.164 phone number validation
 
 	// Time types
 	ZodTypeTime ZodTypeCode = "time" // Go time.Time validation

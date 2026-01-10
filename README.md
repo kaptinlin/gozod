@@ -287,6 +287,10 @@ intersectionSchema := gozod.Intersection(
 )
 result, _ = intersectionSchema.Parse("hello")  // ✅ Satisfies all constraints
 result, _ = intersectionSchema.Parse("HELLO")  // ❌ Not lowercase
+
+// And/Or methods - fluent composition on any schema type
+schema := gozod.String().Min(3).And(gozod.String().Max(10))  // Intersection via method
+schema = gozod.Int().Or(gozod.String())                       // Union via method
 ```
 
 ### Performance Optimization with Code Generation
@@ -319,8 +323,23 @@ func main() {
 // Strings with format validation
 gozod.String().Min(3).Max(100).Email()
 gozod.String().RegexString(`^\d+$`)
-gozod.Uuid()  // UUID format validator
-gozod.URL()   // URL format validator
+gozod.Uuid()     // UUID format validator
+gozod.URL()      // URL format validator
+gozod.HttpURL()  // HTTP/HTTPS URL only
+gozod.Email()    // Email format validator
+
+// Network formats
+gozod.IPv4()     // IPv4: "192.168.1.1"
+gozod.IPv6()     // IPv6: "2001:db8::8a2e:370:7334"
+gozod.Hostname() // DNS hostname: "example.com"
+gozod.MAC()      // MAC address: "00:1A:2B:3C:4D:5E"
+gozod.E164()     // E.164 phone: "+14155552671"
+gozod.CIDRv4()   // IPv4 CIDR: "192.168.1.0/24"
+
+// Text encodings and hashes
+gozod.Hex()      // Hexadecimal string
+gozod.Base64()   // Base64 encoding
+gozod.JWT()      // JWT token format
 
 // Numbers with range validation  
 gozod.Int().Min(0).Max(120).Positive()

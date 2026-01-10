@@ -292,10 +292,13 @@ gozod.URL()                                // URL validation
 // Network addresses (types/network.go)
 gozod.IPv4()                               // IPv4: "192.168.1.1"
 gozod.IPv6()                               // IPv6: "2001:db8::8a2e:370:7334"
+gozod.Hostname()                           // DNS hostname: "example.com"
 gozod.MAC()                                // MAC: "00:1A:2B:3C:4D:5E" (default ":")
 gozod.MAC("-")                             // MAC: "00-1a-2b-3c-4d-5e"
+gozod.E164()                               // E.164 phone: "+14155552671"
 gozod.CIDRv4()                             // IPv4 CIDR: "192.168.1.0/24"
 gozod.CIDRv6()                             // IPv6 CIDR: "2001:db8::/32"
+gozod.HttpURL()                            // HTTP/HTTPS URL only
 
 // ISO 8601 date/time formats (types/iso.go)
 gozod.IsoDate()                            // Date: "2024-12-06"
@@ -316,6 +319,7 @@ gozod.Ulid()                               // ULID format
 gozod.Nanoid()                             // NanoID format
 
 // Text encodings (types/text.go)
+gozod.Hex()                                // Hexadecimal string
 gozod.Base64()                             // Base64 encoding
 gozod.Base64URL()                          // URL-safe Base64
 gozod.Emoji()                              // Emoji characters
@@ -782,6 +786,26 @@ result, err := intersectionSchema.Parse("hello")    // ✅ Satisfies all
 result, err = intersectionSchema.Parse("hi")        // ❌ Too short
 result, err = intersectionSchema.Parse("HELLO")     // ❌ Not lowercase
 ```
+
+### And/Or Methods
+
+All schema types support fluent `.And()` and `.Or()` methods for composing schemas:
+
+```go
+// And() creates an intersection - value must satisfy both schemas
+schema := gozod.String().Min(3).And(gozod.String().Max(10))
+result, _ := schema.Parse("hello")   // ✅ Satisfies both (len >= 3 AND len <= 10)
+
+// Or() creates a union - value can satisfy either schema
+schema = gozod.Int().Or(gozod.String())
+result, _ = schema.Parse(42)         // ✅ Matches Int
+result, _ = schema.Parse("hello")    // ✅ Matches String
+
+// Chain multiple And/Or calls
+schema = gozod.String().Min(1).And(gozod.String().Max(100)).Or(gozod.Nil())
+```
+
+**Supported schema types**: String, Integer, Float, Bool, Array, Slice, Object, Union, Intersection
 
 ---
 

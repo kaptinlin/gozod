@@ -686,6 +686,35 @@ func (z *ZodFloatTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFl
 }
 
 // =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+// Enables chaining: schema.And(other).And(another)
+// TypeScript Zod v4 equivalent: schema.and(other)
+//
+// Example:
+//
+//	schema := gozod.Float64().Min(0.0).And(gozod.Float64().Max(100.0))
+//	result, _ := schema.Parse(50.5) // Must satisfy both constraints
+func (z *ZodFloatTyped[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+// Enables chaining: schema.Or(other).Or(another)
+// TypeScript Zod v4 equivalent: schema.or(other)
+//
+// Example:
+//
+//	schema := gozod.Float64().Or(gozod.Int())
+//	result, _ := schema.Parse(3.14)  // Accepts float
+//	result, _ = schema.Parse(42)     // Accepts int
+func (z *ZodFloatTyped[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 

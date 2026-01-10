@@ -1,4 +1,4 @@
-package gozod
+package jsonschema
 
 import (
 	"testing"
