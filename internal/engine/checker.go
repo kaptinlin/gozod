@@ -110,7 +110,7 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 		// Apply custom error mapping if configured
 		if checkInternals.Def != nil && checkInternals.Def.Error != nil {
 			errorFn := *checkInternals.Def.Error
-			for j := 0; j < checkIssuesLen; j++ {
+			for j := range checkIssuesLen {
 				checkIssues[j].Message = errorFn(checkIssues[j])
 				checkIssues[j].Inst = checkInternals
 			}

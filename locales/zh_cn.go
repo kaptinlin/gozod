@@ -134,7 +134,7 @@ func getFormatNounZh(format string) string {
 // Maintains Chinese grammar patterns for value enumeration
 // Enhanced with slicex functionality
 func joinValuesZhOr(values []any) string {
-	if len(values) == 0 || slicex.IsEmpty(values) {
+	if len(values) == 0 {
 		return ""
 	}
 
@@ -175,7 +175,7 @@ func formatZhCN(raw core.ZodRawIssue) string {
 
 	case core.InvalidValue:
 		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
-		if len(values) == 0 || slicex.IsEmpty(values) {
+		if len(values) == 0 {
 			return "无效值"
 		}
 		if len(values) == 1 {
@@ -205,7 +205,7 @@ func formatZhCN(raw core.ZodRawIssue) string {
 
 	case core.UnrecognizedKeys:
 		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
-		if len(keys) == 0 || slicex.IsEmpty(keys) {
+		if len(keys) == 0 {
 			return "出现未知的键(key)"
 		}
 		// Use slicex for better key processing and issues.JoinValuesWithSeparator for formatting

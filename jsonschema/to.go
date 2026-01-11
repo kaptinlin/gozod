@@ -1254,17 +1254,15 @@ func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
 	}
 
 	// Ensure deterministic order for enum values to avoid map iteration randomness
-	if len(enumValues) > 0 {
-		switch enumValues[0].(type) {
-		case string:
-			slices.SortStableFunc(enumValues, func(a, b interface{}) int {
-				return cmp.Compare(a.(string), b.(string))
-			})
-		case int, int32, int64, uint, uint32, uint64, float64, float32:
-			slices.SortStableFunc(enumValues, func(a, b interface{}) int {
-				return cmp.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
-			})
-		}
+	switch enumValues[0].(type) {
+	case string:
+		slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+			return cmp.Compare(a.(string), b.(string))
+		})
+	case int, int32, int64, uint, uint32, uint64, float64, float32:
+		slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+			return cmp.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
+		})
 	}
 
 	js := &lib.Schema{Enum: enumValues}

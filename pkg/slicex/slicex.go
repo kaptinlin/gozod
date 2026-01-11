@@ -136,6 +136,7 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 		return nil, ErrInvalidReflectValue
 	}
 
+	//nolint:exhaustive // Only Slice, Array, String are valid; all others return same error
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		length := rv.Len()
@@ -148,8 +149,6 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 		// Convert string to slice of characters
 		str := rv.String()
 		return StringToChars(str), nil
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Struct, reflect.UnsafePointer:
-		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
 	default:
 		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
 	}
