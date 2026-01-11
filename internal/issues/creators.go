@@ -318,7 +318,10 @@ func ConvertZodIssueToRawWithProperties(issue core.ZodIssue, pathPrefix []any) c
 // This is used for map types where the key path is prepended to nested issue paths.
 func ConvertZodIssueToRawWithPrependedPath(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
 	// Prepend pathPrefix to existing issue path
-	fullPath := append(pathPrefix, issue.Path...)
+	// Create a new slice to avoid modifying the caller's pathPrefix
+	fullPath := make([]any, 0, len(pathPrefix)+len(issue.Path))
+	fullPath = append(fullPath, pathPrefix...)
+	fullPath = append(fullPath, issue.Path...)
 	return convertZodIssueToRawWithPath(issue, fullPath)
 }
 
