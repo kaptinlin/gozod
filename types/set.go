@@ -506,26 +506,7 @@ func (z *ZodSet[T, R]) validateSet(value map[T]struct{}, checksToRun []core.ZodC
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
 					for _, elementIssue := range zodErr.Issues {
-						rawIssue := core.ZodRawIssue{
-							Code:       elementIssue.Code,
-							Message:    elementIssue.Message,
-							Input:      elementIssue.Input,
-							Path:       []any{elem}, // Use element as path key
-							Properties: make(map[string]any),
-						}
-						if elementIssue.Minimum != nil {
-							rawIssue.Properties["minimum"] = elementIssue.Minimum
-						}
-						if elementIssue.Maximum != nil {
-							rawIssue.Properties["maximum"] = elementIssue.Maximum
-						}
-						if elementIssue.Expected != "" {
-							rawIssue.Properties["expected"] = elementIssue.Expected
-						}
-						if elementIssue.Received != "" {
-							rawIssue.Properties["received"] = elementIssue.Received
-						}
-						rawIssue.Properties["inclusive"] = elementIssue.Inclusive
+						rawIssue := issues.ConvertZodIssueToRawWithProperties(elementIssue, []any{elem})
 						collectedIssues = append(collectedIssues, rawIssue)
 					}
 				} else {

@@ -125,71 +125,48 @@ func Length(value any, expected int) bool {
 // SIZE VALIDATION FUNCTIONS
 // =============================================================================
 
-// MaxSize validates if collection's size is at most maximum
-func MaxSize(value any, maximum int) bool {
+// getCollectionSize returns the size of a collection (map, slice, array, string, etc.)
+// Returns the size and true if successful, or 0 and false if the value is not a collection.
+func getCollectionSize(value any) (int, bool) {
 	if reflectx.IsMap(value) {
 		// Support both map[string]any and map[any]any first
 		if m, ok := value.(map[string]any); ok {
-			return mapx.Count(m) <= maximum
+			return mapx.Count(m), true
 		}
 		if m, ok := value.(map[any]any); ok {
-			return len(m) <= maximum
+			return len(m), true
 		}
 		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
 		if size, ok := reflectx.GetSize(value); ok {
-			return size <= maximum
+			return size, true
 		}
 	}
 	if reflectx.HasLength(value) {
-		if l, ok := reflectx.GetLength(value); ok {
-			return l <= maximum
-		}
+		return reflectx.GetLength(value)
+	}
+	return 0, false
+}
+
+// MaxSize validates if collection's size is at most maximum
+func MaxSize(value any, maximum int) bool {
+	if size, ok := getCollectionSize(value); ok {
+		return size <= maximum
 	}
 	return false
 }
 
 // MinSize validates if collection's size is at least minimum
 func MinSize(value any, minimum int) bool {
-	if reflectx.IsMap(value) {
-		// Support both map[string]any and map[any]any first
-		if m, ok := value.(map[string]any); ok {
-			return mapx.Count(m) >= minimum
-		}
-		if m, ok := value.(map[any]any); ok {
-			return len(m) >= minimum
-		}
-		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
-		if size, ok := reflectx.GetSize(value); ok {
-			return size >= minimum
-		}
-	}
-	if reflectx.HasLength(value) {
-		if l, ok := reflectx.GetLength(value); ok {
-			return l >= minimum
-		}
+	if size, ok := getCollectionSize(value); ok {
+		return size >= minimum
 	}
 	return false
 }
 
 // Size validates if collection's size equals exactly the expected size
 func Size(value any, expected int) bool {
-	if reflectx.IsMap(value) {
-		// Support both map[string]any and map[any]any first
-		if m, ok := value.(map[string]any); ok {
-			return mapx.Count(m) == expected
-		}
-		if m, ok := value.(map[any]any); ok {
-			return len(m) == expected
-		}
-		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
-		if size, ok := reflectx.GetSize(value); ok {
-			return size == expected
-		}
-	}
-	if reflectx.HasLength(value) {
-		if l, ok := reflectx.GetLength(value); ok {
-			return l == expected
-		}
+	if size, ok := getCollectionSize(value); ok {
+		return size == expected
 	}
 	return false
 }

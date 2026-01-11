@@ -524,28 +524,7 @@ func (z *ZodSlice[T, R]) validateSlice(value []T, checks []core.ZodCheck, ctx *c
 				if errors.As(err, &zodErr) {
 					// Propagate all issues from element validation with path prefix
 					for _, elementIssue := range zodErr.Issues {
-						// Create raw issue preserving original code and essential properties
-						rawIssue := core.ZodRawIssue{
-							Code:       elementIssue.Code,
-							Message:    elementIssue.Message,
-							Input:      elementIssue.Input,
-							Path:       []any{i}, // Set path to array index only
-							Properties: make(map[string]any),
-						}
-						// Copy essential properties from ZodIssue to ZodRawIssue
-						if elementIssue.Minimum != nil {
-							rawIssue.Properties["minimum"] = elementIssue.Minimum
-						}
-						if elementIssue.Maximum != nil {
-							rawIssue.Properties["maximum"] = elementIssue.Maximum
-						}
-						if elementIssue.Expected != "" {
-							rawIssue.Properties["expected"] = elementIssue.Expected
-						}
-						if elementIssue.Received != "" {
-							rawIssue.Properties["received"] = elementIssue.Received
-						}
-						rawIssue.Properties["inclusive"] = elementIssue.Inclusive
+						rawIssue := issues.ConvertZodIssueToRawWithProperties(elementIssue, []any{i})
 						collectedIssues = append(collectedIssues, rawIssue)
 					}
 				} else {

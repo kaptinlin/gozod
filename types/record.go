@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 
 	"github.com/kaptinlin/gozod/core"
@@ -793,7 +794,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 	if isExhaustive {
 		seenKeys, unrecognizedKeys := make(map[string]bool), []string{}
 		for key := range value {
-			if !stringInSlice(key, allowedKeys) {
+			if !slices.Contains(allowedKeys, key) {
 				unrecognizedKeys = append(unrecognizedKeys, key)
 			}
 			seenKeys[key] = true
@@ -1164,15 +1165,6 @@ func tryGetExpectedKeys(schema any) ([]string, bool) {
 		}
 	}
 	return nil, false
-}
-
-func stringInSlice(s string, list []string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // =============================================================================

@@ -8,16 +8,27 @@ import (
 )
 
 // Package coerce provides constructors that enable automatic type coercion
-// before validation. For example, strings like "true" or numbers like 1/0
-// will be coerced into boolean values when using Bool().
+// before validation. This allows flexible input types to be automatically
+// converted to the expected schema type.
+//
+// Supported coercion types:
+//   - Bool/BoolPtr: strings ("true", "false", "1", "0"), numbers (0, 1), etc. → bool
+//   - String/StringPtr: any value → string representation
+//   - Int/Int8/.../Int64: strings, floats → integer types
+//   - Uint/Uint8/.../Uint64: strings, floats → unsigned integer types
+//   - Float32/Float64: strings, integers → float types
+//   - BigInt/BigFloat: strings, numbers → arbitrary precision types
+//   - Time/Duration: strings (RFC3339, ISO8601) → time.Time/time.Duration
 //
 // Example:
-//  s := coerce.Bool()
-//  v, err := s.Parse("true") // v == true, err == nil
 //
-// This mirrors the JavaScript Zod API: `z.coerce.boolean()`.
-// Currently only boolean coercion is supported; additional helpers will
-// be added as the library evolves.
+//	s := coerce.Bool()
+//	v, err := s.Parse("true") // v == true, err == nil
+//
+//	n := coerce.Int()
+//	v, err := n.Parse("42")   // v == 42, err == nil
+//
+// This mirrors the JavaScript Zod API: `z.coerce.boolean()`, `z.coerce.number()`, etc.
 
 // Bool returns a boolean schema with coercion enabled.
 func Bool(params ...any) *types.ZodBool[bool] {

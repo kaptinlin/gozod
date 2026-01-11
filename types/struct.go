@@ -821,27 +821,7 @@ func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseCont
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
 				for _, fieldIssue := range zodErr.Issues {
-					rawIssue := core.ZodRawIssue{
-						Code:       fieldIssue.Code,
-						Message:    fieldIssue.Message,
-						Input:      fieldIssue.Input,
-						Path:       append([]any{fieldName}, fieldIssue.Path...),
-						Properties: make(map[string]any),
-					}
-					// Copy essential properties
-					if fieldIssue.Minimum != nil {
-						rawIssue.Properties["minimum"] = fieldIssue.Minimum
-					}
-					if fieldIssue.Maximum != nil {
-						rawIssue.Properties["maximum"] = fieldIssue.Maximum
-					}
-					if fieldIssue.Expected != "" {
-						rawIssue.Properties["expected"] = fieldIssue.Expected
-					}
-					if fieldIssue.Received != "" {
-						rawIssue.Properties["received"] = fieldIssue.Received
-					}
-					rawIssue.Properties["inclusive"] = fieldIssue.Inclusive
+					rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(fieldIssue, []any{fieldName})
 					collectedIssues = append(collectedIssues, rawIssue)
 				}
 			} else {

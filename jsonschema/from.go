@@ -148,22 +148,22 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 		return ctx.convertMultiType(s)
 	}
 
-	// Handle single type
+	// Handle single type - direct comparison is more efficient than slices.Contains for single element
 	if len(s.Type) == 1 {
-		switch {
-		case slices.Contains(s.Type, "string"):
+		switch s.Type[0] {
+		case "string":
 			return ctx.convertString(s)
-		case slices.Contains(s.Type, "number"):
+		case "number":
 			return ctx.convertNumber(s)
-		case slices.Contains(s.Type, "integer"):
+		case "integer":
 			return ctx.convertInteger(s)
-		case slices.Contains(s.Type, "boolean"):
+		case "boolean":
 			return types.Bool(), nil
-		case slices.Contains(s.Type, "null"):
+		case "null":
 			return types.Nil(), nil
-		case slices.Contains(s.Type, "array"):
+		case "array":
 			return ctx.convertArray(s)
-		case slices.Contains(s.Type, "object"):
+		case "object":
 			return ctx.convertObject(s)
 		}
 	}

@@ -690,30 +690,8 @@ func (z *ZodMap[T, R]) validateMap(value map[any]any, checks []core.ZodCheck, ct
 				// Collect key validation errors with path prefix (TypeScript Zod v4 behavior adapted for Go maps)
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
-					// Propagate all issues from key validation with path prefix
 					for _, keyIssue := range zodErr.Issues {
-						// Create raw issue preserving original code and essential properties
-						rawIssue := core.ZodRawIssue{
-							Code:       keyIssue.Code,
-							Message:    keyIssue.Message,
-							Input:      keyIssue.Input,
-							Path:       append([]any{key}, keyIssue.Path...), // Prepend map key to path
-							Properties: make(map[string]any),
-						}
-						// Copy essential properties from ZodIssue to ZodRawIssue
-						if keyIssue.Minimum != nil {
-							rawIssue.Properties["minimum"] = keyIssue.Minimum
-						}
-						if keyIssue.Maximum != nil {
-							rawIssue.Properties["maximum"] = keyIssue.Maximum
-						}
-						if keyIssue.Expected != "" {
-							rawIssue.Properties["expected"] = keyIssue.Expected
-						}
-						if keyIssue.Received != "" {
-							rawIssue.Properties["received"] = keyIssue.Received
-						}
-						rawIssue.Properties["inclusive"] = keyIssue.Inclusive
+						rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(keyIssue, []any{key})
 						collectedIssues = append(collectedIssues, rawIssue)
 					}
 				} else {
@@ -731,30 +709,8 @@ func (z *ZodMap[T, R]) validateMap(value map[any]any, checks []core.ZodCheck, ct
 				// Collect value validation errors with path prefix (TypeScript Zod v4 behavior adapted for Go maps)
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
-					// Propagate all issues from value validation with path prefix
 					for _, valueIssue := range zodErr.Issues {
-						// Create raw issue preserving original code and essential properties
-						rawIssue := core.ZodRawIssue{
-							Code:       valueIssue.Code,
-							Message:    valueIssue.Message,
-							Input:      valueIssue.Input,
-							Path:       append([]any{key}, valueIssue.Path...), // Prepend map key to path
-							Properties: make(map[string]any),
-						}
-						// Copy essential properties from ZodIssue to ZodRawIssue
-						if valueIssue.Minimum != nil {
-							rawIssue.Properties["minimum"] = valueIssue.Minimum
-						}
-						if valueIssue.Maximum != nil {
-							rawIssue.Properties["maximum"] = valueIssue.Maximum
-						}
-						if valueIssue.Expected != "" {
-							rawIssue.Properties["expected"] = valueIssue.Expected
-						}
-						if valueIssue.Received != "" {
-							rawIssue.Properties["received"] = valueIssue.Received
-						}
-						rawIssue.Properties["inclusive"] = valueIssue.Inclusive
+						rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(valueIssue, []any{key})
 						collectedIssues = append(collectedIssues, rawIssue)
 					}
 				} else {

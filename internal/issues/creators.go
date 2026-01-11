@@ -305,6 +305,51 @@ func ConvertZodIssueToRaw(issue core.ZodIssue) core.ZodRawIssue {
 	}
 }
 
+// ConvertZodIssueToRawWithProperties converts a ZodIssue to ZodRawIssue
+// and copies essential properties (minimum, maximum, expected, received, inclusive).
+// This is used by collection types (slice, set, map, object, struct) for element validation.
+// The pathPrefix is set directly as the path (for slice/set where elements have simple index paths).
+func ConvertZodIssueToRawWithProperties(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
+	return convertZodIssueToRawWithPath(issue, pathPrefix)
+}
+
+// ConvertZodIssueToRawWithPrependedPath converts a ZodIssue to ZodRawIssue
+// and prepends pathPrefix to the issue's existing path.
+// This is used for map types where the key path is prepended to nested issue paths.
+func ConvertZodIssueToRawWithPrependedPath(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
+	// Prepend pathPrefix to existing issue path
+	fullPath := append(pathPrefix, issue.Path...)
+	return convertZodIssueToRawWithPath(issue, fullPath)
+}
+
+// convertZodIssueToRawWithPath is the internal helper that creates the raw issue with given path.
+func convertZodIssueToRawWithPath(issue core.ZodIssue, path []any) core.ZodRawIssue {
+	rawIssue := core.ZodRawIssue{
+		Code:       issue.Code,
+		Message:    issue.Message,
+		Input:      issue.Input,
+		Path:       path,
+		Properties: make(map[string]any),
+	}
+
+	// Copy essential properties from ZodIssue to ZodRawIssue
+	if issue.Minimum != nil {
+		rawIssue.Properties["minimum"] = issue.Minimum
+	}
+	if issue.Maximum != nil {
+		rawIssue.Properties["maximum"] = issue.Maximum
+	}
+	if issue.Expected != "" {
+		rawIssue.Properties["expected"] = issue.Expected
+	}
+	if issue.Received != "" {
+		rawIssue.Properties["received"] = issue.Received
+	}
+	rawIssue.Properties["inclusive"] = issue.Inclusive
+
+	return rawIssue
+}
+
 // CreateErrorMap creates an error map from various input types
 func CreateErrorMap(errorInput any) *core.ZodErrorMap {
 	if errorInput == nil {

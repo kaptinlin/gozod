@@ -483,44 +483,44 @@ func ToFloat[T ~float32 | ~float64](v any) (T, error) {
 func checkIntegerTypeBounds[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64](value int64, target T) error {
 	switch any(target).(type) {
 	case int8:
-		if value < -128 || value > 127 {
+		if value < math.MinInt8 || value > math.MaxInt8 {
 			return NewOverflowError(value, "int8")
 		}
 	case int16:
-		if value < -32768 || value > 32767 {
+		if value < math.MinInt16 || value > math.MaxInt16 {
 			return NewOverflowError(value, "int16")
 		}
 	case int32:
-		if value < -2147483648 || value > 2147483647 {
+		if value < math.MinInt32 || value > math.MaxInt32 {
 			return NewOverflowError(value, "int32")
 		}
 	case int:
-		if value < -2147483648 || value > 2147483647 {
+		if value < math.MinInt32 || value > math.MaxInt32 {
 			return NewOverflowError(value, "int (32-bit platforms)")
 		}
 	case uint8:
-		if value < 0 || value > 255 {
+		if value < 0 || value > math.MaxUint8 {
 			if value < 0 {
 				return NewNegativeUintError(value, "uint8")
 			}
 			return NewOverflowError(value, "uint8")
 		}
 	case uint16:
-		if value < 0 || value > 65535 {
+		if value < 0 || value > math.MaxUint16 {
 			if value < 0 {
 				return NewNegativeUintError(value, "uint16")
 			}
 			return NewOverflowError(value, "uint16")
 		}
 	case uint32:
-		if value < 0 || value > 4294967295 {
+		if value < 0 || value > math.MaxUint32 {
 			if value < 0 {
 				return NewNegativeUintError(value, "uint32")
 			}
 			return NewOverflowError(value, "uint32")
 		}
 	case uint:
-		if value < 0 || value > 4294967295 {
+		if value < 0 || value > math.MaxUint32 {
 			if value < 0 {
 				return NewNegativeUintError(value, "uint")
 			}

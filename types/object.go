@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -331,11 +332,7 @@ func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...
 
 // Shape returns the object shape (field schemas)
 func (z *ZodObject[T, R]) Shape() core.ObjectSchema {
-	result := make(core.ObjectSchema)
-	for k, v := range z.internals.Shape {
-		result[k] = v
-	}
-	return result
+	return maps.Clone(z.internals.Shape)
 }
 
 // Properties is an alias for Shape(), returning the object's field schemas.
@@ -431,17 +428,8 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 	}
 
 	// Create new shape combining existing + extension fields
-	newShape := make(core.ObjectSchema)
-
-	// Copy existing shape
-	for k, v := range z.internals.Shape {
-		newShape[k] = v
-	}
-
-	// Add augmentation fields
-	for k, schema := range augmentation {
-		newShape[k] = schema
-	}
+	newShape := maps.Clone(z.internals.Shape)
+	maps.Copy(newShape, augmentation)
 
 	return ObjectTyped[T, R](newShape, params...), nil
 }
@@ -452,17 +440,8 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 // See: .reference/zod/packages/zod/src/v4/core/util.ts:679-691
 func (z *ZodObject[T, R]) SafeExtend(augmentation core.ObjectSchema, params ...any) *ZodObject[T, R] {
 	// Create new shape combining existing + extension fields
-	newShape := make(core.ObjectSchema)
-
-	// Copy existing shape
-	for k, v := range z.internals.Shape {
-		newShape[k] = v
-	}
-
-	// Add augmentation fields
-	for k, schema := range augmentation {
-		newShape[k] = schema
-	}
+	newShape := maps.Clone(z.internals.Shape)
+	maps.Copy(newShape, augmentation)
 
 	return ObjectTyped[T, R](newShape, params...)
 }
@@ -472,17 +451,8 @@ func (z *ZodObject[T, R]) SafeExtend(augmentation core.ObjectSchema, params ...a
 // See: .reference/zod/packages/zod/src/v4/core/util.ts:693-707
 func (z *ZodObject[T, R]) Merge(other *ZodObject[T, R], params ...any) *ZodObject[T, R] {
 	// Create new shape combining existing + other fields
-	newShape := make(core.ObjectSchema)
-
-	// Copy existing shape
-	for k, v := range z.internals.Shape {
-		newShape[k] = v
-	}
-
-	// Add other schema's fields
-	for k, schema := range other.internals.Shape {
-		newShape[k] = schema
-	}
+	newShape := maps.Clone(z.internals.Shape)
+	maps.Copy(newShape, other.internals.Shape)
 
 	// Zod v4: merge() clears checks, so we create a fresh schema
 	// HasUserRefinements will be false on the new schema
@@ -949,30 +919,8 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 			// Collect field validation errors with path prefix (TypeScript Zod v4 behavior)
 			var zodErr *issues.ZodError
 			if errors.As(err, &zodErr) {
-				// Propagate all issues from field validation with path prefix
 				for _, fieldIssue := range zodErr.Issues {
-					// Create raw issue preserving original code and essential properties
-					rawIssue := core.ZodRawIssue{
-						Code:       fieldIssue.Code,
-						Message:    fieldIssue.Message,
-						Input:      fieldIssue.Input,
-						Path:       append([]any{fieldName}, fieldIssue.Path...), // Prepend field name to path
-						Properties: make(map[string]any),
-					}
-					// Copy essential properties from ZodIssue to ZodRawIssue
-					if fieldIssue.Minimum != nil {
-						rawIssue.Properties["minimum"] = fieldIssue.Minimum
-					}
-					if fieldIssue.Maximum != nil {
-						rawIssue.Properties["maximum"] = fieldIssue.Maximum
-					}
-					if fieldIssue.Expected != "" {
-						rawIssue.Properties["expected"] = fieldIssue.Expected
-					}
-					if fieldIssue.Received != "" {
-						rawIssue.Properties["received"] = fieldIssue.Received
-					}
-					rawIssue.Properties["inclusive"] = fieldIssue.Inclusive
+					rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(fieldIssue, []any{fieldName})
 					collectedIssues = append(collectedIssues, rawIssue)
 				}
 			} else {
@@ -1006,27 +954,7 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 						var zodErr *issues.ZodError
 						if errors.As(err, &zodErr) {
 							for _, catchallIssue := range zodErr.Issues {
-								rawIssue := core.ZodRawIssue{
-									Code:       catchallIssue.Code,
-									Message:    catchallIssue.Message,
-									Input:      catchallIssue.Input,
-									Path:       append([]any{fieldName}, catchallIssue.Path...),
-									Properties: make(map[string]any),
-								}
-								// Copy properties
-								if catchallIssue.Minimum != nil {
-									rawIssue.Properties["minimum"] = catchallIssue.Minimum
-								}
-								if catchallIssue.Maximum != nil {
-									rawIssue.Properties["maximum"] = catchallIssue.Maximum
-								}
-								if catchallIssue.Expected != "" {
-									rawIssue.Properties["expected"] = catchallIssue.Expected
-								}
-								if catchallIssue.Received != "" {
-									rawIssue.Properties["received"] = catchallIssue.Received
-								}
-								rawIssue.Properties["inclusive"] = catchallIssue.Inclusive
+								rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(catchallIssue, []any{fieldName})
 								collectedIssues = append(collectedIssues, rawIssue)
 							}
 						} else {
