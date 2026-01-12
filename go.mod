@@ -5,7 +5,7 @@ go 1.25
 require (
 	github.com/go-json-experiment/json v0.0.0-20251027170946-4849db3c2f7e
 	github.com/golang-jwt/jwt/v5 v5.3.0
-	github.com/kaptinlin/jsonschema v0.6.5
+	github.com/kaptinlin/jsonschema v0.6.6
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/text v0.32.0
 )
