@@ -10,22 +10,6 @@ import (
 
 // Types are now defined in adapter.go
 
-// NewCodeGeneratorFromConfig creates a new CodeGenerator instance with the specified configuration
-func NewCodeGeneratorFromConfig(config *GeneratorConfig) *CodeGenerator {
-	analyzer, _ := NewStructAnalyzer()
-	writer, _ := NewFileWriter("", "", config.OutputSuffix, config.DryRun, config.Verbose)
-
-	generator := &CodeGenerator{
-		analyzer:     analyzer,
-		writer:       writer,
-		config:       config,
-		typeMap:      createTypeMapping(),
-		validatorMap: createValidatorMapping(),
-	}
-
-	return generator
-}
-
 // ProcessPackage analyzes and generates code for all structs in the specified package
 func (g *CodeGenerator) ProcessPackage(packagePath string) error {
 	if g.config.Verbose {

@@ -293,9 +293,6 @@ func ToFloat64(v any) (float64, error) {
 	case uint, uint8, uint16, uint32, uint64:
 		return float64(reflect.ValueOf(x).Uint()), nil
 	case *big.Int:
-		if x == nil {
-			return 0, fmt.Errorf("cannot convert nil *big.Int to float64: %w", ErrNilPointer)
-		}
 		f, _ := x.Float64()
 		return f, nil
 	case big.Int:
@@ -495,8 +492,10 @@ func checkIntegerTypeBounds[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | 
 			return NewOverflowError(value, "int32")
 		}
 	case int:
-		if value < math.MinInt32 || value > math.MaxInt32 {
-			return NewOverflowError(value, "int (32-bit platforms)")
+		maxInt := int64(^uint(0) >> 1)
+		minInt := -maxInt - 1
+		if value < minInt || value > maxInt {
+			return NewOverflowError(value, fmt.Sprintf("int (%d-bit)", strconv.IntSize))
 		}
 	case uint8:
 		if value < 0 || value > math.MaxUint8 {
@@ -520,11 +519,12 @@ func checkIntegerTypeBounds[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | 
 			return NewOverflowError(value, "uint32")
 		}
 	case uint:
-		if value < 0 || value > math.MaxUint32 {
-			if value < 0 {
-				return NewNegativeUintError(value, "uint")
-			}
-			return NewOverflowError(value, "uint (32-bit platforms)")
+		if value < 0 {
+			return NewNegativeUintError(value, "uint")
+		}
+		maxUint := uint64(^uint(0))
+		if uint64(value) > maxUint {
+			return NewOverflowError(value, fmt.Sprintf("uint (%d-bit)", strconv.IntSize))
 		}
 	case uint64:
 		if value < 0 {

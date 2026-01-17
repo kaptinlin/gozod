@@ -356,6 +356,13 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 // executeCustomCheck executes custom validation check with strong typing support
 // Handles both refine functions (boolean return) and check functions (payload modification)
 func executeCustomCheck(payload *core.ParsePayload, internals *ZodCheckCustomInternals) {
+	defer func() {
+		if r := recover(); r != nil {
+			value := payload.GetValue()
+			handleRefineResult(false, payload, value, internals)
+		}
+	}()
+
 	switch internals.Def.FnType {
 	case "refine":
 		// Execute refine function with type-safe casting

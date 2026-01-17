@@ -120,6 +120,22 @@ func (p *ParsePayload) GetPath() []any {
 	return slices.Clone(p.path)
 }
 
+func estimateIntLen(n int) int {
+	if n == 0 {
+		return 1
+	}
+	count := 0
+	if n < 0 {
+		count = 1
+		n = -n
+	}
+	for n > 0 {
+		count++
+		n /= 10
+	}
+	return count
+}
+
 // GetPathString returns a string representation of the current path
 func (p *ParsePayload) GetPathString() string {
 	if len(p.path) == 0 {
@@ -132,7 +148,7 @@ func (p *ParsePayload) GetPathString() string {
 		case string:
 			capacity += 1 + len(elem)
 		case int:
-			capacity += 2 + len(strconv.Itoa(elem))
+			capacity += 2 + estimateIntLen(elem)
 		default:
 			capacity += 10
 		}

@@ -16,7 +16,13 @@ var (
 // CORE SCHEMA INTERFACE & INTERNALS
 // =============================================================================
 
-// Global priority counter for modifier application order tracking
+// Global priority counter for modifier application order tracking.
+// This counter monotonically increases and is never reset.
+// Note: In extremely long-running applications with billions of schema modifications,
+// this could theoretically overflow. In practice, this is not a concern as:
+// 1. Schemas are typically created during initialization, not runtime
+// 2. At 1M schemas/second, overflow would occur after 292,471 years
+// 3. Only relative priority matters, not absolute values
 var modifierPriorityCounter int64
 
 //
@@ -142,6 +148,15 @@ type ZodTypeInternals struct {
 // =============================================================================
 
 // Clone creates a deep copy of the internals for immutable modifications.
+//
+// Cloning behavior:
+//   - Deep copied: Checks slice, Values map, Bag map
+//   - Shallow copied: Function pointers (Parse, Constructor, Transform, DefaultFunc, PrefaultFunc)
+//   - Shallow copied: Immutable pointers (Pattern, Error)
+//
+// Function pointers and regex patterns are shared between clones because they
+// are effectively immutable. This clone is safe for the copy-on-write modifier
+// pattern used throughout the schema system.
 func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 	if z == nil {
 		return nil

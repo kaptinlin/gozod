@@ -66,6 +66,10 @@ func (r *Registry[M]) Has(schema ZodSchema) bool {
 
 // Range iterates over the schemas and metadata in the registry.
 // If the callback function returns false, iteration stops.
+//
+// Important: The callback is executed while holding a read lock. Avoid
+// performing expensive operations or calling back into the registry within
+// the callback, as this may cause deadlocks or performance issues.
 func (r *Registry[M]) Range(f func(schema ZodSchema, m M) bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

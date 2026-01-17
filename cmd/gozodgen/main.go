@@ -56,11 +56,11 @@ func main() {
 	}
 
 	if *verbose {
-		log.Printf("🚀 Starting gozodgen code generation")
-		log.Printf("📦 Target packages: %v", packages)
-		log.Printf("📝 Output suffix: %s", *outputSuffix)
+		log.Printf("[INFO] Starting gozodgen code generation")
+		log.Printf("[INFO] Target packages: %v", packages)
+		log.Printf("[INFO] Output suffix: %s", *outputSuffix)
 		if *dryRun {
-			log.Printf("🔍 Dry run mode enabled")
+			log.Printf("[INFO] Dry run mode enabled")
 		}
 	}
 
@@ -76,32 +76,32 @@ func main() {
 
 	generator, err := NewCodeGenerator(config)
 	if err != nil {
-		log.Fatalf("❌ Failed to create generator: %v", err)
+		log.Fatalf("[ERROR] Failed to create generator: %v", err)
 	}
 
 	// Process each package
 	var totalGenerated int
 	for _, pkg := range packages {
 		if *verbose {
-			log.Printf("📂 Processing package: %s", pkg)
+			log.Printf("[INFO] Processing package: %s", pkg)
 		}
 
 		err := generator.ProcessPackage(pkg)
 		if err != nil {
-			log.Fatalf("❌ Failed to process package %s: %v", pkg, err)
+			log.Fatalf("[ERROR] Failed to process package %s: %v", pkg, err)
 		}
 
 		totalGenerated++
 		if *verbose {
-			log.Printf("✅ Processed package %s", pkg)
+			log.Printf("[INFO] Processed package %s", pkg)
 		}
 	}
 
 	if *verbose {
 		if totalGenerated > 0 {
-			log.Printf("🎉 Code generation completed! Generated %d schema methods total", totalGenerated)
+			log.Printf("[INFO] Code generation completed! Generated %d schema methods total", totalGenerated)
 		} else {
-			log.Printf("ℹ️  No structs found requiring code generation")
+			log.Printf("[INFO] No structs found requiring code generation")
 		}
 	}
 }

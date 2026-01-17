@@ -96,28 +96,28 @@ func MultipleOf(value, divisor any) bool {
 
 // MaxLength validates if value's length is at most maximum
 func MaxLength(value any, maximum int) bool {
-	if !reflectx.HasLength(value) {
+	l, ok := reflectx.GetLength(value)
+	if !ok {
 		return false
 	}
-	l, _ := reflectx.GetLength(value)
 	return l <= maximum
 }
 
 // MinLength validates if value's length is at least minimum
 func MinLength(value any, minimum int) bool {
-	if !reflectx.HasLength(value) {
+	l, ok := reflectx.GetLength(value)
+	if !ok {
 		return false
 	}
-	l, _ := reflectx.GetLength(value)
 	return l >= minimum
 }
 
 // Length validates if value's length equals exactly the expected length
 func Length(value any, expected int) bool {
-	if !reflectx.HasLength(value) {
+	l, ok := reflectx.GetLength(value)
+	if !ok {
 		return false
 	}
-	l, _ := reflectx.GetLength(value)
 	return l == expected
 }
 
@@ -528,9 +528,9 @@ type JWTOptions struct {
 	Algorithm *string
 }
 
-// JWT validates if string is a valid JWT token format
-// This function only validates the JWT structure and basic claims
-// It does NOT verify the signature (use JWTWithSecret for signature verification)
+// JWT validates JWT format only (structure and basic claims).
+// WARNING: Does NOT verify signatures. For production use, verify
+// signatures with github.com/golang-jwt/jwt/v5
 func JWT(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
 		return isValidJWTStructure(str, nil)
@@ -538,9 +538,9 @@ func JWT(value any) bool {
 	return false
 }
 
-// JWTWithOptions validates if string is a valid JWT token format with algorithm constraint
-// This function only validates the JWT structure and basic claims
-// It does NOT verify the signature (use JWTWithSecret for signature verification)
+// JWTWithOptions validates JWT format with algorithm constraint.
+// WARNING: Does NOT verify signatures. For production use, verify
+// signatures with github.com/golang-jwt/jwt/v5
 func JWTWithOptions(value any, options JWTOptions) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
 		return isValidJWTStructure(str, options.Algorithm)

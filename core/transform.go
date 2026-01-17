@@ -11,29 +11,20 @@ var (
 	ErrInvalidTransformType = errors.New("invalid type for transform")
 )
 
-// isNilInput performs compile-time nil checking to avoid reflection
 func isNilInput(input any) bool {
-	// Fast path: direct nil comparison for interfaces and pointers
-	// This handles the most common cases without reflection
 	if input == nil {
 		return true
 	}
 
-	// Use reflection only when necessary for complex types
 	v := reflect.ValueOf(input)
 	if !v.IsValid() {
 		return true
 	}
 
-	// Check for nil pointers, interfaces, slices, maps, channels, and functions
+	//nolint:exhaustive // Only these kinds can be nil; others always return false
 	switch v.Kind() {
 	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
 		return v.IsNil()
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
-		reflect.Array, reflect.String, reflect.Struct, reflect.UnsafePointer:
-		return false
 	default:
 		return false
 	}
