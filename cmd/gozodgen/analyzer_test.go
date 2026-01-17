@@ -278,6 +278,7 @@ func TestStructAnalyzer_RealFiles(t *testing.T) {
 		"complex_struct.go",
 		"circular_struct.go",
 		"edge_cases.go",
+		"validators.go",
 	}
 
 	analyzer, err := NewStructAnalyzer()

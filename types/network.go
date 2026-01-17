@@ -1912,6 +1912,66 @@ func (z *ZodHostname[T]) Describe(description string) *ZodHostname[T] {
 }
 
 // =============================================================================
+// HOSTNAME REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic
+func (z *ZodHostname[T]) Refine(fn func(T) bool, params ...any) *ZodHostname[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
+			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				// Call the refinement function with typed nil
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
+		}
+	}
+
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](wrapper, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny adds flexible custom validation logic
+func (z *ZodHostname[T]) RefineAny(fn func(any) bool, params ...any) *ZodHostname[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](fn, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// =============================================================================
 // HOSTNAME COMPOSITION METHODS
 // =============================================================================
 
@@ -2103,6 +2163,65 @@ func (z *ZodMAC[T]) Describe(description string) *ZodMAC[T] {
 	clone := z.withInternals(newInternals)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
+}
+
+// =============================================================================
+// MAC REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic
+func (z *ZodMAC[T]) Refine(fn func(T) bool, params ...any) *ZodMAC[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
+			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
+		}
+	}
+
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](wrapper, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny adds flexible custom validation logic
+func (z *ZodMAC[T]) RefineAny(fn func(any) bool, params ...any) *ZodMAC[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](fn, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // =============================================================================
@@ -2303,6 +2422,65 @@ func (z *ZodE164[T]) Describe(description string) *ZodE164[T] {
 	clone := z.withInternals(newInternals)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
+}
+
+// =============================================================================
+// E164 REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds type-safe custom validation logic
+func (z *ZodE164[T]) Refine(fn func(T) bool, params ...any) *ZodE164[T] {
+	wrapper := func(v any) bool {
+		var zero T
+
+		switch any(zero).(type) {
+		case string:
+			if v == nil {
+				return false
+			}
+			if strVal, ok := v.(string); ok {
+				return fn(any(strVal).(T))
+			}
+			return false
+		case *string:
+			if v == nil {
+				return fn(any((*string)(nil)).(T))
+			}
+			if strVal, ok := v.(string); ok {
+				sCopy := strVal
+				ptr := &sCopy
+				return fn(any(ptr).(T))
+			}
+			return false
+		default:
+			return false
+		}
+	}
+
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](wrapper, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// RefineAny adds flexible custom validation logic
+func (z *ZodE164[T]) RefineAny(fn func(any) bool, params ...any) *ZodE164[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	var errorMessage any
+	if schemaParams.Error != nil {
+		errorMessage = schemaParams.Error
+	}
+
+	check := checks.NewCustom[any](fn, errorMessage)
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
 }
 
 // =============================================================================

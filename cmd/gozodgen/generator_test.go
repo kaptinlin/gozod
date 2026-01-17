@@ -302,6 +302,7 @@ func TestCodeGenerator_RealTestdata(t *testing.T) {
 		"simple_struct.go",
 		"complex_struct.go",
 		"circular_struct.go",
+		"validators.go",
 	}
 
 	for _, filename := range testFiles {

@@ -849,8 +849,10 @@ func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMa
 
 	mapSchema := newZodMapFromDef[T, R](def)
 
-	// Ensure validator is called when key/value schemas exist
-	// Add a minimal check that always passes to trigger validation
+	// IMPORTANT: When key/value schemas are defined, we need to trigger the validation pipeline.
+	// The engine only runs validateMap() when there are checks registered in internals.
+	// Without this dummy check, maps with nested schemas would not validate their contents.
+	// This always-passing check ensures the engine calls our validateMap method.
 	if keySchema != nil || valueSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
 		mapSchema.internals.AddCheck(alwaysPassCheck)

@@ -62,6 +62,29 @@ func (z *ZodFunction[T]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
+// convertFunctionResult converts the engine result to the constraint type T.
+// Handles both direct function (any) and pointer to function (*any) based on T.
+func (z *ZodFunction[T]) convertFunctionResult(result any) T {
+	var zero T
+	zeroType := reflect.TypeOf((*T)(nil)).Elem()
+
+	// Check if T is *any (pointer type)
+	if zeroType.Kind() == reflect.Ptr && zeroType.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
+		// T is *any - return pointer to function
+		if result == nil {
+			return any((*any)(nil)).(T)
+		}
+		fnPtr := &result
+		return any(fnPtr).(T)
+	}
+
+	// T is any - return the function directly
+	if result == nil {
+		return zero
+	}
+	return any(result).(T) //nolint:unconvert
+}
+
 // Parse validates and returns a function that performs input/output validation
 func (z *ZodFunction[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	result, err := engine.ParseComplex[any](
@@ -77,29 +100,7 @@ func (z *ZodFunction[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) 
 		var zero T
 		return zero, err
 	}
-
-	// Handle both direct function and pointer to function based on constraint type T
-	var zero T
-
-	// Use reflection to determine the actual constraint type
-	zeroType := reflect.TypeOf((*T)(nil)).Elem()
-
-	// Check if T is *any (pointer type)
-	if zeroType.Kind() == reflect.Ptr && zeroType.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
-		// T is *any - return pointer to function
-		if result == nil {
-			return any((*any)(nil)).(T), nil
-		}
-		// Create pointer to the function
-		fnPtr := &result
-		return any(fnPtr).(T), nil
-	} else {
-		// T is any - return the function directly
-		if result == nil {
-			return zero, nil
-		}
-		return any(result).(T), nil //nolint:unconvert
-	}
+	return z.convertFunctionResult(result), nil
 }
 
 // MustParse is the type-safe variant that panics on error
@@ -131,29 +132,7 @@ func (z *ZodFunction[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, err
 		var zero T
 		return zero, err
 	}
-
-	// Handle both direct function and pointer to function based on constraint type T
-	var zero T
-
-	// Use reflection to determine the actual constraint type
-	zeroType := reflect.TypeOf((*T)(nil)).Elem()
-
-	// Check if T is *any (pointer type)
-	if zeroType.Kind() == reflect.Ptr && zeroType.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
-		// T is *any - return pointer to function
-		if result == nil {
-			return any((*any)(nil)).(T), nil
-		}
-		// Create pointer to the function
-		fnPtr := &result
-		return any(fnPtr).(T), nil
-	} else {
-		// T is any - return the function directly
-		if result == nil {
-			return zero, nil
-		}
-		return any(result).(T), nil //nolint:unconvert
-	}
+	return z.convertFunctionResult(result), nil
 }
 
 // MustStrictParse validates the input using strict parsing rules and panics on error

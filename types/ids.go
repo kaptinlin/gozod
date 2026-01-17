@@ -281,114 +281,62 @@ func (z *ZodUUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// parseUuidVersionParam extracts UUID version from params if present.
+// Returns the version ("4", "6", "7", or "") and remaining params.
+func parseUuidVersionParam(params []any) (version string, rest []any) {
+	if len(params) == 0 {
+		return "", params
+	}
+	if v, ok := params[0].(string); ok {
+		switch v {
+		case "v4":
+			return "4", params[1:]
+		case "v6":
+			return "6", params[1:]
+		case "v7":
+			return "7", params[1:]
+		}
+	}
+	return "", params
+}
+
+// applyUuidVersion applies UUID check and version-specific regex to a string schema.
+func applyUuidVersion[T StringConstraint](base *ZodString[T], version string, params []any) *ZodString[T] {
+	in := base.GetInternals().Clone()
+	in.AddCheck(checks.UUID(params...))
+	base = base.withInternals(in)
+
+	switch version {
+	case "4":
+		return base.Regex(regex.UUID4)
+	case "6":
+		return base.Regex(regex.UUID6)
+	case "7":
+		return base.Regex(regex.UUID7)
+	default:
+		return base.Regex(regex.UUID)
+	}
+}
+
 // Uuid supports optional version parameter: "v4", "v6", "v7".
 // Otherwise behaves like generic UUID validator.
 func Uuid(params ...any) *ZodUUID[string] {
-	var version string
-	var rest []any
-
-	if len(params) > 0 {
-		if v, ok := params[0].(string); ok {
-			switch v {
-			case "v4":
-				version = "4"
-			case "v6":
-				version = "6"
-			case "v7":
-				version = "7"
-			}
-			if version != "" {
-				rest = params[1:]
-			} else {
-				rest = params
-			}
-		} else {
-			rest = params
-		}
+	version, rest := parseUuidVersionParam(params)
+	if version == "" {
+		rest = params // Use original params for default case
 	}
-
-	var base *ZodString[string]
-	switch version {
-	case "4":
-		base = StringTyped[string](rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID4)
-	case "6":
-		base = StringTyped[string](rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID6)
-	case "7":
-		base = StringTyped[string](rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID7)
-	default:
-		base = StringTyped[string](params...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(params...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID)
-	}
-	return &ZodUUID[string]{base}
+	base := StringTyped[string](rest...)
+	return &ZodUUID[string]{applyUuidVersion(base, version, rest)}
 }
 
+// UuidPtr creates a UUID schema for pointer types.
 func UuidPtr(params ...any) *ZodUUID[*string] {
-	var version string
-	var rest []any
-
-	if len(params) > 0 {
-		if v, ok := params[0].(string); ok {
-			switch v {
-			case "v4":
-				version = "4"
-			case "v6":
-				version = "6"
-			case "v7":
-				version = "7"
-			}
-			if version != "" {
-				rest = params[1:]
-			} else {
-				rest = params
-			}
-		} else {
-			rest = params
-		}
+	version, rest := parseUuidVersionParam(params)
+	if version == "" {
+		rest = params // Use original params for default case
 	}
-
-	var base *ZodString[*string]
-	switch version {
-	case "4":
-		base = StringPtr(rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID4)
-	case "6":
-		base = StringPtr(rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID6)
-	case "7":
-		base = StringPtr(rest...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(rest...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID7)
-	default:
-		base = StringPtr(params...)
-		in := base.GetInternals().Clone()
-		in.AddCheck(checks.UUID(params...))
-		base = base.withInternals(in)
-		base = base.Regex(regex.UUID)
-	}
-	return &ZodUUID[*string]{base}
+	base := StringPtr(rest...)
+	return &ZodUUID[*string]{applyUuidVersion(base, version, rest)}
 }
 
 // =============================================================================

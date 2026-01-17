@@ -453,3 +453,169 @@ func TestFileWriter_CircularReferenceHandling(t *testing.T) {
 		})
 	}
 }
+
+func TestFileWriter_GenerateValidatorChain(t *testing.T) {
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err, "Failed to create writer")
+
+	tests := []struct {
+		name      string
+		rule      tagparser.TagRule
+		fieldType reflect.Type
+		expected  string
+	}{
+		// String validators
+		{name: "trim", rule: tagparser.TagRule{Name: "trim"}, fieldType: reflect.TypeOf(""), expected: ".Trim()"},
+		{name: "lowercase", rule: tagparser.TagRule{Name: "lowercase"}, fieldType: reflect.TypeOf(""), expected: ".ToLowerCase()"},
+		{name: "uppercase", rule: tagparser.TagRule{Name: "uppercase"}, fieldType: reflect.TypeOf(""), expected: ".ToUpperCase()"},
+		{name: "nilable", rule: tagparser.TagRule{Name: "nilable"}, fieldType: reflect.TypeOf(""), expected: ".Nilable()"},
+		{name: "url", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeOf(""), expected: ".URL()"},
+		{name: "ipv4", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeOf(""), expected: ".IPv4()"},
+		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeOf(""), expected: ".IPv6()"},
+		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeOf(""), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
+
+		// Numeric validators
+		{name: "gte", rule: tagparser.TagRule{Name: "gte", Params: []string{"0"}}, fieldType: reflect.TypeOf(0), expected: ".Gte(0)"},
+		{name: "lt", rule: tagparser.TagRule{Name: "lt", Params: []string{"100"}}, fieldType: reflect.TypeOf(0), expected: ".Lt(100)"},
+
+		// Prefault
+		{name: "prefault string", rule: tagparser.TagRule{Name: "prefault", Params: []string{"test"}}, fieldType: reflect.TypeOf(""), expected: `.Prefault("test")`},
+		{name: "prefault int", rule: tagparser.TagRule{Name: "prefault", Params: []string{"42"}}, fieldType: reflect.TypeOf(0), expected: ".Prefault(42)"},
+
+		// Required (returns empty)
+		{name: "required", rule: tagparser.TagRule{Name: "required"}, fieldType: reflect.TypeOf(""), expected: ""},
+
+		// Time (returns empty)
+		{name: "time", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeOf(""), expected: ""},
+
+		// Refine and check
+		{name: "refine", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeOf(""), expected: ".Refine(myValidator)"},
+		{name: "check", rule: tagparser.TagRule{Name: "check", Params: []string{"customCheck"}}, fieldType: reflect.TypeOf(""), expected: ".Check(customCheck)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := writer.generateValidatorChain(tt.rule, tt.fieldType)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFileWriter_GenerateDefaultValue(t *testing.T) {
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err, "Failed to create writer")
+
+	tests := []struct {
+		name      string
+		value     string
+		fieldType reflect.Type
+		expected  string
+	}{
+		{name: "string", value: "hello", fieldType: reflect.TypeOf(""), expected: `.Default("hello")`},
+		{name: "int", value: "42", fieldType: reflect.TypeOf(0), expected: ".Default(42)"},
+		{name: "int64", value: "100", fieldType: reflect.TypeOf(int64(0)), expected: ".Default(100)"},
+		{name: "uint", value: "10", fieldType: reflect.TypeOf(uint(0)), expected: ".Default(10)"},
+		{name: "float64", value: "3.14", fieldType: reflect.TypeOf(0.0), expected: ".Default(3.14)"},
+		{name: "bool", value: "true", fieldType: reflect.TypeOf(false), expected: ".Default(true)"},
+		{name: "pointer string", value: "world", fieldType: reflect.TypeOf((*string)(nil)), expected: `.Default("world")`},
+		// Slice types
+		{name: "string slice", value: `["a","b"]`, fieldType: reflect.TypeOf([]string{}), expected: `.Default([]string{"a", "b"})`},
+		{name: "int slice", value: `[1,2,3]`, fieldType: reflect.TypeOf([]int{}), expected: `.Default([]int{1, 2, 3})`},
+		{name: "float slice", value: `[1.1,2.2]`, fieldType: reflect.TypeOf([]float64{}), expected: `.Default([]float64{1.1, 2.2})`},
+		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Default([]bool{true, false})`},
+		// Map types
+		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Default(map[string]string{"k": "v"})`},
+		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeOf(map[string]interface{}{}), expected: `.Default(map[string]interface{}{"a": 1})`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := writer.generateDefaultValue(tt.value, tt.fieldType)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFileWriter_GeneratePrefaultValue(t *testing.T) {
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err, "Failed to create writer")
+
+	tests := []struct {
+		name      string
+		value     string
+		fieldType reflect.Type
+		expected  string
+	}{
+		{name: "string", value: "hello", fieldType: reflect.TypeOf(""), expected: `.Prefault("hello")`},
+		{name: "int", value: "42", fieldType: reflect.TypeOf(0), expected: ".Prefault(42)"},
+		{name: "int64", value: "100", fieldType: reflect.TypeOf(int64(0)), expected: ".Prefault(100)"},
+		{name: "uint", value: "10", fieldType: reflect.TypeOf(uint(0)), expected: ".Prefault(10)"},
+		{name: "float64", value: "3.14", fieldType: reflect.TypeOf(0.0), expected: ".Prefault(3.14)"},
+		{name: "bool", value: "true", fieldType: reflect.TypeOf(false), expected: ".Prefault(true)"},
+		{name: "pointer string", value: "world", fieldType: reflect.TypeOf((*string)(nil)), expected: `.Prefault("world")`},
+		// Slice types
+		{name: "string slice", value: `["x","y"]`, fieldType: reflect.TypeOf([]string{}), expected: `.Prefault([]string{"x", "y"})`},
+		{name: "int slice", value: `[4,5,6]`, fieldType: reflect.TypeOf([]int{}), expected: `.Prefault([]int{4, 5, 6})`},
+		{name: "float slice", value: `[3.3,4.4]`, fieldType: reflect.TypeOf([]float64{}), expected: `.Prefault([]float64{3.3, 4.4})`},
+		{name: "bool slice", value: `[false,true]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Prefault([]bool{false, true})`},
+		// Map types
+		{name: "string map", value: `{"foo":"bar"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Prefault(map[string]string{"foo": "bar"})`},
+		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeOf(map[string]interface{}{}), expected: `.Prefault(map[string]interface{}{"x": 99})`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := writer.generatePrefaultValue(tt.value, tt.fieldType)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFileWriter_FirstLowerCase(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "simple", input: "User", expected: "user"},
+		{name: "acronym", input: "APIResponse", expected: "apiresponse"}, // All-caps prefix all lowercased
+		{name: "http", input: "HTTPClient", expected: "httpclient"},      // All-caps prefix all lowercased
+		{name: "xml", input: "XMLParser", expected: "xmlparser"},         // All caps then lowercase
+		{name: "single char", input: "A", expected: "a"},
+		{name: "empty", input: "", expected: ""},
+		{name: "generic", input: "Response[T any]", expected: "response"},
+		{name: "already lower", input: "user", expected: "user"},
+		{name: "two chars", input: "ID", expected: "iD"}, // Only first char lowercased, not reaching acronym branch
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := firstLowerCase(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFileWriter_ReceiverName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "simple", input: "User", expected: "u"},
+		{name: "camelCase", input: "UserProfile", expected: "up"},
+		{name: "acronym", input: "APIResponse", expected: "a"},      // All-caps prefix → first letter only
+		{name: "empty", input: "", expected: "x"},
+		{name: "generic", input: "Response[T any]", expected: "r"},
+		{name: "reserved type", input: "Type", expected: "t"},       // Not exactly "type"
+		{name: "reserved interface", input: "Interface", expected: "i"}, // Not exactly "interface"
+		{name: "reserved struct", input: "Struct", expected: "s"},   // Not exactly "struct"
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := receiverName(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

@@ -692,6 +692,136 @@ func TestSlice_Check(t *testing.T) {
 	})
 }
 
+// =============================================================================
+// StrictParse tests
+// =============================================================================
+
+func TestSlice_StrictParse(t *testing.T) {
+	t.Run("basic StrictParse with value type", func(t *testing.T) {
+		schema := Slice[string](String())
+
+		input := []string{"hello", "world"}
+		result, err := schema.StrictParse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"hello", "world"}, result)
+	})
+
+	t.Run("StrictParse with validation constraints", func(t *testing.T) {
+		schema := Slice[string](String().Min(3)).Min(2).Max(5)
+
+		// Valid input
+		input := []string{"hello", "world", "test"}
+		result, err := schema.StrictParse(input)
+		require.NoError(t, err)
+		assert.Equal(t, input, result)
+
+		// Invalid: slice too short
+		shortInput := []string{"hello"}
+		_, err = schema.StrictParse(shortInput)
+		assert.Error(t, err)
+
+		// Invalid: element too short
+		invalidElement := []string{"hi", "hello", "world"}
+		_, err = schema.StrictParse(invalidElement)
+		assert.Error(t, err)
+	})
+
+	t.Run("StrictParse with int slice", func(t *testing.T) {
+		schema := Slice[int](Int().Min(0))
+
+		input := []int{1, 2, 3, 4, 5}
+		result, err := schema.StrictParse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, result)
+
+		// Invalid: negative number
+		invalidInput := []int{1, -2, 3}
+		_, err = schema.StrictParse(invalidInput)
+		assert.Error(t, err)
+	})
+
+	t.Run("StrictParse with pointer type from Optional", func(t *testing.T) {
+		schema := Slice[string](String()).Optional()
+
+		// Valid input
+		input := []string{"test"}
+		result, err := schema.StrictParse(&input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, input, *result)
+
+		// Nil input
+		nilResult, err := schema.StrictParse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, nilResult)
+	})
+
+	t.Run("StrictParse with pointer type from Nilable", func(t *testing.T) {
+		schema := Slice[int](Int()).Nilable()
+
+		// Valid input
+		input := []int{10, 20, 30}
+		result, err := schema.StrictParse(&input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, input, *result)
+
+		// Nil input
+		nilResult, err := schema.StrictParse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, nilResult)
+	})
+
+	t.Run("StrictParse empty slice", func(t *testing.T) {
+		schema := Slice[string](String())
+
+		input := []string{}
+		result, err := schema.StrictParse(input)
+		require.NoError(t, err)
+		assert.Equal(t, []string{}, result)
+	})
+
+	t.Run("MustStrictParse success", func(t *testing.T) {
+		schema := Slice[string](String())
+
+		input := []string{"a", "b", "c"}
+		result := schema.MustStrictParse(input)
+		assert.Equal(t, []string{"a", "b", "c"}, result)
+	})
+
+	t.Run("MustStrictParse panic on error", func(t *testing.T) {
+		schema := Slice[string](String().Min(5))
+
+		assert.Panics(t, func() {
+			schema.MustStrictParse([]string{"hi"}) // "hi" is too short
+		})
+	})
+
+	t.Run("StrictParse with SlicePtr constructor", func(t *testing.T) {
+		schema := SlicePtr[int](Int())
+
+		input := []int{1, 2, 3}
+		result, err := schema.StrictParse(&input)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, []int{1, 2, 3}, *result)
+	})
+
+	t.Run("StrictParse preserves validation behavior", func(t *testing.T) {
+		// Test that StrictParse applies the same validations as Parse
+		schema := Slice[int](Int().Min(10)).Min(2)
+
+		// Both Parse and StrictParse should fail for the same invalid input
+		invalidInput := []int{5, 8} // elements < 10
+
+		_, parseErr := schema.Parse(invalidInput)
+		_, strictParseErr := schema.StrictParse(invalidInput)
+
+		assert.Error(t, parseErr)
+		assert.Error(t, strictParseErr)
+	})
+}
+
 // TestSlice_MultipleErrorCollection tests that slice validation collects multiple errors
 // following TypeScript Zod v4 array behavior (unlike tuples which fail fast)
 func TestSlice_MultipleErrorCollection(t *testing.T) {

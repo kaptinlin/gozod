@@ -32,12 +32,40 @@ func (z *ZodTransform[In, Out]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
+// IsOptional returns true if this schema accepts undefined/missing values
+func (z *ZodTransform[In, Out]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
+
+// IsNilable returns true if this schema accepts nil values
+func (z *ZodTransform[In, Out]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
+
 // Parse applies the transformation to the input value.
-func (z *ZodTransform[In, Out]) Parse(input any) (any, error) {
+func (z *ZodTransform[In, Out]) Parse(input any, ctx ...*core.ParseContext) (any, error) {
 	// The actual transformation logic is handled by the engine,
 	// which will call the transform function from internals.
 	// This Parse method is here to satisfy the ZodType interface.
-	return z.internals.Def.transform(input, nil)
+	var refinementCtx *core.RefinementContext
+	if len(ctx) > 0 && ctx[0] != nil {
+		refinementCtx = &core.RefinementContext{ParseContext: ctx[0]}
+	}
+	return z.internals.Def.transform(input, refinementCtx)
+}
+
+// MustParse applies the transformation and panics on error
+func (z *ZodTransform[In, Out]) MustParse(input any, ctx ...*core.ParseContext) any {
+	result, err := z.Parse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// ParseAny validates input and returns untyped result for runtime scenarios
+func (z *ZodTransform[In, Out]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return z.Parse(input, ctx...)
 }
 
 // StrictParse validates the input using strict parsing rules and returns the transformed result

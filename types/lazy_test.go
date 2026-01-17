@@ -1,7 +1,9 @@
 package types
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
@@ -1096,6 +1098,155 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 		result, canCoerce := lazySchema.Coerce("test")
 		assert.False(t, canCoerce)
 		assert.Equal(t, "test", result)
+	})
+}
+
+// =============================================================================
+// Concurrent thread-safety tests (sync.Once)
+// =============================================================================
+
+func TestLazy_ConcurrentAccess(t *testing.T) {
+	t.Run("concurrent getInnerType calls are thread-safe", func(t *testing.T) {
+		evaluationCount := 0
+		var mu sync.Mutex
+
+		schema := LazyAny(func() any {
+			mu.Lock()
+			evaluationCount++
+			mu.Unlock()
+			// Simulate some work
+			time.Sleep(time.Millisecond)
+			return String().Min(3)
+		})
+
+		// Launch multiple goroutines that all try to parse concurrently
+		const numGoroutines = 100
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+
+		results := make([]any, numGoroutines)
+		errs := make([]error, numGoroutines)
+
+		for i := range numGoroutines {
+			go func(idx int) {
+				defer wg.Done()
+				results[idx], errs[idx] = schema.Parse("hello")
+			}(i)
+		}
+
+		wg.Wait()
+
+		// All parses should succeed
+		for i := range numGoroutines {
+			require.NoError(t, errs[i], "Goroutine %d failed", i)
+			assert.Equal(t, "hello", results[i], "Goroutine %d got wrong result", i)
+		}
+
+		// The getter function should have been called exactly once due to sync.Once
+		mu.Lock()
+		count := evaluationCount
+		mu.Unlock()
+		assert.Equal(t, 1, count, "Getter should be called exactly once with sync.Once")
+	})
+
+	t.Run("concurrent access with type-safe Lazy", func(t *testing.T) {
+		evaluationCount := 0
+		var mu sync.Mutex
+
+		schema := Lazy[*ZodString[string]](func() *ZodString[string] {
+			mu.Lock()
+			evaluationCount++
+			mu.Unlock()
+			time.Sleep(time.Millisecond)
+			return String().Min(2)
+		})
+
+		const numGoroutines = 50
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+
+		for i := range numGoroutines {
+			go func(idx int) {
+				defer wg.Done()
+				result, err := schema.Parse("test")
+				require.NoError(t, err)
+				assert.Equal(t, "test", result)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Verify getter was called only once
+		mu.Lock()
+		count := evaluationCount
+		mu.Unlock()
+		assert.Equal(t, 1, count, "Type-safe Lazy getter should be called exactly once")
+	})
+
+	t.Run("concurrent Unwrap calls are thread-safe", func(t *testing.T) {
+		evaluationCount := 0
+		var mu sync.Mutex
+
+		schema := LazyAny(func() any {
+			mu.Lock()
+			evaluationCount++
+			mu.Unlock()
+			time.Sleep(time.Millisecond)
+			return Bool()
+		})
+
+		const numGoroutines = 50
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+
+		for range numGoroutines {
+			go func() {
+				defer wg.Done()
+				unwrapped := schema.Unwrap()
+				assert.NotNil(t, unwrapped)
+			}()
+		}
+
+		wg.Wait()
+
+		mu.Lock()
+		count := evaluationCount
+		mu.Unlock()
+		assert.Equal(t, 1, count, "Unwrap should trigger getter exactly once")
+	})
+
+	t.Run("cloned lazy schema has independent sync.Once", func(t *testing.T) {
+		originalEvalCount := 0
+		var mu sync.Mutex
+
+		original := LazyAny(func() any {
+			mu.Lock()
+			originalEvalCount++
+			mu.Unlock()
+			return String()
+		})
+
+		// Force evaluation on original
+		_, err := original.Parse("test")
+		require.NoError(t, err)
+
+		mu.Lock()
+		assert.Equal(t, 1, originalEvalCount)
+		mu.Unlock()
+
+		// Clone via Optional (creates new instance)
+		cloned := original.Optional()
+
+		// Parse on cloned should work without re-evaluating original's getter
+		// because cloned inherits cached state
+		result, err := cloned.Parse("hello")
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+
+		mu.Lock()
+		// Original getter should still be 1 (cloned uses cached inner type)
+		assert.Equal(t, 1, originalEvalCount, "Cloned schema should use cached inner type")
+		mu.Unlock()
 	})
 }
 

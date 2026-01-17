@@ -357,3 +357,151 @@ func TestBool_ComplexTransform(t *testing.T) {
 		t.Errorf("expected timeout to be 30, got %v", config["timeout"])
 	}
 }
+
+// =============================================================================
+// ZodTransform interface methods tests
+// =============================================================================
+
+func TestZodTransform_InterfaceMethods(t *testing.T) {
+	t.Run("IsOptional returns false for non-optional transform", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return strings.ToUpper(s), nil
+		})
+
+		assert.False(t, transform.IsOptional(), "Non-optional transform should return false")
+	})
+
+	t.Run("IsOptional returns true for optional schema", func(t *testing.T) {
+		// For optional, we check the inner schema's optional status
+		optionalSchema := String().Optional()
+		assert.True(t, optionalSchema.IsOptional(), "Optional schema should return true")
+	})
+
+	t.Run("IsNilable returns false for non-nilable transform", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return len(s), nil
+		})
+
+		assert.False(t, transform.IsNilable(), "Non-nilable transform should return false")
+	})
+
+	t.Run("IsNilable returns true for nilable schema", func(t *testing.T) {
+		// For nilable, we check the inner schema's nilable status
+		nilableSchema := String().Nilable()
+		assert.True(t, nilableSchema.IsNilable(), "Nilable schema should return true")
+	})
+
+	t.Run("MustParse succeeds for valid input", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return strings.ToUpper(s), nil
+		})
+
+		result := transform.MustParse("hello")
+		assert.Equal(t, "HELLO", result)
+	})
+
+	t.Run("MustParse panics for invalid input", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return strings.ToUpper(s), nil
+		})
+
+		assert.Panics(t, func() {
+			transform.MustParse(123) // Invalid input type
+		})
+	})
+
+	t.Run("MustParse panics when transform returns error", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			if s == "" {
+				return nil, fmt.Errorf("%w: empty string", errTransformError)
+			}
+			return s, nil
+		})
+
+		assert.Panics(t, func() {
+			transform.MustParse("") // Will trigger transform error
+		})
+	})
+
+	t.Run("ParseAny returns any type result", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return len(s), nil
+		})
+
+		result, err := transform.ParseAny("hello")
+		require.NoError(t, err)
+		assert.Equal(t, 5, result)
+		assert.IsType(t, 0, result) // Result should be int
+	})
+
+	t.Run("ParseAny with empty string", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			if s == "" {
+				return "was empty", nil
+			}
+			return s, nil
+		})
+
+		result, err := transform.ParseAny("")
+		require.NoError(t, err)
+		assert.Equal(t, "was empty", result)
+	})
+
+	t.Run("ParseAny returns error for invalid input", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return s, nil
+		})
+
+		_, err := transform.ParseAny(123) // Invalid type
+		assert.Error(t, err)
+	})
+
+	t.Run("Parse with context parameter", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return "transformed:" + s, nil
+		})
+
+		ctx := core.NewParseContext()
+		result, err := transform.Parse("test", ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "transformed:test", result)
+	})
+
+	t.Run("MustParse with context parameter", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return strings.ToLower(s), nil
+		})
+
+		ctx := core.NewParseContext()
+		result := transform.MustParse("HELLO", ctx)
+		assert.Equal(t, "hello", result)
+	})
+
+	t.Run("GetInternals returns valid internals", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return s, nil
+		})
+
+		internals := transform.GetInternals()
+		assert.NotNil(t, internals)
+	})
+
+	t.Run("internals Type is ZodTypeTransform", func(t *testing.T) {
+		transform := String().Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return s, nil
+		})
+
+		internals := transform.GetInternals()
+		assert.Equal(t, core.ZodTypeTransform, internals.Type)
+	})
+
+	t.Run("GetInner returns the inner schema", func(t *testing.T) {
+		innerSchema := String().Min(5)
+		transform := innerSchema.Transform(func(s string, ctx *core.RefinementContext) (any, error) {
+			return s, nil
+		})
+
+		inner := transform.GetInner()
+		assert.NotNil(t, inner)
+	})
+}

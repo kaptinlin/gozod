@@ -821,3 +821,280 @@ func TestIPv6_TypeSafety(t *testing.T) {
 		assert.Equal(t, "2001:db8::1", *ptrResult)
 	})
 }
+
+// =============================================================================
+// HOSTNAME REFINE TESTS
+// =============================================================================
+
+func TestHostname_Refine(t *testing.T) {
+	t.Run("refine with string type", func(t *testing.T) {
+		// Only accept hostnames ending with ".com"
+		schema := Hostname().Refine(func(h string) bool {
+			return len(h) > 4 && h[len(h)-4:] == ".com"
+		})
+
+		result, err := schema.Parse("example.com")
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", result)
+
+		_, err = schema.Parse("example.org")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with pointer type", func(t *testing.T) {
+		schema := HostnamePtr().Refine(func(h *string) bool {
+			return h != nil && len(*h) > 5
+		})
+
+		result, err := schema.Parse("example.com")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "example.com", *result)
+
+		_, err = schema.Parse("a.co")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Hostname must be a .io domain"
+		schema := Hostname().Refine(func(h string) bool {
+			return len(h) > 3 && h[len(h)-3:] == ".io"
+		}, core.SchemaParams{Error: errorMessage})
+
+		_, err := schema.Parse("example.com")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with nilable pointer", func(t *testing.T) {
+		schema := HostnamePtr().Nilable().Refine(func(h *string) bool {
+			return h == nil || len(*h) > 3
+		})
+
+		// Nil should pass
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid hostname should pass
+		result, err = schema.Parse("test.com")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test.com", *result)
+	})
+}
+
+func TestHostname_RefineAny(t *testing.T) {
+	t.Run("refineAny with string schema", func(t *testing.T) {
+		// Only accept hostnames containing "test"
+		schema := Hostname().RefineAny(func(v any) bool {
+			if h, ok := v.(string); ok {
+				for i := 0; i <= len(h)-4; i++ {
+					if h[i:i+4] == "test" {
+						return true
+					}
+				}
+			}
+			return false
+		})
+
+		result, err := schema.Parse("test.example.com")
+		require.NoError(t, err)
+		assert.Equal(t, "test.example.com", result)
+
+		_, err = schema.Parse("prod.example.com")
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny with pointer schema", func(t *testing.T) {
+		schema := HostnamePtr().RefineAny(func(v any) bool {
+			if h, ok := v.(string); ok {
+				return len(h) >= 5
+			}
+			return false
+		})
+
+		result, err := schema.Parse("hello.com")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "hello.com", *result)
+	})
+}
+
+// =============================================================================
+// MAC ADDRESS REFINE TESTS
+// =============================================================================
+
+func TestMAC_Refine(t *testing.T) {
+	t.Run("refine with string type", func(t *testing.T) {
+		// Only accept MACs starting with specific vendor prefix
+		schema := MAC().Refine(func(m string) bool {
+			return len(m) >= 8 && m[:8] == "00:1A:2B"
+		})
+
+		result, err := schema.Parse("00:1A:2B:3C:4D:5E")
+		require.NoError(t, err)
+		assert.Equal(t, "00:1A:2B:3C:4D:5E", result)
+
+		_, err = schema.Parse("AA:BB:CC:DD:EE:FF")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with pointer type", func(t *testing.T) {
+		schema := MACPtr().Refine(func(m *string) bool {
+			return m != nil && len(*m) == 17
+		})
+
+		result, err := schema.Parse("00:11:22:33:44:55")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "00:11:22:33:44:55", *result)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "MAC must be from approved vendor"
+		schema := MAC().Refine(func(m string) bool {
+			return len(m) >= 2 && m[:2] == "AA"
+		}, core.SchemaParams{Error: errorMessage})
+
+		_, err := schema.Parse("00:11:22:33:44:55")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with nilable pointer", func(t *testing.T) {
+		schema := MACPtr().Nilable().Refine(func(m *string) bool {
+			return m == nil || len(*m) > 0
+		})
+
+		// Nil should pass
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid MAC should pass
+		result, err = schema.Parse("00:11:22:33:44:55")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+}
+
+func TestMAC_RefineAny(t *testing.T) {
+	t.Run("refineAny with string schema", func(t *testing.T) {
+		// Validate MAC contains uppercase letters
+		schema := MAC().RefineAny(func(v any) bool {
+			if m, ok := v.(string); ok {
+				for _, c := range m {
+					if c >= 'A' && c <= 'F' {
+						return true
+					}
+				}
+			}
+			return false
+		})
+
+		result, err := schema.Parse("AA:BB:CC:DD:EE:FF")
+		require.NoError(t, err)
+		assert.Equal(t, "AA:BB:CC:DD:EE:FF", result)
+
+		_, err = schema.Parse("00:11:22:33:44:55")
+		assert.Error(t, err)
+	})
+
+	t.Run("refineAny with pointer schema", func(t *testing.T) {
+		schema := MACPtr().RefineAny(func(v any) bool {
+			if m, ok := v.(string); ok {
+				return len(m) == 17
+			}
+			return false
+		})
+
+		result, err := schema.Parse("00:11:22:33:44:55")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+}
+
+// =============================================================================
+// E164 REFINE TESTS
+// =============================================================================
+
+func TestE164_Refine(t *testing.T) {
+	t.Run("refine with string type", func(t *testing.T) {
+		// Only accept US phone numbers (+1)
+		schema := E164().Refine(func(p string) bool {
+			return len(p) > 2 && p[:2] == "+1"
+		})
+
+		result, err := schema.Parse("+14155551234")
+		require.NoError(t, err)
+		assert.Equal(t, "+14155551234", result)
+
+		_, err = schema.Parse("+442071234567")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with pointer type", func(t *testing.T) {
+		schema := E164Ptr().Refine(func(p *string) bool {
+			return p != nil && len(*p) >= 10
+		})
+
+		result, err := schema.Parse("+14155551234")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "+14155551234", *result)
+	})
+
+	t.Run("refine with custom error message", func(t *testing.T) {
+		errorMessage := "Phone number must be from UK"
+		schema := E164().Refine(func(p string) bool {
+			return len(p) > 3 && p[:3] == "+44"
+		}, core.SchemaParams{Error: errorMessage})
+
+		_, err := schema.Parse("+14155551234")
+		assert.Error(t, err)
+	})
+
+	t.Run("refine with nilable pointer", func(t *testing.T) {
+		schema := E164Ptr().Nilable().Refine(func(p *string) bool {
+			return p == nil || len(*p) >= 8
+		})
+
+		// Nil should pass
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+
+		// Valid E164 should pass
+		result, err = schema.Parse("+14155551234")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+}
+
+func TestE164_RefineAny(t *testing.T) {
+	t.Run("refineAny with string schema", func(t *testing.T) {
+		// Validate phone number length
+		schema := E164().RefineAny(func(v any) bool {
+			if p, ok := v.(string); ok {
+				return len(p) >= 10 && len(p) <= 15
+			}
+			return false
+		})
+
+		result, err := schema.Parse("+14155551234")
+		require.NoError(t, err)
+		assert.Equal(t, "+14155551234", result)
+	})
+
+	t.Run("refineAny with pointer schema", func(t *testing.T) {
+		schema := E164Ptr().RefineAny(func(v any) bool {
+			if p, ok := v.(string); ok {
+				return len(p) > 1 && p[0] == '+'
+			}
+			return false
+		})
+
+		result, err := schema.Parse("+14155551234")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+	})
+}

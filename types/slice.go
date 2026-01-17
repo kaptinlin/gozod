@@ -114,13 +114,10 @@ func (z *ZodSlice[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 
 // StrictParse provides compile-time type safety by requiring exact type matching.
 // This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
-func (z *ZodSlice[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	// Convert T to R for ParseComplexStrict
-	constraintInput := convertToSliceConstraintType[T, R](input)
-
+// The input must exactly match the schema's constraint type R ([]T or *[]T).
+func (z *ZodSlice[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
 	result, err := engine.ParseComplexStrict[[]T, R](
-		constraintInput,
+		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeSlice,
 		z.extractSlice,
@@ -138,7 +135,7 @@ func (z *ZodSlice[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 
 // MustStrictParse validates input with compile-time type safety and panics on failure.
 // This method provides zero-overhead abstraction with strict type constraints.
-func (z *ZodSlice[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+func (z *ZodSlice[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)

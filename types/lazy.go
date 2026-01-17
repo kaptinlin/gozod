@@ -1,6 +1,8 @@
 package types
 
 import (
+	"sync"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
@@ -39,6 +41,7 @@ type ZodLazyInternals struct {
 	Getter    func() any        // Schema getter function that returns any schema type
 	InnerType core.ZodType[any] // Cached inner schema (converted to interface)
 	Cached    bool              // Whether inner schema is cached
+	once      sync.Once         // Ensures thread-safe lazy initialization
 }
 
 // ZodLazy represents a lazy validation schema for recursive type definitions
@@ -388,13 +391,18 @@ func (z *ZodLazy[T]) Unwrap() core.ZodType[any] {
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// getInnerType implements lazy evaluation with caching
+// getInnerType implements lazy evaluation with thread-safe caching using sync.Once
 func (z *ZodLazy[T]) getInnerType() core.ZodType[any] {
-	if !z.internals.Cached {
+	// Fast path: if already cached (e.g., from cloned internals), return immediately
+	if z.internals.Cached {
+		return z.internals.InnerType
+	}
+	// Thread-safe initialization for first access
+	z.internals.once.Do(func() {
 		rawSchema := z.internals.Getter()
 		z.internals.InnerType = convertToAnyInterface(rawSchema)
 		z.internals.Cached = true
-	}
+	})
 	return z.internals.InnerType
 }
 
@@ -596,7 +604,13 @@ func (z *ZodLazy[T]) withInternals(in *core.ZodTypeInternals) *ZodLazy[T] {
 func (z *ZodLazy[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodLazy[T]); ok {
 		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
+		// Copy fields individually to avoid copying sync.Once (which contains sync.noCopy)
+		z.internals.ZodTypeInternals = src.internals.ZodTypeInternals
+		z.internals.Def = src.internals.Def
+		z.internals.Getter = src.internals.Getter
+		z.internals.InnerType = src.internals.InnerType
+		z.internals.Cached = src.internals.Cached
+		// Note: once is intentionally not copied - new instance gets fresh sync.Once
 		z.internals.Checks = originalChecks
 	}
 }
