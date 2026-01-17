@@ -147,29 +147,24 @@ func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		isPointerConstraint = true
 	}
 
-	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParsePrimitive
-	// But only if no other modifiers (Optional, Nilable, Prefault) are set
-	originalInternals := z.internals
+	// Prepare internals for parsing - use local variable to avoid race conditions
+	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation
+	internalsForParsing := &z.internals.ZodTypeInternals
 	if isPointerConstraint &&
-		!originalInternals.Optional &&
-		!originalInternals.Nilable &&
-		originalInternals.PrefaultValue == nil &&
-		originalInternals.PrefaultFunc == nil {
-		// Create a copy of internals with Optional flag temporarily enabled
-		tempInternals := *originalInternals
-		tempInternals.SetOptional(true)
-		z.internals = &tempInternals
-
-		// Restore original internals after parsing
-		defer func() {
-			z.internals = originalInternals
-		}()
+		!z.internals.Optional &&
+		!z.internals.Nilable &&
+		z.internals.PrefaultValue == nil &&
+		z.internals.PrefaultFunc == nil {
+		// Create a local copy of internals with Optional flag temporarily enabled
+		modifiedInternals := z.internals.ZodTypeInternals
+		modifiedInternals.SetOptional(true)
+		internalsForParsing = &modifiedInternals
 	}
 
 	// Use ParsePrimitive with custom validator and converter functions
 	return engine.ParsePrimitive[T, R](
 		input,
-		&z.internals.ZodTypeInternals,
+		internalsForParsing,
 		typeCode,
 		// Validator function - validates the base type T
 		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
@@ -182,8 +177,8 @@ func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 
 			// Handle nil input for optional/nilable schemas
 			if result == nil {
-				internals := originalInternals // Use original internals for nil checking
-				if internals.Optional || internals.Nilable {
+				// Use z.internals (original) for nil checking, not the modified version
+				if z.internals.Optional || z.internals.Nilable {
 					return zeroR, nil
 				}
 				return zeroR, issues.CreateNonOptionalError(ctx)

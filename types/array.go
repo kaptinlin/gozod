@@ -63,7 +63,6 @@ func (z *ZodArray[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input using array-specific parsing logic
 // Parse validates input using array-specific parsing logic with engine.ParseComplex
 func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	result, err := engine.ParseComplex[[]any](
@@ -102,7 +101,11 @@ func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 			return typedResult, nil
 		}
 		var zero R
-		return zero, issues.CreateInvalidTypeError(core.ZodTypeArray, result, ctx[0])
+		parseCtx := core.NewParseContext()
+		if len(ctx) > 0 && ctx[0] != nil {
+			parseCtx = ctx[0]
+		}
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeArray, result, parseCtx)
 	}
 }
 

@@ -189,7 +189,7 @@ func IsoTimeTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 func IsoDuration(params ...any) *ZodIso[string]     { return IsoDurationTyped[string](params...) }
 func IsoDurationPtr(params ...any) *ZodIso[*string] { return IsoDurationTyped[*string](params...) }
 func IsoDurationTyped[T IsoConstraint](params ...any) *ZodIso[T] {
-	return IsoTyped[T](params...).Duration(params...)
+	return IsoTyped[T](params...).Duration()
 }
 
 // -----------------------------------------------------------------------------

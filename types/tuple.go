@@ -111,7 +111,11 @@ func (z *ZodTuple[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 			return typedResult, nil
 		}
 		var zero R
-		return zero, issues.CreateInvalidTypeError(core.ZodTypeTuple, result, ctx[0])
+		parseCtx := core.NewParseContext()
+		if len(ctx) > 0 && ctx[0] != nil {
+			parseCtx = ctx[0]
+		}
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeTuple, result, parseCtx)
 	}
 }
 
