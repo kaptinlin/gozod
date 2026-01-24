@@ -604,12 +604,12 @@ func TestFileWriter_ReceiverName(t *testing.T) {
 	}{
 		{name: "simple", input: "User", expected: "u"},
 		{name: "camelCase", input: "UserProfile", expected: "up"},
-		{name: "acronym", input: "APIResponse", expected: "a"},      // All-caps prefix → first letter only
+		{name: "acronym", input: "APIResponse", expected: "a"}, // All-caps prefix → first letter only
 		{name: "empty", input: "", expected: "x"},
 		{name: "generic", input: "Response[T any]", expected: "r"},
-		{name: "reserved type", input: "Type", expected: "t"},       // Not exactly "type"
+		{name: "reserved type", input: "Type", expected: "t"},           // Not exactly "type"
 		{name: "reserved interface", input: "Interface", expected: "i"}, // Not exactly "interface"
-		{name: "reserved struct", input: "Struct", expected: "s"},   // Not exactly "struct"
+		{name: "reserved struct", input: "Struct", expected: "s"},       // Not exactly "struct"
 	}
 
 	for _, tt := range tests {
