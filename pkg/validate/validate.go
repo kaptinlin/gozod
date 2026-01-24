@@ -18,6 +18,16 @@ import (
 )
 
 // =============================================================================
+// PRE-COMPILED REGEX PATTERNS
+// =============================================================================
+
+// isoTimeRegex validates ISO time format: HH:MM, HH:MM:SS, HH:MM:SS.sss
+var isoTimeRegex = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
+
+// durationRegex validates ISO 8601 duration format
+var durationRegex = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
+
+// =============================================================================
 // NUMERIC VALIDATION FUNCTIONS
 // =============================================================================
 
@@ -678,12 +688,6 @@ func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
 	}
 	return false
 }
-
-// Pre-compiled regex for ISOTime validation
-var isoTimeRegex = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
-
-// Pre-compiled regex for ISODuration validation
-var durationRegex = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
 
 // ISOTime validates if string is a valid ISO time format
 func ISOTime(value any) bool {

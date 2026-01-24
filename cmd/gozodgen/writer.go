@@ -17,6 +17,33 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
+// basicTypes is a set of basic Go type names for fast lookup
+var basicTypes = map[string]bool{
+	"string": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
+	"float32": true, "float64": true, "bool": true, "complex64": true, "complex128": true,
+}
+
+// basicTypeConstructors maps basic Go types to their GoZod constructor calls
+var basicTypeConstructors = map[string]string{
+	"string":     "gozod.String()",
+	"int":        "gozod.Int()",
+	"int8":       "gozod.Int8()",
+	"int16":      "gozod.Int16()",
+	"int32":      "gozod.Int32()",
+	"int64":      "gozod.Int64()",
+	"uint":       "gozod.Uint()",
+	"uint8":      "gozod.Uint8()",
+	"uint16":     "gozod.Uint16()",
+	"uint32":     "gozod.Uint32()",
+	"uint64":     "gozod.Uint64()",
+	"float32":    "gozod.Float32()",
+	"float64":    "gozod.Float64()",
+	"bool":       "gozod.Bool()",
+	"complex64":  "gozod.Complex64()",
+	"complex128": "gozod.Complex128()",
+}
+
 // FileWriter handles the generation and writing of Go code files
 type FileWriter struct {
 	outputDir    string
@@ -454,35 +481,12 @@ func (w *FileWriter) getBaseConstructorFromTypeName(typeName, structName string)
 
 // isBasicTypeName checks if a type name is a basic Go type
 func (w *FileWriter) isBasicTypeName(typeName string) bool {
-	basicTypes := map[string]bool{
-		"string": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
-		"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
-		"float32": true, "float64": true, "bool": true, "complex64": true, "complex128": true,
-	}
 	return basicTypes[typeName]
 }
 
 // getBasicTypeConstructor returns the GoZod constructor for basic Go types
 func (w *FileWriter) getBasicTypeConstructor(typeName string) string {
-	constructors := map[string]string{
-		"string":     "gozod.String()",
-		"int":        "gozod.Int()",
-		"int8":       "gozod.Int8()",
-		"int16":      "gozod.Int16()",
-		"int32":      "gozod.Int32()",
-		"int64":      "gozod.Int64()",
-		"uint":       "gozod.Uint()",
-		"uint8":      "gozod.Uint8()",
-		"uint16":     "gozod.Uint16()",
-		"uint32":     "gozod.Uint32()",
-		"uint64":     "gozod.Uint64()",
-		"float32":    "gozod.Float32()",
-		"float64":    "gozod.Float64()",
-		"bool":       "gozod.Bool()",
-		"complex64":  "gozod.Complex64()",
-		"complex128": "gozod.Complex128()",
-	}
-	if constructor, exists := constructors[typeName]; exists {
+	if constructor, exists := basicTypeConstructors[typeName]; exists {
 		return constructor
 	}
 	return "gozod.Any()"

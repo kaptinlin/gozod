@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// Types are now defined in adapter.go
-
 // ProcessPackage analyzes and generates code for all structs in the specified package
 func (g *CodeGenerator) ProcessPackage(packagePath string) error {
 	if g.config.Verbose {

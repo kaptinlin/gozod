@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Process each package
-	var totalGenerated int
+	var totalProcessedPackages int
 	for _, pkg := range packages {
 		if *verbose {
 			log.Printf("[INFO] Processing package: %s", pkg)
@@ -91,15 +91,15 @@ func main() {
 			log.Fatalf("[ERROR] Failed to process package %s: %v", pkg, err)
 		}
 
-		totalGenerated++
+		totalProcessedPackages++
 		if *verbose {
 			log.Printf("[INFO] Processed package %s", pkg)
 		}
 	}
 
 	if *verbose {
-		if totalGenerated > 0 {
-			log.Printf("[INFO] Code generation completed! Generated %d schema methods total", totalGenerated)
+		if totalProcessedPackages > 0 {
+			log.Printf("[INFO] Code generation completed! Processed %d packages total", totalProcessedPackages)
 		} else {
 			log.Printf("[INFO] No structs found requiring code generation")
 		}

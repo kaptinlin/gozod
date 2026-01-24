@@ -33,8 +33,7 @@ type StructAnalyzer struct {
 	fset     *token.FileSet
 	packages map[string]*types.Package
 	imports  map[string]string
-	// parser   *tags.TagParser // Removed due to YAGNI refactoring
-	info *types.Info
+	info     *types.Info
 }
 
 // GenerationInfo contains information about a struct that needs code generation
@@ -60,8 +59,7 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 		fset:     token.NewFileSet(),
 		packages: make(map[string]*types.Package),
 		imports:  make(map[string]string),
-		// parser:   tags.NewTagParser(), // Removed due to YAGNI refactoring
-		info: info,
+		info:     info,
 	}, nil
 }
 

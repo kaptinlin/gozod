@@ -79,10 +79,26 @@ func ToBool(v any) (bool, error) {
 		return x, nil
 	case string:
 		return stringToBool(x)
-	case int, int8, int16, int32, int64:
-		return reflect.ValueOf(x).Int() != 0, nil
-	case uint, uint8, uint16, uint32, uint64:
-		return reflect.ValueOf(x).Uint() != 0, nil
+	case int:
+		return x != 0, nil
+	case int64:
+		return x != 0, nil
+	case int32:
+		return x != 0, nil
+	case int8:
+		return x != 0, nil
+	case int16:
+		return x != 0, nil
+	case uint:
+		return x != 0, nil
+	case uint64:
+		return x != 0, nil
+	case uint32:
+		return x != 0, nil
+	case uint8:
+		return x != 0, nil
+	case uint16:
+		return x != 0, nil
 	case float32:
 		return x != 0, nil
 	case float64:
