@@ -76,7 +76,8 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		parseCtx,
 	)
 	if err != nil {
-		return *new(R), err
+		var zero R
+		return zero, err
 	}
 	return convertToIntersectionConstraintType[T, R](result), nil
 }
@@ -561,7 +562,8 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 			// R is a pointer type, return nil pointer
 			return any((*any)(nil)).(R)
 		}
-		return *new(R)
+		var zero R
+		return zero
 	}
 
 	// Get the type of R to determine if it's a pointer type
@@ -588,7 +590,8 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 				dereferencedValue := valueReflect.Elem().Interface()
 				return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
 			}
-			return *new(R)
+			var zero R
+			return zero
 		}
 		// Direct conversion
 		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion

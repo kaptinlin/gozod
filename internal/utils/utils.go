@@ -46,7 +46,7 @@ func GetFirstParam(params ...any) any {
 // IsPrimitiveType checks if a schema type is a primitive type that supports coercion
 // Only primitive types should support coercion according to TypeScript Zod v4 alignment
 func IsPrimitiveType(typeName core.ZodTypeCode) bool {
-	switch typeName {
+	switch typeName { //nolint:exhaustive // non-primitive types handled by default
 	case core.ZodTypeString, core.ZodTypeBool, core.ZodTypeTime:
 		return true
 	case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
@@ -59,8 +59,6 @@ func IsPrimitiveType(typeName core.ZodTypeCode) bool {
 		return true
 	case core.ZodTypeBigInt:
 		return true
-	case core.ZodTypeNumber, core.ZodTypeNaN, core.ZodTypeInteger, core.ZodTypeDate, core.ZodTypeNil, core.ZodTypeAny, core.ZodTypeUnknown, core.ZodTypeNever, core.ZodTypeArray, core.ZodTypeSlice, core.ZodTypeTuple, core.ZodTypeObject, core.ZodTypeStruct, core.ZodTypeRecord, core.ZodTypeMap, core.ZodTypeSet, core.ZodTypeUnion, core.ZodTypeXor, core.ZodTypeDiscriminated, core.ZodTypeIntersection, core.ZodTypeStringBool, core.ZodTypeFunction, core.ZodTypeLazy, core.ZodTypeLiteral, core.ZodTypeEnum, core.ZodTypeOptional, core.ZodTypeNilable, core.ZodTypeDefault, core.ZodTypePrefault, core.ZodTypePipeline, core.ZodTypeTransform, core.ZodTypePipe, core.ZodTypeCustom, core.ZodTypeCheck, core.ZodTypeRefine, core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeEmail, core.ZodTypeURL, core.ZodTypeHostname, core.ZodTypeMAC, core.ZodTypeE164, core.ZodTypeIso, core.ZodTypeISODateTime, core.ZodTypeISODate, core.ZodTypeISOTime, core.ZodTypeISODuration, core.ZodTypeFile, core.ZodTypeFloat, core.ZodTypeUintptr, core.ZodTypeNonOptional:
-		return false
 	default:
 		return false
 	}
@@ -101,13 +99,11 @@ func GetNumericOrigin(value any) string {
 	default:
 		// Check for big.Int and string through reflection
 		parsedType := reflectx.ParsedType(value)
-		switch parsedType {
+		switch parsedType { //nolint:exhaustive // only bigint and string need special handling
 		case core.ParsedTypeBigint:
 			return "bigint"
 		case core.ParsedTypeString:
 			return "string"
-		case core.ParsedTypeNumber, core.ParsedTypeBool, core.ParsedTypeFloat, core.ParsedTypeObject, core.ParsedTypeFunction, core.ParsedTypeFile, core.ParsedTypeDate, core.ParsedTypeArray, core.ParsedTypeSlice, core.ParsedTypeTuple, core.ParsedTypeMap, core.ParsedTypeSet, core.ParsedTypeNaN, core.ParsedTypeNil, core.ParsedTypeComplex, core.ParsedTypeStruct, core.ParsedTypeEnum, core.ParsedTypeUnknown:
-			return "unknown"
 		default:
 			return "unknown"
 		}
@@ -139,11 +135,9 @@ func GetSizableOrigin(value any) string {
 
 	// Check parsed type for other cases
 	parsedType := reflectx.ParsedType(value)
-	switch parsedType {
+	switch parsedType { //nolint:exhaustive // only file type needs special handling
 	case core.ParsedTypeFile:
 		return "file"
-	case core.ParsedTypeString, core.ParsedTypeNumber, core.ParsedTypeBigint, core.ParsedTypeBool, core.ParsedTypeFloat, core.ParsedTypeObject, core.ParsedTypeFunction, core.ParsedTypeDate, core.ParsedTypeArray, core.ParsedTypeSlice, core.ParsedTypeTuple, core.ParsedTypeMap, core.ParsedTypeSet, core.ParsedTypeNaN, core.ParsedTypeNil, core.ParsedTypeComplex, core.ParsedTypeStruct, core.ParsedTypeEnum, core.ParsedTypeUnknown:
-		return "unknown"
 	default:
 		return "unknown"
 	}
@@ -602,11 +596,11 @@ func IsPrimitiveValue(value any) bool {
 		reflectx.IsNumeric(value)
 }
 
-// TypeDescription returns a human-readable type description for error messages
-// Delegates to pkg/reflectx.ParsedCategory for consistent behavior
+// TypeDescription returns a human-readable type description for error messages.
+// Delegates to pkg/reflectx.ParsedCategory for consistent behavior.
 func TypeDescription(value any) string {
 	if value == nil {
-		return "null"
+		return "nil"
 	}
 	return reflectx.ParsedCategory(value)
 }

@@ -16,11 +16,8 @@ var ErrInputNotMap = errors.New("input is not a map type")
 // BASIC PROPERTY OPERATIONS
 // =============================================================================
 
-// Get safely gets a property from the properties map
+// Get safely gets a property from the properties map.
 func Get(props map[string]any, key string) (any, bool) {
-	if props == nil {
-		return nil, false
-	}
 	value, exists := props[key]
 	return value, exists
 }
@@ -32,20 +29,14 @@ func Set(props map[string]any, key string, value any) {
 	}
 }
 
-// Has checks if a property exists in the properties map
+// Has checks if a property exists in the properties map.
 func Has(props map[string]any, key string) bool {
-	if props == nil {
-		return false
-	}
 	_, exists := props[key]
 	return exists
 }
 
-// Count returns the number of properties in the map
+// Count returns the number of properties in the map.
 func Count(props map[string]any) int {
-	if props == nil {
-		return 0
-	}
 	return len(props)
 }
 

@@ -26,16 +26,16 @@ func ConvertToGeneric[T any](v any) (T, error) {
 	srcVal := reflect.ValueOf(v)
 	srcType := srcVal.Type()
 
-	// 1️⃣  direct assignment (no allocation)
+	// Step 1: direct assignment (no allocation)
 	if srcType.AssignableTo(target) {
 		return v.(T), nil
 	}
 
-	// 2️⃣  reflect.Convert handles safe numeric / string casts
+	// Step 2: reflect.Convert handles safe numeric/string casts
 	if srcType.ConvertibleTo(target) {
 		return srcVal.Convert(target).Interface().(T), nil
 	}
 
-	// 3️⃣  unsupported – bail out quickly
+	// Step 3: unsupported conversion, return error
 	return zero, fmt.Errorf("unsupported conversion from %T to %v: %w", v, target, ErrUnsupportedConversion)
 }

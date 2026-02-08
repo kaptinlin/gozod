@@ -3,6 +3,9 @@ package checks
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
@@ -46,13 +49,8 @@ func TestDirectCheckCreation(t *testing.T) {
 	}
 
 	internals := check.GetZod()
-	if internals == nil {
-		t.Fatal("GetZod returned nil")
-	}
-
-	if internals.Def.Check != "test_check" {
-		t.Errorf("Expected check type 'test_check', got '%s'", internals.Def.Check)
-	}
+	require.NotNil(t, internals, "GetZod returned nil")
+	assert.Equal(t, "test_check", internals.Def.Check)
 }
 
 func TestCheckExecution(t *testing.T) {

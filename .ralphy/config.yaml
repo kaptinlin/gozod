@@ -1,0 +1,36 @@
+# Ralphy Configuration
+# https://github.com/michaelshimeles/ralphy
+
+# Project info
+project:
+  name: "gozod"
+  language: "Go"
+  framework: ""
+  description: "TypeScript Zod v4-compatible validation library for Go with compile-time type safety"
+
+# Commands (from Makefile)
+commands:
+  test: "make test"
+  lint: "make lint"
+  build: "go build ./..."
+
+# Rules - instructions the AI MUST follow
+# These are injected into every prompt
+rules:
+  - "Before implementing any feature, ALWAYS check '.reference' folder for TypeScript Zod v4 source. Consult the reference to ensure API compatibility."
+  - "Follow SOLID, KISS (Keep It Simple, Stupid), DRY (Don't Repeat Yourself), and YAGNI (You Ain't Gonna Need It) principles."
+  - "Maximize code reuse whenever possible."
+  - "Follow '.agents/rules/' guides before writing new code."
+  - "All schemas must implement both Parse (runtime flexibility) and StrictParse (compile-time type safety) methods."
+  - "Use Copy-on-Write pattern for modifiers — always clone internals before modification."
+  - "Never bypass engine APIs (ParsePrimitive/ParseComplex) — maintains consistent modifier handling."
+  - "Follow [Google Go Best Practices](https://google.github.io/go-style/best-practices)"
+  - "Follow [Google Go Decisions](https://google.github.io/go-style/decisions)"
+  - "Follow [Google Go Formatting](https://google.github.io/go-style/formatting)"
+
+# Boundaries - files/folders the AI should not modify
+boundaries:
+  never_touch:
+    - ".reference/**"
+    - "bin/**"
+    - "go.sum"

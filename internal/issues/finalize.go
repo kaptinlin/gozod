@@ -126,18 +126,6 @@ func ExtractSchemaLevelError(iss core.ZodRawIssue) string {
 		}
 	}
 
-	// Handle ZodCheckCustomInternals directly (for refine operations)
-	// Try direct field access for custom check internals
-	if customInternals, ok := iss.Inst.(interface {
-		GetZod() *core.ZodCheckInternals
-	}); ok {
-		if zodInternals := customInternals.GetZod(); zodInternals != nil {
-			if zodInternals.Def != nil && zodInternals.Def.Error != nil {
-				return (*zodInternals.Def.Error)(iss)
-			}
-		}
-	}
-
 	return ""
 }
 

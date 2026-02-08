@@ -45,29 +45,20 @@ func IsValid(v any) bool {
 	return rv.IsValid()
 }
 
-// IsBool checks if a value is a bool type
+// IsBool checks if a value is a bool type.
 func IsBool(v any) bool {
-	if v == nil {
-		return false
-	}
 	_, ok := v.(bool)
 	return ok
 }
 
-// IsString checks if a value is a string type
+// IsString checks if a value is a string type.
 func IsString(v any) bool {
-	if v == nil {
-		return false
-	}
 	_, ok := v.(string)
 	return ok
 }
 
-// IsInt checks if a value is any integer type
+// IsInt checks if a value is any integer type.
 func IsInt(v any) bool {
-	if v == nil {
-		return false
-	}
 	switch v.(type) {
 	case int, int8, int16, int32, int64:
 		return true
@@ -76,11 +67,8 @@ func IsInt(v any) bool {
 	}
 }
 
-// IsUint checks if a value is any unsigned integer type
+// IsUint checks if a value is any unsigned integer type.
 func IsUint(v any) bool {
-	if v == nil {
-		return false
-	}
 	switch v.(type) {
 	case uint, uint8, uint16, uint32, uint64, uintptr:
 		return true
@@ -89,11 +77,8 @@ func IsUint(v any) bool {
 	}
 }
 
-// IsFloat checks if a value is any float type
+// IsFloat checks if a value is any float type.
 func IsFloat(v any) bool {
-	if v == nil {
-		return false
-	}
 	switch v.(type) {
 	case float32, float64:
 		return true
@@ -102,11 +87,8 @@ func IsFloat(v any) bool {
 	}
 }
 
-// IsComplex checks if a value is any complex type
+// IsComplex checks if a value is any complex type.
 func IsComplex(v any) bool {
-	if v == nil {
-		return false
-	}
 	switch v.(type) {
 	case complex64, complex128:
 		return true
@@ -115,11 +97,8 @@ func IsComplex(v any) bool {
 	}
 }
 
-// IsBigInt checks if a value is a big.Int type
+// IsBigInt checks if a value is a big.Int type.
 func IsBigInt(v any) bool {
-	if v == nil {
-		return false
-	}
 	switch v.(type) {
 	case *big.Int, big.Int:
 		return true
@@ -197,20 +176,14 @@ func IsPointer(v any) bool {
 	return reflect.TypeOf(v).Kind() == reflect.Ptr
 }
 
-// IsError checks if a value implements the error interface
+// IsError checks if a value implements the error interface.
 func IsError(v any) bool {
-	if v == nil {
-		return false
-	}
 	_, ok := v.(error)
 	return ok
 }
 
-// IsStringer checks if a value implements the fmt.Stringer interface
+// IsStringer checks if a value implements the fmt.Stringer interface.
 func IsStringer(v any) bool {
-	if v == nil {
-		return false
-	}
 	_, ok := v.(fmt.Stringer)
 	return ok
 }
@@ -296,10 +269,10 @@ func ParsedType(v any) core.ParsedType {
 	}
 }
 
-// ParsedCategory returns the general category of a type
+// ParsedCategory returns the general category of a type using Go-idiomatic names.
 func ParsedCategory(v any) string {
 	if v == nil {
-		return "null"
+		return "nil"
 	}
 
 	if IsNumeric(v) {
@@ -309,7 +282,7 @@ func ParsedCategory(v any) string {
 		return "string"
 	}
 	if IsBool(v) {
-		return "boolean"
+		return "bool"
 	}
 	if IsArray(v) || IsSlice(v) {
 		return "array"

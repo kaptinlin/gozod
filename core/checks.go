@@ -1,18 +1,17 @@
-// Package core contains the low-level building blocks shared by every schema
-// implementation.  This file groups **validation check** primitives: the
-// interfaces, configuration objects and function signatures required to plug
-// additional constraints into any Zod schema.
+// This file groups validation check primitives: the interfaces, configuration
+// objects and function signatures required to plug additional constraints into
+// any Zod schema.
 //
-// Naming convention
+// Naming convention:
 //
-//	ZodCheck*   – general check abstractions (interface / internals / def)
-//	ZodCheckFn  – validation function executed at runtime
-//	ZodWhenFn   – predicate that decides whether the check should run
-//	ZodRefineFn – type-safe helper for simple boolean refinements
+//	ZodCheck*   - general check abstractions (interface / internals / def)
+//	ZodCheckFn  - validation function executed at runtime
+//	ZodWhenFn   - predicate that decides whether the check should run
+//	ZodRefineFn - type-safe helper for simple boolean refinements
 //
-// A *check* is therefore a self-contained unit composed of metadata +
-// execution function.  Higher-level packages (`internal/checks`, individual
-// type packages, …) create concrete checks by embedding / configuring these
+// A check is therefore a self-contained unit composed of metadata +
+// execution function. Higher-level packages (internal/checks, individual
+// type packages) create concrete checks by embedding or configuring these
 // primitives.
 package core
 
@@ -28,7 +27,7 @@ type ZodCheck interface {
 }
 
 // ZodCheckInternals contains the internal state and logic for a check.
-// This structure holds all the necessary data for executing a validation check
+// This structure holds all the necessary data for executing a validation check.
 type ZodCheckInternals struct {
 	Def      *ZodCheckDef                     // The check's definition and metadata.
 	Issc     *ZodIssueBase                    // A template for issues this check might create.
@@ -48,7 +47,7 @@ func (c *ZodCheckInternals) GetZod() *ZodCheckInternals {
 // =============================================================================
 
 // ZodCheckDef defines the static configuration for a validation check.
-// Contains the basic configuration for any validation check
+// It contains the basic configuration for any validation check.
 type ZodCheckDef struct {
 	Check string       // The unique identifier for the check (e.g., "min_length").
 	Error *ZodErrorMap // An optional custom error mapping function.
@@ -73,7 +72,7 @@ type CustomParams struct {
 }
 
 // ZodCustomParams is a type alias for CustomParams to maintain consistency
-// with TypeScript naming conventions
+// with TypeScript naming conventions.
 type ZodCustomParams = CustomParams
 
 // =============================================================================

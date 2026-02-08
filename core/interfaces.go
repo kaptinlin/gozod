@@ -1,16 +1,18 @@
+// Package core provides the foundational types, interfaces, and constants
+// shared by all schema implementations in the gozod validation library.
 package core
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
 	"sync/atomic"
 )
 
-// Static error variables to comply with err113
-var (
-	ErrSchemaNotZodSchema = fmt.Errorf("schema does not implement ZodSchema interface")
-)
+// ErrSchemaNotZodSchema is a sentinel error returned when a value does not
+// implement the ZodSchema interface.
+var ErrSchemaNotZodSchema = errors.New("schema does not implement ZodSchema interface")
 
 // =============================================================================
 // CORE SCHEMA INTERFACE & INTERNALS

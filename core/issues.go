@@ -8,16 +8,16 @@ import (
 // ERROR HANDLING TYPES
 // =============================================================================
 
-// ZodErrorMap represents a function that maps raw issues to error messages
-// Allows customization of error messages based on validation context
+// ZodErrorMap represents a function that maps raw issues to error messages.
+// It allows customization of error messages based on validation context.
 type ZodErrorMap func(ZodRawIssue) string
 
 // =============================================================================
 // ISSUE BASE TYPES
 // =============================================================================
 
-// ZodIssueBase represents the base structure for all validation issues
-// Contains common fields that all validation issues share
+// ZodIssueBase represents the base structure for all validation issues.
+// It contains common fields that all validation issues share.
 type ZodIssueBase struct {
 	Code    IssueCode `json:"code,omitempty"`  // Issue type identifier
 	Input   any       `json:"input,omitempty"` // The input that caused the issue
@@ -25,8 +25,8 @@ type ZodIssueBase struct {
 	Message string    `json:"message"`         // Human-readable error message
 }
 
-// ZodRawIssue represents a raw issue before finalization
-// Used internally during validation before converting to final ZodIssue
+// ZodRawIssue represents a raw issue before finalization.
+// It is used internally during validation before converting to final ZodIssue.
 type ZodRawIssue struct {
 	Code       IssueCode      `json:"code"`                 // Issue type code
 	Input      any            `json:"input,omitempty"`      // Input value that failed
@@ -37,8 +37,8 @@ type ZodRawIssue struct {
 	Inst       any            `json:"-"`                    // Instance that generated the issue
 }
 
-// ZodIssue represents a finalized validation issue
-// This is the final form of validation issues after processing
+// ZodIssue represents a finalized validation issue.
+// This is the final form of validation issues after processing.
 type ZodIssue struct {
 	ZodIssueBase
 	Expected  ZodTypeCode    `json:"expected,omitempty"`  // Expected type or value
@@ -67,16 +67,16 @@ type ZodIssue struct {
 // SPECIALIZED ISSUE TYPES
 // =============================================================================
 
-// ZodIssueInvalidType represents invalid type error
-// Used when the input type doesn't match the expected type
+// ZodIssueInvalidType represents an invalid type error.
+// It is used when the input type does not match the expected type.
 type ZodIssueInvalidType struct {
 	ZodIssueBase
 	Expected ZodTypeCode `json:"expected"` // Expected type name
 	Received ZodTypeCode `json:"received"` // Actual type name
 }
 
-// ZodIssueInvalidValue represents invalid value error
-// Used when the input value is not in the allowed set
+// ZodIssueInvalidValue represents an invalid value error.
+// It is used when the input value is not in the allowed set.
 type ZodIssueInvalidValue struct {
 	ZodIssueBase
 	Options []any `json:"options"` // List of valid options
@@ -86,63 +86,63 @@ type ZodIssueInvalidValue struct {
 // ZODISSUE METHODS
 // =============================================================================
 
-// GetMinimum returns the minimum value if present
+// GetMinimum returns the minimum value if present.
 func (z *ZodIssue) GetMinimum() (any, bool) {
 	return z.Minimum, z.Minimum != nil
 }
 
-// GetMaximum returns the maximum value if present
+// GetMaximum returns the maximum value if present.
 func (z *ZodIssue) GetMaximum() (any, bool) {
 	return z.Maximum, z.Maximum != nil
 }
 
-// Error implements the error interface for ZodIssue
+// Error implements the error interface for ZodIssue.
 func (z ZodIssue) Error() string {
 	return z.Message
 }
 
-// String returns string representation of ZodIssue for debugging
+// String returns a string representation of ZodIssue for debugging.
 func (z ZodIssue) String() string {
 	return fmt.Sprintf("ZodIssue{Code: %s, Message: %s, Path: %v}", z.Code, z.Message, z.Path)
 }
 
-// GetExpected returns the expected type for invalid_type issues
-func (i ZodIssue) GetExpected() (ZodTypeCode, bool) {
-	if i.Code != InvalidType {
+// GetExpected returns the expected type for invalid_type issues.
+func (z ZodIssue) GetExpected() (ZodTypeCode, bool) {
+	if z.Code != InvalidType {
 		return "", false
 	}
-	return i.Expected, i.Expected != ""
+	return z.Expected, z.Expected != ""
 }
 
-// GetReceived returns the received type for invalid_type issues
-func (i ZodIssue) GetReceived() (ZodTypeCode, bool) {
-	if i.Code != InvalidType {
+// GetReceived returns the received type for invalid_type issues.
+func (z ZodIssue) GetReceived() (ZodTypeCode, bool) {
+	if z.Code != InvalidType {
 		return "", false
 	}
-	return i.Received, i.Received != ""
+	return z.Received, z.Received != ""
 }
 
-// GetFormat returns the format for invalid_format issues
-func (i ZodIssue) GetFormat() (string, bool) {
-	if i.Code != InvalidFormat {
+// GetFormat returns the format for invalid_format issues.
+func (z ZodIssue) GetFormat() (string, bool) {
+	if z.Code != InvalidFormat {
 		return "", false
 	}
-	return i.Format, i.Format != ""
+	return z.Format, z.Format != ""
 }
 
-// GetDivisor returns the divisor for not_multiple_of issues
-func (i ZodIssue) GetDivisor() (any, bool) {
-	if i.Code != NotMultipleOf {
+// GetDivisor returns the divisor for not_multiple_of issues.
+func (z ZodIssue) GetDivisor() (any, bool) {
+	if z.Code != NotMultipleOf {
 		return nil, false
 	}
-	return i.Divisor, i.Divisor != nil
+	return z.Divisor, z.Divisor != nil
 }
 
 // =============================================================================
 // ZODRAWISSUE ACCESSOR METHODS
 // =============================================================================
 
-// getStringProperty safely gets a string property from the properties map
+// getStringProperty safely gets a string property from the properties map.
 func getStringProperty(properties map[string]any, key string) string {
 	if properties == nil {
 		return ""
@@ -153,7 +153,7 @@ func getStringProperty(properties map[string]any, key string) string {
 	return ""
 }
 
-// getZodTypeCodeProperty safely gets a ZodTypeCode property from the properties map
+// getZodTypeCodeProperty safely gets a ZodTypeCode property from the properties map.
 func getZodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
 	if properties == nil {
 		return ""
@@ -167,47 +167,47 @@ func getZodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
 	return ""
 }
 
-// GetExpected returns the expected value from properties map
+// GetExpected returns the expected value from properties map.
 func (r ZodRawIssue) GetExpected() ZodTypeCode {
 	return getZodTypeCodeProperty(r.Properties, "expected")
 }
 
-// GetReceived returns the received value from properties map
+// GetReceived returns the received value from properties map.
 func (r ZodRawIssue) GetReceived() ZodTypeCode {
 	return getZodTypeCodeProperty(r.Properties, "received")
 }
 
-// GetOrigin returns the origin value from properties map
+// GetOrigin returns the origin value from properties map.
 func (r ZodRawIssue) GetOrigin() string {
 	return getStringProperty(r.Properties, "origin")
 }
 
-// GetFormat returns the format value from properties map
+// GetFormat returns the format value from properties map.
 func (r ZodRawIssue) GetFormat() string {
 	return getStringProperty(r.Properties, "format")
 }
 
-// GetPattern returns the pattern value from properties map
+// GetPattern returns the pattern value from properties map.
 func (r ZodRawIssue) GetPattern() string {
 	return getStringProperty(r.Properties, "pattern")
 }
 
-// GetPrefix returns the prefix value from properties map
+// GetPrefix returns the prefix value from properties map.
 func (r ZodRawIssue) GetPrefix() string {
 	return getStringProperty(r.Properties, "prefix")
 }
 
-// GetSuffix returns the suffix value from properties map
+// GetSuffix returns the suffix value from properties map.
 func (r ZodRawIssue) GetSuffix() string {
 	return getStringProperty(r.Properties, "suffix")
 }
 
-// GetIncludes returns the includes value from properties map
+// GetIncludes returns the includes value from properties map.
 func (r ZodRawIssue) GetIncludes() string {
 	return getStringProperty(r.Properties, "includes")
 }
 
-// getProperty safely gets a property from the properties map
+// getProperty safely gets a property from the properties map.
 func (r ZodRawIssue) getProperty(key string) any {
 	if r.Properties == nil {
 		return nil
@@ -215,13 +215,13 @@ func (r ZodRawIssue) getProperty(key string) any {
 	return r.Properties[key]
 }
 
-// GetMinimum returns the minimum value from properties map
+// GetMinimum returns the minimum value from properties map.
 func (r ZodRawIssue) GetMinimum() any { return r.getProperty("minimum") }
 
-// GetMaximum returns the maximum value from properties map
+// GetMaximum returns the maximum value from properties map.
 func (r ZodRawIssue) GetMaximum() any { return r.getProperty("maximum") }
 
-// GetInclusive returns the inclusive value from properties map
+// GetInclusive returns the inclusive value from properties map.
 func (r ZodRawIssue) GetInclusive() bool {
 	if val, ok := r.getProperty("inclusive").(bool); ok {
 		return val
@@ -229,10 +229,10 @@ func (r ZodRawIssue) GetInclusive() bool {
 	return false
 }
 
-// GetDivisor returns the divisor value from properties map
+// GetDivisor returns the divisor value from properties map.
 func (r ZodRawIssue) GetDivisor() any { return r.getProperty("divisor") }
 
-// GetKeys returns the keys value from properties map
+// GetKeys returns the keys value from properties map.
 func (r ZodRawIssue) GetKeys() []string {
 	if val, ok := r.getProperty("keys").([]string); ok {
 		return val
@@ -240,7 +240,7 @@ func (r ZodRawIssue) GetKeys() []string {
 	return nil
 }
 
-// GetValues returns the values from properties map
+// GetValues returns the values from properties map.
 func (r ZodRawIssue) GetValues() []any {
 	if val, ok := r.getProperty("values").([]any); ok {
 		return val

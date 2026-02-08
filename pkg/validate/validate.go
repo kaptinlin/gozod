@@ -10,6 +10,7 @@ import (
 
 	json "github.com/go-json-experiment/json"
 	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
@@ -350,9 +351,9 @@ func IPv6(value any) bool {
 	return false
 }
 
-// ValidateCIDR validates CIDR notation with strict format checking
+// CIDR validates CIDR notation with strict format checking.
 // version: 0=both, 4=IPv4 only, 6=IPv6 only
-func ValidateCIDR(value any, version int) bool {
+func CIDR(value any, version int) bool {
 	str, ok := reflectx.ExtractString(value)
 	if !ok {
 		return false
@@ -384,14 +385,19 @@ func ValidateCIDR(value any, version int) bool {
 	return true
 }
 
+// ValidateCIDR is a deprecated alias for CIDR.
+//
+// Deprecated: Use CIDR instead.
+var ValidateCIDR = CIDR
+
 // CIDRv4 validates if string is a valid IPv4 CIDR format
 func CIDRv4(value any) bool {
-	return ValidateCIDR(value, 4)
+	return CIDR(value, 4)
 }
 
 // CIDRv6 validates if string is a valid IPv6 CIDR format
 func CIDRv6(value any) bool {
-	return ValidateCIDR(value, 6)
+	return CIDR(value, 6)
 }
 
 // Base64 validates if string is valid Base64 encoding
@@ -580,7 +586,7 @@ func isValidJWTStructure(token string, expectedAlgorithm *string) bool {
 }
 
 // validateJWTHeaderWithGolangJWT validates JWT header using golang-jwt parsed data
-func validateJWTHeaderWithGolangJWT(header map[string]interface{}, expectedAlgorithm *string) bool {
+func validateJWTHeaderWithGolangJWT(header map[string]any, expectedAlgorithm *string) bool {
 	// Check if typ claim exists and is "JWT" (if present)
 	if typ, exists := header["typ"]; exists {
 		if typStr, ok := typ.(string); ok && typStr != "JWT" {

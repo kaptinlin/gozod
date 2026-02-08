@@ -8,5 +8,5 @@
 // Usage:
 //
 //	m := structx.ToMap(myStruct)
-//	err := structx.FromMap(m, &myStruct)
+//	result, err := structx.FromMap(m, reflect.TypeOf(MyStruct{}))
 package structx

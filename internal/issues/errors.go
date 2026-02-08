@@ -3,19 +3,15 @@ package issues
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
-
-// Pre-compiled regex for path validation and formatting
-var nonWordRegex = regexp.MustCompile(`[^\w$]`)
 
 // =============================================================================
 // ZOD ERROR CLASS
@@ -383,44 +379,10 @@ func FlattenErrorWithFormatter(error *ZodError, formatter MessageFormatter) *Fla
 // PATH AND STRING UTILITIES
 // =============================================================================
 
-// ToDotPath converts a path array to dot notation string
+// ToDotPath converts a path array to dot notation string.
+// Delegates to utils.ToDotPath to avoid duplicate implementations.
 func ToDotPath(path []any) string {
-	if len(path) == 0 {
-		return ""
-	}
-
-	// Use strings.Builder to construct path string efficiently
-	var builder strings.Builder
-	builder.Grow(len(path) * 8) // Rough estimate
-
-	for i, element := range path {
-		if i > 0 {
-			builder.WriteByte('.')
-		}
-
-		switch el := element.(type) {
-		case string:
-			if nonWordRegex.MatchString(el) {
-				builder.WriteByte('[')
-				builder.WriteByte('"')
-				builder.WriteString(el)
-				builder.WriteByte('"')
-				builder.WriteByte(']')
-			} else {
-				builder.WriteString(el)
-			}
-		case int:
-			builder.WriteByte('[')
-			builder.WriteString(strconv.Itoa(el))
-			builder.WriteByte(']')
-		default:
-			builder.WriteByte('[')
-			builder.WriteString(fmt.Sprintf("%v", el))
-			builder.WriteByte(']')
-		}
-	}
-
-	return builder.String()
+	return utils.ToDotPath(path)
 }
 
 // PrettifyError formats a ZodError into a readable string using its formatter
@@ -493,64 +455,63 @@ func convertZodIssueToProperties(issue ZodIssue) map[string]any {
 	// Fallback: create properties map manually
 	properties := make(map[string]any)
 
-	// Use mapx to safely set properties
 	if issue.Expected != "" {
-		mapx.Set(properties, "expected", issue.Expected)
+		properties["expected"] = issue.Expected
 	}
 	if issue.Received != "" {
-		mapx.Set(properties, "received", issue.Received)
+		properties["received"] = issue.Received
 	}
 	if issue.Minimum != nil {
-		mapx.Set(properties, "minimum", issue.Minimum)
+		properties["minimum"] = issue.Minimum
 	}
 	if issue.Maximum != nil {
-		mapx.Set(properties, "maximum", issue.Maximum)
+		properties["maximum"] = issue.Maximum
 	}
 	if issue.Format != "" {
-		mapx.Set(properties, "format", issue.Format)
+		properties["format"] = issue.Format
 	}
 	if issue.Pattern != "" {
-		mapx.Set(properties, "pattern", issue.Pattern)
+		properties["pattern"] = issue.Pattern
 	}
 	if issue.Prefix != "" {
-		mapx.Set(properties, "startsWith", issue.Prefix)
+		properties["startsWith"] = issue.Prefix
 	}
 	if issue.Suffix != "" {
-		mapx.Set(properties, "endsWith", issue.Suffix)
+		properties["endsWith"] = issue.Suffix
 	}
 	if issue.Includes != "" {
-		mapx.Set(properties, "includes", issue.Includes)
+		properties["includes"] = issue.Includes
 	}
 	if issue.Algorithm != "" {
-		mapx.Set(properties, "algorithm", issue.Algorithm)
+		properties["algorithm"] = issue.Algorithm
 	}
 	if issue.Divisor != nil {
-		mapx.Set(properties, "divisor", issue.Divisor)
+		properties["divisor"] = issue.Divisor
 	}
-	if !slicex.IsEmpty(issue.Keys) {
-		mapx.Set(properties, "keys", issue.Keys)
+	if len(issue.Keys) > 0 {
+		properties["keys"] = issue.Keys
 	}
-	if !slicex.IsEmpty(issue.Values) {
-		mapx.Set(properties, "values", issue.Values)
+	if len(issue.Values) > 0 {
+		properties["values"] = issue.Values
 	}
 	if issue.Origin != "" {
-		mapx.Set(properties, "origin", issue.Origin)
+		properties["origin"] = issue.Origin
 	}
 	if issue.Key != nil {
-		mapx.Set(properties, "key", issue.Key)
+		properties["key"] = issue.Key
 	}
 	if len(issue.Params) > 0 {
 		for k, v := range issue.Params {
-			mapx.Set(properties, k, v)
+			properties[k] = v
 		}
 	}
 
 	// Add inclusive flag
-	mapx.Set(properties, "inclusive", issue.Inclusive)
+	properties["inclusive"] = issue.Inclusive
 
 	// Add issue-specific properties that might be useful for formatting
 	if issue.Message != "" {
-		mapx.Set(properties, "originalMessage", issue.Message)
+		properties["originalMessage"] = issue.Message
 	}
 
 	return properties

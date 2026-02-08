@@ -6,10 +6,9 @@ import (
 	"reflect"
 )
 
-// Static error variables
-var (
-	ErrInvalidTransformType = errors.New("invalid type for transform")
-)
+// ErrInvalidTransformType is a sentinel error returned when a type assertion
+// fails during transformation.
+var ErrInvalidTransformType = errors.New("invalid type for transform")
 
 func isNilInput(input any) bool {
 	if input == nil {
@@ -71,8 +70,8 @@ func (z *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (Out, err
 	// Check if this is a Default/DefaultFunc short-circuit case
 	// These should skip transformation completely
 	sourceInternals := z.source.GetInternals()
-	isDefaultShortCircuit := (sourceInternals.DefaultValue != nil && isNilInput(input)) ||
-		(sourceInternals.DefaultFunc != nil && isNilInput(input))
+	isDefaultShortCircuit := isNilInput(input) &&
+		(sourceInternals.DefaultValue != nil || sourceInternals.DefaultFunc != nil)
 
 	if isDefaultShortCircuit {
 		// For Default/DefaultFunc, skip transformation and return the default value directly
@@ -85,9 +84,8 @@ func (z *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (Out, err
 		if result, ok := any(validated).(Out); ok {
 			return result, nil
 		}
-		// If type conversion fails, return zero value
 		var zero Out
-		return zero, nil
+		return zero, fmt.Errorf("%w: default value type %T is not compatible with output type %T", ErrInvalidTransformType, validated, zero)
 	}
 
 	// Step 1: Validate with source schema

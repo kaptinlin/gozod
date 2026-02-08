@@ -160,7 +160,7 @@ func TestComplexIssueTypes(t *testing.T) {
 		// Verify that element errors are processed correctly
 		assert.Contains(t, flattened.FieldErrors["array"], "Invalid array element")
 		assert.Contains(t, prettified, "Invalid array element")
-		assert.Contains(t, prettified, "array.[0]: Invalid array element")
+		assert.Contains(t, prettified, "array[0]: Invalid array element")
 	})
 
 	t.Run("processes standard issue types correctly", func(t *testing.T) {
@@ -283,7 +283,7 @@ func TestErrorIntegration(t *testing.T) {
 		assert.Contains(t, prettified, "Unknown field 'extraField'")
 		assert.Contains(t, prettified, "Expected string, received number")
 		assert.Contains(t, prettified, "user.name: Expected string, received number")
-		assert.Contains(t, prettified, "user.contacts.[0].email: Invalid email format")
+		assert.Contains(t, prettified, "user.contacts[0].email: Invalid email format")
 	})
 
 	t.Run("error identification and conversion workflow", func(t *testing.T) {
@@ -465,7 +465,7 @@ func TestErrorIntegration(t *testing.T) {
 		// Path formatting in prettified output
 		assert.Contains(t, prettified, "name: Expected string")
 		assert.Contains(t, prettified, "profile.age: Age must be at least 18")
-		assert.Contains(t, prettified, "contacts.[0].email: Invalid email format")
+		assert.Contains(t, prettified, "contacts[0].email: Invalid email format")
 		assert.Contains(t, prettified, "settings.preferences.theme.spacing: Must be multiple of 5")
 
 		// Step 7: Test custom mapping integration

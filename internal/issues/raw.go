@@ -48,7 +48,7 @@ func WithOrigin(origin string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "origin", origin)
+		issue.Properties["origin"] = origin
 	}
 }
 
@@ -65,7 +65,7 @@ func WithMinimum(minimum any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "minimum", minimum)
+		issue.Properties["minimum"] = minimum
 	}
 }
 
@@ -75,7 +75,7 @@ func WithMaximum(maximum any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "maximum", maximum)
+		issue.Properties["maximum"] = maximum
 	}
 }
 
@@ -85,7 +85,7 @@ func WithExpected(expected string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "expected", expected)
+		issue.Properties["expected"] = expected
 	}
 }
 
@@ -95,7 +95,7 @@ func WithReceived(received string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "received", received)
+		issue.Properties["received"] = received
 	}
 }
 
@@ -112,7 +112,7 @@ func WithInclusive(inclusive bool) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "inclusive", inclusive)
+		issue.Properties["inclusive"] = inclusive
 	}
 }
 
@@ -122,7 +122,7 @@ func WithFormat(format string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "format", format)
+		issue.Properties["format"] = format
 	}
 }
 
@@ -139,7 +139,7 @@ func WithPattern(pattern string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "pattern", pattern)
+		issue.Properties["pattern"] = pattern
 	}
 }
 
@@ -149,7 +149,7 @@ func WithPrefix(prefix string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "prefix", prefix)
+		issue.Properties["prefix"] = prefix
 	}
 }
 
@@ -159,7 +159,7 @@ func WithSuffix(suffix string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "suffix", suffix)
+		issue.Properties["suffix"] = suffix
 	}
 }
 
@@ -169,7 +169,7 @@ func WithIncludes(includes string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "includes", includes)
+		issue.Properties["includes"] = includes
 	}
 }
 
@@ -179,7 +179,7 @@ func WithDivisor(divisor any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "divisor", divisor)
+		issue.Properties["divisor"] = divisor
 	}
 }
 
@@ -189,7 +189,7 @@ func WithKeys(keys []string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "keys", keys)
+		issue.Properties["keys"] = keys
 	}
 }
 
@@ -199,7 +199,7 @@ func WithValues(values []any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "values", values)
+		issue.Properties["values"] = values
 	}
 }
 
@@ -209,7 +209,7 @@ func WithAlgorithm(algorithm string) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "algorithm", algorithm)
+		issue.Properties["algorithm"] = algorithm
 	}
 }
 
@@ -219,7 +219,7 @@ func WithParams(params map[string]any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, "params", params)
+		issue.Properties["params"] = params
 	}
 }
 
@@ -236,7 +236,7 @@ func WithProperty(key string, value any) func(*core.ZodRawIssue) {
 		if issue.Properties == nil {
 			issue.Properties = make(map[string]any)
 		}
-		mapx.Set(issue.Properties, key, value)
+		issue.Properties[key] = value
 	}
 }
 

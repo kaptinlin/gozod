@@ -20,9 +20,9 @@ var (
 
 	// Pick/Omit/Extend errors - Zod v4 compatible error messages
 	// See: .reference/zod/packages/zod/src/v4/core/util.ts:599, 628, 664
-	ErrPickRefinements   = errors.New(".pick() cannot be used on object schemas containing refinements")
-	ErrOmitRefinements   = errors.New(".omit() cannot be used on object schemas containing refinements")
-	ErrExtendRefinements = errors.New(".extend() cannot overwrite keys on object schemas containing refinements. Use .SafeExtend() instead")
+	ErrPickRefinements   = errors.New("Pick cannot be used on object schemas containing refinements")
+	ErrOmitRefinements   = errors.New("Omit cannot be used on object schemas containing refinements")
+	ErrExtendRefinements = errors.New("Extend cannot overwrite keys on object schemas containing refinements, use SafeExtend instead")
 	ErrUnrecognizedKey   = errors.New("unrecognized key")
 )
 
@@ -893,7 +893,7 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 		if !exists {
 			if !z.isFieldOptional(fieldSchema, fieldName) {
 				// Create missing required field issue
-				rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Missing required field: %s", fieldName), map[string]any{
+				rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("missing required field: %s", fieldName), map[string]any{
 					"expected": "nonoptional",
 					"received": "undefined",
 				}, nil)
@@ -905,7 +905,7 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 
 		// Check for explicit nil on ExactOptional fields (Zod v4: exactOptional rejects undefined/nil)
 		if fieldValue == nil && z.isFieldExactOptional(fieldSchema) {
-			rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("Field %s cannot be explicitly nil (use absent key instead)", fieldName), map[string]any{
+			rawIssue := issues.CreateIssue(core.InvalidType, fmt.Sprintf("field %s cannot be explicitly nil (use absent key instead)", fieldName), map[string]any{
 				"expected": "string", // or the actual expected type
 				"received": "nil",
 			}, nil)
@@ -1064,7 +1064,13 @@ func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.Parse
 	return nil
 }
 
-// isFieldOptional checks if a field schema is optional using reflection or partial state
+// internalsProvider is a local interface for type-safe access to schema internals,
+// avoiding reflection-based method dispatch.
+type internalsProvider interface {
+	GetInternals() *core.ZodTypeInternals
+}
+
+// isFieldOptional checks if a field schema is optional using type assertion or partial state
 func (z *ZodObject[T, R]) isFieldOptional(schema any, fieldName string) bool {
 	if schema == nil {
 		return true
@@ -1082,19 +1088,8 @@ func (z *ZodObject[T, R]) isFieldOptional(schema any, fieldName string) bool {
 		}
 	}
 
-	schemaValue := reflect.ValueOf(schema)
-	if !schemaValue.IsValid() || schemaValue.IsNil() {
-		return true
-	}
-
-	// Try to get internals to check if optional
-	if internalsMethod := schemaValue.MethodByName("GetInternals"); internalsMethod.IsValid() {
-		results := internalsMethod.Call(nil)
-		if len(results) > 0 {
-			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
-				return internals.Optional
-			}
-		}
+	if ip, ok := schema.(internalsProvider); ok {
+		return ip.GetInternals().Optional
 	}
 
 	return false
@@ -1107,19 +1102,8 @@ func (z *ZodObject[T, R]) isFieldExactOptional(schema any) bool {
 		return false
 	}
 
-	schemaValue := reflect.ValueOf(schema)
-	if !schemaValue.IsValid() || schemaValue.IsNil() {
-		return false
-	}
-
-	// Try to get internals to check if ExactOptional
-	if internalsMethod := schemaValue.MethodByName("GetInternals"); internalsMethod.IsValid() {
-		results := internalsMethod.Call(nil)
-		if len(results) > 0 {
-			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
-				return internals.ExactOptional
-			}
-		}
+	if ip, ok := schema.(internalsProvider); ok {
+		return ip.GetInternals().ExactOptional
 	}
 
 	return false

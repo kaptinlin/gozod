@@ -172,7 +172,7 @@ func TestErrorProcessingIntegration(t *testing.T) {
 		assert.Contains(t, prettified, "Unknown field 'extraField'")
 		assert.Contains(t, prettified, "Expected string, received number")
 		assert.Contains(t, prettified, "user.name: Expected string, received number")
-		assert.Contains(t, prettified, "user.contacts.[0].email: Invalid email format")
+		assert.Contains(t, prettified, "user.contacts[0].email: Invalid email format")
 	})
 
 	t.Run("error identification and conversion workflow", func(t *testing.T) {

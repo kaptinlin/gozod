@@ -1,24 +1,15 @@
-package coerce
-
-import (
-	"math/big"
-	"time"
-
-	"github.com/kaptinlin/gozod/types"
-)
-
 // Package coerce provides constructors that enable automatic type coercion
 // before validation. This allows flexible input types to be automatically
 // converted to the expected schema type.
 //
 // Supported coercion types:
-//   - Bool/BoolPtr: strings ("true", "false", "1", "0"), numbers (0, 1), etc. → bool
-//   - String/StringPtr: any value → string representation
-//   - Int/Int8/.../Int64: strings, floats → integer types
-//   - Uint/Uint8/.../Uint64: strings, floats → unsigned integer types
-//   - Float32/Float64: strings, integers → float types
-//   - BigInt/BigFloat: strings, numbers → arbitrary precision types
-//   - Time/Duration: strings (RFC3339, ISO8601) → time.Time/time.Duration
+//   - Bool/BoolPtr: strings ("true", "false", "1", "0"), numbers (0, 1), etc. -> bool
+//   - String/StringPtr: any value -> string representation
+//   - Int/Int8/.../Int64: strings, floats -> integer types
+//   - Uint/Uint8/.../Uint64: strings, floats -> unsigned integer types
+//   - Float32/Float64: strings, integers -> float types
+//   - BigInt/BigFloat: strings, numbers -> arbitrary precision types
+//   - Time/Duration: strings (RFC3339, ISO8601) -> time.Time/time.Duration
 //
 // Example:
 //
@@ -28,7 +19,15 @@ import (
 //	n := coerce.Int()
 //	v, err := n.Parse("42")   // v == 42, err == nil
 //
-// This mirrors the JavaScript Zod API: `z.coerce.boolean()`, `z.coerce.number()`, etc.
+// This mirrors the JavaScript Zod API: z.coerce.boolean(), z.coerce.number(), etc.
+package coerce
+
+import (
+	"math/big"
+	"time"
+
+	"github.com/kaptinlin/gozod/types"
+)
 
 // Bool returns a boolean schema with coercion enabled.
 func Bool(params ...any) *types.ZodBool[bool] {
@@ -50,7 +49,8 @@ func StringPtr(params ...any) *types.ZodString[*string] {
 	return types.CoercedStringPtr(params...)
 }
 
-// Number returns a number schema with coercion enabled.
+// Number returns a float64 schema with coercion enabled.
+// It is the Go equivalent of Zod's z.coerce.number().
 func Number(params ...any) *types.ZodFloatTyped[float64, float64] {
 	return types.CoercedNumber(params...)
 }
@@ -60,7 +60,8 @@ func NumberPtr(params ...any) *types.ZodFloatTyped[float64, *float64] {
 	return types.CoercedNumberPtr(params...)
 }
 
-// Float returns a float schema with coercion enabled.
+// Float returns a float64 schema with coercion enabled.
+// Unlike Number, Float is a Go-specific alias that maps directly to float64.
 func Float(params ...any) *types.ZodFloatTyped[float64, float64] {
 	return types.CoercedFloat[float64](params...)
 }
@@ -90,7 +91,8 @@ func Float64Ptr(params ...any) *types.ZodFloatTyped[float64, *float64] {
 	return types.CoercedFloat64Ptr(params...)
 }
 
-// Integer returns a generic integer schema with coercion enabled.
+// Integer returns an int64 schema with coercion enabled.
+// For platform-sized int, use Int instead.
 func Integer(params ...any) *types.ZodIntegerTyped[int64, int64] {
 	return types.CoercedInteger(params...)
 }
@@ -100,7 +102,8 @@ func IntegerPtr(params ...any) *types.ZodIntegerTyped[int64, *int64] {
 	return types.CoercedIntegerPtr(params...)
 }
 
-// Int returns an int schema with coercion enabled.
+// Int returns a platform-sized int schema with coercion enabled.
+// For fixed-width int64, use Integer instead.
 func Int(params ...any) *types.ZodIntegerTyped[int, int] {
 	return types.CoercedInt(params...)
 }

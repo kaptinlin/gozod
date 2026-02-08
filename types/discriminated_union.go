@@ -79,7 +79,8 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 	// Check for delayed construction error
 	if constructionError, exists := z.internals.Bag["construction_error"]; exists {
 		if errMsg, ok := constructionError.(string); ok {
-			return *new(R), issues.CreateInvalidSchemaError(errMsg, input, parseCtx)
+			var zero R
+			return zero, issues.CreateInvalidSchemaError(errMsg, input, parseCtx)
 		}
 	}
 
@@ -114,13 +115,15 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 			}
 			return z.Parse(prefaultValue, parseCtx)
 		}
-		return *new(R), issues.CreateInvalidTypeError(core.ZodTypeObject, input, parseCtx)
+		var zero R
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeObject, input, parseCtx)
 	}
 
 	// Get the value of the discriminator key
 	discriminatorValue, exists := inputMap[z.internals.Discriminator]
 	if !exists {
-		return *new(R), issues.CreateMissingRequiredError(z.internals.Discriminator, "discriminator field", input, parseCtx)
+		var zero R
+		return zero, issues.CreateMissingRequiredError(z.internals.Discriminator, "discriminator field", input, parseCtx)
 	}
 
 	// Find the corresponding schema based on the discriminator value
@@ -146,19 +149,22 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 			}
 		}
 		if result == nil {
-			return *new(R), issues.CreateInvalidUnionError(allErrs, input, parseCtx)
+			var zero R
+			return zero, issues.CreateInvalidUnionError(allErrs, input, parseCtx)
 		}
 	}
 
 	if err != nil {
-		return *new(R), err
+		var zero R
+		return zero, err
 	}
 
 	// Apply any custom checks on the discriminated union itself and capture transformed result
 	if len(z.internals.Checks) > 0 {
 		transformedResult, validationErr := engine.ApplyChecks[any](result, z.internals.Checks, parseCtx)
 		if validationErr != nil {
-			return *new(R), validationErr
+			var zero R
+			return zero, validationErr
 		}
 		result = transformedResult
 	}

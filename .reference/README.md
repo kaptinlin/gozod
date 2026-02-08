@@ -55,7 +55,7 @@ When writing GoZod code, please refer to the corresponding TypeScript files:
 
 ✅ **Exact Correspondence**: The TypeScript code referenced in GoZod code comments should exactly match the actual code in these files.
 
-📚 **Documentation Consistency**: Follow the format specified in `.cursor/rules/typescript-to-go-comments.mdc` for referencing TypeScript code.
+📚 **Documentation Consistency**: Follow the format specified in `.agents/rules/` for referencing TypeScript code.
 
 ## Code Correspondence Example
 

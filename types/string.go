@@ -304,23 +304,7 @@ func (z *ZodString[T]) Includes(substring string, params ...any) *ZodString[T] {
 
 // Trim adds string trimming transformation
 func (z *ZodString[T]) Trim(params ...any) *ZodString[T] {
-	// Use Overwrite to transform the value by trimming surrounding whitespace.
-	transform := func(val T) T {
-		switch v := any(val).(type) {
-		case string:
-			return any(strings.TrimSpace(v)).(T)
-		case *string:
-			if v == nil {
-				return val // keep nil pointer untouched
-			}
-			trimmed := strings.TrimSpace(*v)
-			ptr := &trimmed
-			return any(ptr).(T)
-		default:
-			return val
-		}
-	}
-	return z.Overwrite(transform, params...)
+	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.TrimSpace) }, params...)
 }
 
 // JSON adds JSON format validation
@@ -683,6 +667,22 @@ func (z *ZodString[T]) CloneFrom(source any) {
 // UTILITY FUNCTIONS
 // =============================================================================
 
+// applyStringTransform applies a string transformation function to either string or *string values.
+func applyStringTransform[T StringConstraint](val T, fn func(string) string) T {
+	switch v := any(val).(type) {
+	case string:
+		return any(fn(v)).(T)
+	case *string:
+		if v == nil {
+			return val
+		}
+		result := fn(*v)
+		return any(&result).(T)
+	default:
+		return val
+	}
+}
+
 // convertToStringType converts any value to the constrained string type T
 func convertToStringType[T StringConstraint](v any) (T, bool) {
 	var zero T
@@ -831,42 +831,12 @@ func (z *ZodString[T]) Uppercase(params ...any) *ZodString[T] {
 
 // ToLowerCase transforms the string to lower case
 func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {
-	transform := func(val T) T {
-		switch v := any(val).(type) {
-		case string:
-			return any(strings.ToLower(v)).(T)
-		case *string:
-			if v == nil {
-				return val
-			}
-			lower := strings.ToLower(*v)
-			ptr := &lower
-			return any(ptr).(T)
-		default:
-			return val
-		}
-	}
-	return z.Overwrite(transform, params...)
+	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToLower) }, params...)
 }
 
 // ToUpperCase transforms the string to upper case
 func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
-	transform := func(val T) T {
-		switch v := any(val).(type) {
-		case string:
-			return any(strings.ToUpper(v)).(T)
-		case *string:
-			if v == nil {
-				return val
-			}
-			upper := strings.ToUpper(*v)
-			ptr := &upper
-			return any(ptr).(T)
-		default:
-			return val
-		}
-	}
-	return z.Overwrite(transform, params...)
+	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToUpper) }, params...)
 }
 
 // Normalize transforms the string using Unicode normalization.
@@ -888,22 +858,9 @@ func (z *ZodString[T]) Normalize(form ...string) *ZodString[T] {
 		normForm = form[0]
 	}
 
-	tx := func(val T) T {
-		switch v := any(val).(type) {
-		case string:
-			return any(normalizeUnicode(v, normForm)).(T)
-		case *string:
-			if v == nil {
-				return val
-			}
-			normalized := normalizeUnicode(*v, normForm)
-			ptr := &normalized
-			return any(ptr).(T)
-		default:
-			return val
-		}
-	}
-	return z.Overwrite(tx)
+	return z.Overwrite(func(val T) T {
+		return applyStringTransform(val, func(s string) string { return normalizeUnicode(s, normForm) })
+	})
 }
 
 // normalizeUnicode normalizes a string using the specified Unicode form.
@@ -934,22 +891,7 @@ func normalizeUnicode(s string, form string) string {
 //	z.String().Slugify().Parse("  Hello   World  ") // -> "hello-world"
 //	z.String().Slugify().Parse("Hello@World#123")  // -> "helloworld123"
 func (z *ZodString[T]) Slugify(params ...any) *ZodString[T] {
-	tx := func(val T) T {
-		switch v := any(val).(type) {
-		case string:
-			return any(transform.Slugify(v)).(T)
-		case *string:
-			if v == nil {
-				return val
-			}
-			slugified := transform.Slugify(*v)
-			ptr := &slugified
-			return any(ptr).(T)
-		default:
-			return val
-		}
-	}
-	return z.Overwrite(tx, params...)
+	return z.Overwrite(func(val T) T { return applyStringTransform(val, transform.Slugify) }, params...)
 }
 
 // NonOptional removes the optional flag and returns a new schema with string value type

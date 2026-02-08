@@ -124,9 +124,9 @@ func TestParsedCategory(t *testing.T) {
 		value    any
 		expected string
 	}{
-		{"nil", nil, "null"},
+		{"nil", nil, "nil"},
 		{"string", "hello", "string"},
-		{"bool", true, "boolean"},
+		{"bool", true, "bool"},
 		{"int", 123, "number"},
 		{"float", 123.45, "number"},
 		{"slice", []int{1, 2, 3}, "array"},

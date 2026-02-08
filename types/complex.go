@@ -90,7 +90,7 @@ func (z *ZodComplex[T]) Coerce(input any) (any, bool) {
 			return &result, true
 		}
 	}
-	return *new(T), false
+	return zero, false
 }
 
 // Parse validates input using unified ParsePrimitive API

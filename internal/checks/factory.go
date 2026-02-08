@@ -4,7 +4,6 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
-	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
@@ -331,14 +330,14 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 		errorMessage = "Invalid input"
 	}
 
-	// Create properties map using mapx for safe operations
+	// Create properties map
 	properties := make(map[string]any)
-	mapx.Set(properties, "origin", "custom")
-	mapx.Set(properties, "continue", !internals.Def.Abort)
+	properties["origin"] = "custom"
+	properties["continue"] = !internals.Def.Abort
 
-	// Add custom parameters if provided using mapx
-	if mapx.Count(internals.Def.Params) > 0 {
-		mapx.Set(properties, "params", internals.Def.Params)
+	// Add custom parameters if provided
+	if len(internals.Def.Params) > 0 {
+		properties["params"] = internals.Def.Params
 	}
 
 	// Use low-level CreateCustomIssue directly since ParseContext is not available at this level
@@ -639,9 +638,9 @@ func executePropertyCheck(payload *core.ParsePayload, internals *ZodCheckPropert
 
 		// Create properties map
 		properties := make(map[string]any)
-		mapx.Set(properties, "origin", "property")
-		mapx.Set(properties, "property", internals.Def.Property)
-		mapx.Set(properties, "continue", !internals.Def.Abort)
+		properties["origin"] = "property"
+		properties["property"] = internals.Def.Property
+		properties["continue"] = !internals.Def.Abort
 
 		// Create custom issue
 		issue := issues.CreateCustomIssue(errorMessage, properties, propertyValue)

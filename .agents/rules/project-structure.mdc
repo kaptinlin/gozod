@@ -170,7 +170,7 @@ Current schema implementations include:
 | **Special Types** | `any.go`, `unknown.go`, `never.go`, `nil.go` | Special validation types |
 | **Collections** | `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go` | Container types |
 | **Objects** | `object.go`, `struct.go` | Structured data types |
-| **Composition** | `union.go`, `discriminated_union.go`, `intersection.go` | Type composition |
+| **Composition** | `union.go`, `xor.go`, `discriminated_union.go`, `intersection.go` | Type composition |
 | **Functions** | `function.go` | Function validation |
 | **Formats** | `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go` | Format-specific validation |
 | **Text** | `text.go`, `stringbool.go` | Text processing types |
@@ -236,5 +236,5 @@ clean:    # Clean build artifacts
 ### 6.2 Documentation Strategy
 - **Code examples** live in `examples/` with working `main.go` files
 - **API documentation** in `docs/` with comprehensive guides
-- **Implementation guides** in `.cursor/rules/` for AI assistance
+- **Implementation guides** in `.agents/rules/` for AI assistance
 - **Project instructions** in `CLAUDE.md` for Claude Code integration

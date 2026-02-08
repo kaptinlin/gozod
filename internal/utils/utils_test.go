@@ -418,7 +418,7 @@ func TestTypeDescription(t *testing.T) {
 		{
 			name:     "nil value",
 			input:    nil,
-			expected: "null",
+			expected: "nil",
 		},
 		{
 			name:     "string value",
@@ -428,7 +428,7 @@ func TestTypeDescription(t *testing.T) {
 		{
 			name:     "bool value",
 			input:    true,
-			expected: "boolean",
+			expected: "bool",
 		},
 		{
 			name:     "int value",

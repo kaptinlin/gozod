@@ -62,13 +62,8 @@ func TestMainFromStructPtr_BasicUsage(t *testing.T) {
 	result, err := schema.Parse(user)
 	require.NoError(t, err, "Parse should succeed for valid user pointer")
 
-	if result == nil {
-		t.Fatal("Expected non-nil result")
-	}
-
-	if result.Name != user.Name {
-		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
-	}
+	require.NotNil(t, result, "Expected non-nil result")
+	assert.Equal(t, user.Name, result.Name)
 }
 
 func TestMainFromStruct_WithModifiers(t *testing.T) {

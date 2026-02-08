@@ -10,12 +10,9 @@ import (
 // CONTEXT CREATION FUNCTIONS
 // =============================================================================
 
-// NewParseContext creates a new parse context with default values
+// NewParseContext creates a new parse context with default values.
 func NewParseContext() *ParseContext {
-	return &ParseContext{
-		Error:       nil,
-		ReportInput: false,
-	}
+	return &ParseContext{}
 }
 
 // NewParsePayload creates a new parsing payload with given value
