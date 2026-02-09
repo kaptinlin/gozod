@@ -1,5 +1,5 @@
-// Package tagparser provides shared tag parsing functionality for GoZod
-// Extracted from types/struct.go to enable reuse by cmd/gozodgen and other components
+// Package tagparser provides shared tag parsing functionality for GoZod.
+// Extracted from types/struct.go to enable reuse by cmd/gozodgen and other components.
 package tagparser
 
 import (
@@ -7,117 +7,109 @@ import (
 	"strings"
 )
 
-// TagParser handles gozod tag parsing with configurable tag name
+// unescaper handles escape sequences in tag parameters using a single-pass replacer.
+var unescaper = strings.NewReplacer(
+	`\,`, ",",
+	`\n`, "\n",
+	`\t`, "\t",
+	`\'`, "'",
+	`\\`, `\`,
+)
+
+// TagParser handles gozod tag parsing with configurable tag name.
 type TagParser struct {
-	tagName string // Tag name to parse (default: "gozod")
+	tagName string
 }
 
-// New creates a new TagParser with default "gozod" tag name
+// New creates a TagParser with the default "gozod" tag name.
 func New() *TagParser {
-	return &TagParser{
-		tagName: "gozod",
-	}
+	return &TagParser{tagName: "gozod"}
 }
 
-// NewWithTagName creates a new TagParser with custom tag name
+// NewWithTagName creates a TagParser with a custom tag name.
 func NewWithTagName(tagName string) *TagParser {
-	return &TagParser{
-		tagName: tagName,
-	}
+	return &TagParser{tagName: tagName}
 }
 
-// FieldInfo represents parsed information about a struct field
+// FieldInfo represents parsed information about a struct field.
 type FieldInfo struct {
 	Name     string       // Go field name
 	Type     reflect.Type // Go field type
-	TypeName string       // AST-based type name string for circular reference detection
+	TypeName string       // AST-based type name for circular reference detection
 	JsonName string       // JSON field name (from json tag or field name)
 	GozodTag string       // Raw gozod tag value
 	Rules    []TagRule    // Parsed validation rules
-	Required bool         // Whether field is required (has "required" rule)
-	Optional bool         // Whether field should be optional (pointer type without required)
+	Required bool         // Whether field has "required" rule
+	Optional bool         // Whether field is optional (pointer without required)
 	Nilable  bool         // Whether field has "nilable" rule
 }
 
-// TagRule represents a single validation rule parsed from a tag
+// TagRule represents a single validation rule parsed from a tag.
 type TagRule struct {
 	Name   string   // Rule name (e.g., "min", "max", "email")
 	Params []string // Rule parameters (e.g., ["2"] for "min=2")
 }
 
-// ParseStructTags parses all gozod tags in a struct type and returns field information
+// ParseStructTags parses all gozod tags in a struct type and returns field information.
 func (p *TagParser) ParseStructTags(structType reflect.Type) ([]FieldInfo, error) {
-	var fields []FieldInfo
-
 	// Handle pointer to struct
-	if structType.Kind() == reflect.Ptr {
+	if structType.Kind() == reflect.Pointer {
 		structType = structType.Elem()
 	}
 
-	// Ensure it's a struct
 	if structType.Kind() != reflect.Struct {
-		return nil, nil // Not a struct, no fields to parse
+		return nil, nil
 	}
 
-	// Iterate through all exported fields
-	for i := 0; i < structType.NumField(); i++ {
+	fields := make([]FieldInfo, 0, structType.NumField())
+
+	for i := range structType.NumField() {
 		field := structType.Field(i)
 
-		// Skip unexported fields
 		if !field.IsExported() {
 			continue
 		}
 
-		// Skip fields with gozod:"-" tag
-		gozodTag := field.Tag.Get(p.tagName)
-		if gozodTag == "-" {
+		tag := field.Tag.Get(p.tagName)
+		if tag == "-" {
 			continue
 		}
 
-		// Parse field information
-		fieldInfo := FieldInfo{
+		info := FieldInfo{
 			Name:     field.Name,
 			Type:     field.Type,
-			JsonName: getJSONFieldName(field),
-			GozodTag: gozodTag,
+			JsonName: jsonFieldName(field),
+			GozodTag: tag,
 		}
 
-		// Parse validation rules from tag
-		if gozodTag != "" {
-			rules, err := p.ParseTagString(gozodTag)
+		if tag != "" {
+			rules, err := p.ParseTagString(tag)
 			if err != nil {
 				return nil, err
 			}
-			fieldInfo.Rules = rules
-
-			// Check for special rules
-			fieldInfo.Required = hasRule(rules, "required")
-			fieldInfo.Nilable = hasRule(rules, "nilable")
+			info.Rules = rules
+			info.Required = hasRule(rules, "required")
+			info.Nilable = hasRule(rules, "nilable")
 		}
 
-		// Determine if field should be optional
-		fieldInfo.Optional = shouldBeOptional(field, fieldInfo.Required, fieldInfo.Nilable)
-
-		fields = append(fields, fieldInfo)
+		info.Optional = isOptional(field, info.Required, info.Nilable)
+		fields = append(fields, info)
 	}
 
 	return fields, nil
 }
 
-// ParseTagString parses a single tag string into validation rules
+// ParseTagString parses a single tag string into validation rules.
 func (p *TagParser) ParseTagString(tag string) ([]TagRule, error) {
-	var rules []TagRule
-
 	if tag == "" {
-		return rules, nil
+		return []TagRule{}, nil
 	}
 
-	// Split by comma, handling escaped commas
-	parts := parseTagParts(tag)
+	parts := splitTagParts(tag)
+	rules := make([]TagRule, 0, len(parts))
 
 	for _, part := range parts {
-		rule := parseTagRule(strings.TrimSpace(part))
-		if rule.Name != "" {
+		if rule := parseRule(strings.TrimSpace(part)); rule.Name != "" {
 			rules = append(rules, rule)
 		}
 	}
@@ -125,79 +117,74 @@ func (p *TagParser) ParseTagString(tag string) ([]TagRule, error) {
 	return rules, nil
 }
 
-// parseTagParts splits tag string by commas, handling escapes and JSON structures
-func parseTagParts(tag string) []string {
-	var parts []string
+// splitTagParts splits a tag string by commas, respecting escapes,
+// quotes, brackets, and braces.
+func splitTagParts(tag string) []string {
+	parts := make([]string, 0, strings.Count(tag, ",")+1)
 	var current strings.Builder
-	var bracketDepth int
-	var braceDepth int
+	var bracketDepth, braceDepth int
 	var inQuotes bool
 	var quoteChar rune
 	escaped := false
 
-	for i, char := range tag {
-		switch char {
+	for i, ch := range tag {
+		switch ch {
 		case '\\':
 			if i+1 < len(tag) {
-				// Handle escape sequences
-				current.WriteRune(char)
+				current.WriteRune(ch)
 				escaped = true
 			} else {
-				current.WriteRune(char)
+				current.WriteRune(ch)
 			}
 		case '"', '\'':
 			if !escaped {
 				if !inQuotes {
-					// Start of quoted string
 					inQuotes = true
-					quoteChar = char
-				} else if char == quoteChar {
-					// End of quoted string
+					quoteChar = ch
+				} else if ch == quoteChar {
 					inQuotes = false
 				}
 			}
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		case '[':
 			if !inQuotes && !escaped {
 				bracketDepth++
 			}
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		case ']':
 			if !inQuotes && !escaped {
 				bracketDepth--
 			}
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		case '{':
 			if !inQuotes && !escaped {
 				braceDepth++
 			}
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		case '}':
 			if !inQuotes && !escaped {
 				braceDepth--
 			}
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		case ',':
 			if !escaped && !inQuotes && bracketDepth == 0 && braceDepth == 0 {
-				// Unescaped comma outside quotes and brackets - end current part
 				parts = append(parts, current.String())
 				current.Reset()
 			} else {
-				current.WriteRune(char)
+				current.WriteRune(ch)
 			}
 			escaped = false
 		default:
-			current.WriteRune(char)
+			current.WriteRune(ch)
 			escaped = false
 		}
 	}
 
-	// Add final part
 	if current.Len() > 0 {
 		parts = append(parts, current.String())
 	}
@@ -205,109 +192,66 @@ func parseTagParts(tag string) []string {
 	return parts
 }
 
-// parseTagRule parses a single rule part into TagRule
-func parseTagRule(part string) TagRule {
+// parseRule parses a single rule string (e.g., "min=2") into a TagRule.
+func parseRule(part string) TagRule {
 	if part == "" {
 		return TagRule{}
 	}
 
-	// Check if rule has parameters (contains =)
-	if name, paramStr, found := strings.Cut(part, "="); found {
-		name = strings.TrimSpace(name)
-		paramStr = strings.TrimSpace(paramStr)
+	name, paramStr, hasParams := strings.Cut(part, "=")
+	if !hasParams {
+		return TagRule{Name: strings.TrimSpace(part)}
+	}
 
-		// Parse parameters - split by space for multi-value params
-		var params []string
-		if paramStr != "" {
-			// Handle quoted parameters
-			switch {
-			case strings.HasPrefix(paramStr, "'") && strings.HasSuffix(paramStr, "'"):
-				// Single quoted parameter
-				unquoted := paramStr[1 : len(paramStr)-1]
-				params = []string{unescapeString(unquoted)}
-			case strings.Contains(paramStr, " "):
-				// Multiple space-separated parameters
-				params = strings.Fields(paramStr)
-			default:
-				// Single parameter
-				params = []string{paramStr}
-			}
-		}
+	name = strings.TrimSpace(name)
+	paramStr = strings.TrimSpace(paramStr)
 
-		return TagRule{
-			Name:   name,
-			Params: params,
+	var params []string
+	if paramStr != "" {
+		switch {
+		case strings.HasPrefix(paramStr, "'") && strings.HasSuffix(paramStr, "'"):
+			params = []string{unescaper.Replace(paramStr[1 : len(paramStr)-1])}
+		case strings.Contains(paramStr, " "):
+			params = strings.Fields(paramStr)
+		default:
+			params = []string{paramStr}
 		}
 	}
 
-	// Rule without parameters
-	return TagRule{
-		Name:   strings.TrimSpace(part),
-		Params: nil,
-	}
+	return TagRule{Name: name, Params: params}
 }
 
-// unescapeString handles escape sequences in tag parameters
-func unescapeString(s string) string {
-	s = strings.ReplaceAll(s, "\\,", ",")
-	s = strings.ReplaceAll(s, "\\n", "\n")
-	s = strings.ReplaceAll(s, "\\t", "\t")
-	s = strings.ReplaceAll(s, "\\'", "'")
-	s = strings.ReplaceAll(s, "\\\\", "\\")
-	return s
-}
-
-// getJSONFieldName extracts JSON field name from struct field
-func getJSONFieldName(field reflect.StructField) string {
+// jsonFieldName extracts the JSON field name from a struct field's json tag.
+// Falls back to the Go field name when no usable json name is present.
+func jsonFieldName(field reflect.StructField) string {
 	jsonTag := field.Tag.Get("json")
-	if jsonTag == "" {
+	if jsonTag == "" || jsonTag == "-" {
 		return field.Name
 	}
 
-	// Handle json:"-" (skip field) and json:",omitempty" etc.
-	if jsonTag == "-" {
-		return field.Name // Use Go field name as fallback
-	}
-
-	// Extract name before first comma
-	if name, _, found := strings.Cut(jsonTag, ","); found {
-		if name = strings.TrimSpace(name); name != "" {
-			return name
-		}
-	} else {
-		return strings.TrimSpace(jsonTag)
+	name, _, _ := strings.Cut(jsonTag, ",")
+	if name = strings.TrimSpace(name); name != "" {
+		return name
 	}
 
 	return field.Name
 }
 
-// hasRule checks if a rule with given name exists in rules slice
+// hasRule reports whether a rule with the given name exists in rules.
 func hasRule(rules []TagRule, name string) bool {
-	for _, rule := range rules {
-		if rule.Name == name {
+	for _, r := range rules {
+		if r.Name == name {
 			return true
 		}
 	}
 	return false
 }
 
-// shouldBeOptional determines if a field should be optional based on type and rules
-func shouldBeOptional(field reflect.StructField, required, nilable bool) bool {
-	// If explicitly required, not optional
+// isOptional reports whether a field should be treated as optional
+// based on its type and parsed rules.
+func isOptional(field reflect.StructField, required, nilable bool) bool {
 	if required {
 		return false
 	}
-
-	// If nilable tag is present, it's optional
-	if nilable {
-		return true
-	}
-
-	// Pointer types are optional by default (unless required)
-	if field.Type.Kind() == reflect.Ptr {
-		return true
-	}
-
-	// Non-pointer types are not optional by default
-	return false
+	return nilable || field.Type.Kind() == reflect.Pointer
 }

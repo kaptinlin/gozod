@@ -274,7 +274,7 @@ func TestTagParser_NonStructType(t *testing.T) {
 	}
 }
 
-func TestGetJSONFieldName(t *testing.T) {
+func TestJSONFieldName(t *testing.T) {
 	tests := []struct {
 		name     string
 		field    reflect.StructField
@@ -310,7 +310,7 @@ func TestGetJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"-"`,
 			},
-			expected: "TestField", // Fallback to field name
+			expected: "TestField",
 		},
 		{
 			name: "json tag omitempty only",
@@ -318,15 +318,15 @@ func TestGetJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:",omitempty"`,
 			},
-			expected: "TestField", // Fallback to field name
+			expected: "TestField",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getJSONFieldName(tt.field)
+			result := jsonFieldName(tt.field)
 			if result != tt.expected {
-				t.Errorf("getJSONFieldName() = %q, expected %q", result, tt.expected)
+				t.Errorf("jsonFieldName() = %q, expected %q", result, tt.expected)
 			}
 		})
 	}
@@ -356,45 +356,40 @@ func TestHasRule(t *testing.T) {
 	}
 }
 
-func TestShouldBeOptional(t *testing.T) {
-	// Test required field
+func TestIsOptional(t *testing.T) {
 	requiredField := reflect.StructField{
 		Name: "RequiredField",
 		Type: reflect.TypeOf(""),
 	}
-	if shouldBeOptional(requiredField, true, false) {
+	if isOptional(requiredField, true, false) {
 		t.Error("Required field should not be optional")
 	}
 
-	// Test pointer field (optional by default)
 	pointerField := reflect.StructField{
 		Name: "PointerField",
 		Type: reflect.TypeOf((*string)(nil)),
 	}
-	if !shouldBeOptional(pointerField, false, false) {
+	if !isOptional(pointerField, false, false) {
 		t.Error("Pointer field should be optional by default")
 	}
 
-	// Test required pointer field
-	if shouldBeOptional(pointerField, true, false) {
+	if isOptional(pointerField, true, false) {
 		t.Error("Required pointer field should not be optional")
 	}
 
-	// Test nilable field
 	nilableField := reflect.StructField{
 		Name: "NilableField",
 		Type: reflect.TypeOf(""),
 	}
-	if !shouldBeOptional(nilableField, false, true) {
+	if !isOptional(nilableField, false, true) {
 		t.Error("Nilable field should be optional")
 	}
 
-	// Test regular field (not optional)
 	regularField := reflect.StructField{
 		Name: "RegularField",
 		Type: reflect.TypeOf(""),
 	}
-	if shouldBeOptional(regularField, false, false) {
+	if isOptional(regularField, false, false) {
 		t.Error("Regular field should not be optional")
 	}
 }
