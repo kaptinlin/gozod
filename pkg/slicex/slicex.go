@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Sentinel errors for slicex package.
+// Sentinel errors for the slicex package.
 var (
 	ErrInvalidReflectValue   = errors.New("invalid reflect value")
 	ErrNotSliceArrayOrString = errors.New("input is not a slice, array, or string")
@@ -19,110 +19,89 @@ var (
 	ErrCannotConvertSlice        = errors.New("cannot convert slice")
 )
 
-// =============================================================================
-// SLICE CONVERSION FUNCTIONS
-// =============================================================================
+// toAnySlice converts a typed slice to []any, eliminating repeated
+// make+loop boilerplate across type-switch branches.
+func toAnySlice[T any](v []T) []any {
+	result := make([]any, len(v))
+	for i, item := range v {
+		result[i] = item
+	}
+	return result
+}
 
-// ToAny converts any slice/array to []any
+// ToAny converts a slice, array, or string to []any.
+// A nil input returns (nil, nil). A bare string returns a
+// single-element []any. For unrecognized concrete types,
+// reflection is used as a fallback.
 func ToAny(input any) ([]any, error) {
 	if input == nil {
 		return nil, nil
 	}
-
 	switch v := input.(type) {
 	case []any:
 		return v, nil
 	case []string:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []int:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []int32:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []int64:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []float32:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []float64:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case []bool:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = item
-		}
-		return result, nil
+		return toAnySlice(v), nil
 	case string:
-		// Treat entire string as a single element when coercing to []any
 		return []any{v}, nil
 	default:
-		// Try reflection-based conversion
 		return FromReflect(reflect.ValueOf(input))
 	}
 }
 
-// ToTyped converts any slice to []T using generics
+// ToTyped converts any slice to []T using generics.
+// Each element is first tried via type assertion, then via
+// reflect conversion.
+//
+// Returns ErrCannotConvertSliceElement if an element cannot
+// be converted to the target type.
 func ToTyped[T any](input any) ([]T, error) {
 	if input == nil {
 		return nil, nil
 	}
-
-	// Convert to []any first
 	anySlice, err := ToAny(input)
 	if err != nil {
 		return nil, err
 	}
-
+	targetType := reflect.TypeFor[T]()
 	result := make([]T, len(anySlice))
 	for i, item := range anySlice {
-		if typedItem, ok := item.(T); ok {
-			result[i] = typedItem
-		} else {
-			// Try type conversion
-			itemValue := reflect.ValueOf(item)
-			targetType := reflect.TypeOf((*T)(nil)).Elem()
-
-			if itemValue.Type().ConvertibleTo(targetType) {
-				converted := itemValue.Convert(targetType)
-				result[i] = converted.Interface().(T)
-			} else {
-				return nil, fmt.Errorf("%w: cannot convert %v to type %v", ErrCannotConvertSliceElement, item, targetType)
-			}
+		if typed, ok := item.(T); ok {
+			result[i] = typed
+			continue
 		}
+		itemValue := reflect.ValueOf(item)
+		if !itemValue.Type().ConvertibleTo(targetType) {
+			return nil, fmt.Errorf(
+				"element %v (type %T) not convertible to %v: %w",
+				item, item, targetType,
+				ErrCannotConvertSliceElement,
+			)
+		}
+		result[i] = itemValue.Convert(targetType).Interface().(T)
 	}
-
 	return result, nil
 }
 
-// ToStrings converts any slice to []string
+// ToStrings converts any slice to []string by formatting each
+// element with fmt.Sprintf.
 func ToStrings(input any) ([]string, error) {
 	anySlice, err := ToAny(input)
 	if err != nil {
 		return nil, err
 	}
-
 	result := make([]string, len(anySlice))
 	for i, item := range anySlice {
 		result[i] = fmt.Sprintf("%v", item)
@@ -130,31 +109,34 @@ func ToStrings(input any) ([]string, error) {
 	return result, nil
 }
 
-// FromReflect converts reflect.Value to []any
+// FromReflect converts a reflect.Value (slice, array, or string)
+// to []any.
+//
+// Returns ErrInvalidReflectValue for invalid values, and
+// ErrNotSliceArrayOrString for unsupported kinds.
 func FromReflect(rv reflect.Value) ([]any, error) {
 	if !rv.IsValid() {
 		return nil, ErrInvalidReflectValue
 	}
-
-	//nolint:exhaustive // Only Slice, Array, String are valid; all others return same error
+	//nolint:exhaustive // Only Slice, Array, String are valid
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
-		length := rv.Len()
-		result := make([]any, length)
-		for i := range length {
+		result := make([]any, rv.Len())
+		for i := range rv.Len() {
 			result[i] = rv.Index(i).Interface()
 		}
 		return result, nil
 	case reflect.String:
-		// Convert string to slice of characters
-		str := rv.String()
-		return StringToChars(str), nil
+		return StringToChars(rv.String()), nil
 	default:
-		return nil, fmt.Errorf("input is not a slice, array, or string, got %v: %w", rv.Kind(), ErrNotSliceArrayOrString)
+		return nil, fmt.Errorf(
+			"got %v: %w", rv.Kind(), ErrNotSliceArrayOrString,
+		)
 	}
 }
 
-// StringToChars converts a string to []any of characters
+// StringToChars converts a string to []any where each element
+// is a single-character string.
 func StringToChars(s string) []any {
 	runes := []rune(s)
 	result := make([]any, len(runes))
@@ -164,47 +146,44 @@ func StringToChars(s string) []any {
 	return result
 }
 
-// =============================================================================
-// SLICE EXTRACTION FUNCTIONS
-// =============================================================================
-
-// Extract extracts slice from input, returns the slice and whether extraction was successful
+// Extract converts input to []any, returning whether the
+// conversion succeeded.
 func Extract(input any) ([]any, bool) {
 	result, err := ToAny(input)
 	return result, err == nil
 }
 
-// ExtractArray extracts array from input, returns the slice and whether extraction was successful
+// ExtractArray extracts an array (not slice) from input.
+// Returns false for nil, slices, or non-array types.
 func ExtractArray(input any) ([]any, bool) {
 	if input == nil {
 		return nil, false
 	}
-	rv := reflect.ValueOf(input)
-	if rv.Kind() != reflect.Array {
+	if reflect.ValueOf(input).Kind() != reflect.Array {
 		return nil, false
 	}
 	result, err := ToAny(input)
 	return result, err == nil
 }
 
-// ExtractSlice extracts slice from input, returns the slice and whether extraction was successful
+// ExtractSlice extracts a slice (not array) from input.
+// Returns false for nil, arrays, or non-slice types.
 func ExtractSlice(input any) ([]any, bool) {
 	if input == nil {
 		return nil, false
 	}
-	rv := reflect.ValueOf(input)
-	if rv.Kind() != reflect.Slice {
+	if reflect.ValueOf(input).Kind() != reflect.Slice {
 		return nil, false
 	}
 	result, err := ToAny(input)
 	return result, err == nil
 }
 
-// =============================================================================
-// SLICE MERGE FUNCTIONS
-// =============================================================================
-
-// Merge merges two slices of any type
+// Merge concatenates two slices. If both inputs share the same
+// concrete slice type, the result preserves that type.
+//
+// Returns ErrCannotConvertFirstSlice or ErrCannotConvertSecondSlice
+// if the respective input cannot be converted.
 func Merge(a, b any) (any, error) {
 	if a == nil && b == nil {
 		return nil, nil
@@ -215,70 +194,61 @@ func Merge(a, b any) (any, error) {
 	if b == nil {
 		return a, nil
 	}
-
-	// Convert both to []any first
 	sliceA, errA := ToAny(a)
 	if errA != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertFirstSlice, errA)
 	}
-
 	sliceB, errB := ToAny(b)
 	if errB != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSecondSlice, errB)
 	}
-
-	merged := append(sliceA, sliceB...) //nolint:gocritic // Creating new slice intentionally
-	return convertToOriginalType(merged, a, b)
+	merged := make([]any, 0, len(sliceA)+len(sliceB))
+	merged = append(merged, sliceA...)
+	merged = append(merged, sliceB...)
+	return restoreType(merged, a, b)
 }
 
-// Append appends elements to a slice
+// Append appends elements to a slice, preserving the original
+// slice's concrete type when possible.
 func Append(slice any, elements ...any) (any, error) {
 	if slice == nil {
 		return elements, nil
 	}
-
 	sliceAny, err := ToAny(slice)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
 	result := make([]any, len(sliceAny)+len(elements))
 	copy(result, sliceAny)
 	copy(result[len(sliceAny):], elements)
-
-	return convertToOriginalType(result, slice, nil)
+	return restoreType(result, slice, nil)
 }
 
-// Prepend prepends elements to a slice
+// Prepend inserts elements before a slice, preserving the
+// original slice's concrete type when possible.
 func Prepend(slice any, elements ...any) (any, error) {
 	if slice == nil {
 		return elements, nil
 	}
-
 	sliceAny, err := ToAny(slice)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
 	result := make([]any, len(elements)+len(sliceAny))
 	copy(result, elements)
 	copy(result[len(elements):], sliceAny)
-
-	return convertToOriginalType(result, slice, nil)
+	return restoreType(result, slice, nil)
 }
 
-// =============================================================================
-// SLICE UTILITY FUNCTIONS
-// =============================================================================
-
-// Length returns the length of a slice or array
+// Length returns the length of a slice, array, or string.
+// Returns ErrNotSliceArrayOrString for other types.
 func Length(input any) (int, error) {
 	if input == nil {
 		return 0, nil
 	}
-
 	rv := reflect.ValueOf(input)
-	switch rv.Kind() { //nolint:exhaustive // Only handling slice, array, and string types
+	//nolint:exhaustive // Only handling slice, array, and string
+	switch rv.Kind() {
 	case reflect.Slice, reflect.Array, reflect.String:
 		return rv.Len(), nil
 	default:
@@ -286,37 +256,39 @@ func Length(input any) (int, error) {
 	}
 }
 
-// IsEmpty checks if a slice is empty
+// IsEmpty reports whether input is nil, empty, or not a
+// recognized collection type.
 func IsEmpty(input any) bool {
 	length, err := Length(input)
 	return err != nil || length == 0
 }
 
-// Contains checks if a slice contains a specific value
+// Contains reports whether slice contains value, compared
+// using reflect.DeepEqual.
 func Contains(slice any, value any) bool {
 	sliceAny, err := ToAny(slice)
 	if err != nil {
 		return false
 	}
-
 	return slices.ContainsFunc(sliceAny, func(item any) bool {
 		return reflect.DeepEqual(item, value)
 	})
 }
 
-// IndexOf returns the index of the first occurrence of value in slice
+// IndexOf returns the index of the first occurrence of value
+// in slice, or -1 if not found. Comparison uses
+// reflect.DeepEqual.
 func IndexOf(slice any, value any) int {
 	sliceAny, err := ToAny(slice)
 	if err != nil {
 		return -1
 	}
-
 	return slices.IndexFunc(sliceAny, func(item any) bool {
 		return reflect.DeepEqual(item, value)
 	})
 }
 
-// Reverse reverses a slice
+// Reverse returns a new slice with elements in reverse order.
 func Reverse(slice any) (any, error) {
 	if slice == nil {
 		return nil, nil
@@ -326,10 +298,12 @@ func Reverse(slice any) (any, error) {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
 	slices.Reverse(sliceAny)
-	return convertToOriginalType(sliceAny, slice, nil)
+	return restoreType(sliceAny, slice, nil)
 }
 
-// Unique removes duplicate elements from a slice
+// Unique removes duplicate elements, preserving first-occurrence
+// order. Comparable types use a map; non-comparable types fall
+// back to reflect.DeepEqual.
 func Unique(slice any) (any, error) {
 	if slice == nil {
 		return nil, nil
@@ -338,52 +312,42 @@ func Unique(slice any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
-	// Use two-phase deduplication:
-	// 1. Comparable types are recorded using a map.
-	// 2. Non-comparable types are recorded using sequential scanning and reflect.DeepEqual.
-
 	seenComparable := make(map[any]struct{})
 	var seenNonComparable []any
-
 	result := make([]any, 0, len(sliceAny))
-
 	for _, item := range sliceAny {
-		if item == nil {
-			// nil can be directly compared
-			if _, ok := seenComparable[item]; !ok {
-				seenComparable[item] = struct{}{}
-				result = append(result, item)
-			}
+		if isDuplicate(item, seenComparable, seenNonComparable) {
 			continue
 		}
-
-		itemType := reflect.TypeOf(item)
-		if itemType.Comparable() {
-			if _, ok := seenComparable[item]; !ok {
-				seenComparable[item] = struct{}{}
-				result = append(result, item)
-			}
+		if item == nil || reflect.TypeOf(item).Comparable() {
+			seenComparable[item] = struct{}{}
 		} else {
-			// Use DeepEqual sequential scanning for non-comparable types
-			duplicated := false
-			for _, existing := range seenNonComparable {
-				if reflect.DeepEqual(existing, item) {
-					duplicated = true
-					break
-				}
-			}
-			if !duplicated {
-				seenNonComparable = append(seenNonComparable, item)
-				result = append(result, item)
-			}
+			seenNonComparable = append(seenNonComparable, item)
 		}
+		result = append(result, item)
 	}
-
-	return convertToOriginalType(result, slice, nil)
+	return restoreType(result, slice, nil)
 }
 
-// Filter filters a slice based on a predicate function
+// isDuplicate checks whether item has already been seen.
+func isDuplicate(
+	item any,
+	seenComparable map[any]struct{},
+	seenNonComparable []any,
+) bool {
+	if item == nil || reflect.TypeOf(item).Comparable() {
+		_, exists := seenComparable[item]
+		return exists
+	}
+	for _, existing := range seenNonComparable {
+		if reflect.DeepEqual(existing, item) {
+			return true
+		}
+	}
+	return false
+}
+
+// Filter returns elements for which predicate returns true.
 func Filter(slice any, predicate func(any) bool) (any, error) {
 	if slice == nil {
 		return nil, nil
@@ -392,18 +356,17 @@ func Filter(slice any, predicate func(any) bool) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
 	result := make([]any, 0, len(sliceAny))
 	for _, item := range sliceAny {
 		if predicate(item) {
 			result = append(result, item)
 		}
 	}
-
-	return convertToOriginalType(result, slice, nil)
+	return restoreType(result, slice, nil)
 }
 
-// Map transforms each element of a slice using a mapper function
+// Map transforms each element using mapper and returns the
+// resulting slice.
 func Map(slice any, mapper func(any) any) (any, error) {
 	if slice == nil {
 		return nil, nil
@@ -412,43 +375,34 @@ func Map(slice any, mapper func(any) any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSlice, err)
 	}
-
 	result := make([]any, len(sliceAny))
 	for i, item := range sliceAny {
 		result[i] = mapper(item)
 	}
-
-	return convertToOriginalType(result, slice, nil)
+	return restoreType(result, slice, nil)
 }
 
-// Join joins slice elements with a separator
+// Join formats each element with fmt.Sprintf and joins them
+// with separator. Returns "" for empty or invalid input.
 func Join(slice any, separator string) string {
 	sliceAny, err := ToAny(slice)
-	if err != nil {
+	if err != nil || len(sliceAny) == 0 {
 		return ""
 	}
-
-	if len(sliceAny) == 0 {
-		return ""
-	}
-
-	strValues := make([]string, len(sliceAny))
+	strs := make([]string, len(sliceAny))
 	for i, v := range sliceAny {
 		if v != nil {
-			strValues[i] = fmt.Sprintf("%v", v)
+			strs[i] = fmt.Sprintf("%v", v)
 		}
 	}
-
-	return strings.Join(strValues, separator)
+	return strings.Join(strs, separator)
 }
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-// convertToOriginalType attempts to convert merged slice back to original type
-func convertToOriginalType(merged []any, original1, original2 any) (any, error) {
-	// Get the type of the first non-nil original
+// restoreType attempts to convert []any back to the concrete
+// slice type of the first non-nil original argument.
+func restoreType(
+	merged []any, original1, original2 any,
+) (any, error) {
 	var originalType reflect.Type
 	switch {
 	case original1 != nil:
@@ -458,33 +412,24 @@ func convertToOriginalType(merged []any, original1, original2 any) (any, error) 
 	default:
 		return merged, nil
 	}
-
-	// If original was []any, return as-is
-	if originalType == reflect.TypeOf([]any{}) {
+	if originalType == reflect.TypeFor[[]any]() {
 		return merged, nil
 	}
-
-	// Try to convert to original slice type
-	if originalType.Kind() == reflect.Slice {
-		elemType := originalType.Elem()
-		result := reflect.MakeSlice(originalType, len(merged), len(merged))
-
-		for i, item := range merged {
-			itemValue := reflect.ValueOf(item)
-			switch {
-			case itemValue.Type().ConvertibleTo(elemType):
-				converted := itemValue.Convert(elemType)
-				result.Index(i).Set(converted)
-			case itemValue.Type().AssignableTo(elemType):
-				result.Index(i).Set(itemValue)
-			default:
-				// Cannot convert, return []any
-				return merged, nil
-			}
-		}
-
-		return result.Interface(), nil
+	if originalType.Kind() != reflect.Slice {
+		return merged, nil
 	}
-
-	return merged, nil
+	elemType := originalType.Elem()
+	result := reflect.MakeSlice(originalType, len(merged), len(merged))
+	for i, item := range merged {
+		iv := reflect.ValueOf(item)
+		switch {
+		case iv.Type().ConvertibleTo(elemType):
+			result.Index(i).Set(iv.Convert(elemType))
+		case iv.Type().AssignableTo(elemType):
+			result.Index(i).Set(iv)
+		default:
+			return merged, nil
+		}
+	}
+	return result.Interface(), nil
 }

@@ -8,10 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// SLICE CONVERSION TESTS
-// =============================================================================
-
 func TestToAny(t *testing.T) {
 	t.Run("nil input returns nil", func(t *testing.T) {
 		got, err := ToAny(nil)
@@ -20,47 +16,41 @@ func TestToAny(t *testing.T) {
 	})
 
 	t.Run("[]any returns same slice", func(t *testing.T) {
-		input := []any{1, 2, 3}
-		got, err := ToAny(input)
+		got, err := ToAny([]any{1, 2, 3})
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 	})
 
-	t.Run("[]string converts correctly", func(t *testing.T) {
-		input := []string{"a", "b", "c"}
-		got, err := ToAny(input)
+	t.Run("[]string", func(t *testing.T) {
+		got, err := ToAny([]string{"a", "b", "c"})
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 		assert.Equal(t, "a", got[0])
 	})
 
-	t.Run("[]int converts correctly", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		got, err := ToAny(input)
+	t.Run("[]int", func(t *testing.T) {
+		got, err := ToAny([]int{1, 2, 3})
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 		assert.Equal(t, 1, got[0])
 	})
 
-	t.Run("[]float64 converts correctly", func(t *testing.T) {
-		input := []float64{1.1, 2.2, 3.3}
-		got, err := ToAny(input)
+	t.Run("[]float64", func(t *testing.T) {
+		got, err := ToAny([]float64{1.1, 2.2, 3.3})
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 		assert.Equal(t, 1.1, got[0])
 	})
 
-	t.Run("[]bool converts correctly", func(t *testing.T) {
-		input := []bool{true, false, true}
-		got, err := ToAny(input)
+	t.Run("[]bool", func(t *testing.T) {
+		got, err := ToAny([]bool{true, false, true})
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 		assert.True(t, got[0].(bool))
 	})
 
-	t.Run("string converts to single element slice", func(t *testing.T) {
-		input := "hello"
-		got, err := ToAny(input)
+	t.Run("string as single element", func(t *testing.T) {
+		got, err := ToAny("hello")
 		require.NoError(t, err)
 		assert.Len(t, got, 1)
 		assert.Equal(t, "hello", got[0])
@@ -74,30 +64,24 @@ func TestToTyped(t *testing.T) {
 		assert.Nil(t, got)
 	})
 
-	t.Run("[]any to []string works", func(t *testing.T) {
-		input := []any{"a", "b", "c"}
-		got, err := ToTyped[string](input)
+	t.Run("[]any to []string", func(t *testing.T) {
+		got, err := ToTyped[string]([]any{"a", "b", "c"})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"a", "b", "c"}, got)
 	})
 
-	t.Run("[]any to []int works", func(t *testing.T) {
-		input := []any{1, 2, 3}
-		got, err := ToTyped[int](input)
+	t.Run("[]any to []int", func(t *testing.T) {
+		got, err := ToTyped[int]([]any{1, 2, 3})
 		require.NoError(t, err)
 		assert.Equal(t, []int{1, 2, 3}, got)
 	})
 }
 
 func TestToStrings(t *testing.T) {
-	t.Run("converts slice to strings", func(t *testing.T) {
-		input := []any{1, "hello", true}
-		got, err := ToStrings(input)
+	t.Run("mixed types", func(t *testing.T) {
+		got, err := ToStrings([]any{1, "hello", true})
 		require.NoError(t, err)
-		assert.Len(t, got, 3)
-		assert.Equal(t, "1", got[0])
-		assert.Equal(t, "hello", got[1])
-		assert.Equal(t, "true", got[2])
+		assert.Equal(t, []string{"1", "hello", "true"}, got)
 	})
 }
 
@@ -107,23 +91,20 @@ func TestFromReflect(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInvalidReflectValue)
 	})
 
-	t.Run("slice converts correctly", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		got, err := FromReflect(reflect.ValueOf(input))
+	t.Run("slice", func(t *testing.T) {
+		got, err := FromReflect(reflect.ValueOf([]int{1, 2, 3}))
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 	})
 
-	t.Run("array converts correctly", func(t *testing.T) {
-		input := [3]int{1, 2, 3}
-		got, err := FromReflect(reflect.ValueOf(input))
+	t.Run("array", func(t *testing.T) {
+		got, err := FromReflect(reflect.ValueOf([3]int{1, 2, 3}))
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 	})
 
 	t.Run("string converts to chars", func(t *testing.T) {
-		input := "abc"
-		got, err := FromReflect(reflect.ValueOf(input))
+		got, err := FromReflect(reflect.ValueOf("abc"))
 		require.NoError(t, err)
 		assert.Len(t, got, 3)
 		assert.Equal(t, "a", got[0])
@@ -135,35 +116,28 @@ func TestFromReflect(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// SLICE EXTRACTION TESTS
-// =============================================================================
-
 func TestExtract(t *testing.T) {
-	t.Run("valid slice extracts correctly", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		got, ok := Extract(input)
+	t.Run("valid slice", func(t *testing.T) {
+		got, ok := Extract([]int{1, 2, 3})
 		assert.True(t, ok)
 		assert.Len(t, got, 3)
 	})
 
-	t.Run("invalid input returns false", func(t *testing.T) {
+	t.Run("invalid input", func(t *testing.T) {
 		_, ok := Extract(123)
 		assert.False(t, ok)
 	})
 }
 
 func TestExtractArray(t *testing.T) {
-	t.Run("array extracts correctly", func(t *testing.T) {
-		input := [3]int{1, 2, 3}
-		got, ok := ExtractArray(input)
+	t.Run("array", func(t *testing.T) {
+		got, ok := ExtractArray([3]int{1, 2, 3})
 		assert.True(t, ok)
 		assert.Len(t, got, 3)
 	})
 
 	t.Run("slice returns false", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		_, ok := ExtractArray(input)
+		_, ok := ExtractArray([]int{1, 2, 3})
 		assert.False(t, ok)
 	})
 
@@ -174,49 +148,39 @@ func TestExtractArray(t *testing.T) {
 }
 
 func TestExtractSlice(t *testing.T) {
-	t.Run("slice extracts correctly", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		got, ok := ExtractSlice(input)
+	t.Run("slice", func(t *testing.T) {
+		got, ok := ExtractSlice([]int{1, 2, 3})
 		assert.True(t, ok)
 		assert.Len(t, got, 3)
 	})
 
 	t.Run("array returns false", func(t *testing.T) {
-		input := [3]int{1, 2, 3}
-		_, ok := ExtractSlice(input)
+		_, ok := ExtractSlice([3]int{1, 2, 3})
 		assert.False(t, ok)
 	})
 }
 
-// =============================================================================
-// SLICE MERGE TESTS
-// =============================================================================
-
 func TestMerge(t *testing.T) {
-	t.Run("both nil returns nil", func(t *testing.T) {
+	t.Run("both nil", func(t *testing.T) {
 		got, err := Merge(nil, nil)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
 
 	t.Run("first nil returns second", func(t *testing.T) {
-		second := []int{1, 2}
-		got, err := Merge(nil, second)
+		got, err := Merge(nil, []int{1, 2})
 		require.NoError(t, err)
-		assert.Equal(t, second, got)
+		assert.Equal(t, []int{1, 2}, got)
 	})
 
 	t.Run("second nil returns first", func(t *testing.T) {
-		first := []int{1, 2}
-		got, err := Merge(first, nil)
+		got, err := Merge([]int{1, 2}, nil)
 		require.NoError(t, err)
-		assert.Equal(t, first, got)
+		assert.Equal(t, []int{1, 2}, got)
 	})
 
-	t.Run("merges two slices", func(t *testing.T) {
-		first := []int{1, 2}
-		second := []int{3, 4}
-		got, err := Merge(first, second)
+	t.Run("two slices", func(t *testing.T) {
+		got, err := Merge([]int{1, 2}, []int{3, 4})
 		require.NoError(t, err)
 		gotSlice, ok := got.([]int)
 		require.True(t, ok)
@@ -228,16 +192,13 @@ func TestAppend(t *testing.T) {
 	t.Run("nil slice returns elements", func(t *testing.T) {
 		got, err := Append(nil, 1, 2, 3)
 		require.NoError(t, err)
-		gotSlice := got.([]any)
-		assert.Len(t, gotSlice, 3)
+		assert.Len(t, got.([]any), 3)
 	})
 
-	t.Run("appends to existing slice", func(t *testing.T) {
-		slice := []int{1, 2}
-		got, err := Append(slice, 3, 4)
+	t.Run("appends to existing", func(t *testing.T) {
+		got, err := Append([]int{1, 2}, 3, 4)
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Len(t, gotSlice, 4)
+		assert.Len(t, got.([]int), 4)
 	})
 }
 
@@ -245,13 +206,11 @@ func TestPrepend(t *testing.T) {
 	t.Run("nil slice returns elements", func(t *testing.T) {
 		got, err := Prepend(nil, 1, 2, 3)
 		require.NoError(t, err)
-		gotSlice := got.([]any)
-		assert.Len(t, gotSlice, 3)
+		assert.Len(t, got.([]any), 3)
 	})
 
-	t.Run("prepends to existing slice", func(t *testing.T) {
-		slice := []int{3, 4}
-		got, err := Prepend(slice, 1, 2)
+	t.Run("prepends to existing", func(t *testing.T) {
+		got, err := Prepend([]int{3, 4}, 1, 2)
 		require.NoError(t, err)
 		gotSlice := got.([]int)
 		assert.Len(t, gotSlice, 4)
@@ -260,10 +219,6 @@ func TestPrepend(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// SLICE UTILITY TESTS
-// =============================================================================
-
 func TestLength(t *testing.T) {
 	t.Run("nil returns 0", func(t *testing.T) {
 		got, err := Length(nil)
@@ -271,19 +226,19 @@ func TestLength(t *testing.T) {
 		assert.Equal(t, 0, got)
 	})
 
-	t.Run("slice returns correct length", func(t *testing.T) {
+	t.Run("slice", func(t *testing.T) {
 		got, err := Length([]int{1, 2, 3})
 		require.NoError(t, err)
 		assert.Equal(t, 3, got)
 	})
 
-	t.Run("array returns correct length", func(t *testing.T) {
+	t.Run("array", func(t *testing.T) {
 		got, err := Length([5]int{})
 		require.NoError(t, err)
 		assert.Equal(t, 5, got)
 	})
 
-	t.Run("string returns correct length", func(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
 		got, err := Length("hello")
 		require.NoError(t, err)
 		assert.Equal(t, 5, got)
@@ -301,14 +256,13 @@ func TestIsEmpty(t *testing.T) {
 		input any
 		want  bool
 	}{
-		{"nil is empty", nil, true},
-		{"empty slice is empty", []int{}, true},
-		{"non-empty slice is not empty", []int{1}, false},
-		{"empty string is empty", "", true},
-		{"non-empty string is not empty", "a", false},
-		{"non-slice is empty (error)", 123, true},
+		{name: "nil", input: nil, want: true},
+		{name: "empty slice", input: []int{}, want: true},
+		{name: "non-empty slice", input: []int{1}, want: false},
+		{name: "empty string", input: "", want: true},
+		{name: "non-empty string", input: "a", want: false},
+		{name: "non-slice (error)", input: 123, want: true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, IsEmpty(tt.input))
@@ -317,29 +271,29 @@ func TestIsEmpty(t *testing.T) {
 }
 
 func TestContains(t *testing.T) {
-	t.Run("finds existing element", func(t *testing.T) {
+	t.Run("finds existing", func(t *testing.T) {
 		assert.True(t, Contains([]int{1, 2, 3}, 2))
 	})
 
-	t.Run("does not find missing element", func(t *testing.T) {
+	t.Run("missing element", func(t *testing.T) {
 		assert.False(t, Contains([]int{1, 2, 3}, 5))
 	})
 
-	t.Run("handles nil slice", func(t *testing.T) {
+	t.Run("nil slice", func(t *testing.T) {
 		assert.False(t, Contains(nil, 1))
 	})
 }
 
 func TestIndexOf(t *testing.T) {
-	t.Run("finds index of existing element", func(t *testing.T) {
+	t.Run("finds index", func(t *testing.T) {
 		assert.Equal(t, 1, IndexOf([]int{1, 2, 3}, 2))
 	})
 
-	t.Run("returns -1 for missing element", func(t *testing.T) {
+	t.Run("missing returns -1", func(t *testing.T) {
 		assert.Equal(t, -1, IndexOf([]int{1, 2, 3}, 5))
 	})
 
-	t.Run("returns -1 for nil slice", func(t *testing.T) {
+	t.Run("nil returns -1", func(t *testing.T) {
 		assert.Equal(t, -1, IndexOf(nil, 1))
 	})
 }
@@ -351,20 +305,16 @@ func TestReverse(t *testing.T) {
 		assert.Nil(t, got)
 	})
 
-	t.Run("reverses slice correctly", func(t *testing.T) {
-		input := []int{1, 2, 3, 4}
-		got, err := Reverse(input)
+	t.Run("reverses correctly", func(t *testing.T) {
+		got, err := Reverse([]int{1, 2, 3, 4})
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Equal(t, []int{4, 3, 2, 1}, gotSlice)
+		assert.Equal(t, []int{4, 3, 2, 1}, got.([]int))
 	})
 
-	t.Run("single element stays same", func(t *testing.T) {
-		input := []int{1}
-		got, err := Reverse(input)
+	t.Run("single element", func(t *testing.T) {
+		got, err := Reverse([]int{1})
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Equal(t, []int{1}, gotSlice)
+		assert.Equal(t, []int{1}, got.([]int))
 	})
 }
 
@@ -376,19 +326,15 @@ func TestUnique(t *testing.T) {
 	})
 
 	t.Run("removes duplicates", func(t *testing.T) {
-		input := []int{1, 2, 2, 3, 3, 3}
-		got, err := Unique(input)
+		got, err := Unique([]int{1, 2, 2, 3, 3, 3})
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Len(t, gotSlice, 3)
+		assert.Len(t, got.([]int), 3)
 	})
 
 	t.Run("preserves order", func(t *testing.T) {
-		input := []string{"c", "a", "b", "a", "c"}
-		got, err := Unique(input)
+		got, err := Unique([]string{"c", "a", "b", "a", "c"})
 		require.NoError(t, err)
-		gotSlice := got.([]string)
-		assert.Equal(t, []string{"c", "a", "b"}, gotSlice)
+		assert.Equal(t, []string{"c", "a", "b"}, got.([]string))
 	})
 }
 
@@ -399,14 +345,12 @@ func TestFilter(t *testing.T) {
 		assert.Nil(t, got)
 	})
 
-	t.Run("filters elements correctly", func(t *testing.T) {
-		input := []int{1, 2, 3, 4, 5}
-		got, err := Filter(input, func(v any) bool {
+	t.Run("filters correctly", func(t *testing.T) {
+		got, err := Filter([]int{1, 2, 3, 4, 5}, func(v any) bool {
 			return v.(int) > 2
 		})
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Len(t, gotSlice, 3)
+		assert.Len(t, got.([]int), 3)
 	})
 }
 
@@ -417,14 +361,12 @@ func TestMap(t *testing.T) {
 		assert.Nil(t, got)
 	})
 
-	t.Run("maps elements correctly", func(t *testing.T) {
-		input := []int{1, 2, 3}
-		got, err := Map(input, func(v any) any {
+	t.Run("maps correctly", func(t *testing.T) {
+		got, err := Map([]int{1, 2, 3}, func(v any) any {
 			return v.(int) * 2
 		})
 		require.NoError(t, err)
-		gotSlice := got.([]int)
-		assert.Equal(t, []int{2, 4, 6}, gotSlice)
+		assert.Equal(t, []int{2, 4, 6}, got.([]int))
 	})
 }
 
@@ -435,14 +377,13 @@ func TestJoin(t *testing.T) {
 		separator string
 		want      string
 	}{
-		{"empty slice", []int{}, ",", ""},
-		{"single element", []int{1}, ",", "1"},
-		{"multiple elements", []int{1, 2, 3}, ",", "1,2,3"},
-		{"string slice", []string{"a", "b", "c"}, "-", "a-b-c"},
-		{"nil values", []any{"a", nil, "b"}, ",", "a,,b"},
-		{"invalid input", 123, ",", ""},
+		{name: "empty slice", input: []int{}, separator: ",", want: ""},
+		{name: "single element", input: []int{1}, separator: ",", want: "1"},
+		{name: "multiple elements", input: []int{1, 2, 3}, separator: ",", want: "1,2,3"},
+		{name: "string slice", input: []string{"a", "b", "c"}, separator: "-", want: "a-b-c"},
+		{name: "nil values", input: []any{"a", nil, "b"}, separator: ",", want: "a,,b"},
+		{name: "invalid input", input: 123, separator: ",", want: ""},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, Join(tt.input, tt.separator))
@@ -451,21 +392,17 @@ func TestJoin(t *testing.T) {
 }
 
 func TestStringToChars(t *testing.T) {
-	t.Run("converts string to char slice", func(t *testing.T) {
+	t.Run("ascii", func(t *testing.T) {
 		got := StringToChars("abc")
-		assert.Len(t, got, 3)
-		assert.Equal(t, "a", got[0])
-		assert.Equal(t, "b", got[1])
-		assert.Equal(t, "c", got[2])
+		assert.Equal(t, []any{"a", "b", "c"}, got)
 	})
 
-	t.Run("handles unicode", func(t *testing.T) {
+	t.Run("unicode", func(t *testing.T) {
 		got := StringToChars("你好")
 		assert.Len(t, got, 2)
 	})
 
 	t.Run("empty string", func(t *testing.T) {
-		got := StringToChars("")
-		assert.Empty(t, got)
+		assert.Empty(t, StringToChars(""))
 	})
 }
