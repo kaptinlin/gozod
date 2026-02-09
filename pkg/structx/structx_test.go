@@ -8,10 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// TEST TYPES
-// =============================================================================
-
 type testUser struct {
 	Name    string `json:"name"`
 	Age     int    `json:"age"`
@@ -33,10 +29,6 @@ type testSkipField struct {
 	Name   string `json:"name"`
 	Secret string `json:"-"`
 }
-
-// =============================================================================
-// STRUCT CONVERSION TESTS
-// =============================================================================
 
 func TestToMap(t *testing.T) {
 	t.Run("nil input returns error", func(t *testing.T) {
@@ -196,7 +188,7 @@ func TestUnmarshal(t *testing.T) {
 	})
 }
 
-func TestGetFieldName(t *testing.T) {
+func TestFieldName(t *testing.T) {
 	type testStruct struct {
 		WithTag    string `json:"custom_name"`
 		WithEmpty  string `json:",omitempty"`
@@ -207,19 +199,19 @@ func TestGetFieldName(t *testing.T) {
 	st := reflect.TypeOf(testStruct{})
 
 	tests := []struct {
-		fieldName string
-		want      string
+		field string
+		want  string
 	}{
 		{"WithTag", "custom_name"},
 		{"WithEmpty", "WithEmpty"},
-		{"WithDash", "-"},
+		{"WithDash", ""},
 		{"WithoutTag", "WithoutTag"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.fieldName, func(t *testing.T) {
-			field, _ := st.FieldByName(tt.fieldName)
-			got := getFieldName(field)
+		t.Run(tt.field, func(t *testing.T) {
+			f, _ := st.FieldByName(tt.field)
+			got := fieldName(f)
 			assert.Equal(t, tt.want, got)
 		})
 	}

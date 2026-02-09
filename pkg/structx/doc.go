@@ -1,12 +1,11 @@
-// Package structx provides utility functions for working with Go structs.
+// Package structx converts between Go structs and map[string]any.
 //
-// Key features:
-//   - Struct to map conversion (ToMap, Marshal)
-//   - Map to struct conversion (FromMap, Unmarshal)
-//   - JSON tag support for field naming
+// Field names are derived from json struct tags, falling back to the
+// Go field name when no tag is present. Fields tagged with json:"-"
+// are skipped.
 //
 // Usage:
 //
-//	m := structx.ToMap(myStruct)
+//	m, err := structx.ToMap(myStruct)
 //	result, err := structx.FromMap(m, reflect.TypeOf(MyStruct{}))
 package structx
