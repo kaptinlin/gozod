@@ -2,23 +2,20 @@ package reflectx
 
 import "reflect"
 
-// ExtractString returns the string value if v is a string. Otherwise ok=false.
-func ExtractString(v any) (str string, ok bool) {
+// ExtractString returns the string value if v is a string.
+// For nil or non-string values it returns ("", false).
+func ExtractString(v any) (string, bool) {
 	if v == nil {
 		return "", false
 	}
-	str, ok = v.(string)
-	return
+	s, ok := v.(string)
+	return s, ok
 }
 
-// HasLength reports whether v supports the built-in len() function (string,
-// array, slice).
+// HasLength reports whether v supports len() (string, array, or slice).
 func HasLength(v any) bool {
-	if v == nil {
-		return false
-	}
 	//nolint:exhaustive // default handles all other cases
-	switch reflect.TypeOf(v).Kind() {
+	switch kindOf(v) {
 	case reflect.String, reflect.Array, reflect.Slice:
 		return true
 	default:
@@ -26,13 +23,10 @@ func HasLength(v any) bool {
 	}
 }
 
-// HasSize reports whether v has size semantics (map, chan, slice, array).
+// HasSize reports whether v has size semantics (map, chan, slice, or array).
 func HasSize(v any) bool {
-	if v == nil {
-		return false
-	}
 	//nolint:exhaustive // default handles all other cases
-	switch reflect.TypeOf(v).Kind() {
+	switch kindOf(v) {
 	case reflect.Map, reflect.Chan, reflect.Slice, reflect.Array:
 		return true
 	default:
@@ -40,18 +34,34 @@ func HasSize(v any) bool {
 	}
 }
 
-// GetLength returns len(v) and ok=true when HasLength(v) is true.
-func GetLength(v any) (length int, ok bool) {
-	if !HasLength(v) {
+// Length returns len(v) for strings, arrays, and slices.
+// It returns (0, false) when v does not support len().
+func Length(v any) (int, bool) {
+	if v == nil {
 		return 0, false
 	}
-	return reflect.ValueOf(v).Len(), true
+	rv := reflect.ValueOf(v)
+	//nolint:exhaustive // default handles all other cases
+	switch rv.Kind() {
+	case reflect.String, reflect.Array, reflect.Slice:
+		return rv.Len(), true
+	default:
+		return 0, false
+	}
 }
 
-// GetSize returns len(v) and ok=true when HasSize(v) is true.
-func GetSize(v any) (size int, ok bool) {
-	if !HasSize(v) {
+// Size returns len(v) for maps, channels, slices, and arrays.
+// It returns (0, false) when v does not support size semantics.
+func Size(v any) (int, bool) {
+	if v == nil {
 		return 0, false
 	}
-	return reflect.ValueOf(v).Len(), true
+	rv := reflect.ValueOf(v)
+	//nolint:exhaustive // default handles all other cases
+	switch rv.Kind() {
+	case reflect.Map, reflect.Chan, reflect.Slice, reflect.Array:
+		return rv.Len(), true
+	default:
+		return 0, false
+	}
 }

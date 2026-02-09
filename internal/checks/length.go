@@ -164,7 +164,7 @@ func Size(exact int, params ...any) core.ZodCheck {
 		Check: func(payload *core.ParsePayload) {
 			if !validate.Size(payload.GetValue(), exact) {
 				// Determine if too big or too small based on actual size
-				if actualSize, ok := reflectx.GetSize(payload.GetValue()); ok {
+				if actualSize, ok := reflectx.Size(payload.GetValue()); ok {
 					origin := utils.GetSizableOrigin(payload.GetValue())
 					if actualSize > exact {
 						payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
@@ -231,7 +231,7 @@ func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if actualSize, ok := reflectx.GetSize(payload.GetValue()); ok {
+			if actualSize, ok := reflectx.Size(payload.GetValue()); ok {
 				origin := utils.GetSizableOrigin(payload.GetValue())
 				if actualSize > maximum {
 					payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
@@ -276,7 +276,7 @@ func Empty(params ...any) core.ZodCheck {
 
 // getActualLength returns the actual length using optimized utilities
 func getActualLength(value any) int {
-	if l, ok := reflectx.GetLength(value); ok {
+	if l, ok := reflectx.Length(value); ok {
 		return l
 	}
 	return 0

@@ -28,7 +28,7 @@ func main() {
 
     // Property checking
     if reflectx.HasLength(value) {
-        if length, ok := reflectx.GetLength(value); ok {
+        if length, ok := reflectx.Length(value); ok {
             fmt.Printf("Length: %d\n", length)
         }
     }
@@ -64,21 +64,19 @@ reflectx.IsNumeric(val)     // true if numeric type
 reflectx.IsMap(val)         // true if map
 reflectx.IsSlice(val)       // true if slice
 reflectx.IsNil(val)         // true if nil
-reflectx.IsZero(val)        // true if zero value
-reflectx.IsPointer(val)     // true if pointer
+reflectx.IsBool(val)        // true if bool
+reflectx.IsArray(val)       // true if array
+reflectx.IsStruct(val)      // true if struct
 
 // Property
 reflectx.HasLength(val)     // true if has length property
-length, _ := reflectx.GetLength(val)
+length, _ := reflectx.Length(val)
 
 // Value extraction
 reflectx.ExtractString(val) // (string, ok)
-reflectx.ExtractInt(val)    // (int, ok)
-reflectx.ExtractSlice(val)  // (slice, ok)
-reflectx.ExtractMap(val)    // (map, ok)
 
 // Size helpers
-size, _ := reflectx.GetSize(val)
+size, _ := reflectx.Size(val)
 
 // Pointer operations
 reflectx.Deref(ptr)         // (value, ok)

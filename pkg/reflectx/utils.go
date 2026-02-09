@@ -6,15 +6,19 @@ import (
 	"reflect"
 )
 
-// Sentinel errors returned by ConvertToGeneric.
+// Sentinel errors returned by [ConvertToGeneric].
 var (
-	ErrNilValue              = errors.New("cannot convert nil")
+	// ErrNilValue indicates a nil value was passed to ConvertToGeneric.
+	ErrNilValue = errors.New("cannot convert nil")
+	// ErrUnsupportedConversion indicates the source type cannot be converted
+	// to the target type via assignment or reflect.Convert.
 	ErrUnsupportedConversion = errors.New("unsupported conversion")
 )
 
-// ConvertToGeneric converts arbitrary value v into type T using reflection only
-// when necessary. It returns zero value of T plus an error when conversion is
-// impossible. Fast paths are kept extremely short for performance.
+// ConvertToGeneric converts v to type T. It tries direct assignment first,
+// then falls back to [reflect.Value.Convert] for safe numeric/string casts.
+// Returns the zero value of T and a wrapped sentinel error ([ErrNilValue] or
+// [ErrUnsupportedConversion]) when conversion is impossible.
 func ConvertToGeneric[T any](v any) (T, error) {
 	var zero T
 	target := reflect.TypeOf(zero)
@@ -26,16 +30,15 @@ func ConvertToGeneric[T any](v any) (T, error) {
 	srcVal := reflect.ValueOf(v)
 	srcType := srcVal.Type()
 
-	// Step 1: direct assignment (no allocation)
+	// Fast path: direct assignment (no allocation).
 	if srcType.AssignableTo(target) {
 		return v.(T), nil
 	}
 
-	// Step 2: reflect.Convert handles safe numeric/string casts
+	// Slow path: reflect.Convert handles safe numeric/string casts.
 	if srcType.ConvertibleTo(target) {
 		return srcVal.Convert(target).Interface().(T), nil
 	}
 
-	// Step 3: unsupported conversion, return error
 	return zero, fmt.Errorf("unsupported conversion from %T to %v: %w", v, target, ErrUnsupportedConversion)
 }

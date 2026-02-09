@@ -107,7 +107,7 @@ func MultipleOf(value, divisor any) bool {
 
 // MaxLength validates if value's length is at most maximum
 func MaxLength(value any, maximum int) bool {
-	l, ok := reflectx.GetLength(value)
+	l, ok := reflectx.Length(value)
 	if !ok {
 		return false
 	}
@@ -116,7 +116,7 @@ func MaxLength(value any, maximum int) bool {
 
 // MinLength validates if value's length is at least minimum
 func MinLength(value any, minimum int) bool {
-	l, ok := reflectx.GetLength(value)
+	l, ok := reflectx.Length(value)
 	if !ok {
 		return false
 	}
@@ -125,7 +125,7 @@ func MinLength(value any, minimum int) bool {
 
 // Length validates if value's length equals exactly the expected length
 func Length(value any, expected int) bool {
-	l, ok := reflectx.GetLength(value)
+	l, ok := reflectx.Length(value)
 	if !ok {
 		return false
 	}
@@ -148,12 +148,12 @@ func getCollectionSize(value any) (int, bool) {
 			return len(m), true
 		}
 		// Fall back to reflection for any other map type (e.g., map[T]struct{} for sets)
-		if size, ok := reflectx.GetSize(value); ok {
+		if size, ok := reflectx.Size(value); ok {
 			return size, true
 		}
 	}
 	if reflectx.HasLength(value) {
-		return reflectx.GetLength(value)
+		return reflectx.Length(value)
 	}
 	return 0, false
 }
