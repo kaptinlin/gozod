@@ -11,6 +11,54 @@ import (
 // BASIC PROPERTY OPERATIONS TESTS
 // =============================================================================
 
+func TestValueOf(t *testing.T) {
+	props := map[string]any{"name": "Alice", "age": 25, "active": true}
+
+	t.Run("matching type returns value true", func(t *testing.T) {
+		v, ok := ValueOf[string](props, "name")
+		assert.Equal(t, "Alice", v)
+		assert.True(t, ok)
+	})
+
+	t.Run("wrong type returns zero false", func(t *testing.T) {
+		v, ok := ValueOf[string](props, "age")
+		assert.Empty(t, v)
+		assert.False(t, ok)
+	})
+
+	t.Run("missing key returns zero false", func(t *testing.T) {
+		v, ok := ValueOf[string](props, "missing")
+		assert.Empty(t, v)
+		assert.False(t, ok)
+	})
+
+	t.Run("nil map returns zero false", func(t *testing.T) {
+		v, ok := ValueOf[string](nil, "key")
+		assert.Empty(t, v)
+		assert.False(t, ok)
+	})
+}
+
+func TestValueOrDefault(t *testing.T) {
+	props := map[string]any{"name": "Alice", "age": 25}
+
+	t.Run("matching type returns value", func(t *testing.T) {
+		assert.Equal(t, "Alice", ValueOrDefault(props, "name", "default"))
+	})
+
+	t.Run("wrong type returns default", func(t *testing.T) {
+		assert.Equal(t, "default", ValueOrDefault(props, "age", "default"))
+	})
+
+	t.Run("missing key returns default", func(t *testing.T) {
+		assert.Equal(t, "default", ValueOrDefault(props, "missing", "default"))
+	})
+
+	t.Run("nil map returns default", func(t *testing.T) {
+		assert.Equal(t, 42, ValueOrDefault(nil, "key", 42))
+	})
+}
+
 func TestGet(t *testing.T) {
 	t.Run("nil map returns nil false", func(t *testing.T) {
 		val, exists := Get(nil, "key")

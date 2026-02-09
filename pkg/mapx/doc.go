@@ -1,12 +1,12 @@
-// Package mapx provides utility functions for working with Go maps.
+// Package mapx provides type-safe utility functions for working with Go maps.
 //
-// Key features:
-//   - Map key extraction and manipulation
-//   - Map merging and cloning
-//   - Type-safe map operations
+// The core generic functions [ValueOf] and [ValueOrDefault] eliminate
+// boilerplate for typed map access. Convenience wrappers (GetString,
+// GetBool, etc.) are provided for common types.
 //
 // Usage:
 //
-//	keys := mapx.Keys(myMap)
+//	name, ok := mapx.ValueOf[string](m, "name")
+//	port := mapx.ValueOrDefault(m, "port", 8080)
 //	merged := mapx.Merge(map1, map2)
 package mapx
