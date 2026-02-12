@@ -83,7 +83,13 @@ func executeChecks(
 		}
 
 		// Skip check if "when" predicate returns false.
+		// Check for explicit abort before evaluating When — a prior check
+		// with Abort:true should prevent subsequent checks from running,
+		// even if they have a When predicate (Zod v4 fix: 5b574501).
 		if ci.When != nil {
+			if CheckAborted(*payload, 0) {
+				continue
+			}
 			wp := core.NewParsePayloadWithPath(val, payload.Path())
 			if !ci.When(wp) {
 				continue

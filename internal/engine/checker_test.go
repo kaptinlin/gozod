@@ -236,6 +236,38 @@ func TestExecuteChecks(t *testing.T) {
 		}
 	})
 
+	t.Run("abort skips check with When predicate", func(t *testing.T) {
+		payload := core.NewParsePayload("hi")
+
+		// Check 1: always fails, with Abort: true
+		check1 := checks.NewCustom[string](func(v any) bool {
+			return false
+		}, core.CustomParams{
+			Abort: true,
+		})
+
+		// Check 2: has a When predicate (like built-in Min/Max) — should be skipped
+		check2 := checks.NewCustom[string](func(v any) bool {
+			return false // Would fail if reached
+		}, core.CustomParams{
+			When: func(_ *core.ParsePayload) bool {
+				return true // When passes, but abort should prevent execution
+			},
+		})
+
+		checkList := []core.ZodCheck{check1, check2}
+		result := executeChecks("hi", checkList, payload, nil)
+
+		if result == nil {
+			t.Fatal("Expected result, got nil")
+		}
+
+		// Should have exactly 1 issue from check1, not 2
+		if len(result.Issues()) != 1 {
+			t.Errorf("Expected exactly 1 issue (abort should skip When-gated check), got %d", len(result.Issues()))
+		}
+	})
+
 	t.Run("memory optimization with sufficient capacity", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
