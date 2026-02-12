@@ -180,7 +180,7 @@ func FormatErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) ZodFo
 type ZodErrorTree struct {
 	Errors     []string                 `json:"errors"`               // Errors at this level
 	Properties map[string]*ZodErrorTree `json:"properties,omitempty"` // Object property errors
-	Items      [](*ZodErrorTree)        `json:"items,omitempty"`      // Array/slice item errors
+	Items      []*ZodErrorTree          `json:"items,omitempty"`      // Array/slice item errors
 }
 
 // FlattenedError separates top-level form errors from field-specific errors.
@@ -211,7 +211,7 @@ func TreeifyErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) *Zod
 	tree := &ZodErrorTree{
 		Errors:     make([]string, 0, max(issueCount/4, 2)),
 		Properties: make(map[string]*ZodErrorTree, max(issueCount/2, 4)),
-		Items:      make([](*ZodErrorTree), 0, max(issueCount/4, 2)),
+		Items:      make([]*ZodErrorTree, 0, max(issueCount/4, 2)),
 	}
 
 	for _, issue := range zodErr.Issues {
@@ -241,7 +241,7 @@ func processIssueInTree(issue ZodIssue, tree *ZodErrorTree, mapper func(ZodIssue
 				current.Properties[element] = &ZodErrorTree{
 					Errors:     []string{},
 					Properties: make(map[string]*ZodErrorTree),
-					Items:      [](*ZodErrorTree){},
+					Items:      []*ZodErrorTree{},
 				}
 			}
 			current = current.Properties[element]
@@ -251,7 +251,7 @@ func processIssueInTree(issue ZodIssue, tree *ZodErrorTree, mapper func(ZodIssue
 				current.Items = append(current.Items, &ZodErrorTree{
 					Errors:     []string{},
 					Properties: make(map[string]*ZodErrorTree),
-					Items:      [](*ZodErrorTree){},
+					Items:      []*ZodErrorTree{},
 				})
 			}
 			current = current.Items[element]

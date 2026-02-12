@@ -23,11 +23,13 @@ const (
 )
 
 // Core issue types
-type ParseParams = core.ParseParams
-type ZodErrorMap = core.ZodErrorMap
-type ZodIssueBase = core.ZodIssueBase
-type ZodRawIssue = core.ZodRawIssue
-type ZodIssue = core.ZodIssue
+type (
+	ParseParams  = core.ParseParams
+	ZodErrorMap  = core.ZodErrorMap
+	ZodIssueBase = core.ZodIssueBase
+	ZodRawIssue  = core.ZodRawIssue
+	ZodIssue     = core.ZodIssue
+)
 
 // ZodIssueInvalidType represents a type validation error.
 // Corresponds to Zod v4's $ZodIssueInvalidType

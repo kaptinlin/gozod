@@ -31,168 +31,163 @@ func NewRawIssueFromMessage(message string, input any, inst any) core.ZodRawIssu
 	}
 }
 
+// ensureProperties initializes the Properties map if nil.
+func ensureProperties(issue *core.ZodRawIssue) {
+	if issue.Properties == nil {
+		issue.Properties = make(map[string]any)
+	}
+}
+
+// WithOrigin sets the origin property on a raw issue.
 func WithOrigin(origin string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["origin"] = origin
 	}
 }
 
+// WithMessage sets the message on a raw issue.
 func WithMessage(message string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Message = message
 	}
 }
 
+// WithMinimum sets the minimum property on a raw issue.
 func WithMinimum(minimum any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["minimum"] = minimum
 	}
 }
 
+// WithMaximum sets the maximum property on a raw issue.
 func WithMaximum(maximum any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["maximum"] = maximum
 	}
 }
 
+// WithExpected sets the expected property on a raw issue.
 func WithExpected(expected string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["expected"] = expected
 	}
 }
 
+// WithReceived sets the received property on a raw issue.
 func WithReceived(received string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["received"] = received
 	}
 }
 
+// WithPath sets the path on a raw issue.
 func WithPath(path []any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Path = path
 	}
 }
 
+// WithInclusive sets the inclusive property on a raw issue.
 func WithInclusive(inclusive bool) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["inclusive"] = inclusive
 	}
 }
 
+// WithFormat sets the format property on a raw issue.
 func WithFormat(format string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["format"] = format
 	}
 }
 
+// WithContinue sets the continue flag on a raw issue.
 func WithContinue(cont bool) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Continue = cont
 	}
 }
 
+// WithPattern sets the pattern property on a raw issue.
 func WithPattern(pattern string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["pattern"] = pattern
 	}
 }
 
+// WithPrefix sets the prefix property on a raw issue.
 func WithPrefix(prefix string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["prefix"] = prefix
 	}
 }
 
+// WithSuffix sets the suffix property on a raw issue.
 func WithSuffix(suffix string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["suffix"] = suffix
 	}
 }
 
+// WithIncludes sets the includes property on a raw issue.
 func WithIncludes(includes string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["includes"] = includes
 	}
 }
 
+// WithDivisor sets the divisor property on a raw issue.
 func WithDivisor(divisor any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["divisor"] = divisor
 	}
 }
 
+// WithKeys sets the keys property on a raw issue.
 func WithKeys(keys []string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["keys"] = keys
 	}
 }
 
+// WithValues sets the values property on a raw issue.
 func WithValues(values []any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["values"] = values
 	}
 }
 
+// WithAlgorithm sets the algorithm property on a raw issue.
 func WithAlgorithm(algorithm string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["algorithm"] = algorithm
 	}
 }
 
+// WithParams sets the params property on a raw issue.
 func WithParams(params map[string]any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties["params"] = params
 	}
 }
 
+// WithInst sets the schema instance on a raw issue.
 func WithInst(inst any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Inst = inst
@@ -202,9 +197,7 @@ func WithInst(inst any) func(*core.ZodRawIssue) {
 // WithProperty sets a single property by key.
 func WithProperty(key string, value any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties[key] = value
 	}
 }
@@ -212,9 +205,7 @@ func WithProperty(key string, value any) func(*core.ZodRawIssue) {
 // WithProperties merges multiple properties into the issue.
 func WithProperties(properties map[string]any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
-		if issue.Properties == nil {
-			issue.Properties = make(map[string]any)
-		}
+		ensureProperties(issue)
 		issue.Properties = mapx.Merge(issue.Properties, properties)
 	}
 }

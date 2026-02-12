@@ -9,8 +9,12 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
+// ----------------------------------------------------------------------------
+// Modifier processing
+// ----------------------------------------------------------------------------
+
 // processModifiers handles modifier processing for nil input.
-// Returns early for non-nil input.
+// It returns early for non-nil input.
 func processModifiers[T any](
 	input any,
 	internals *core.ZodTypeInternals,
@@ -103,8 +107,16 @@ func processModifiersCore[T any](
 	return nil, true, issues.CreateInvalidTypeError(expectedType, input, ctx)
 }
 
+// ----------------------------------------------------------------------------
+// Transform and utility helpers
+// ----------------------------------------------------------------------------
+
 // applyTransformIfPresent applies the transform function if set.
-func applyTransformIfPresent(result any, internals *core.ZodTypeInternals, ctx *core.ParseContext) (any, error) {
+func applyTransformIfPresent(
+	result any,
+	internals *core.ZodTypeInternals,
+	ctx *core.ParseContext,
+) (any, error) {
 	if internals.Transform == nil {
 		return result, nil
 	}

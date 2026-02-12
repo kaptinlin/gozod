@@ -58,16 +58,16 @@ type Cloneable interface {
 
 // ZodTypeInternals holds the complete configuration and state for any schema.
 type ZodTypeInternals struct {
-	Type   ZodTypeCode                                                  // Type identifier
-	Checks []ZodCheck                                                   // Validation checks to apply
-	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload // Core parsing function
+	Type   ZodTypeCode // Type identifier
+	Checks []ZodCheck  // Validation checks to apply
+	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload
 
 	// Core validation flags
-	Coerce        bool // Whether to enable type coercion
-	Optional      bool // Whether the field is optional
-	Nilable       bool // Whether nil values are allowed
-	NonOptional   bool // True if .NonOptional() was applied
-	ExactOptional bool // True if .ExactOptional() was applied
+	Coerce        bool
+	Optional      bool
+	Nilable       bool
+	NonOptional   bool
+	ExactOptional bool
 
 	// Default/Prefault values
 	DefaultValue  any
@@ -96,7 +96,6 @@ type ZodTypeInternals struct {
 }
 
 // Clone creates a deep copy of the internals for copy-on-write modifications.
-//
 // Deep copied: Checks slice, Values map, Bag map.
 // Shared (immutable): function pointers, Pattern, Error.
 func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
@@ -164,8 +163,7 @@ func (z *ZodTypeInternals) SetNonOptional(value bool) {
 }
 
 // SetExactOptional enables exact optional mode.
-// Also sets Optional=true because ExactOptional implies Optional
-// for absent key handling.
+// Also sets Optional=true because ExactOptional implies Optional for absent key handling.
 func (z *ZodTypeInternals) SetExactOptional(value bool) {
 	z.ExactOptional = value
 	if value {

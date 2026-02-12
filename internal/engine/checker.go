@@ -6,8 +6,16 @@ import (
 	"github.com/kaptinlin/gozod/core"
 )
 
+// ----------------------------------------------------------------------------
+// Public check execution API
+// ----------------------------------------------------------------------------
+
 // RunChecks executes all validation checks on a payload's value.
-func RunChecks(checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.ParseContext) *core.ParsePayload {
+func RunChecks(
+	checks []core.ZodCheck,
+	payload *core.ParsePayload,
+	ctx ...*core.ParseContext,
+) *core.ParsePayload {
 	if payload == nil || len(checks) == 0 {
 		return payload
 	}
@@ -21,7 +29,12 @@ func RunChecks(checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.
 }
 
 // RunChecksOnValue executes all validation checks on a specific value.
-func RunChecksOnValue(value any, checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.ParseContext) *core.ParsePayload {
+func RunChecksOnValue(
+	value any,
+	checks []core.ZodCheck,
+	payload *core.ParsePayload,
+	ctx ...*core.ParseContext,
+) *core.ParsePayload {
 	if payload == nil || len(checks) == 0 {
 		return payload
 	}
@@ -34,8 +47,17 @@ func RunChecksOnValue(value any, checks []core.ZodCheck, payload *core.ParsePayl
 	return executeChecks(value, checks, payload, pc)
 }
 
+// ----------------------------------------------------------------------------
+// Internal check execution
+// ----------------------------------------------------------------------------
+
 // executeChecks runs all checks sequentially, collecting issues and applying overwrites.
-func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload, _ *core.ParseContext) *core.ParsePayload {
+func executeChecks(
+	value any,
+	checks []core.ZodCheck,
+	payload *core.ParsePayload,
+	_ *core.ParseContext,
+) *core.ParsePayload {
 	n := len(checks)
 	if n == 0 {
 		return payload

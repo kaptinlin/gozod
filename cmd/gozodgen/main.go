@@ -103,7 +103,7 @@ func main() {
 	}
 }
 
-// showHelp displays the help message
+// showHelp displays the help message.
 func showHelp() {
 	fmt.Println(`gozodgen - GoZod Code Generation Tool
 
@@ -151,7 +151,7 @@ OUTPUT:
     gozod tags, providing zero-reflection validation performance.`)
 }
 
-// parseBuildTags parses comma-separated build tags
+// parseBuildTags parses comma-separated build tags.
 func parseBuildTags(tags string) []string {
 	if tags == "" {
 		return nil
@@ -166,7 +166,7 @@ func parseBuildTags(tags string) []string {
 	return result
 }
 
-// GeneratorConfig holds configuration for the code generator
+// GeneratorConfig holds configuration for the code generator.
 type GeneratorConfig struct {
 	OutputSuffix string   // File suffix for generated files
 	PackageName  string   // Override package name

@@ -46,8 +46,6 @@ func CreateInvalidValueIssue(validValues []any, input any) core.ZodRawIssue {
 				values = uniqueSlice
 			}
 		}
-	} else if len(validValues) > 10 {
-		values = validValues
 	}
 
 	properties := make(map[string]any, 1)

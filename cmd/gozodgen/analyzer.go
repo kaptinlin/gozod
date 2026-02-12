@@ -1,4 +1,3 @@
-// Package main provides the gozodgen code generation tool.
 package main
 
 import (
@@ -21,10 +20,10 @@ var (
 	errEmptyRuleName     = errors.New("empty rule name")
 )
 
-// timeType is a marker type for time.Time detection
+// timeType is a marker type for time.Time detection.
 type timeType struct{}
 
-// StructAnalyzer analyzes Go source files to find structs requiring code generation
+// StructAnalyzer analyzes Go source files to find structs requiring code generation.
 type StructAnalyzer struct {
 	fset     *token.FileSet
 	packages map[string]*types.Package
@@ -42,7 +41,7 @@ type GenerationInfo struct {
 	FilePath    string                // Source file path
 }
 
-// NewStructAnalyzer creates a new AST analyzer instance
+// NewStructAnalyzer creates a new AST analyzer instance.
 func NewStructAnalyzer() (*StructAnalyzer, error) {
 	info := &types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
@@ -60,7 +59,7 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 
 // AnalyzePackage analyzes all Go files in a package directory.
 func (a *StructAnalyzer) AnalyzePackage(pkgPath string) ([]*GenerationInfo, error) {
-	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments) //nolint:deprecated // ParseDir is sufficient for code generation
+	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("parse package %s: %w", pkgPath, err)
 	}
@@ -165,7 +164,7 @@ func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, 
 	}, nil
 }
 
-// extractImports extracts import statements from a file
+// extractImports extracts import statements from a file.
 func (a *StructAnalyzer) extractImports(file *ast.File) []string {
 	imports := make([]string, 0, len(file.Imports))
 
@@ -414,7 +413,7 @@ func extractTagValue(tagString, tagName string) string {
 	return reflect.StructTag(tagString).Get(tagName)
 }
 
-// parseTagRules parses gozod tag rules with proper handling of complex JSON values
+// parseTagRules parses gozod tag rules with proper handling of complex JSON values.
 func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, error) {
 	if tagValue == "" {
 		return nil, nil

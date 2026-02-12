@@ -14,14 +14,14 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
-// basicTypes is a set of basic Go type names for fast lookup
+// basicTypes is a set of basic Go type names for fast lookup.
 var basicTypes = map[string]bool{
 	"string": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"float32": true, "float64": true, "bool": true, "complex64": true, "complex128": true,
 }
 
-// basicTypeConstructors maps basic Go types to their GoZod constructor calls
+// basicTypeConstructors maps basic Go types to their GoZod constructor calls.
 var basicTypeConstructors = map[string]string{
 	"string":     "gozod.String()",
 	"int":        "gozod.Int()",
@@ -41,7 +41,7 @@ var basicTypeConstructors = map[string]string{
 	"complex128": "gozod.Complex128()",
 }
 
-// FileWriter handles the generation and writing of Go code files
+// FileWriter handles the generation and writing of Go code files.
 type FileWriter struct {
 	outputDir    string
 	packageName  string
@@ -127,7 +127,7 @@ func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
 	return buf.String(), nil
 }
 
-// generateImports generates the import statements needed for the generated code
+// generateImports generates the import statements needed for the generated code.
 func (w *FileWriter) generateImports(info *GenerationInfo) []string {
 	imports := make(map[string]bool)
 
@@ -617,7 +617,7 @@ func ({{.StructName | receiverName}} {{.StructName}}) Schema() *gozod.ZodStruct[
 	return tmpl, nil
 }
 
-// firstLowerCase converts the first character of a string to lowercase and handles special cases
+// firstLowerCase converts the first character of a string to lowercase and handles special cases.
 func firstLowerCase(s string) string {
 	if s == "" {
 		return s
@@ -650,7 +650,7 @@ func firstLowerCase(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-// receiverName generates a valid Go receiver variable name
+// receiverName generates a valid Go receiver variable name.
 func receiverName(s string) string {
 	if s == "" {
 		return "x"
@@ -693,7 +693,7 @@ func receiverName(s string) string {
 	return name
 }
 
-// toSnakeCase converts CamelCase to snake_case properly
+// toSnakeCase converts CamelCase to snake_case properly.
 func toSnakeCase(s string) string {
 	if s == "" {
 		return s

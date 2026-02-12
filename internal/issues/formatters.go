@@ -498,29 +498,23 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 	if origin == "file" {
 		if isTooSmall {
 			return fmt.Sprintf("File size must be at least %s bytes", thresholdStr)
-		} else {
-			return fmt.Sprintf("File size must be at most %s bytes", thresholdStr)
 		}
+		return fmt.Sprintf("File size must be at most %s bytes", thresholdStr)
 	}
 
-	// Use consistent "Too small/Too big: expected X to be/have Y" format for other types
-	if sizing != nil {
-		// For sized types (strings, arrays, etc.), use "have" with sizing info
-		adj := FriendlyComparisonText(inclusive, isTooSmall)
-		if isTooSmall {
-			return fmt.Sprintf("Too small: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
-		} else {
-			return fmt.Sprintf("Too big: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
-		}
-	} else {
-		// For numeric and other types, use "be" format
-		adj := FriendlyComparisonText(inclusive, isTooSmall)
-		if isTooSmall {
-			return fmt.Sprintf("Too small: expected %s to be %s%s", origin, adj, thresholdStr)
-		} else {
-			return fmt.Sprintf("Too big: expected %s to be %s%s", origin, adj, thresholdStr)
-		}
+	adj := FriendlyComparisonText(inclusive, isTooSmall)
+	prefix := "Too big"
+	if isTooSmall {
+		prefix = "Too small"
 	}
+
+	// For sized types (strings, arrays, etc.), use "have" with sizing info
+	if sizing != nil {
+		return fmt.Sprintf("%s: expected %s to have %s%s %s", prefix, origin, adj, thresholdStr, sizing.Unit)
+	}
+
+	// For numeric and other types, use "be" format
+	return fmt.Sprintf("%s: expected %s to be %s%s", prefix, origin, adj, thresholdStr)
 }
 
 // formatStringValidation handles string format validation messages.

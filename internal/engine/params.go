@@ -8,6 +8,10 @@ import (
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
 
+// ----------------------------------------------------------------------------
+// Schema parameter helpers
+// ----------------------------------------------------------------------------
+
 // WithError creates a SchemaParams with a custom error message.
 func WithError(message string) core.SchemaParams {
 	return core.SchemaParams{Error: message}

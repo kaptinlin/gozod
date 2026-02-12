@@ -5,12 +5,13 @@ import (
 	"regexp"
 	"slices"
 
+	lib "github.com/kaptinlin/jsonschema"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/types"
-	lib "github.com/kaptinlin/jsonschema"
 )
 
-// FromJSONSchema conversion errors.
+// Conversion errors for FromJSONSchema operations.
 var (
 	ErrUnsupportedJSONSchemaType    = errors.New("unsupported JSON Schema type")
 	ErrUnsupportedJSONSchemaKeyword = errors.New("unsupported JSON Schema keyword")

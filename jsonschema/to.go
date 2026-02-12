@@ -8,12 +8,13 @@ import (
 	"reflect"
 	"slices"
 
+	lib "github.com/kaptinlin/jsonschema"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/types"
-	lib "github.com/kaptinlin/jsonschema"
 )
 
-// Sentinel errors reused across this package for consistent error handling.
+// Conversion errors for ToJSONSchema operations.
 var (
 	ErrUnsupportedInputType          = errors.New("unsupported input type")
 	ErrCircularReference             = errors.New("circular reference detected")
@@ -1256,11 +1257,11 @@ func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
 	// Ensure deterministic order for enum values to avoid map iteration randomness
 	switch enumValues[0].(type) {
 	case string:
-		slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+		slices.SortStableFunc(enumValues, func(a, b any) int {
 			return cmp.Compare(a.(string), b.(string))
 		})
 	case int, int32, int64, uint, uint32, uint64, float64, float32:
-		slices.SortStableFunc(enumValues, func(a, b interface{}) int {
+		slices.SortStableFunc(enumValues, func(a, b any) int {
 			return cmp.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
 		})
 	}

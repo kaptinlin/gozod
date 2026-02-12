@@ -1,177 +1,176 @@
 package core
 
-// IssueCode represents validation issue types
-// These codes categorize different types of validation failures
+// IssueCode represents validation issue types.
+// These codes categorize different types of validation failures.
 type IssueCode string
 
 const (
 	// Type validation issues
-	InvalidType    IssueCode = "invalid_type"    // Input type doesn't match expected type
-	InvalidValue   IssueCode = "invalid_value"   // Input value not in allowed set
-	InvalidFormat  IssueCode = "invalid_format"  // String doesn't match expected format
-	InvalidUnion   IssueCode = "invalid_union"   // None of union alternatives match
-	InvalidKey     IssueCode = "invalid_key"     // Object key validation failed
-	InvalidElement IssueCode = "invalid_element" // Array element validation failed
+	InvalidType    IssueCode = "invalid_type"
+	InvalidValue   IssueCode = "invalid_value"
+	InvalidFormat  IssueCode = "invalid_format"
+	InvalidUnion   IssueCode = "invalid_union"
+	InvalidKey     IssueCode = "invalid_key"
+	InvalidElement IssueCode = "invalid_element"
 
 	// Range validation issues
-	TooBig        IssueCode = "too_big"         // Value exceeds maximum limit
-	TooSmall      IssueCode = "too_small"       // Value below minimum limit
-	NotMultipleOf IssueCode = "not_multiple_of" // Value not multiple of divisor
+	TooBig        IssueCode = "too_big"
+	TooSmall      IssueCode = "too_small"
+	NotMultipleOf IssueCode = "not_multiple_of"
 
 	// Structure validation issues
-	UnrecognizedKeys IssueCode = "unrecognized_keys" // Object has unknown keys
+	UnrecognizedKeys IssueCode = "unrecognized_keys"
 
 	// Custom validation issues
-	Custom IssueCode = "custom" // Custom validation failure
+	Custom IssueCode = "custom"
 
 	// Schema validation issues
-	InvalidSchema IssueCode = "invalid_schema" // Schema definition is invalid
+	InvalidSchema IssueCode = "invalid_schema"
 
 	// Discriminator validation issues
-	InvalidDiscriminator IssueCode = "invalid_discriminator" // Discriminator field missing/invalid
+	InvalidDiscriminator IssueCode = "invalid_discriminator"
 
 	// Intersection validation issues
-	IncompatibleTypes IssueCode = "incompatible_types" // Types cannot be merged (intersection)
+	IncompatibleTypes IssueCode = "incompatible_types"
 
 	// New validation issues
-	MissingRequired IssueCode = "missing_required" // Required field is missing
-	TypeConversion  IssueCode = "type_conversion"  // Type conversion failed
-	NilPointer      IssueCode = "nil_pointer"      // Nil pointer encountered
-
+	MissingRequired IssueCode = "missing_required"
+	TypeConversion  IssueCode = "type_conversion"
+	NilPointer      IssueCode = "nil_pointer"
 )
 
-// ZodTypeCode represents a type-safe wrapper for schema type identifiers
-// This provides compile-time type safety and better IDE support
+// ZodTypeCode represents a type-safe wrapper for schema type identifiers.
+// This provides compile-time type safety and better IDE support.
 type ZodTypeCode string
 
-// ZodType constants define the type identifiers for all schema types
-// These are used internally to identify and categorize schema types
+// ZodType constants define the type identifiers for all schema types.
+// These are used internally to identify and categorize schema types.
 const (
 	// Primitive types
-	ZodTypeString  ZodTypeCode = "string"  // String validation schema
-	ZodTypeNumber  ZodTypeCode = "number"  // Generic number validation
-	ZodTypeNaN     ZodTypeCode = "nan"     // NaN value validation
-	ZodTypeInteger ZodTypeCode = "integer" // Integer validation
-	ZodTypeBigInt  ZodTypeCode = "bigint"  // Big integer validation
-	ZodTypeBool    ZodTypeCode = "bool"    // Boolean validation
-	ZodTypeDate    ZodTypeCode = "date"    // Date validation
-	ZodTypeNil     ZodTypeCode = "nil"     // Nil/null validation
+	ZodTypeString  ZodTypeCode = "string"
+	ZodTypeNumber  ZodTypeCode = "number"
+	ZodTypeNaN     ZodTypeCode = "nan"
+	ZodTypeInteger ZodTypeCode = "integer"
+	ZodTypeBigInt  ZodTypeCode = "bigint"
+	ZodTypeBool    ZodTypeCode = "bool"
+	ZodTypeDate    ZodTypeCode = "date"
+	ZodTypeNil     ZodTypeCode = "nil"
 
 	// Special types
-	ZodTypeAny     ZodTypeCode = "any"     // Accept any value
-	ZodTypeUnknown ZodTypeCode = "unknown" // Unknown type (safer any)
-	ZodTypeNever   ZodTypeCode = "never"   // Never accepts value
+	ZodTypeAny     ZodTypeCode = "any"
+	ZodTypeUnknown ZodTypeCode = "unknown"
+	ZodTypeNever   ZodTypeCode = "never"
 
 	// Collection types
-	ZodTypeArray  ZodTypeCode = "array"  // Fixed-length array
-	ZodTypeSlice  ZodTypeCode = "slice"  // Dynamic array/slice
-	ZodTypeTuple  ZodTypeCode = "tuple"  // Fixed-length tuple with heterogeneous types
-	ZodTypeObject ZodTypeCode = "object" // Object with known shape
-	ZodTypeStruct ZodTypeCode = "struct" // Go struct validation
-	ZodTypeRecord ZodTypeCode = "record" // Key-value record
-	ZodTypeMap    ZodTypeCode = "map"    // Go map validation
-	ZodTypeSet    ZodTypeCode = "set"    // Set validation (map[T]struct{})
+	ZodTypeArray  ZodTypeCode = "array"
+	ZodTypeSlice  ZodTypeCode = "slice"
+	ZodTypeTuple  ZodTypeCode = "tuple"
+	ZodTypeObject ZodTypeCode = "object"
+	ZodTypeStruct ZodTypeCode = "struct"
+	ZodTypeRecord ZodTypeCode = "record"
+	ZodTypeMap    ZodTypeCode = "map"
+	ZodTypeSet    ZodTypeCode = "set"
 
 	// Composite types
-	ZodTypeUnion         ZodTypeCode = "union"               // Union of multiple types (anyOf)
-	ZodTypeXor           ZodTypeCode = "xor"                 // Exclusive union (oneOf) - exactly one must match
-	ZodTypeDiscriminated ZodTypeCode = "discriminated_union" // Discriminated union
-	ZodTypeIntersection  ZodTypeCode = "intersection"        // Intersection of types
+	ZodTypeUnion         ZodTypeCode = "union"
+	ZodTypeXor           ZodTypeCode = "xor"
+	ZodTypeDiscriminated ZodTypeCode = "discriminated_union"
+	ZodTypeIntersection  ZodTypeCode = "intersection"
 
 	// Special string types
-	ZodTypeStringBool ZodTypeCode = "stringbool" // String representation of boolean
+	ZodTypeStringBool ZodTypeCode = "stringbool"
 
 	// Function and lazy types
-	ZodTypeFunction ZodTypeCode = "function" // Function validation
-	ZodTypeLazy     ZodTypeCode = "lazy"     // Lazy evaluation schema
+	ZodTypeFunction ZodTypeCode = "function"
+	ZodTypeLazy     ZodTypeCode = "lazy"
 
 	// Value types
-	ZodTypeLiteral ZodTypeCode = "literal" // Literal value validation
-	ZodTypeEnum    ZodTypeCode = "enum"    // Enumeration validation
+	ZodTypeLiteral ZodTypeCode = "literal"
+	ZodTypeEnum    ZodTypeCode = "enum"
 
 	// Modifier types
-	ZodTypeOptional ZodTypeCode = "optional" // Optional field modifier
-	ZodTypeNilable  ZodTypeCode = "nilable"  // Nilable field modifier
-	ZodTypeDefault  ZodTypeCode = "default"  // Default value wrapper
-	ZodTypePrefault ZodTypeCode = "prefault" // Fallback value wrapper
+	ZodTypeOptional ZodTypeCode = "optional"
+	ZodTypeNilable  ZodTypeCode = "nilable"
+	ZodTypeDefault  ZodTypeCode = "default"
+	ZodTypePrefault ZodTypeCode = "prefault"
 
 	// Processing types
-	ZodTypePipeline  ZodTypeCode = "pipeline"  // Processing pipeline
-	ZodTypeTransform ZodTypeCode = "transform" // Value transformation
-	ZodTypePipe      ZodTypeCode = "pipe"      // Schema piping
-	ZodTypeCustom    ZodTypeCode = "custom"    // Custom validation
-	ZodTypeCheck     ZodTypeCode = "check"     // Validation check
-	ZodTypeRefine    ZodTypeCode = "refine"    // Refinement validation
+	ZodTypePipeline  ZodTypeCode = "pipeline"
+	ZodTypeTransform ZodTypeCode = "transform"
+	ZodTypePipe      ZodTypeCode = "pipe"
+	ZodTypeCustom    ZodTypeCode = "custom"
+	ZodTypeCheck     ZodTypeCode = "check"
+	ZodTypeRefine    ZodTypeCode = "refine"
 
 	// Network and format types
-	ZodTypeIPv4     ZodTypeCode = "ipv4"     // IPv4 address validation
-	ZodTypeIPv6     ZodTypeCode = "ipv6"     // IPv6 address validation
-	ZodTypeCIDRv4   ZodTypeCode = "cidrv4"   // IPv4 CIDR validation
-	ZodTypeCIDRv6   ZodTypeCode = "cidrv6"   // IPv6 CIDR validation
-	ZodTypeEmail    ZodTypeCode = "email"    // Email address validation
-	ZodTypeURL      ZodTypeCode = "url"      // URL validation
-	ZodTypeHostname ZodTypeCode = "hostname" // DNS hostname validation
-	ZodTypeMAC      ZodTypeCode = "mac"      // MAC address validation
-	ZodTypeE164     ZodTypeCode = "e164"     // E.164 phone number validation
+	ZodTypeIPv4     ZodTypeCode = "ipv4"
+	ZodTypeIPv6     ZodTypeCode = "ipv6"
+	ZodTypeCIDRv4   ZodTypeCode = "cidrv4"
+	ZodTypeCIDRv6   ZodTypeCode = "cidrv6"
+	ZodTypeEmail    ZodTypeCode = "email"
+	ZodTypeURL      ZodTypeCode = "url"
+	ZodTypeHostname ZodTypeCode = "hostname"
+	ZodTypeMAC      ZodTypeCode = "mac"
+	ZodTypeE164     ZodTypeCode = "e164"
 
 	// Time types
-	ZodTypeTime ZodTypeCode = "time" // Go time.Time validation
+	ZodTypeTime ZodTypeCode = "time"
 
 	// ISO 8601 format validation types
-	ZodTypeIso         ZodTypeCode = "iso"          // ISO 8601 format validation
-	ZodTypeISODateTime ZodTypeCode = "iso_datetime" // ISO 8601 datetime validation
-	ZodTypeISODate     ZodTypeCode = "iso_date"     // ISO 8601 date validation
-	ZodTypeISOTime     ZodTypeCode = "iso_time"     // ISO 8601 time validation
-	ZodTypeISODuration ZodTypeCode = "iso_duration" // ISO 8601 duration validation
+	ZodTypeIso         ZodTypeCode = "iso"
+	ZodTypeISODateTime ZodTypeCode = "iso_datetime"
+	ZodTypeISODate     ZodTypeCode = "iso_date"
+	ZodTypeISOTime     ZodTypeCode = "iso_time"
+	ZodTypeISODuration ZodTypeCode = "iso_duration"
 
 	// File and binary types
-	ZodTypeFile ZodTypeCode = "file" // File validation
+	ZodTypeFile ZodTypeCode = "file"
 
 	// Numeric subtypes
-	ZodTypeFloat32     ZodTypeCode = "float32"     // 32-bit float
-	ZodTypeFloat64     ZodTypeCode = "float64"     // 64-bit float
-	ZodTypeFloat       ZodTypeCode = "float"       // Flexible float type (accepts float32, float64)
-	ZodTypeInt         ZodTypeCode = "int"         // Flexible integer type (accepts all integer types)
-	ZodTypeInt8        ZodTypeCode = "int8"        // 8-bit signed integer
-	ZodTypeInt16       ZodTypeCode = "int16"       // 16-bit signed integer
-	ZodTypeInt32       ZodTypeCode = "int32"       // 32-bit signed integer
-	ZodTypeInt64       ZodTypeCode = "int64"       // 64-bit signed integer
-	ZodTypeUint        ZodTypeCode = "uint"        // Platform-dependent unsigned integer
-	ZodTypeUint8       ZodTypeCode = "uint8"       // 8-bit unsigned integer
-	ZodTypeUint16      ZodTypeCode = "uint16"      // 16-bit unsigned integer
-	ZodTypeUint32      ZodTypeCode = "uint32"      // 32-bit unsigned integer
-	ZodTypeUint64      ZodTypeCode = "uint64"      // 64-bit unsigned integer
-	ZodTypeUintptr     ZodTypeCode = "uintptr"     // Pointer-sized unsigned integer
-	ZodTypeComplex64   ZodTypeCode = "complex64"   // 64-bit complex number
-	ZodTypeComplex128  ZodTypeCode = "complex128"  // 128-bit complex number
-	ZodTypeNonOptional ZodTypeCode = "nonoptional" // Special type identifier for non-optional fields
+	ZodTypeFloat32     ZodTypeCode = "float32"
+	ZodTypeFloat64     ZodTypeCode = "float64"
+	ZodTypeFloat       ZodTypeCode = "float"
+	ZodTypeInt         ZodTypeCode = "int"
+	ZodTypeInt8        ZodTypeCode = "int8"
+	ZodTypeInt16       ZodTypeCode = "int16"
+	ZodTypeInt32       ZodTypeCode = "int32"
+	ZodTypeInt64       ZodTypeCode = "int64"
+	ZodTypeUint        ZodTypeCode = "uint"
+	ZodTypeUint8       ZodTypeCode = "uint8"
+	ZodTypeUint16      ZodTypeCode = "uint16"
+	ZodTypeUint32      ZodTypeCode = "uint32"
+	ZodTypeUint64      ZodTypeCode = "uint64"
+	ZodTypeUintptr     ZodTypeCode = "uintptr"
+	ZodTypeComplex64   ZodTypeCode = "complex64"
+	ZodTypeComplex128  ZodTypeCode = "complex128"
+	ZodTypeNonOptional ZodTypeCode = "nonoptional"
 )
 
-// ParsedType represents the type of parsed data values at runtime
-// This corresponds to Zod v4's ParsedTypes
+// ParsedType represents the type of parsed data values at runtime.
+// This corresponds to Zod v4's ParsedTypes.
 // See: .reference/zod/packages/zod/src/v4/core/util.ts:66-82
-// These are used during runtime type detection and validation
+// These are used during runtime type detection and validation.
 type ParsedType string
 
 const (
-	ParsedTypeString   ParsedType = "string"   // String data type
-	ParsedTypeNumber   ParsedType = "number"   // Numeric data type (integers)
-	ParsedTypeBigint   ParsedType = "bigint"   // Big integer data type
-	ParsedTypeBool     ParsedType = "bool"     // Boolean data type
-	ParsedTypeFloat    ParsedType = "float"    // Floating-point data type
-	ParsedTypeObject   ParsedType = "object"   // Object/struct data type
-	ParsedTypeFunction ParsedType = "function" // Function data type
-	ParsedTypeFile     ParsedType = "file"     // File data type
-	ParsedTypeDate     ParsedType = "date"     // Date/time data type
-	ParsedTypeArray    ParsedType = "array"    // Fixed-size array data type
-	ParsedTypeSlice    ParsedType = "slice"    // Dynamic slice data type
-	ParsedTypeTuple    ParsedType = "tuple"    // Fixed-length tuple data type
-	ParsedTypeMap      ParsedType = "map"      // Map data type
-	ParsedTypeSet      ParsedType = "set"      // Set data type (map[T]struct{})
-	ParsedTypeNaN      ParsedType = "nan"      // Not-a-Number data type
-	ParsedTypeNil      ParsedType = "nil"      // Nil/null data type
-	ParsedTypeComplex  ParsedType = "complex"  // Complex number data type
-	ParsedTypeStruct   ParsedType = "struct"   // Go struct data type
-	ParsedTypeEnum     ParsedType = "enum"     // Enumeration data type
-	ParsedTypeUnknown  ParsedType = "unknown"  // Unknown data type
+	ParsedTypeString   ParsedType = "string"
+	ParsedTypeNumber   ParsedType = "number"
+	ParsedTypeBigint   ParsedType = "bigint"
+	ParsedTypeBool     ParsedType = "bool"
+	ParsedTypeFloat    ParsedType = "float"
+	ParsedTypeObject   ParsedType = "object"
+	ParsedTypeFunction ParsedType = "function"
+	ParsedTypeFile     ParsedType = "file"
+	ParsedTypeDate     ParsedType = "date"
+	ParsedTypeArray    ParsedType = "array"
+	ParsedTypeSlice    ParsedType = "slice"
+	ParsedTypeTuple    ParsedType = "tuple"
+	ParsedTypeMap      ParsedType = "map"
+	ParsedTypeSet      ParsedType = "set"
+	ParsedTypeNaN      ParsedType = "nan"
+	ParsedTypeNil      ParsedType = "nil"
+	ParsedTypeComplex  ParsedType = "complex"
+	ParsedTypeStruct   ParsedType = "struct"
+	ParsedTypeEnum     ParsedType = "enum"
+	ParsedTypeUnknown  ParsedType = "unknown"
 )

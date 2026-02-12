@@ -8,6 +8,10 @@ import (
 	"github.com/kaptinlin/gozod/pkg/mapx"
 )
 
+// ----------------------------------------------------------------------------
+// Type initialization and construction
+// ----------------------------------------------------------------------------
+
 // InitZodType initializes the common fields of a ZodType.
 func InitZodType[T core.ZodType[any]](schema T, def *core.ZodTypeDef) {
 	i := schema.Internals()
@@ -55,8 +59,15 @@ func NewBaseZodTypeInternals(typeName core.ZodTypeCode) core.ZodTypeInternals {
 	}
 }
 
+// ----------------------------------------------------------------------------
+// Copy-on-write operations
+// ----------------------------------------------------------------------------
+
 // AddCheck adds a validation check and returns a new schema instance (copy-on-write).
-func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](schema T, check core.ZodCheck) core.ZodType[any] {
+func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](
+	schema T,
+	check core.ZodCheck,
+) core.ZodType[any] {
 	src := schema.Internals()
 
 	checks := append(append([]core.ZodCheck(nil), src.Checks...), check)
@@ -95,7 +106,10 @@ func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](schema T, check
 }
 
 // Clone creates a new schema instance with optional definition modifications (copy-on-write).
-func Clone[T interface{ Internals() *core.ZodTypeInternals }](schema T, modify func(*core.ZodTypeDef)) core.ZodType[any] {
+func Clone[T interface{ Internals() *core.ZodTypeInternals }](
+	schema T,
+	modify func(*core.ZodTypeDef),
+) core.ZodType[any] {
 	src := schema.Internals()
 
 	def := &core.ZodTypeDef{
@@ -131,6 +145,10 @@ func Clone[T interface{ Internals() *core.ZodTypeInternals }](schema T, modify f
 	return dst
 }
 
+// ----------------------------------------------------------------------------
+// Internals state management
+// ----------------------------------------------------------------------------
+
 // CopyInternalsState copies all state from src to dst.
 func CopyInternalsState(dst, src *core.ZodTypeInternals) {
 	if src == nil || dst == nil {
@@ -162,7 +180,7 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 		return
 	}
 
-	// Merge flags
+	// Merge flags.
 	if src.IsOptional() {
 		dst.SetOptional(true)
 	}
@@ -173,7 +191,7 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 		dst.SetCoerce(true)
 	}
 
-	// Merge modifiers
+	// Merge modifiers.
 	if src.DefaultValue != nil {
 		dst.SetDefaultValue(src.DefaultValue)
 	}
