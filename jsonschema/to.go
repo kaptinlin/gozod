@@ -1226,6 +1226,21 @@ func (c *converter) convertRecord(schema core.ZodSchema) (*lib.Schema, error) {
 		}
 	}
 
+	// For loose records with regex-based key patterns, emit patternProperties
+	// instead of propertyNames for more semantically correct JSON Schema that
+	// composes better with allOf/intersections (Zod v4: e01cd02b).
+	if looseSchema, ok := schema.(interface{ IsLoose() bool }); ok && looseSchema.IsLoose() {
+		if propertyNames != nil && propertyNames.Pattern != nil {
+			patternProps := lib.SchemaMap{
+				*propertyNames.Pattern: additionalProperties,
+			}
+			return &lib.Schema{
+				Type:              []string{"object"},
+				PatternProperties: &patternProps,
+			}, nil
+		}
+	}
+
 	return &lib.Schema{
 		Type:                 []string{"object"},
 		PropertyNames:        propertyNames,

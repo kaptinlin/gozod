@@ -695,6 +695,29 @@ func TestToJSONSchema_Records(t *testing.T) {
 		assert.NoError(t, err)
 		assertJSONEquals(t, expected, string(jsonSchemaBytes))
 	})
+
+	t.Run("LooseRecord with regex key emits patternProperties", func(t *testing.T) {
+		// Zod v4 (e01cd02b): loose records with regex key patterns should emit
+		// patternProperties instead of propertyNames for more semantic JSON Schema.
+		schema := types.LooseRecord(types.String().Regex(regexp.MustCompile("^[a-z]+$")), types.Int())
+		expected := `{"type":"object","patternProperties":{"^[a-z]+$":{"type":"integer"}}}`
+		jsonSchema, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(jsonSchema)
+		require.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
+
+	t.Run("Non-loose Record with regex key uses propertyNames", func(t *testing.T) {
+		// Non-loose records should still use propertyNames even with regex key patterns.
+		schema := types.Record(types.String().Regex(regexp.MustCompile("^[a-z]+$")), types.Int())
+		expected := `{"type":"object","propertyNames":{"type":"string","pattern":"^[a-z]+$"},"additionalProperties":{"type":"integer"}}`
+		jsonSchema, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(jsonSchema)
+		require.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
 }
 
 // =============================================================================
