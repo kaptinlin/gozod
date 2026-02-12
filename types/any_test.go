@@ -30,51 +30,73 @@ func TestAny_BasicFunctionality(t *testing.T) {
 
 		for _, input := range testCases {
 			result, err := schema.Parse(input)
-			require.NoError(t, err, "Expected no error for input: %v", input)
-			assert.Equal(t, input, result, "Expected input to be returned as-is")
+			require.NoError(t, err, "input: %v", input)
+			assert.Equal(t, input, result)
 		}
 	})
 
-	t.Run("mustParse success", func(t *testing.T) {
+	t.Run("MustParse success", func(t *testing.T) {
 		schema := Any()
 		result := schema.MustParse("test")
 		assert.Equal(t, "test", result)
 	})
 
-	t.Run("mustParse panic on error", func(t *testing.T) {
+	t.Run("MustParse panics on error", func(t *testing.T) {
 		schema := Any().Refine(func(v any) bool {
-			return false // Always fail
+			return false
 		})
-
 		assert.Panics(t, func() {
 			schema.MustParse("test")
 		})
 	})
 
 	t.Run("basic validation with refinement", func(t *testing.T) {
-		// Only accept strings
 		schema := Any().Refine(func(v any) bool {
 			_, ok := v.(string)
 			return ok
 		})
 
-		// Valid string
 		result, err := schema.Parse("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
-		// Invalid non-string
 		_, err = schema.Parse(42)
-		assert.Error(t, err, "Expected error for non-string input")
+		assert.Error(t, err)
 	})
 
 	t.Run("nil handling", func(t *testing.T) {
 		schema := Any()
-
-		// Nil should be accepted for Any type
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
+	})
+}
+
+// =============================================================================
+// StrictParse tests
+// =============================================================================
+
+func TestAny_StrictParse(t *testing.T) {
+	t.Run("accepts value", func(t *testing.T) {
+		schema := Any()
+		result, err := schema.StrictParse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+	})
+
+	t.Run("MustStrictParse success", func(t *testing.T) {
+		schema := Any()
+		result := schema.MustStrictParse(42)
+		assert.Equal(t, 42, result)
+	})
+
+	t.Run("MustStrictParse panics on error", func(t *testing.T) {
+		schema := Any().Refine(func(v any) bool {
+			return false
+		})
+		assert.Panics(t, func() {
+			schema.MustStrictParse("test")
+		})
 	})
 }
 
@@ -85,15 +107,7 @@ func TestAny_BasicFunctionality(t *testing.T) {
 func TestAny_TypeSafety(t *testing.T) {
 	t.Run("type preservation", func(t *testing.T) {
 		schema := Any()
-
-		// Test that types are preserved
-		inputs := []any{
-			"string",
-			42,
-			3.14,
-			true,
-			[]int{1, 2, 3},
-		}
+		inputs := []any{"string", 42, 3.14, true, []int{1, 2, 3}}
 
 		for _, input := range inputs {
 			result, err := schema.Parse(input)
@@ -104,14 +118,11 @@ func TestAny_TypeSafety(t *testing.T) {
 
 	t.Run("complex nested type preservation", func(t *testing.T) {
 		schema := Any()
-
 		complexInput := map[string]any{
 			"string": "value",
 			"number": 42,
 			"array":  []any{1, "two", true},
-			"nested": map[string]any{
-				"inner": "value",
-			},
+			"nested": map[string]any{"inner": "value"},
 		}
 
 		result, err := schema.Parse(complexInput)
@@ -125,53 +136,86 @@ func TestAny_TypeSafety(t *testing.T) {
 // =============================================================================
 
 func TestAny_Modifiers(t *testing.T) {
-	t.Run("Optional behavior", func(t *testing.T) {
-		schema := Any()
-		optionalSchema := schema.Optional()
+	t.Run("Optional", func(t *testing.T) {
+		optionalSchema := Any().Optional()
 
-		// Type check: ensure it returns *ZodAny[any, *any]
-		_ = optionalSchema
-
-		// Test non-nil value - returns pointer
 		result, err := optionalSchema.Parse("hello")
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "hello", *result)
 
-		// Test nil value (should be allowed for optional)
 		result, err = optionalSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
-	t.Run("Nilable behavior", func(t *testing.T) {
-		schema := Any()
-		nilableSchema := schema.Nilable()
+	t.Run("Nilable", func(t *testing.T) {
+		nilableSchema := Any().Nilable()
 
-		_ = nilableSchema
-
-		// Test nil handling
 		result, err := nilableSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
-		// Test valid value - returns pointer
 		result, err = nilableSchema.Parse(42)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, 42, *result)
 	})
 
-	t.Run("Default preserves any type", func(t *testing.T) {
-		schema := Any()
-		defaultSchema := schema.Default("default_value")
+	t.Run("Nullish", func(t *testing.T) {
+		schema := Any().Nullish()
 
-		_ = defaultSchema
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 
-		// Valid input should override default
-		result, err := defaultSchema.Parse("input_value")
+		result, err = schema.Parse("value")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "value", *result)
+	})
+
+	t.Run("Default", func(t *testing.T) {
+		schema := Any().Default("default_value")
+
+		result, err := schema.Parse("input_value")
 		require.NoError(t, err)
 		assert.Equal(t, "input_value", result)
+
+		result, err = schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "default_value", result)
+	})
+
+	t.Run("DefaultFunc", func(t *testing.T) {
+		called := false
+		schema := Any().DefaultFunc(func() any {
+			called = true
+			return "dynamic_default"
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "dynamic_default", result)
+		assert.True(t, called)
+	})
+
+	t.Run("Prefault", func(t *testing.T) {
+		schema := Any().Prefault("fallback")
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "fallback", result)
+	})
+
+	t.Run("PrefaultFunc", func(t *testing.T) {
+		schema := Any().PrefaultFunc(func() any {
+			return "dynamic_fallback"
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "dynamic_fallback", result)
 	})
 }
 
@@ -181,25 +225,21 @@ func TestAny_Modifiers(t *testing.T) {
 
 func TestAny_Refine(t *testing.T) {
 	t.Run("basic refinement", func(t *testing.T) {
-		// Only accept strings
 		schema := Any().Refine(func(v any) bool {
 			_, ok := v.(string)
 			return ok
 		})
 
-		// Valid case
 		result, err := schema.Parse("hello")
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
 
-		// Invalid case
 		_, err = schema.Parse(42)
 		assert.Error(t, err)
 	})
 
 	t.Run("refine with pointer constraints", func(t *testing.T) {
 		schema := Any().Nilable().Refine(func(v *any) bool {
-			// Accept nil or strings
 			if v == nil {
 				return true
 			}
@@ -207,41 +247,69 @@ func TestAny_Refine(t *testing.T) {
 			return ok
 		})
 
-		// Nil should be accepted
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
-		// String should pass - returns pointer
 		result, err = schema.Parse("hello")
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "hello", *result)
 
-		// Number should fail
 		_, err = schema.Parse(42)
+		assert.Error(t, err)
+	})
+
+	t.Run("RefineAny", func(t *testing.T) {
+		schema := Any().RefineAny(func(v any) bool {
+			_, ok := v.(int)
+			return ok
+		})
+
+		result, err := schema.Parse(42)
+		require.NoError(t, err)
+		assert.Equal(t, 42, result)
+
+		_, err = schema.Parse("not int")
 		assert.Error(t, err)
 	})
 }
 
 // =============================================================================
-// Factory function tests
+// NonOptional tests
+// =============================================================================
+
+func TestAny_NonOptional(t *testing.T) {
+	t.Run("rejects nil", func(t *testing.T) {
+		schema := Any().NonOptional()
+
+		_, err := schema.Parse(123)
+		require.NoError(t, err)
+
+		_, err = schema.Parse(nil)
+		assert.Error(t, err)
+		var zErr *issues.ZodError
+		if issues.IsZodError(err, &zErr) {
+			assert.Equal(t, core.ZodTypeNonOptional,
+				zErr.Issues[0].Expected)
+		}
+	})
+}
+
+// =============================================================================
+// Factory tests
 // =============================================================================
 
 func TestAny_Factories(t *testing.T) {
-	t.Run("Any factory", func(t *testing.T) {
+	t.Run("Any", func(t *testing.T) {
 		schema := Any()
-		_ = schema
-
 		result, err := schema.Parse("test")
 		require.NoError(t, err)
 		assert.Equal(t, "test", result)
 	})
 
-	t.Run("AnyPtr factory", func(t *testing.T) {
+	t.Run("AnyPtr", func(t *testing.T) {
 		schema := AnyPtr()
-		_ = schema
-
 		result, err := schema.Parse("test")
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -252,21 +320,36 @@ func TestAny_Factories(t *testing.T) {
 		schema := Any(core.SchemaParams{
 			Error: "Custom error",
 		})
-
 		require.NotNil(t, schema)
 	})
 }
 
-func TestAny_NonOptional(t *testing.T) {
-	schema := Any().NonOptional()
+// =============================================================================
+// Composition tests
+// =============================================================================
 
-	_, err := schema.Parse(123)
-	require.NoError(t, err)
+func TestAny_Composition(t *testing.T) {
+	t.Run("And", func(t *testing.T) {
+		schema := Any().And(Any())
+		require.NotNil(t, schema)
+	})
 
-	_, err = schema.Parse(nil)
-	assert.Error(t, err)
-	var zErr *issues.ZodError
-	if issues.IsZodError(err, &zErr) {
-		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
-	}
+	t.Run("Or", func(t *testing.T) {
+		schema := Any().Or(String())
+		require.NotNil(t, schema)
+	})
+}
+
+// =============================================================================
+// Copy-on-Write immutability tests
+// =============================================================================
+
+func TestAny_CopyOnWrite(t *testing.T) {
+	t.Run("modifiers do not mutate original", func(t *testing.T) {
+		original := Any()
+		_ = original.Optional()
+		_ = original.Default("x")
+
+		assert.False(t, original.IsOptional())
+	})
 }

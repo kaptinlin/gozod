@@ -11,19 +11,19 @@ import (
 // TYPE DEFINITIONS
 // =============================================================================
 
-// ZodAnyDef defines the configuration for any value validation
+// ZodAnyDef defines the configuration for any value validation.
 type ZodAnyDef struct {
 	core.ZodTypeDef
 }
 
-// ZodAnyInternals contains any validator internal state
+// ZodAnyInternals contains any validator internal state.
 type ZodAnyInternals struct {
 	core.ZodTypeInternals
-	Def *ZodAnyDef // Schema definition
+	Def *ZodAnyDef
 }
 
-// ZodAny represents an any-value validation schema with dual generic parameters
-// T = base type (any), R = constraint type (any or *any)
+// ZodAny validates any value with dual generic parameters.
+// T is the base type (any), R is the constraint type (any or *any).
 type ZodAny[T any, R any] struct {
 	internals *ZodAnyInternals
 }
@@ -32,56 +32,76 @@ type ZodAny[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema
+// GetInternals returns the internal state of the schema.
 func (z *ZodAny[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
+// IsOptional reports whether this schema accepts undefined/missing values.
 func (z *ZodAny[T, R]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
 
-// IsNilable returns true if this schema accepts nil values
+// IsNilable reports whether this schema accepts nil values.
 func (z *ZodAny[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// validateAnyValue is the Any type validator - accepts any value and applies checks
-func validateAnyValue[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-	// Any type accepts any value, only need to apply checks
-	return engine.ApplyChecks[T](value, checks, ctx)
+// convertAnyResult handles nil and pointer conversion for the any type,
+// where engine.ConvertToConstraintType cannot distinguish nil any.
+func convertAnyResult[T any, R any](
+	result any,
+	_ *core.ParseContext,
+	_ core.ZodTypeCode,
+) (R, error) {
+	var zero R
+	if result == nil {
+		return zero, nil
+	}
+	// Direct type match (covers R=any case)
+	if r, ok := result.(R); ok {
+		return r, nil
+	}
+	// Handle R=*any: wrap value in pointer
+	if _, ok := any(zero).(*any); ok {
+		valueCopy := result
+		return any(&valueCopy).(R), nil
+	}
+	return zero, nil
 }
 
-// Parse returns the input value as-is with modifier support using engine.ParsePrimitive
+// Parse validates input and returns a value matching the generic type R.
 func (z *ZodAny[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	// Create converter adapter for engine.ParsePrimitive
-	converter := func(value any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
-		return convertToAnyConstraintType[T, R](value), nil
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeAny
 	}
-
 	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
-		core.ZodTypeAny,
-		validateAnyValue[T],
-		converter,
+		expectedType,
+		engine.ApplyChecks[T],
+		convertAnyResult[T, R],
 		ctx...,
 	)
 }
 
-// StrictParse provides type-safe parsing with compile-time guarantees using engine.ParsePrimitiveStrict
+// StrictParse provides type-safe parsing with compile-time guarantees.
 func (z *ZodAny[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	expectedType := z.internals.Type
+	if expectedType == "" {
+		expectedType = core.ZodTypeAny
+	}
 	return engine.ParsePrimitiveStrict[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
-		core.ZodTypeAny,
-		validateAnyValue[T],
+		expectedType,
+		engine.ApplyChecks[T],
 		ctx...,
 	)
 }
 
-// MustParse is the variant that panics on error
+// MustParse panics on validation error.
 func (z *ZodAny[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -90,8 +110,16 @@ func (z *ZodAny[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// ParseAny validates input and returns untyped result for runtime scenarios.
-// Zero-overhead wrapper around Parse to eliminate reflection calls.
+// MustStrictParse panics on validation error with compile-time type safety.
+func (z *ZodAny[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+	result, err := z.StrictParse(input, ctx...)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// ParseAny validates input and returns an untyped result.
 func (z *ZodAny[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -100,21 +128,28 @@ func (z *ZodAny[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional makes the any type optional and returns pointer constraint
+// Optional returns a pointer-typed schema that accepts missing values.
 func (z *ZodAny[T, R]) Optional() *ZodAny[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable makes the any type nilable and returns pointer constraint
+// ExactOptional accepts absent keys but rejects explicit nil values.
+func (z *ZodAny[T, R]) ExactOptional() *ZodAny[T, R] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
+// Nilable returns a pointer-typed schema that accepts nil values.
 func (z *ZodAny[T, R]) Nilable() *ZodAny[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers
+// Nullish combines optional and nilable modifiers.
 func (z *ZodAny[T, R]) Nullish() *ZodAny[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -122,12 +157,12 @@ func (z *ZodAny[T, R]) Nullish() *ZodAny[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// NonOptional removes Optional flag and returns base constraint type T.
+// NonOptional removes the optional flag and forces return type to T.
+// Sets internals.Type to ZodTypeNonOptional for error reporting.
 func (z *ZodAny[T, R]) NonOptional() *ZodAny[T, T] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
-
 	return &ZodAny[T, T]{
 		internals: &ZodAnyInternals{
 			ZodTypeInternals: *in,
@@ -136,46 +171,41 @@ func (z *ZodAny[T, R]) NonOptional() *ZodAny[T, T] {
 	}
 }
 
-// Default preserves current constraint type R
+// Default sets a default value used when input is nil.
 func (z *ZodAny[T, R]) Default(v T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc preserves current constraint type R
+// DefaultFunc sets a function-based default value.
 func (z *ZodAny[T, R]) DefaultFunc(fn func() T) *ZodAny[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides fallback values on validation failure
+// Prefault provides a fallback value through the full parsing pipeline.
 func (z *ZodAny[T, R]) Prefault(v T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc provides a dynamic fallback value.
 func (z *ZodAny[T, R]) PrefaultFunc(fn func() T) *ZodAny[T, R] {
 	in := z.internals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this any schema.
+// Meta stores metadata in the global registry.
 func (z *ZodAny[T, R]) Meta(meta core.GlobalMeta) *ZodAny[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
 func (z *ZodAny[T, R]) Describe(description string) *ZodAny[T, R] {
 	newInternals := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
@@ -192,34 +222,38 @@ func (z *ZodAny[T, R]) Describe(description string) *ZodAny[T, R] {
 // VALIDATION METHODS
 // =============================================================================
 
-// Overwrite applies data transformation while preserving type structure
-// This allows for data cleaning, normalization, and preprocessing operations
+// Overwrite applies data transformation while preserving type structure.
 func (z *ZodAny[T, R]) Overwrite(transform func(T) T, params ...any) *ZodAny[T, R] {
-	// Create transformation function that wraps the user's transform function
 	transformFunc := checks.NewZodCheckOverwrite(func(value any) any {
-		// Convert any to T, apply transformation, and return as any
-		return convertToAnyType[T, R](transform(extractAnyValue[T, R](convertToAnyConstraintType[T, R](value))))
+		if v, ok := value.(T); ok {
+			return transform(v)
+		}
+		return value
 	}, params...)
-
-	// Clone current internals and add the overwrite check
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(transformFunc)
-
 	return z.withInternals(newInternals)
 }
 
-// Refine applies type-safe validation with constraint type R
+// Refine applies a custom validation function matching the schema's output type R.
 func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
-	// Wrapper converts the raw value to R before calling fn
 	wrapper := func(v any) bool {
-		// Convert value to constraint type R and call the refinement function
-		if constraintValue, ok := convertToAnyConstraintValue[T, R](v); ok {
-			return fn(constraintValue)
+		// Direct type match
+		if r, ok := v.(R); ok {
+			return fn(r)
+		}
+		// Handle *any: wrap value in pointer for pointer constraint types
+		var zero R
+		if _, ok := any(zero).(*any); ok {
+			if v == nil {
+				return fn(any((*any)(nil)).(R))
+			}
+			valueCopy := v
+			return fn(any(&valueCopy).(R))
 		}
 		return false
 	}
 
-	// Use unified parameter handling
 	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
@@ -234,9 +268,8 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
 	return z.withInternals(newInternals)
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny provides flexible validation without type conversion.
 func (z *ZodAny[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodAny[T, R] {
-	// Use unified parameter handling
 	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
@@ -251,26 +284,56 @@ func (z *ZodAny[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodAny[T, R] {
 	return z.withInternals(newInternals)
 }
 
+// Check adds a custom validation function that can push multiple issues.
+func (z *ZodAny[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodAny[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		if val, ok := payload.GetValue().(R); ok {
+			fn(val, payload)
+		}
+	}
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
+	newInternals := z.internals.Clone()
+	newInternals.AddCheck(check)
+	return z.withInternals(newInternals)
+}
+
+// With is an alias for Check for Zod v4 API compatibility.
+func (z *ZodAny[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodAny[T, R] {
+	return z.Check(fn, params...)
+}
+
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform applies a transformation function using the WrapFn pattern.
+// Transform applies a transformation function.
 func (z *ZodAny[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		anyValue := extractAnyValue[T, R](input)
-		return fn(anyValue, ctx)
+		return fn(extractAnyValue[T, R](input), ctx)
 	}
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
-// Pipe creates a pipeline using the WrapFn pattern.
+// Pipe creates a pipeline to another schema.
 func (z *ZodAny[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
-		anyValue := extractAnyValue[T, R](input)
-		return target.Parse(anyValue, ctx)
+		return target.Parse(extractAnyValue[T, R](input), ctx)
 	}
 	return core.NewZodPipe[R, any](z, target, targetFn)
+}
+
+// =============================================================================
+// COMPOSITION METHODS
+// =============================================================================
+
+// And creates an intersection with another schema.
+func (z *ZodAny[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+func (z *ZodAny[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
 }
 
 // =============================================================================
@@ -291,134 +354,66 @@ func (z *ZodAny[T, R]) withInternals(in *core.ZodTypeInternals) *ZodAny[T, R] {
 	}}
 }
 
-// CloneFrom copies configuration from another schema
+// CloneFrom copies configuration from another schema.
 func (z *ZodAny[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodAny[T, R]); ok {
-		z.internals = src.internals
+		originalChecks := z.internals.Checks
+		*z.internals = *src.internals
+		z.internals.Checks = originalChecks
 	}
 }
 
-// =============================================================================
-// TYPE CONVERSION HELPERS
-// =============================================================================
-
-// convertToAnyConstraintType converts a base type T to constraint type R
-func convertToAnyConstraintType[T any, R any](value any) R {
-	var zero R
-	switch any(zero).(type) {
-	case *any:
-		// Need to return *any from any
-		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R)
-		}
-		return any((*any)(nil)).(R)
-	default:
-		// Return value directly as R, handle nil case safely
-		if value == nil {
-			return zero // Return zero value for nil
-		}
-		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
-	}
-}
-
-// extractAnyValue extracts base type T from constraint type R
+// extractAnyValue extracts base type T from constraint type R.
 func extractAnyValue[T any, R any](value R) T {
-	if v, ok := any(value).(*any); ok {
-		if v != nil {
-			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
-		}
-		var zero T
-		return zero
+	if v, ok := any(value).(*any); ok && v != nil {
+		return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 	}
 	return any(value).(T)
 }
 
-// convertToAnyConstraintValue converts any value to constraint type R if possible
-func convertToAnyConstraintValue[T any, R any](value any) (R, bool) {
-	var zero R
-
-	// Direct type match
-	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
-		return r, true
-	}
-
-	// Handle pointer conversion for any types
-	if _, ok := any(zero).(*any); ok {
-		// Need to convert any to *any
-		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R), true
-		}
-		return any((*any)(nil)).(R), true
-	}
-
-	return zero, false
-}
-
-// convertToAnyType helper function for Overwrite transformations
-// Converts transformed result back to any type for further processing
-func convertToAnyType[T any, R any](value T) any {
-	return any(value)
-}
-
 // =============================================================================
-// CONSTRUCTOR FUNCTIONS
+// CONSTRUCTORS
 // =============================================================================
 
-// newZodAnyFromDef constructs new ZodAny from definition
+// newZodAnyFromDef constructs a new ZodAny from the given definition.
 func newZodAnyFromDef[T any, R any](def *ZodAnyDef) *ZodAny[T, R] {
 	internals := &ZodAnyInternals{
-		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
-		Def:              def,
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Bag:    make(map[string]any),
+		},
+		Def: def,
 	}
 
-	// Any type should default to accepting nil values like in Zod v4
+	// Any type defaults to accepting nil values like Zod v4.
 	internals.Nilable = true
 
-	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		anyDef := &ZodAnyDef{
-			ZodTypeDef: *newDef,
-		}
+		anyDef := &ZodAnyDef{ZodTypeDef: *newDef}
 		return any(newZodAnyFromDef[T, R](anyDef)).(core.ZodType[any])
 	}
 
-	schema := &ZodAny[T, R]{internals: internals}
-
-	// Set error if provided
 	if def.Error != nil {
 		internals.Error = def.Error
 	}
 
-	// Set checks if provided
-	if len(def.Checks) > 0 {
-		for _, check := range def.Checks {
-			internals.AddCheck(check)
-		}
-	}
-
-	return schema
+	return &ZodAny[T, R]{internals: internals}
 }
 
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
-
-// Any creates any schema that accepts any value - returns value constraint
+// Any creates a schema that accepts any value.
 func Any(params ...any) *ZodAny[any, any] {
 	return AnyTyped[any, any](params...)
 }
 
-// AnyPtr creates any schema that accepts any value - returns pointer constraint
+// AnyPtr creates a schema that accepts any value with pointer constraint.
 func AnyPtr(params ...any) *ZodAny[any, *any] {
 	return AnyTyped[any, *any](params...)
 }
 
-// AnyTyped creates typed any schema with generic constraints
+// AnyTyped creates a typed any schema with generic constraints.
 func AnyTyped[T any, R any](params ...any) *ZodAny[T, R] {
-	param := utils.FirstParam(params...)
-	normalizedParams := utils.NormalizeParams(param)
+	schemaParams := utils.NormalizeParams(params...)
 
 	def := &ZodAnyDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -427,9 +422,8 @@ func AnyTyped[T any, R any](params ...any) *ZodAny[T, R] {
 		},
 	}
 
-	// Use utils.ApplySchemaParams for consistent parameter handling
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
 
 	return newZodAnyFromDef[T, R](def)

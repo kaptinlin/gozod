@@ -274,37 +274,12 @@ type TestProduct struct {
 	t.Logf("Integration test successful - generated valid code")
 }
 
-func TestFieldInfoAndValidatorInfo(t *testing.T) {
-	// Test data structures used in main
-	fieldInfo := FieldInfo{
-		Name:     "TestField",
-		Type:     nil, // Would be set to actual type in real usage
-		Rules:    []string{"required", "min=2"},
-		JsonName: "test_field",
-		GozodTag: "required,min=2",
-	}
-
-	if fieldInfo.Name != "TestField" {
-		t.Errorf("Expected Name to be TestField, got %s", fieldInfo.Name)
-	}
-
-	validatorInfo := ValidatorInfo{
-		FieldName:     "TestField",
-		ValidatorName: "min",
-		Value:         "2",
-		ChainCall:     ".Min(2)",
-	}
-
-	if validatorInfo.ChainCall != ".Min(2)" {
-		t.Errorf("Expected ChainCall to be .Min(2), got %s", validatorInfo.ChainCall)
-	}
-
-	fieldSchemaInfo := FieldSchemaInfo{
+func TestFieldSchemaInfo(t *testing.T) {
+	info := FieldSchemaInfo{
 		FieldName:  "TestField",
 		SchemaCode: "gozod.String().Min(2)",
 	}
 
-	if fieldSchemaInfo.SchemaCode != "gozod.String().Min(2)" {
-		t.Errorf("Expected SchemaCode to be gozod.String().Min(2), got %s", fieldSchemaInfo.SchemaCode)
-	}
+	assert.Equal(t, "TestField", info.FieldName)
+	assert.Equal(t, "gozod.String().Min(2)", info.SchemaCode)
 }

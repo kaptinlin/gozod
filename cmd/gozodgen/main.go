@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"reflect"
 	"strings"
 )
 
@@ -179,64 +178,38 @@ type GeneratorConfig struct {
 	Force        bool     // Force regeneration
 }
 
-// ValidatorGenerator generates validator code for fields
-type ValidatorGenerator func(fieldType string, params []string) string
-
-// FieldInfo represents information about a struct field for code generation
-type FieldInfo struct {
-	Name     string       // Field name
-	Type     reflect.Type // Field type
-	Rules    []string     // Parsed validation rules
-	JsonName string       // JSON field name (from json tag)
-	GozodTag string       // Raw gozod tag value
-}
-
-// ValidatorInfo contains validator generation information
-type ValidatorInfo struct {
-	FieldName     string // Field name in schema
-	ValidatorName string // Validator function name
-	Value         string // Generated validator code
-	ChainCall     string // Method chain call
-}
-
-// FieldSchemaInfo contains field schema generation information
+// FieldSchemaInfo contains field schema generation information.
 type FieldSchemaInfo struct {
 	FieldName  string // Field name
 	SchemaCode string // Generated schema code
 }
 
-// CodeGenerator represents the main code generation engine
+// CodeGenerator represents the main code generation engine.
 type CodeGenerator struct {
-	config       *GeneratorConfig
-	analyzer     *StructAnalyzer
-	writer       *FileWriter
-	typeMap      map[string]string
-	validatorMap map[string]ValidatorGenerator
+	config   *GeneratorConfig
+	analyzer *StructAnalyzer
+	writer   *FileWriter
 }
 
-// NewCodeGenerator creates a new code generator instance
+// NewCodeGenerator creates a new code generator instance.
 func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	if config == nil {
 		return nil, ErrConfigNil
 	}
 
-	// Create analyzer for parsing Go source files
 	analyzer, err := NewStructAnalyzer()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create analyzer: %w", err)
+		return nil, fmt.Errorf("create analyzer: %w", err)
 	}
 
-	// Create file writer for output
 	writer, err := NewFileWriter("", config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create writer: %w", err)
+		return nil, fmt.Errorf("create writer: %w", err)
 	}
 
 	return &CodeGenerator{
-		config:       config,
-		analyzer:     analyzer,
-		writer:       writer,
-		typeMap:      createTypeMapping(),
-		validatorMap: createValidatorMapping(),
+		config:   config,
+		analyzer: analyzer,
+		writer:   writer,
 	}, nil
 }

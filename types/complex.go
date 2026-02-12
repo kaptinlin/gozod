@@ -15,17 +15,17 @@ import (
 // TYPE CONSTRAINTS
 // =============================================================================
 
-// ComplexConstraint defines supported complex types for generic implementation
+// ComplexConstraint defines the supported complex types for generic schemas.
 type ComplexConstraint interface {
 	complex64 | complex128 | *complex64 | *complex128
 }
 
-// Complex64Constraint defines constraint for complex64 types
+// Complex64Constraint defines the constraint for complex64 types.
 type Complex64Constraint interface {
 	complex64 | *complex64
 }
 
-// Complex128Constraint defines constraint for complex128 types
+// Complex128Constraint defines the constraint for complex128 types.
 type Complex128Constraint interface {
 	complex128 | *complex128
 }
@@ -34,18 +34,18 @@ type Complex128Constraint interface {
 // TYPE DEFINITIONS
 // =============================================================================
 
-// ZodComplexDef defines the schema definition for complex number validation
+// ZodComplexDef holds the schema definition for complex number validation.
 type ZodComplexDef struct {
 	core.ZodTypeDef
 }
 
-// ZodComplexInternals contains the internal state for complex schema
+// ZodComplexInternals contains the internal state for a complex schema.
 type ZodComplexInternals struct {
 	core.ZodTypeInternals
-	Def *ZodComplexDef // Schema definition reference
+	Def *ZodComplexDef
 }
 
-// ZodComplex represents a generic complex number validation schema
+// ZodComplex is a generic complex number validation schema.
 type ZodComplex[T ComplexConstraint] struct {
 	internals *ZodComplexInternals
 }
@@ -54,22 +54,22 @@ type ZodComplex[T ComplexConstraint] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals exposes internal state for framework usage
+// GetInternals returns the internal state of the schema.
 func (z *ZodComplex[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
+// IsOptional reports whether this schema accepts undefined/missing values.
 func (z *ZodComplex[T]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
 
-// IsNilable returns true if this schema accepts nil values
+// IsNilable reports whether this schema accepts nil values.
 func (z *ZodComplex[T]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Coerce attempts to coerce input to target complex type using coerce package
+// Coerce converts input to the target complex type, implementing the Coercible interface.
 func (z *ZodComplex[T]) Coerce(input any) (any, bool) {
 	var zero T
 	switch any(zero).(type) {
@@ -93,7 +93,7 @@ func (z *ZodComplex[T]) Coerce(input any) (any, bool) {
 	return zero, false
 }
 
-// Parse validates input using unified ParsePrimitive API
+// Parse validates input and returns a value matching the generic type T.
 func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	var zero T
 	switch any(zero).(type) {
@@ -101,34 +101,24 @@ func (z *ZodComplex[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 		return engine.ParsePrimitive[complex64, T](
 			input,
 			&z.internals.ZodTypeInternals,
-			core.ZodTypeComplex64,
-			z.applyComplexChecks64,
+			z.expectedType(),
+			z.applyChecks64,
 			engine.ConvertToConstraintType[complex64, T],
 			ctx...,
 		)
-	case complex128, *complex128:
-		return engine.ParsePrimitive[complex128, T](
-			input,
-			&z.internals.ZodTypeInternals,
-			core.ZodTypeComplex128,
-			z.applyComplexChecks128,
-			engine.ConvertToConstraintType[complex128, T],
-			ctx...,
-		)
 	default:
-		// Default to complex128
 		return engine.ParsePrimitive[complex128, T](
 			input,
 			&z.internals.ZodTypeInternals,
-			core.ZodTypeComplex128,
-			z.applyComplexChecks128,
+			z.expectedType(),
+			z.applyChecks128,
 			engine.ConvertToConstraintType[complex128, T],
 			ctx...,
 		)
 	}
 }
 
-// MustParse validates the input value and panics on failure
+// MustParse validates input and panics on failure.
 func (z *ZodComplex[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -137,66 +127,35 @@ func (z *ZodComplex[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// ParseAny validates the input value and returns any type (for runtime interface)
+// ParseAny validates input and returns any type for runtime interface usage.
 func (z *ZodComplex[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
+// StrictParse provides compile-time type safety by requiring exact type T.
 func (z *ZodComplex[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	var zero T
-
-	// Determine the type code based on T
-	var expectedType core.ZodTypeCode
-	switch any(zero).(type) {
-	case complex64, *complex64:
-		expectedType = core.ZodTypeComplex64
-	case complex128, *complex128:
-		expectedType = core.ZodTypeComplex128
-	default:
-		// Fallback to complex128
-		expectedType = core.ZodTypeComplex128
-	}
-
-	// Use the internally recorded type code if available
-	if z.internals.Type != "" {
-		expectedType = z.internals.Type
-	}
-
 	switch any(zero).(type) {
 	case complex64, *complex64:
 		return engine.ParsePrimitiveStrict[complex64, T](
 			input,
 			&z.internals.ZodTypeInternals,
-			expectedType,
-			z.applyComplexChecks64,
-			ctx...,
-		)
-	case complex128, *complex128:
-		return engine.ParsePrimitiveStrict[complex128, T](
-			input,
-			&z.internals.ZodTypeInternals,
-			expectedType,
-			z.applyComplexChecks128,
+			z.expectedType(),
+			z.applyChecks64,
 			ctx...,
 		)
 	default:
-		// Fallback to complex128
 		return engine.ParsePrimitiveStrict[complex128, T](
 			input,
 			&z.internals.ZodTypeInternals,
-			expectedType,
-			z.applyComplexChecks128,
+			z.expectedType(),
+			z.applyChecks128,
 			ctx...,
 		)
 	}
 }
 
-// MustStrictParse provides compile-time type safety and panics on validation failure.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
+// MustStrictParse provides compile-time type safety and panics on failure.
 func (z *ZodComplex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -209,14 +168,13 @@ func (z *ZodComplex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 // HELPER METHODS
 // =============================================================================
 
-// applyComplexChecks64 handles ApplyChecks for complex64 with pointer type support
-func (z *ZodComplex[T]) applyComplexChecks64(value complex64, checks []core.ZodCheck, ctx *core.ParseContext) (complex64, error) {
-	transformedValue, err := engine.ApplyChecks[any](value, checks, ctx)
+// applyChecks64 applies validation checks for complex64 values.
+func (z *ZodComplex[T]) applyChecks64(value complex64, chks []core.ZodCheck, ctx *core.ParseContext) (complex64, error) {
+	transformedValue, err := engine.ApplyChecks[any](value, chks, ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	// Handle potential pointer type from Overwrite transformations
 	switch v := transformedValue.(type) {
 	case complex64:
 		return v, nil
@@ -233,19 +191,17 @@ func (z *ZodComplex[T]) applyComplexChecks64(value complex64, checks []core.ZodC
 		}
 		return 0, nil
 	default:
-		// If transformation returned unexpected type, return original result
 		return value, nil
 	}
 }
 
-// applyComplexChecks128 handles ApplyChecks for complex128 with pointer type support
-func (z *ZodComplex[T]) applyComplexChecks128(value complex128, checks []core.ZodCheck, ctx *core.ParseContext) (complex128, error) {
-	transformedValue, err := engine.ApplyChecks[any](value, checks, ctx)
+// applyChecks128 applies validation checks for complex128 values.
+func (z *ZodComplex[T]) applyChecks128(value complex128, chks []core.ZodCheck, ctx *core.ParseContext) (complex128, error) {
+	transformedValue, err := engine.ApplyChecks[any](value, chks, ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	// Handle potential pointer type from Overwrite transformations
 	switch v := transformedValue.(type) {
 	case complex128:
 		return v, nil
@@ -262,7 +218,6 @@ func (z *ZodComplex[T]) applyComplexChecks128(value complex128, checks []core.Zo
 		}
 		return 0, nil
 	default:
-		// If transformation returned unexpected type, return original result
 		return value, nil
 	}
 }
@@ -271,21 +226,29 @@ func (z *ZodComplex[T]) applyComplexChecks128(value complex128, checks []core.Zo
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional always returns *complex128 for nullable semantics
+// Optional returns a new schema that accepts nil, with *complex128 constraint.
 func (z *ZodComplex[T]) Optional() *ZodComplex[*complex128] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withComplex128PtrInternals(in)
 }
 
-// Nilable allows nil values, returns pointer type
+// ExactOptional accepts absent keys but rejects explicit nil values.
+// Unlike Optional, ExactOptional only accepts absent keys in object fields.
+func (z *ZodComplex[T]) ExactOptional() *ZodComplex[T] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
+// Nilable returns a new schema that accepts nil values, with *complex128 constraint.
 func (z *ZodComplex[T]) Nilable() *ZodComplex[*complex128] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withComplex128PtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers
+// Nullish returns a new schema combining optional and nilable modifiers.
 func (z *ZodComplex[T]) Nullish() *ZodComplex[*complex128] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -293,10 +256,9 @@ func (z *ZodComplex[T]) Nullish() *ZodComplex[*complex128] {
 	return z.withComplex128PtrInternals(in)
 }
 
-// Default preserves current generic type T
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 	in := z.internals.Clone()
-	// Convert the default value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
 	case *complex64:
@@ -306,20 +268,17 @@ func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 		in.SetDefaultValue(&v)
 	case complex64:
 		in.SetDefaultValue(complex64(v))
-	case complex128:
-		in.SetDefaultValue(v)
 	default:
 		in.SetDefaultValue(v)
 	}
 	return z.withInternals(in)
 }
 
-// DefaultFunc preserves current generic type T
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
 		v := fn()
-		// Convert the default value to the appropriate constraint type
 		var zero T
 		switch any(zero).(type) {
 		case *complex64:
@@ -329,8 +288,6 @@ func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 			return &v
 		case complex64:
 			return complex64(v)
-		case complex128:
-			return v
 		default:
 			return v
 		}
@@ -338,10 +295,9 @@ func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 	return z.withInternals(in)
 }
 
-// Prefault provides fallback values on validation failure
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 	in := z.internals.Clone()
-	// Convert the prefault value to the appropriate constraint type
 	var zero T
 	switch any(zero).(type) {
 	case *complex64:
@@ -351,20 +307,17 @@ func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 		in.SetPrefaultValue(&v)
 	case complex64:
 		in.SetPrefaultValue(complex64(v))
-	case complex128:
-		in.SetPrefaultValue(v)
 	default:
 		in.SetPrefaultValue(v)
 	}
 	return z.withInternals(in)
 }
 
-// PrefaultFunc keeps the current generic type T.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
 		v := fn()
-		// Convert the prefault value to the appropriate constraint type
 		var zero T
 		switch any(zero).(type) {
 		case *complex64:
@@ -374,8 +327,6 @@ func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 			return &v
 		case complex64:
 			return complex64(v)
-		case complex128:
-			return v
 		default:
 			return v
 		}
@@ -390,7 +341,6 @@ func (z *ZodComplex[T]) Meta(meta core.GlobalMeta) *ZodComplex[T] {
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
 func (z *ZodComplex[T]) Describe(description string) *ZodComplex[T] {
 	newInternals := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
@@ -407,7 +357,7 @@ func (z *ZodComplex[T]) Describe(description string) *ZodComplex[T] {
 // VALIDATION METHODS (USING CHECKS PACKAGE)
 // =============================================================================
 
-// Min adds minimum magnitude validation for complex numbers
+// Min adds minimum magnitude validation for complex numbers.
 func (z *ZodComplex[T]) Min(minimum float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -415,12 +365,10 @@ func (z *ZodComplex[T]) Min(minimum float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Max adds maximum magnitude validation for complex numbers
+// Max adds maximum magnitude validation for complex numbers.
 func (z *ZodComplex[T]) Max(maximum float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -428,12 +376,10 @@ func (z *ZodComplex[T]) Max(maximum float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Gt adds greater than validation for complex magnitude (exclusive)
+// Gt adds greater-than magnitude validation (exclusive).
 func (z *ZodComplex[T]) Gt(value float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -441,12 +387,10 @@ func (z *ZodComplex[T]) Gt(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Gte adds greater than or equal validation for complex magnitude (inclusive)
+// Gte adds greater-than-or-equal magnitude validation (inclusive).
 func (z *ZodComplex[T]) Gte(value float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -454,12 +398,10 @@ func (z *ZodComplex[T]) Gte(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Lt adds less than validation for complex magnitude (exclusive)
+// Lt adds less-than magnitude validation (exclusive).
 func (z *ZodComplex[T]) Lt(value float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -467,12 +409,10 @@ func (z *ZodComplex[T]) Lt(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Lte adds less than or equal validation for complex magnitude (inclusive)
+// Lte adds less-than-or-equal magnitude validation (inclusive).
 func (z *ZodComplex[T]) Lte(value float64, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -480,32 +420,30 @@ func (z *ZodComplex[T]) Lte(value float64, params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Positive adds positive magnitude validation (> 0) for complex numbers
+// Positive adds positive magnitude validation (> 0).
 func (z *ZodComplex[T]) Positive(params ...any) *ZodComplex[T] {
 	return z.Gt(0, params...)
 }
 
-// Negative adds negative validation (< 0) - validates real part for complex numbers
+// Negative adds negative validation (< 0) for complex magnitude.
 func (z *ZodComplex[T]) Negative(params ...any) *ZodComplex[T] {
 	return z.Lt(0, params...)
 }
 
-// NonNegative adds non-negative validation (>= 0) for complex magnitude
+// NonNegative adds non-negative validation (>= 0) for complex magnitude.
 func (z *ZodComplex[T]) NonNegative(params ...any) *ZodComplex[T] {
 	return z.Gte(0, params...)
 }
 
-// NonPositive adds non-positive validation (<= 0) for complex magnitude
+// NonPositive adds non-positive validation (<= 0) for complex magnitude.
 func (z *ZodComplex[T]) NonPositive(params ...any) *ZodComplex[T] {
 	return z.Lte(0, params...)
 }
 
-// Finite adds finite validation for complex numbers (no infinite components)
+// Finite validates that both real and imaginary parts are finite (no Inf or NaN).
 func (z *ZodComplex[T]) Finite(params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](func(v any) bool {
 		if val := convertToComplexValue(v); val != nil {
@@ -514,68 +452,52 @@ func (z *ZodComplex[T]) Finite(params ...any) *ZodComplex[T] {
 		}
 		return false
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform creates a type-safe transformation using the WrapFn pattern
+// Transform creates a type-safe transformation pipeline.
 func (z *ZodComplex[T]) Transform(fn func(complex128, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
 	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
-		complexVal := extractComplex128(input)
-		return fn(complexVal, ctx)
+		return fn(extractComplex128(input), ctx)
 	}
 	return core.NewZodTransform[T, any](z, wrapperFn)
 }
 
 // Overwrite transforms the input value while preserving the original type.
-// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
-// The transformation function is stored as a check, so it doesn't modify the inferred type.
 func (z *ZodComplex[T]) Overwrite(transform func(T) T, params ...any) *ZodComplex[T] {
-	// Create a transformation function that works with the exact type T
 	transformAny := func(input any) any {
-		// Try to convert input to type T
 		converted, ok := convertToComplexType[T](input)
 		if !ok {
-			// If conversion fails, return original value
 			return input
 		}
-
-		// Apply transformation directly on type T
 		return transform(converted)
 	}
-
 	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// Pipe creates a pipeline using the WrapFn pattern
+// Pipe creates a validation pipeline with another schema.
 func (z *ZodComplex[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
-	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
-		complexVal := extractComplex128(input)
-		return target.Parse(complexVal, ctx)
+	targetFn := func(input T, ctx *core.ParseContext) (any, error) {
+		return target.Parse(extractComplex128(input), ctx)
 	}
-	return core.NewZodPipe[T, any](z, target, wrapperFn)
+	return core.NewZodPipe[T, any](z, target, targetFn)
 }
 
 // =============================================================================
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies type-safe validation with automatic type conversion
+// Refine applies a custom validation function matching the schema's output type T.
 func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 	wrapper := func(v any) bool {
 		var zero T
-
 		switch any(zero).(type) {
 		case complex64:
-			// Schema output is complex64
 			if v == nil {
 				return false
 			}
@@ -584,18 +506,15 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			}
 			return false
 		case *complex64:
-			// Schema output is *complex64 – convert incoming value to *complex64
 			if v == nil {
 				return fn(any((*complex64)(nil)).(T))
 			}
 			if complexVal, ok := v.(complex64); ok {
 				cCopy := complexVal
-				ptr := &cCopy
-				return fn(any(ptr).(T))
+				return fn(any(&cCopy).(T))
 			}
 			return false
 		case complex128:
-			// Schema output is complex128
 			if v == nil {
 				return false
 			}
@@ -604,14 +523,12 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			}
 			return false
 		case *complex128:
-			// Schema output is *complex128 – convert incoming value to *complex128
 			if v == nil {
 				return fn(any((*complex128)(nil)).(T))
 			}
 			if complexVal, ok := v.(complex128); ok {
 				cCopy := complexVal
-				ptr := &cCopy
-				return fn(any(ptr).(T))
+				return fn(any(&cCopy).(T))
 			}
 			return false
 		default:
@@ -620,24 +537,55 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 	}
 
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny applies a custom validation function that receives the raw value.
 func (z *ZodComplex[T]) RefineAny(fn func(any) bool, params ...any) *ZodComplex[T] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
+}
+
+// =============================================================================
+// COMPOSITION METHODS (Zod v4 Compatibility)
+// =============================================================================
+
+// And creates an intersection with another schema.
+func (z *ZodComplex[T]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+func (z *ZodComplex[T]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
 }
 
 // =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withComplex128PtrInternals creates new instance with *complex128 type
+// expectedType returns the schema's type code, with fallback based on T.
+func (z *ZodComplex[T]) expectedType() core.ZodTypeCode {
+	if z.internals.Type != "" {
+		return z.internals.Type
+	}
+	var zero T
+	switch any(zero).(type) {
+	case complex64, *complex64:
+		return core.ZodTypeComplex64
+	default:
+		return core.ZodTypeComplex128
+	}
+}
+
+// withCheck clones internals, adds a check, and returns a new schema (Copy-on-Write).
+func (z *ZodComplex[T]) withCheck(check core.ZodCheck) *ZodComplex[T] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
+// withComplex128PtrInternals creates a new *complex128 schema from cloned internals.
 func (z *ZodComplex[T]) withComplex128PtrInternals(in *core.ZodTypeInternals) *ZodComplex[*complex128] {
 	return &ZodComplex[*complex128]{internals: &ZodComplexInternals{
 		ZodTypeInternals: *in,
@@ -645,7 +593,7 @@ func (z *ZodComplex[T]) withComplex128PtrInternals(in *core.ZodTypeInternals) *Z
 	}}
 }
 
-// withInternals creates new instance preserving generic type T
+// withInternals creates a new schema preserving generic type T.
 func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] {
 	return &ZodComplex[T]{internals: &ZodComplexInternals{
 		ZodTypeInternals: *in,
@@ -653,7 +601,7 @@ func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] 
 	}}
 }
 
-// CloneFrom copies configuration from another schema
+// CloneFrom copies configuration from another schema of the same type.
 func (z *ZodComplex[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodComplex[T]); ok {
 		originalChecks := z.internals.Checks
@@ -662,7 +610,7 @@ func (z *ZodComplex[T]) CloneFrom(source any) {
 	}
 }
 
-// extractComplex128 extracts complex128 value from generic type T
+// extractComplex128 extracts the underlying complex128 from a generic constraint type.
 func extractComplex128[T ComplexConstraint](value T) complex128 {
 	switch v := any(value).(type) {
 	case complex64:
@@ -684,7 +632,7 @@ func extractComplex128[T ComplexConstraint](value T) complex128 {
 	}
 }
 
-// convertToComplexValue extracts complex128 value from any complex type
+// convertToComplexValue extracts a complex128 pointer from any complex type.
 func convertToComplexValue(v any) *complex128 {
 	switch val := v.(type) {
 	case complex64:
@@ -708,27 +656,24 @@ func convertToComplexValue(v any) *complex128 {
 	}
 }
 
-// convertToComplexType converts any value to the complex constraint type T with strict type checking
+// convertToComplexType converts any value to the target complex constraint type T.
 func convertToComplexType[T ComplexConstraint](v any) (T, bool) {
 	var zero T
 
 	if v == nil {
-		// Handle nil values for pointer types
 		switch any(zero).(type) {
 		case *complex64, *complex128:
-			return zero, true // zero value for pointer types is nil
+			return zero, true
 		default:
-			return zero, false // nil not allowed for value types
+			return zero, false
 		}
 	}
 
-	// Extract complex value from input
 	complexValue := convertToComplexValue(v)
 	if complexValue == nil {
-		return zero, false // Reject all non-complex types
+		return zero, false
 	}
 
-	// Convert to target type T
 	switch any(zero).(type) {
 	case complex64:
 		return any(complex64(*complexValue)).(T), true
@@ -744,7 +689,7 @@ func convertToComplexType[T ComplexConstraint](v any) (T, bool) {
 	}
 }
 
-// newZodComplexFromDef constructs new ZodComplex from definition
+// newZodComplexFromDef constructs a new ZodComplex from a definition.
 func newZodComplexFromDef[T ComplexConstraint](def *ZodComplexDef) *ZodComplex[T] {
 	internals := &ZodComplexInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
@@ -756,7 +701,6 @@ func newZodComplexFromDef[T ComplexConstraint](def *ZodComplexDef) *ZodComplex[T
 		Def: def,
 	}
 
-	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		complexDef := &ZodComplexDef{
 			ZodTypeDef: *newDef,
@@ -776,56 +720,49 @@ func newZodComplexFromDef[T ComplexConstraint](def *ZodComplexDef) *ZodComplex[T
 // =============================================================================
 
 // ComplexTyped creates a generic complex schema with automatic type inference.
-// It automatically determines the appropriate type code based on the generic type parameter.
-// Usage: ComplexTyped[complex64](), ComplexTyped[complex128](), ComplexTyped[*complex64](), etc.
 func ComplexTyped[T ComplexConstraint](params ...any) *ZodComplex[T] {
-	// Determine type code based on T
 	var typeCode core.ZodTypeCode
 	var zero T
 	switch any(zero).(type) {
 	case complex64, *complex64:
 		typeCode = core.ZodTypeComplex64
-	case complex128, *complex128:
-		typeCode = core.ZodTypeComplex128
 	default:
-		typeCode = core.ZodTypeComplex128 // default to complex128
+		typeCode = core.ZodTypeComplex128
 	}
-
 	return newComplexTyped[T](typeCode, params...)
 }
 
-// Complex64 creates complex64 schema
+// Complex64 creates a complex64 schema.
 func Complex64(params ...any) *ZodComplex[complex64] {
 	return newComplexTyped[complex64](core.ZodTypeComplex64, params...)
 }
 
-// Complex64Ptr creates schema for *complex64
+// Complex64Ptr creates a *complex64 schema.
 func Complex64Ptr(params ...any) *ZodComplex[*complex64] {
 	return newComplexTyped[*complex64](core.ZodTypeComplex64, params...)
 }
 
-// Complex128 creates complex128 schema
+// Complex128 creates a complex128 schema.
 func Complex128(params ...any) *ZodComplex[complex128] {
 	return newComplexTyped[complex128](core.ZodTypeComplex128, params...)
 }
 
-// Complex128Ptr creates schema for *complex128
+// Complex128Ptr creates a *complex128 schema.
 func Complex128Ptr(params ...any) *ZodComplex[*complex128] {
 	return newComplexTyped[*complex128](core.ZodTypeComplex128, params...)
 }
 
-// Complex creates complex128 schema (default)
+// Complex creates a complex128 schema (default alias).
 func Complex(params ...any) *ZodComplex[complex128] {
 	return Complex128(params...)
 }
 
-// ComplexPtr creates schema for *complex128 (default)
+// ComplexPtr creates a *complex128 schema (default alias).
 func ComplexPtr(params ...any) *ZodComplex[*complex128] {
 	return Complex128Ptr(params...)
 }
 
-// newComplexTyped is the underlying generic function for creating complex schemas,
-// allowing for explicit type parameterization. This is an internal function.
+// newComplexTyped creates a complex schema with explicit type parameterization.
 func newComplexTyped[T ComplexConstraint](typeCode core.ZodTypeCode, params ...any) *ZodComplex[T] {
 	schemaParams := utils.NormalizeParams(params...)
 
@@ -836,44 +773,43 @@ func newComplexTyped[T ComplexConstraint](typeCode core.ZodTypeCode, params ...a
 		},
 	}
 
-	// Apply the normalized parameters to the schema definition
 	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 
 	return newZodComplexFromDef[T](def)
 }
 
-// CoercedComplex creates coerced complex128 schema (default)
+// CoercedComplex creates a coerced complex128 schema (default alias).
 func CoercedComplex(params ...any) *ZodComplex[complex128] {
 	return CoercedComplex128(params...)
 }
 
-// CoercedComplexPtr creates coerced *complex128 schema (default)
+// CoercedComplexPtr creates a coerced *complex128 schema (default alias).
 func CoercedComplexPtr(params ...any) *ZodComplex[*complex128] {
 	return CoercedComplex128Ptr(params...)
 }
 
-// CoercedComplex64 creates coerced complex64 schema
+// CoercedComplex64 creates a coerced complex64 schema.
 func CoercedComplex64(params ...any) *ZodComplex[complex64] {
 	schema := Complex64(params...)
 	schema.internals.SetCoerce(true)
 	return schema
 }
 
-// CoercedComplex64Ptr creates coerced *complex64 schema
+// CoercedComplex64Ptr creates a coerced *complex64 schema.
 func CoercedComplex64Ptr(params ...any) *ZodComplex[*complex64] {
 	schema := Complex64Ptr(params...)
 	schema.internals.SetCoerce(true)
 	return schema
 }
 
-// CoercedComplex128 creates coerced complex128 schema
+// CoercedComplex128 creates a coerced complex128 schema.
 func CoercedComplex128(params ...any) *ZodComplex[complex128] {
 	schema := Complex128(params...)
 	schema.internals.SetCoerce(true)
 	return schema
 }
 
-// CoercedComplex128Ptr creates coerced *complex128 schema
+// CoercedComplex128Ptr creates a coerced *complex128 schema.
 func CoercedComplex128Ptr(params ...any) *ZodComplex[*complex128] {
 	schema := Complex128Ptr(params...)
 	schema.internals.SetCoerce(true)

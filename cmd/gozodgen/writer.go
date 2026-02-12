@@ -508,172 +508,104 @@ func (w *FileWriter) isStringType(t reflect.Type) bool {
 	return false
 }
 
-// generateDefaultValue generates Go code for default values based on type
+// generateDefaultValue generates Go code for default values based on type.
 func (w *FileWriter) generateDefaultValue(value string, fieldType reflect.Type) string {
-	switch fieldType.Kind() {
-	case reflect.String:
-		return fmt.Sprintf(`.Default("%s")`, value)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Uintptr:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Float32, reflect.Float64:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Complex64, reflect.Complex128:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Bool:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Array:
-		return w.generateSliceDefault(value, fieldType) // Treat arrays like slices
-	case reflect.Slice:
-		return w.generateSliceDefault(value, fieldType)
-	case reflect.Map:
-		return w.generateMapDefault(value, fieldType)
-	case reflect.Chan:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Func:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Interface:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Ptr:
-		// Handle pointer types by recursing to element type
-		return w.generateDefaultValue(value, fieldType.Elem())
-	case reflect.Struct:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.UnsafePointer:
-		return fmt.Sprintf(".Default(%s)", value)
-	case reflect.Invalid:
-		return fmt.Sprintf(".Default(%s)", value)
-	}
-	return fmt.Sprintf(".Default(%s)", value) // Default fallback
+	return w.generateTypedValue("Default", value, fieldType)
 }
 
-// generatePrefaultValue generates Go code for prefault values based on type
+// generatePrefaultValue generates Go code for prefault values based on type.
 func (w *FileWriter) generatePrefaultValue(value string, fieldType reflect.Type) string {
-	switch fieldType.Kind() {
+	return w.generateTypedValue("Prefault", value, fieldType)
+}
+
+// generateTypedValue generates a method call (.Default or .Prefault) with
+// the value formatted according to the field's Go type.
+func (w *FileWriter) generateTypedValue(method, value string, fieldType reflect.Type) string {
+	switch fieldType.Kind() { //nolint:exhaustive // only special-cased types need distinct formatting
 	case reflect.String:
-		return fmt.Sprintf(`.Prefault("%s")`, value)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Uintptr:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Float32, reflect.Float64:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Complex64, reflect.Complex128:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Bool:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Array:
-		return w.generateSlicePrefault(value, fieldType) // Treat arrays like slices
-	case reflect.Slice:
-		return w.generateSlicePrefault(value, fieldType)
+		return fmt.Sprintf(`.%s("%s")`, method, value)
+	case reflect.Slice, reflect.Array:
+		return generateSliceValue(method, value, fieldType)
 	case reflect.Map:
-		return w.generateMapPrefault(value, fieldType)
-	case reflect.Chan:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Func:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Interface:
-		return fmt.Sprintf(".Prefault(%s)", value)
+		return generateMapValue(method, value, fieldType)
 	case reflect.Ptr:
-		// Handle pointer types by recursing to element type
-		return w.generatePrefaultValue(value, fieldType.Elem())
-	case reflect.Struct:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.UnsafePointer:
-		return fmt.Sprintf(".Prefault(%s)", value)
-	case reflect.Invalid:
-		return fmt.Sprintf(".Prefault(%s)", value)
+		return w.generateTypedValue(method, value, fieldType.Elem())
+	default:
+		return fmt.Sprintf(".%s(%s)", method, value)
 	}
-	return fmt.Sprintf(".Prefault(%s)", value) // Default fallback
 }
 
-// generateSliceDefault generates Go code for slice default values
-func (w *FileWriter) generateSliceDefault(value string, fieldType reflect.Type) string {
+// generateSliceValue generates a Go slice literal for .Default() or .Prefault() calls.
+func generateSliceValue(method, value string, fieldType reflect.Type) string {
 	value = strings.TrimSpace(value)
 	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
-		return fmt.Sprintf(".Default(%s)", value)
+		return fmt.Sprintf(".%s(%s)", method, value)
 	}
 
-	// Try JSON parsing first
 	var jsonResult []interface{}
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		// Generate Go slice literal
 		elemType := fieldType.Elem()
-		switch elemType.Kind() {
+		switch elemType.Kind() { //nolint:exhaustive // only common JSON-decodable types need special handling
 		case reflect.String:
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for _, item := range jsonResult {
 				if str, ok := item.(string); ok {
 					items = append(items, fmt.Sprintf(`"%s"`, str))
 				}
 			}
-			return fmt.Sprintf(".Default([]string{%s})", strings.Join(items, ", "))
+			return fmt.Sprintf(".%s([]string{%s})", method, strings.Join(items, ", "))
 		case reflect.Int:
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for _, item := range jsonResult {
-				if num, ok := item.(float64); ok { // JSON numbers are float64
+				if num, ok := item.(float64); ok {
 					items = append(items, fmt.Sprintf("%d", int(num)))
 				}
 			}
-			return fmt.Sprintf(".Default([]int{%s})", strings.Join(items, ", "))
+			return fmt.Sprintf(".%s([]int{%s})", method, strings.Join(items, ", "))
 		case reflect.Float64:
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for _, item := range jsonResult {
 				if num, ok := item.(float64); ok {
 					items = append(items, fmt.Sprintf("%g", num))
 				}
 			}
-			return fmt.Sprintf(".Default([]float64{%s})", strings.Join(items, ", "))
+			return fmt.Sprintf(".%s([]float64{%s})", method, strings.Join(items, ", "))
 		case reflect.Bool:
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for _, item := range jsonResult {
 				if b, ok := item.(bool); ok {
 					items = append(items, fmt.Sprintf("%t", b))
 				}
 			}
-			return fmt.Sprintf(".Default([]bool{%s})", strings.Join(items, ", "))
-		case reflect.Invalid, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-			reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-			reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
-			reflect.Struct, reflect.UnsafePointer:
-			// For other types, fall back to simple parsing
-			break
+			return fmt.Sprintf(".%s([]bool{%s})", method, strings.Join(items, ", "))
+		default:
+			// Fall through to fallback
 		}
 	}
 
-	// Fallback to simple parsing
-	return fmt.Sprintf(".Default(%s)", value)
+	return fmt.Sprintf(".%s(%s)", method, value)
 }
 
-// generateMapDefault generates Go code for map default values
-func (w *FileWriter) generateMapDefault(value string, fieldType reflect.Type) string {
+// generateMapValue generates a Go map literal for .Default() or .Prefault() calls.
+func generateMapValue(method, value string, fieldType reflect.Type) string {
 	value = strings.TrimSpace(value)
 	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-		return fmt.Sprintf(".Default(%s)", value)
+		return fmt.Sprintf(".%s(%s)", method, value)
 	}
 
-	// Try JSON parsing
 	var jsonResult map[string]interface{}
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		valueType := fieldType.Elem()
-		switch valueType.Kind() {
+		switch fieldType.Elem().Kind() { //nolint:exhaustive // only string and interface map values are JSON-decodable
 		case reflect.String:
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for k, v := range jsonResult {
 				if str, ok := v.(string); ok {
 					items = append(items, fmt.Sprintf(`"%s": "%s"`, k, str))
 				}
 			}
-			return fmt.Sprintf(".Default(map[string]string{%s})", strings.Join(items, ", "))
+			return fmt.Sprintf(".%s(map[string]string{%s})", method, strings.Join(items, ", "))
 		case reflect.Interface:
-			// For map[string]interface{}, generate map literal
-			var items []string
+			items := make([]string, 0, len(jsonResult))
 			for k, v := range jsonResult {
 				switch val := v.(type) {
 				case string:
@@ -686,128 +618,13 @@ func (w *FileWriter) generateMapDefault(value string, fieldType reflect.Type) st
 					items = append(items, fmt.Sprintf(`"%s": %v`, k, val))
 				}
 			}
-			return fmt.Sprintf(".Default(map[string]interface{}{%s})", strings.Join(items, ", "))
-		case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
-			reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
-			reflect.Struct, reflect.UnsafePointer:
-			// For other types, fall back to simple parsing
-			break
+			return fmt.Sprintf(".%s(map[string]interface{}{%s})", method, strings.Join(items, ", "))
+		default:
+			// Fall through to fallback
 		}
 	}
 
-	// Fallback
-	return fmt.Sprintf(".Default(%s)", value)
-}
-
-// generateSlicePrefault generates Go code for slice prefault values
-func (w *FileWriter) generateSlicePrefault(value string, fieldType reflect.Type) string {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
-		return fmt.Sprintf(".Prefault(%s)", value)
-	}
-
-	// Try JSON parsing first
-	var jsonResult []interface{}
-	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		// Generate Go slice literal
-		elemType := fieldType.Elem()
-		switch elemType.Kind() {
-		case reflect.String:
-			var items []string
-			for _, item := range jsonResult {
-				if str, ok := item.(string); ok {
-					items = append(items, fmt.Sprintf(`"%s"`, str))
-				}
-			}
-			return fmt.Sprintf(".Prefault([]string{%s})", strings.Join(items, ", "))
-		case reflect.Int:
-			var items []string
-			for _, item := range jsonResult {
-				if num, ok := item.(float64); ok { // JSON numbers are float64
-					items = append(items, fmt.Sprintf("%d", int(num)))
-				}
-			}
-			return fmt.Sprintf(".Prefault([]int{%s})", strings.Join(items, ", "))
-		case reflect.Float64:
-			var items []string
-			for _, item := range jsonResult {
-				if num, ok := item.(float64); ok {
-					items = append(items, fmt.Sprintf("%g", num))
-				}
-			}
-			return fmt.Sprintf(".Prefault([]float64{%s})", strings.Join(items, ", "))
-		case reflect.Bool:
-			var items []string
-			for _, item := range jsonResult {
-				if b, ok := item.(bool); ok {
-					items = append(items, fmt.Sprintf("%t", b))
-				}
-			}
-			return fmt.Sprintf(".Prefault([]bool{%s})", strings.Join(items, ", "))
-		case reflect.Invalid, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-			reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-			reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
-			reflect.Struct, reflect.UnsafePointer:
-			// For other types, fall back to simple parsing
-			break
-		}
-	}
-
-	// Fallback to simple parsing
-	return fmt.Sprintf(".Prefault(%s)", value)
-}
-
-// generateMapPrefault generates Go code for map prefault values
-func (w *FileWriter) generateMapPrefault(value string, fieldType reflect.Type) string {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-		return fmt.Sprintf(".Prefault(%s)", value)
-	}
-
-	// Try JSON parsing
-	var jsonResult map[string]interface{}
-	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		valueType := fieldType.Elem()
-		switch valueType.Kind() {
-		case reflect.String:
-			var items []string
-			for k, v := range jsonResult {
-				if str, ok := v.(string); ok {
-					items = append(items, fmt.Sprintf(`"%s": "%s"`, k, str))
-				}
-			}
-			return fmt.Sprintf(".Prefault(map[string]string{%s})", strings.Join(items, ", "))
-		case reflect.Interface:
-			// For map[string]interface{}, generate map literal
-			var items []string
-			for k, v := range jsonResult {
-				switch val := v.(type) {
-				case string:
-					items = append(items, fmt.Sprintf(`"%s": "%s"`, k, val))
-				case float64:
-					items = append(items, fmt.Sprintf(`"%s": %g`, k, val))
-				case bool:
-					items = append(items, fmt.Sprintf(`"%s": %t`, k, val))
-				default:
-					items = append(items, fmt.Sprintf(`"%s": %v`, k, val))
-				}
-			}
-			return fmt.Sprintf(".Prefault(map[string]interface{}{%s})", strings.Join(items, ", "))
-		case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
-			reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
-			reflect.Struct, reflect.UnsafePointer:
-			// For other types, fall back to simple parsing
-			break
-		}
-	}
-
-	// Fallback
-	return fmt.Sprintf(".Prefault(%s)", value)
+	return fmt.Sprintf(".%s(%s)", method, value)
 }
 
 // hasUUIDRule checks if field has UUID validation rule

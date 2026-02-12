@@ -12,7 +12,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Static error variables
 var (
 	ErrNilPointerToArray    = errors.New("nil pointer to array")
 	ErrNilPointer           = errors.New("nil pointer")
@@ -63,7 +62,7 @@ func (z *ZodArray[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input using array-specific parsing logic with engine.ParseComplex
+// Parse validates input using array-specific parsing logic.
 func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	result, err := engine.ParseComplex[[]any](
 		input,
@@ -79,24 +78,19 @@ func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 		return zero, err
 	}
 
-	// Handle different return types from ParseComplex
 	switch v := result.(type) {
 	case []any:
-		// Direct array type - convert to constraint type R
 		return convertArrayFromGeneric[T, R](v), nil
 	case *[]any:
-		// Pointer to array - convert to constraint type R
 		if v == nil {
 			var zero R
 			return zero, nil
 		}
 		return convertArrayFromGeneric[T, R](*v), nil
 	case nil:
-		// Nil result (for optional/nilable cases)
 		var zero R
 		return zero, nil
 	default:
-		// Try direct type assertion as fallback
 		if typedResult, ok := result.(R); ok {
 			return typedResult, nil
 		}
@@ -119,10 +113,7 @@ func (z *ZodArray[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 }
 
 // StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
 func (z *ZodArray[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	// Convert T to R for ParseComplexStrict
 	constraintInput, ok := convertToArrayType[T, R](input)
 	if !ok {
 		var zero R
@@ -137,7 +128,7 @@ func (z *ZodArray[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 		)
 	}
 
-	result, err := engine.ParseComplexStrict[[]any, R](
+	return engine.ParseComplexStrict[[]any, R](
 		constraintInput,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeArray,
@@ -146,16 +137,9 @@ func (z *ZodArray[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 		z.validateArrayForEngine,
 		ctx...,
 	)
-	if err != nil {
-		var zero R
-		return zero, err
-	}
-
-	return result, nil
 }
 
 // MustStrictParse validates input with compile-time type safety and panics on failure.
-// This method provides zero-overhead abstraction with strict type constraints.
 func (z *ZodArray[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -164,8 +148,7 @@ func (z *ZodArray[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// ParseAny validates input and returns untyped result for runtime scenarios.
-// Zero-overhead wrapper around Parse to eliminate reflection calls.
+// ParseAny validates input and returns untyped result.
 func (z *ZodArray[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -339,33 +322,21 @@ func (z *ZodArray[T, R]) Rest() any {
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform applies a transformation function using the WrapFn pattern.
-// Array types implement direct extraction of T values for transformation.
+// Transform applies a transformation function to the parsed array value.
 func (z *ZodArray[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	// WrapFn Pattern: Create wrapper function for type-safe extraction
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		arrayValue := extractArrayValue[T, R](input) // Use existing extraction logic
-		return fn(arrayValue, ctx)
+		return fn(extractArrayValue[T, R](input), ctx)
 	}
-
-	// Use the new factory function for ZodTransform
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
 // Overwrite transforms the input value while preserving the original type.
-// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
-// The transformation function is stored as a check, so it doesn't modify the inferred type.
 func (z *ZodArray[T, R]) Overwrite(transform func(R) R, params ...any) *ZodArray[T, R] {
-	// Create a transformation function that works with the constraint type R
 	transformAny := func(input any) any {
-		// Try to convert input to constraint type R
 		converted, ok := convertToArrayType[T, R](input)
 		if !ok {
-			// If conversion fails, return original value
 			return input
 		}
-
-		// Apply transformation directly on constraint type R
 		return transform(converted)
 	}
 
@@ -375,32 +346,15 @@ func (z *ZodArray[T, R]) Overwrite(transform func(R) R, params ...any) *ZodArray
 	return z.withInternals(newInternals)
 }
 
-// Pipe creates a pipeline using the WrapFn pattern.
-// Instead of using adapter structures, this creates a target function that handles type conversion.
-//
-// WrapFn Implementation:
-//  1. Create a target function that extracts T from constraint type R
-//  2. Apply the target schema to the extracted T
-//  3. Return a ZodPipe with the target function
-//
-// Zero Redundancy:
-//   - No arrayTypeConverter structure needed
-//   - Direct function composition eliminates overhead
-//   - Type-safe extraction from constraint type R to T
+// Pipe creates a pipeline that passes the parsed value to a target schema.
 //
 // Example:
 //
-//	arrayToString := Array([]any{String()}).Pipe(String())  // []any -> string conversion
+//	arrayToString := Array([]any{String()}).Pipe(String())
 func (z *ZodArray[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	// WrapFn Pattern: Create target function for type conversion and validation
 	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		// Extract T value from constraint type R
-		arrayValue := extractArrayValue[T, R](input)
-		// Apply target schema to the extracted T
-		return target.Parse(arrayValue, ctx)
+		return target.Parse(extractArrayValue[T, R](input), ctx)
 	}
-
-	// Use the new factory function for ZodPipe
 	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
 
@@ -410,26 +364,21 @@ func (z *ZodArray[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 
 // Refine applies type-safe validation that matches the schema's output type R.
 func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] {
-	// Wrapper converts the raw value (always T or nil) into R before calling fn.
 	wrapper := func(v any) bool {
 		var zero R
 
 		switch any(zero).(type) {
 		case *T:
-			// Schema output is *T – convert incoming value (T or nil) to *T
 			if v == nil {
 				return fn(any((*T)(nil)).(R))
 			}
 			if arrayVal, ok := v.(T); ok {
 				arrayValCopy := arrayVal
-				ptr := &arrayValCopy
-				return fn(any(ptr).(R))
+				return fn(any(&arrayValCopy).(R))
 			}
 			return false
 		default:
-			// Schema output is T
 			if v == nil {
-				// nil should never reach here for T schema; treat as failure.
 				return false
 			}
 			if arrayVal, ok := v.(T); ok {
@@ -439,30 +388,26 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 		}
 	}
 
-	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
-	// Convert back to the format expected by checks.NewCustom
 	var errorMessage any
 	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
+		errorMessage = schemaParams.Error
 	}
 
 	check := checks.NewCustom[any](wrapper, errorMessage)
-
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny provides flexible validation without type conversion.
 func (z *ZodArray[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodArray[T, R] {
-	// Use unified parameter handling
 	schemaParams := utils.NormalizeParams(params...)
 
 	var errorMessage any
 	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
+		errorMessage = schemaParams.Error
 	}
 
 	check := checks.NewCustom[any](fn, errorMessage)
@@ -504,8 +449,7 @@ func (z *ZodArray[T, R]) Or(other any) *ZodUnion[any, any] {
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withPtrInternals creates a new ZodArray instance of constraint type *T.
-// Used by modifiers such as Optional, Nilable, and Nullish that must return a pointer constraint.
+// withPtrInternals creates a new ZodArray with pointer constraint type *T.
 func (z *ZodArray[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodArray[T, *T] {
 	return &ZodArray[T, *T]{internals: &ZodArrayInternals{
 		ZodTypeInternals: *in,
@@ -515,8 +459,7 @@ func (z *ZodArray[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodArray[T
 	}}
 }
 
-// withInternals creates a new ZodArray instance that keeps the original constraint type R.
-// Used by modifiers that retain the original constraint, such as Default, Prefault, and Transform.
+// withInternals creates a new ZodArray keeping the original constraint type R.
 func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R] {
 	return &ZodArray[T, R]{internals: &ZodArrayInternals{
 		ZodTypeInternals: *in,
@@ -526,104 +469,73 @@ func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R
 	}}
 }
 
-// CloneFrom copies configuration from another schema
+// CloneFrom copies configuration from another schema.
 func (z *ZodArray[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodArray[T, R]); ok {
-		// Preserve original checks to avoid overwriting them
 		originalChecks := z.internals.Checks
-
-		// Copy all state from source
 		*z.internals = *src.internals
-
-		// Restore the original checks that were set by the constructor
 		z.internals.Checks = originalChecks
 	}
 }
 
-// convertArrayFromGeneric converts from generic []any to constraint type R
+// convertArrayFromGeneric converts from generic []any to constraint type R.
 func convertArrayFromGeneric[T any, R any](arrayValue []any) R {
-	// Handle direct array assignment
 	if directValue, ok := any(arrayValue).(R); ok {
 		return directValue
 	}
 
-	// Try type conversion for pointer types
+	// Pointer types (e.g. *[]any): wrap in pointer.
 	var zero R
-	zeroType := reflect.TypeOf((*R)(nil)).Elem()
-
-	// Check if R is a pointer type (like *[]any)
-	if zeroType.Kind() == reflect.Ptr {
-		// Create pointer to the array
-		ptrVal := any(&arrayValue)
-		if converted, ok := ptrVal.(R); ok {
+	if reflect.TypeOf((*R)(nil)).Elem().Kind() == reflect.Ptr {
+		if converted, ok := any(&arrayValue).(R); ok {
 			return converted
 		}
-		// Return nil pointer if conversion fails
-		return zero
 	}
 
-	// For non-pointer types, try direct conversion
-	if converted, ok := any(arrayValue).(R); ok {
-		return converted
-	}
-
-	// Fallback to zero value if all conversions fail
 	return zero
 }
 
-// convertToArrayType converts any value to the array constraint type R with strict type checking
-func convertToArrayType[T any, R any](
-	value any,
-) (R, bool) {
+// convertToArrayType converts any value to the array constraint type R.
+func convertToArrayType[T any, R any](value any) (R, bool) {
 	var zero R
 
 	if value == nil {
-		// Handle nil values for pointer types
-		zeroType := reflect.TypeOf((*R)(nil)).Elem()
-		if zeroType.Kind() == reflect.Ptr {
-			return zero, true // zero value for pointer types is nil
+		if reflect.TypeOf((*R)(nil)).Elem().Kind() == reflect.Ptr {
+			return zero, true
 		}
-		return zero, false // nil not allowed for value types
-	}
-
-	// Extract array value from input
-	var arrayValue []any
-	var isValid bool
-
-	switch val := value.(type) {
-	case []any:
-		arrayValue, isValid = val, true
-	case *[]any:
-		if val != nil {
-			arrayValue, isValid = *val, true
-		}
-	default:
-		// Try to extract using reflection for other slice types
-		if rv := reflect.ValueOf(value); rv.Kind() == reflect.Slice {
-			arrayValue = make([]any, rv.Len())
-			for i := 0; i < rv.Len(); i++ {
-				arrayValue[i] = rv.Index(i).Interface()
-			}
-			isValid = true
-		} else {
-			return zero, false // Reject all non-array types
-		}
-	}
-
-	if !isValid {
 		return zero, false
 	}
 
-	// Convert to target constraint type R
+	var arrayValue []any
+
+	switch val := value.(type) {
+	case []any:
+		arrayValue = val
+	case *[]any:
+		if val == nil {
+			return zero, false
+		}
+		arrayValue = *val
+	default:
+		rv := reflect.ValueOf(value)
+		if rv.Kind() != reflect.Slice {
+			return zero, false
+		}
+		arrayValue = make([]any, rv.Len())
+		for i := range rv.Len() {
+			arrayValue[i] = rv.Index(i).Interface()
+		}
+	}
+
+	// Convert to target constraint type R.
 	zeroType := reflect.TypeOf((*R)(nil)).Elem()
 	//nolint:exhaustive
 	switch zeroType.Kind() {
 	case reflect.Slice:
-		if reflect.TypeOf(value).AssignableTo(reflect.TypeOf((*R)(nil)).Elem()) {
+		if reflect.TypeOf(value).AssignableTo(zeroType) {
 			return value.(R), true
 		}
 	case reflect.Ptr:
-		// R is *[]any
 		if converted, ok := any(&arrayValue).(R); ok {
 			return converted, true
 		}
@@ -644,7 +556,7 @@ func extractArrayValue[T any, R any](value R) T {
 	return any(value).(T)
 }
 
-// extractArray converts input to []any array
+// extractArray converts input to []any.
 func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 	switch v := value.(type) {
 	case []any:
@@ -655,10 +567,9 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		}
 		return nil, ErrNilPointerToArray
 	default:
-		// Try to convert using reflection
 		rv := reflect.ValueOf(value)
 
-		// Handle pointer to slice/array
+		// Handle pointer to slice/array.
 		if rv.Kind() == reflect.Ptr {
 			if rv.IsNil() {
 				return nil, ErrNilPointer
@@ -667,85 +578,63 @@ func (z *ZodArray[T, R]) extractArray(value any) ([]any, error) {
 		}
 
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return nil, fmt.Errorf("%w, got %T", ErrExpectedArrayOrSlice, value)
+			return nil, fmt.Errorf("%w: got %T", ErrExpectedArrayOrSlice, value)
 		}
 
 		result := make([]any, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
+		for i := range rv.Len() {
 			result[i] = rv.Index(i).Interface()
 		}
 		return result, nil
 	}
 }
 
-// validateArrayWithIssues validates the array content using raw issues (new approach)
+// validateArrayWithIssues validates array content and collects all issues.
 func (z *ZodArray[T, R]) validateArrayWithIssues(value []any, checks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
-	// Defensive check for nil internals
 	if z.internals == nil {
 		return nil, issues.CreateInvalidTypeError(core.ZodTypeArray, value, ctx)
 	}
 
-	// First apply checks (including Overwrite transformations) to get the transformed value
-	transformedValue, err := engine.ApplyChecks[[]any](value, checks, ctx)
+	// Apply checks (including Overwrite transformations) first.
+	value, err := engine.ApplyChecks[[]any](value, checks, ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// Use the transformed value for subsequent validation
-	value = transformedValue
 
 	fixedLen := len(z.internals.Items)
 	actualLen := len(value)
 	hasRest := z.internals.Rest != nil
 
-	var collectedIssues []core.ZodRawIssue
-
-	// Validate length first - fail fast on length errors (TypeScript Zod v4 behavior)
+	// Fail fast on length errors (TypeScript Zod v4 behavior).
 	if hasRest {
-		// With rest parameter: must have at least fixed length
 		if actualLen < fixedLen {
 			issue := issues.CreateTooSmallIssue(fixedLen, true, "array", value)
 			issue.Properties["is_rest_param"] = true
-			collectedIssues = append(collectedIssues, issue)
-			// Fail fast - return immediately on length error
-			return nil, issues.CreateArrayValidationIssues(collectedIssues)
+			return nil, issues.CreateArrayValidationIssues([]core.ZodRawIssue{issue})
 		}
-	} else {
-		// Without rest parameter: must match exactly - fail fast on length error
-		if actualLen != fixedLen {
-			if actualLen < fixedLen {
-				issue := issues.CreateFixedLengthArrayIssue(fixedLen, actualLen, value, true)
-				collectedIssues = append(collectedIssues, issue)
-			} else {
-				issue := issues.CreateFixedLengthArrayIssue(fixedLen, actualLen, value, false)
-				collectedIssues = append(collectedIssues, issue)
-			}
-			// Fail fast - return immediately on length error (TypeScript Zod v4 behavior)
-			return nil, issues.CreateArrayValidationIssues(collectedIssues)
-		}
+	} else if actualLen != fixedLen {
+		tooSmall := actualLen < fixedLen
+		issue := issues.CreateFixedLengthArrayIssue(fixedLen, actualLen, value, tooSmall)
+		return nil, issues.CreateArrayValidationIssues([]core.ZodRawIssue{issue})
 	}
 
-	// Length is correct, now validate all elements and collect multiple errors
-	// Validate fixed part - collect all element errors instead of stopping at first
-	// Use min() (Go 1.21+) for cleaner bounds calculation
+	// Length is correct — validate all elements and collect errors.
+	var collectedIssues []core.ZodRawIssue
+
 	for i := range min(fixedLen, actualLen) {
 		if err := z.validateElement(value[i], z.internals.Items[i], ctx, i); err != nil {
-			issue := issues.CreateElementValidationIssue(i, "array", value[i], err)
-			collectedIssues = append(collectedIssues, issue)
+			collectedIssues = append(collectedIssues, issues.CreateElementValidationIssue(i, "array", value[i], err))
 		}
 	}
 
-	// Validate rest part - collect all rest element errors
 	if hasRest && actualLen > fixedLen {
 		for i := fixedLen; i < actualLen; i++ {
 			if err := z.validateElement(value[i], z.internals.Rest, ctx, i); err != nil {
-				issue := issues.CreateElementValidationIssue(i, "array rest", value[i], err)
-				collectedIssues = append(collectedIssues, issue)
+				collectedIssues = append(collectedIssues, issues.CreateElementValidationIssue(i, "array rest", value[i], err))
 			}
 		}
 	}
 
-	// If we collected any issues, return them as a combined error
 	if len(collectedIssues) > 0 {
 		return nil, issues.CreateArrayValidationIssues(collectedIssues)
 	}
@@ -753,18 +642,12 @@ func (z *ZodArray[T, R]) validateArrayWithIssues(value []any, checks []core.ZodC
 	return value, nil
 }
 
-// validateElement validates a single array element against its schema
-func (z *ZodArray[T, R]) validateElement(value any, schema any, ctx *core.ParseContext, index int) error {
+// validateElement validates a single array element against its schema.
+func (z *ZodArray[T, R]) validateElement(value any, schema any, _ *core.ParseContext, _ int) error {
 	if schema == nil {
 		return nil
 	}
 
-	// Defensive check for context
-	if ctx == nil {
-		return issues.CreateCustomError("validation context is nil", nil, value, &core.ParseContext{})
-	}
-
-	// Try using reflection to call Parse method - this handles all schema types
 	schemaValue := reflect.ValueOf(schema)
 	if !schemaValue.IsValid() || schemaValue.IsNil() {
 		return nil
@@ -780,19 +663,12 @@ func (z *ZodArray[T, R]) validateElement(value any, schema any, ctx *core.ParseC
 		return nil
 	}
 
-	// Build arguments for Parse call
 	args := []reflect.Value{reflect.ValueOf(value)}
-	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
-		// Add context parameter if expected
-		args = append(args, reflect.ValueOf(ctx))
-	}
 
-	// Call Parse method
 	results := parseMethod.Call(args)
 	if len(results) >= 2 {
-		// Check if there's an error (second return value)
-		if errInterface := results[1].Interface(); errInterface != nil {
-			if err, ok := errInterface.(error); ok {
+		if errVal := results[1].Interface(); errVal != nil {
+			if err, ok := errVal.(error); ok {
 				return err
 			}
 		}
@@ -801,7 +677,7 @@ func (z *ZodArray[T, R]) validateElement(value any, schema any, ctx *core.ParseC
 	return nil
 }
 
-// newZodArrayFromDef constructs new ZodArray from definition
+// newZodArrayFromDef constructs a new ZodArray from a definition.
 func newZodArrayFromDef[T any, R any](def *ZodArrayDef) *ZodArray[T, R] {
 	internals := &ZodArrayInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
@@ -815,7 +691,6 @@ func newZodArrayFromDef[T any, R any](def *ZodArrayDef) *ZodArray[T, R] {
 		Rest:  def.Rest,
 	}
 
-	// Provide constructor for AddCheck functionality
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		arrayDef := &ZodArrayDef{
 			ZodTypeDef: *newDef,
@@ -835,67 +710,49 @@ func newZodArrayFromDef[T any, R any](def *ZodArrayDef) *ZodArray[T, R] {
 // CONSTRUCTORS AND FACTORY FUNCTIONS
 // =============================================================================
 
-// Array creates tuple schema with fixed elements
-// Supports the following patterns:
-// Array() - empty tuple
-// Array([]any{String(), Int()}) - fixed length tuple
-// Array([]any{String(), Int()}, Bool()) - tuple with rest parameter
+// Array creates a tuple schema with fixed elements.
 //
-// Graceful handling: Non-[]any arguments are converted to single-element array for convenience
+//	Array()                                    - empty tuple
+//	Array([]any{String(), Int()})              - fixed length tuple
+//	Array([]any{String(), Int()}, Bool())      - tuple with rest parameter
 func Array(args ...any) *ZodArray[[]any, []any] {
-	// No arguments - create empty array
 	if len(args) == 0 {
 		return ArrayTyped[[]any, []any]([]any{})
 	}
 
-	// First argument must be []any - explicit API format
 	if items, ok := args[0].([]any); ok {
 		return ArrayTyped[[]any, []any](items, args[1:]...)
 	}
 
-	// Graceful handling: treat single non-[]any argument as single-element array
-	// This provides better user experience while maintaining API consistency
+	// Graceful handling: treat single non-[]any argument as single-element array.
 	return ArrayTyped[[]any, []any]([]any{args[0]}, args[1:]...)
 }
 
-// ArrayPtr creates pointer-capable tuple schema
-//
-// Graceful handling: Non-[]any arguments are converted to single-element array for convenience
+// ArrayPtr creates a pointer-capable tuple schema.
 func ArrayPtr(args ...any) *ZodArray[[]any, *[]any] {
-	// No arguments - create empty array
 	if len(args) == 0 {
 		return ArrayTyped[[]any, *[]any]([]any{})
 	}
 
-	// First argument must be []any - explicit API format
 	if items, ok := args[0].([]any); ok {
 		return ArrayTyped[[]any, *[]any](items, args[1:]...)
 	}
 
-	// Graceful handling: treat single non-[]any argument as single-element array
-	// This provides better user experience while maintaining API consistency
 	return ArrayTyped[[]any, *[]any]([]any{args[0]}, args[1:]...)
 }
 
-// ArrayTyped is the generic constructor for tuple schemas
-// Supports explicit syntax only:
-// ArrayTyped([]any{schemas...}) - fixed length tuple
-// ArrayTyped([]any{schemas...}, params) - fixed length tuple with custom params
-// ArrayTyped([]any{schemas...}, Rest) - tuple with rest parameter
-// ArrayTyped([]any{schemas...}, Rest, params) - with custom params
+// ArrayTyped is the generic constructor for tuple schemas.
 func ArrayTyped[T any, R any](items []any, args ...any) *ZodArray[T, R] {
-	var Rest any
+	var rest any
 	var param any
 
-	// Parse remaining arguments
 	for _, arg := range args {
 		switch v := arg.(type) {
 		case core.SchemaParams:
 			param = v
 		default:
-			// First non-params argument is rest schema
-			if Rest == nil {
-				Rest = v
+			if rest == nil {
+				rest = v
 			}
 		}
 	}
@@ -908,10 +765,9 @@ func ArrayTyped[T any, R any](items []any, args ...any) *ZodArray[T, R] {
 			Checks: []core.ZodCheck{},
 		},
 		Items: items,
-		Rest:  Rest,
+		Rest:  rest,
 	}
 
-	// Apply normalized parameters to schema definition
 	if normalizedParams != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
@@ -919,16 +775,15 @@ func ArrayTyped[T any, R any](items []any, args ...any) *ZodArray[T, R] {
 	return newZodArrayFromDef[T, R](def)
 }
 
-// Check adds a custom validation function that can report multiple issues for array schema.
+// Check adds a custom validation function that can report multiple issues.
 func (z *ZodArray[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodArray[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
-		// If R is a value type and the value in payload is the corresponding value type, perform automatic value adaptation
 		if val, ok := payload.GetValue().(R); ok {
 			fn(val, payload)
 			return
 		}
 
-		// If R is a pointer type and the value in payload is the corresponding value type, perform automatic pointer adaptation
+		// Pointer type adaptation: wrap value type in pointer for R = *T.
 		var zero R
 		zeroTyp := reflect.TypeOf(zero)
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
@@ -950,7 +805,7 @@ func (z *ZodArray[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 	return z.withInternals(newInternals)
 }
 
-// extractArrayForEngine extracts []any from input for engine.ParseComplex
+// extractArrayForEngine extracts []any from input for engine.ParseComplex.
 func (z *ZodArray[T, R]) extractArrayForEngine(input any) ([]any, bool) {
 	result, err := z.extractArray(input)
 	if err != nil {
@@ -959,14 +814,12 @@ func (z *ZodArray[T, R]) extractArrayForEngine(input any) ([]any, bool) {
 	return result, true
 }
 
-// extractArrayPtrForEngine extracts pointer to []any from input for engine.ParseComplex
+// extractArrayPtrForEngine extracts pointer to []any from input.
 func (z *ZodArray[T, R]) extractArrayPtrForEngine(input any) (*[]any, bool) {
-	// Try direct pointer extraction
 	if ptr, ok := input.(*[]any); ok {
 		return ptr, true
 	}
 
-	// Try extracting array and return pointer to it
 	result, err := z.extractArray(input)
 	if err != nil {
 		return nil, false
@@ -974,7 +827,7 @@ func (z *ZodArray[T, R]) extractArrayPtrForEngine(input any) (*[]any, bool) {
 	return &result, true
 }
 
-// validateArrayForEngine validates []any for engine.ParseComplex
+// validateArrayForEngine validates []any for engine.ParseComplex.
 func (z *ZodArray[T, R]) validateArrayForEngine(value []any, checks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
 	return z.validateArrayWithIssues(value, checks, ctx)
 }

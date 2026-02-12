@@ -36,7 +36,7 @@ type StructAnalyzer struct {
 	info     *types.Info
 }
 
-// GenerationInfo contains information about a struct that needs code generation
+// GenerationInfo contains information about a struct that needs code generation.
 type GenerationInfo struct {
 	Name        string                // Struct name
 	Package     string                // Package name
@@ -44,7 +44,6 @@ type GenerationInfo struct {
 	Imports     []string              // Required imports
 	HasGenerate bool                  // Whether struct has //go:generate gozodgen directive
 	FilePath    string                // Source file path
-	StructType  reflect.Type          // Struct type for validation
 }
 
 // NewStructAnalyzer creates a new AST analyzer instance
@@ -162,24 +161,24 @@ func (a *StructAnalyzer) analyzeFile(fileName string, file *ast.File, pkgName st
 	return structs, nil
 }
 
-// analyzeStruct analyzes a single struct declaration
+// parsedField pairs a FieldInfo with a flag indicating whether the field had a gozod tag.
+type parsedField struct {
+	info        tagparser.FieldInfo
+	hasGozodTag bool
+}
+
+// analyzeStruct analyzes a single struct declaration.
 func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, pkgName, fileName string, imports []string, hasGenerate bool) (*GenerationInfo, error) {
-	// Parse struct fields directly from AST
-	fields, err := a.parseStructFields(structType)
+	parsed, err := a.parseStructFields(structType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse struct fields: %w", err)
+		return nil, fmt.Errorf("parse struct fields: %w", err)
 	}
 
-	// Filter fields that have gozod tags or should be included
 	var gozodFields []tagparser.FieldInfo
-	for _, field := range fields {
-		// Include fields that have gozod tags (even if empty), have rules, are required, or struct has generate directive
-		// We use the Optional field temporarily to store the hasAnyGozodTag flag
-		hasGozodTag := field.Optional
-		if len(field.Rules) > 0 || field.Required || hasGozodTag || hasGenerate {
-			// Reset the Optional field to its proper value for pointer types
-			field.Optional = field.Type != nil && field.Type.Kind() == reflect.Ptr && !field.Required
-			gozodFields = append(gozodFields, field)
+	for _, pf := range parsed {
+		if len(pf.info.Rules) > 0 || pf.info.Required || pf.hasGozodTag || hasGenerate {
+			pf.info.Optional = pf.info.Type != nil && pf.info.Type.Kind() == reflect.Ptr && !pf.info.Required
+			gozodFields = append(gozodFields, pf.info)
 		}
 	}
 
@@ -190,7 +189,6 @@ func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, 
 		Imports:     imports,
 		HasGenerate: hasGenerate,
 		FilePath:    fileName,
-		StructType:  nil, // We'll set this when needed
 	}, nil
 }
 
@@ -227,59 +225,50 @@ func (a *StructAnalyzer) hasGenerateDirective(comments *ast.CommentGroup) bool {
 	return false
 }
 
-// parseStructFields parses struct fields from AST and extracts tag information
-func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]tagparser.FieldInfo, error) {
-	var fields []tagparser.FieldInfo
+// parseStructFields parses struct fields from AST and extracts tag information.
+func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsedField, error) {
+	var fields []parsedField
 
 	for _, field := range structType.Fields.List {
-		// Skip anonymous fields for now
 		if len(field.Names) == 0 {
 			continue
 		}
 
 		for _, name := range field.Names {
-			// Skip unexported fields
 			if !name.IsExported() {
 				continue
 			}
 
-			fieldInfo := tagparser.FieldInfo{
+			info := tagparser.FieldInfo{
 				Name:     name.Name,
 				Type:     a.getReflectType(field.Type),
-				TypeName: a.getTypeNameFromAST(field.Type), // Add AST type name
+				TypeName: a.getTypeNameFromAST(field.Type),
 				JsonName: a.extractJSONName(field),
 			}
 
-			// Parse gozod tag if present
-			hasAnyGozodTag := false
+			hasGozodTag := false
 			if field.Tag != nil {
 				tagValue := strings.Trim(field.Tag.Value, "`")
-				// Check if gozod tag exists (even if empty)
 				if strings.Contains(tagValue, "gozod:") {
-					hasAnyGozodTag = true
+					hasGozodTag = true
 					gozodTag := a.extractTagValue(tagValue, "gozod")
-					fieldInfo.GozodTag = gozodTag // Store the raw gozod tag value (could be empty)
+					info.GozodTag = gozodTag
 					if gozodTag != "" {
 						rules, err := a.parseTagRules(gozodTag)
 						if err != nil {
-							return nil, fmt.Errorf("failed to parse gozod tag for field %s: %w", name.Name, err)
+							return nil, fmt.Errorf("parse gozod tag for field %s: %w", name.Name, err)
 						}
-						fieldInfo.Rules = rules
-
-						// Set required flag
+						info.Rules = rules
 						for _, rule := range rules {
 							if rule.Name == "required" {
-								fieldInfo.Required = true
+								info.Required = true
 							}
 						}
 					}
 				}
 			}
 
-			// Store whether field has any gozod tag for filtering purposes
-			fieldInfo.Optional = hasAnyGozodTag // Reuse Optional field temporarily as a flag
-
-			fields = append(fields, fieldInfo)
+			fields = append(fields, parsedField{info: info, hasGozodTag: hasGozodTag})
 		}
 	}
 
@@ -427,20 +416,16 @@ func (a *StructAnalyzer) getReflectTypeFromAST(expr ast.Expr) reflect.Type {
 	}
 }
 
-// NeedsGeneration checks if a struct needs code generation
+// NeedsGeneration reports whether a struct needs code generation.
 func (a *StructAnalyzer) NeedsGeneration(info *GenerationInfo) bool {
-	// Check if struct has fields with validation rules
+	if info.HasGenerate {
+		return true
+	}
 	for _, field := range info.Fields {
 		if len(field.Rules) > 0 || field.Required {
 			return true
 		}
 	}
-
-	// Or if struct has //go:generate directive
-	if info.HasGenerate {
-		return true
-	}
-
 	return false
 }
 

@@ -18,25 +18,21 @@ func TestBool_BasicFunctionality(t *testing.T) {
 	t.Run("valid boolean inputs", func(t *testing.T) {
 		schema := Bool()
 
-		// Test true value
-		result, err := schema.Parse(true)
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-
-		// Test false value
-		result, err = schema.Parse(false)
-		require.NoError(t, err)
-		assert.Equal(t, false, result)
+		for _, input := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%t", input), func(t *testing.T) {
+				result, err := schema.Parse(input)
+				require.NoError(t, err)
+				assert.Equal(t, input, result)
+			})
+		}
 	})
 
 	t.Run("invalid type inputs", func(t *testing.T) {
 		schema := Bool()
 
-		invalidInputs := []any{
+		for _, input := range []any{
 			"not a boolean", 123, 3.14, []bool{true}, nil,
-		}
-
-		for _, input := range invalidInputs {
+		} {
 			_, err := schema.Parse(input)
 			assert.Error(t, err, "Expected error for input: %v", input)
 		}
@@ -45,16 +41,13 @@ func TestBool_BasicFunctionality(t *testing.T) {
 	t.Run("Parse and MustParse methods", func(t *testing.T) {
 		schema := Bool()
 
-		// Test Parse method
 		result, err := schema.Parse(true)
 		require.NoError(t, err)
 		assert.Equal(t, true, result)
 
-		// Test MustParse method
 		mustResult := schema.MustParse(false)
 		assert.Equal(t, false, mustResult)
 
-		// Test panic on invalid input
 		assert.Panics(t, func() {
 			schema.MustParse("invalid")
 		})
@@ -79,47 +72,36 @@ func TestBool_BasicFunctionality(t *testing.T) {
 func TestBool_TypeSafety(t *testing.T) {
 	t.Run("Bool returns bool type", func(t *testing.T) {
 		schema := Bool()
-		require.NotNil(t, schema)
 
-		result, err := schema.Parse(true)
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-		assert.IsType(t, bool(false), result) // Ensure type is bool
-
-		result, err = schema.Parse(false)
-		require.NoError(t, err)
-		assert.Equal(t, false, result)
-		assert.IsType(t, bool(false), result)
+		for _, input := range []bool{true, false} {
+			result, err := schema.Parse(input)
+			require.NoError(t, err)
+			assert.Equal(t, input, result)
+			assert.IsType(t, bool(false), result)
+		}
 	})
 
 	t.Run("BoolPtr returns *bool type", func(t *testing.T) {
 		schema := BoolPtr()
-		require.NotNil(t, schema)
 
-		result, err := schema.Parse(true)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, true, *result)
-		assert.IsType(t, (*bool)(nil), result) // Ensure type is *bool
-
-		result, err = schema.Parse(false)
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, false, *result)
+		for _, input := range []bool{true, false} {
+			result, err := schema.Parse(input)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, input, *result)
+			assert.IsType(t, (*bool)(nil), result)
+		}
 	})
 
 	t.Run("type inference with assignment", func(t *testing.T) {
-		// Type-inference friendly API
-		boolSchema := Bool()   // bool type
-		ptrSchema := BoolPtr() // *bool type
+		boolSchema := Bool()
+		ptrSchema := BoolPtr()
 
-		// Test bool type
 		result1, err1 := boolSchema.Parse(true)
 		require.NoError(t, err1)
 		assert.IsType(t, bool(false), result1)
 		assert.Equal(t, true, result1)
 
-		// Test *bool type
 		result2, err2 := ptrSchema.Parse(true)
 		require.NoError(t, err2)
 		assert.IsType(t, (*bool)(nil), result2)
@@ -128,13 +110,11 @@ func TestBool_TypeSafety(t *testing.T) {
 	})
 
 	t.Run("MustParse type safety", func(t *testing.T) {
-		// Test bool type
 		boolSchema := Bool()
 		result := boolSchema.MustParse(true)
 		assert.IsType(t, bool(false), result)
 		assert.Equal(t, true, result)
 
-		// Test *bool type
 		ptrSchema := BoolPtr()
 		ptrResult := ptrSchema.MustParse(true)
 		assert.IsType(t, (*bool)(nil), ptrResult)
@@ -143,13 +123,12 @@ func TestBool_TypeSafety(t *testing.T) {
 	})
 
 	t.Run("generic type constraint verification", func(t *testing.T) {
-		// Compile-time type checking - these should compile
+		// Compile-time type checking
 		var _ = Bool()
 		var _ = BoolPtr()
 		var _ = Bool().Optional()
 		var _ = Bool().Default(true)
 
-		// Verify actual behavior matches type constraints
 		boolSchema := Bool()
 		result, err := boolSchema.Parse(true)
 		require.NoError(t, err)
@@ -1113,7 +1092,6 @@ func TestBool_EdgeCases(t *testing.T) {
 	t.Run("transform and pipe integration", func(t *testing.T) {
 		schema := Bool()
 
-		// Test Transform
 		transform := schema.Transform(func(b bool, ctx *core.RefinementContext) (any, error) {
 			if b {
 				return "yes", nil
@@ -1129,14 +1107,14 @@ func TestBool_EdgeCases(t *testing.T) {
 		boolVal := true
 		ptrVal := &boolVal
 
-		extracted1 := extractBool[bool](boolVal)
+		extracted1 := extractBool(boolVal)
 		assert.Equal(t, true, extracted1)
 
-		extracted2 := extractBool[*bool](ptrVal)
+		extracted2 := extractBool(ptrVal)
 		assert.Equal(t, true, extracted2)
 
 		nilPtr := (*bool)(nil)
-		extracted3 := extractBool[*bool](nilPtr)
+		extracted3 := extractBool(nilPtr)
 		assert.Equal(t, false, extracted3)
 	})
 

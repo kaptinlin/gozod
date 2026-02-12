@@ -18,33 +18,30 @@ func TestBigInt_BasicFunctionality(t *testing.T) {
 	t.Run("valid big.Int inputs", func(t *testing.T) {
 		schema := BigInt()
 
-		// Test positive value
-		bigVal := big.NewInt(42)
-		result, err := schema.Parse(bigVal)
-		require.NoError(t, err)
-		assert.Equal(t, bigVal, result)
+		tests := []struct {
+			name  string
+			input *big.Int
+		}{
+			{name: "positive", input: big.NewInt(42)},
+			{name: "negative", input: big.NewInt(-123)},
+			{name: "zero", input: big.NewInt(0)},
+		}
 
-		// Test negative value
-		negVal := big.NewInt(-123)
-		result, err = schema.Parse(negVal)
-		require.NoError(t, err)
-		assert.Equal(t, negVal, result)
-
-		// Test zero value
-		zeroVal := big.NewInt(0)
-		result, err = schema.Parse(zeroVal)
-		require.NoError(t, err)
-		assert.Equal(t, zeroVal, result)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(tt.input)
+				require.NoError(t, err)
+				assert.Equal(t, tt.input, result)
+			})
+		}
 	})
 
 	t.Run("invalid type inputs", func(t *testing.T) {
 		schema := BigInt()
 
-		invalidInputs := []any{
+		for _, input := range []any{
 			"not a bigint", 123, 3.14, []byte{1, 2, 3}, nil,
-		}
-
-		for _, input := range invalidInputs {
+		} {
 			_, err := schema.Parse(input)
 			assert.Error(t, err, "Expected error for input: %v", input)
 		}
@@ -269,77 +266,105 @@ func TestBigInt_Validations(t *testing.T) {
 	t.Run("Min validation", func(t *testing.T) {
 		schema := BigInt().Min(big.NewInt(10))
 
-		// Valid: value >= minimum
-		result, err := schema.Parse(big.NewInt(15))
-		require.NoError(t, err)
-		expected := big.NewInt(15)
-		assert.Equal(t, expected, result)
+		tests := []struct {
+			name    string
+			input   int64
+			wantErr bool
+		}{
+			{name: "above minimum", input: 15, wantErr: false},
+			{name: "at minimum", input: 10, wantErr: false},
+			{name: "below minimum", input: 5, wantErr: true},
+		}
 
-		// Valid: value == minimum
-		result, err = schema.Parse(big.NewInt(10))
-		require.NoError(t, err)
-		expected = big.NewInt(10)
-		assert.Equal(t, expected, result)
-
-		// Invalid: value < minimum
-		_, err = schema.Parse(big.NewInt(5))
-		assert.Error(t, err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(big.NewInt(tt.input))
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, big.NewInt(tt.input), result)
+				}
+			})
+		}
 	})
 
 	t.Run("Max validation", func(t *testing.T) {
 		schema := BigInt().Max(big.NewInt(100))
 
-		// Valid: value <= maximum
-		result, err := schema.Parse(big.NewInt(50))
-		require.NoError(t, err)
-		expected := big.NewInt(50)
-		assert.Equal(t, expected, result)
+		tests := []struct {
+			name    string
+			input   int64
+			wantErr bool
+		}{
+			{name: "below maximum", input: 50, wantErr: false},
+			{name: "at maximum", input: 100, wantErr: false},
+			{name: "above maximum", input: 150, wantErr: true},
+		}
 
-		// Valid: value == maximum
-		result, err = schema.Parse(big.NewInt(100))
-		require.NoError(t, err)
-		expected = big.NewInt(100)
-		assert.Equal(t, expected, result)
-
-		// Invalid: value > maximum
-		_, err = schema.Parse(big.NewInt(150))
-		assert.Error(t, err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(big.NewInt(tt.input))
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, big.NewInt(tt.input), result)
+				}
+			})
+		}
 	})
 
 	t.Run("Positive validation", func(t *testing.T) {
 		schema := BigInt().Positive()
 
-		// Valid: positive number
-		result, err := schema.Parse(big.NewInt(42))
-		require.NoError(t, err)
-		expected := big.NewInt(42)
-		assert.Equal(t, expected, result)
+		tests := []struct {
+			name    string
+			input   int64
+			wantErr bool
+		}{
+			{name: "positive", input: 42, wantErr: false},
+			{name: "zero", input: 0, wantErr: true},
+			{name: "negative", input: -1, wantErr: true},
+		}
 
-		// Invalid: zero
-		_, err = schema.Parse(big.NewInt(0))
-		assert.Error(t, err)
-
-		// Invalid: negative
-		_, err = schema.Parse(big.NewInt(-1))
-		assert.Error(t, err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(big.NewInt(tt.input))
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, big.NewInt(tt.input), result)
+				}
+			})
+		}
 	})
 
 	t.Run("Negative validation", func(t *testing.T) {
 		schema := BigInt().Negative()
 
-		// Valid: negative number
-		result, err := schema.Parse(big.NewInt(-42))
-		require.NoError(t, err)
-		expected := big.NewInt(-42)
-		assert.Equal(t, expected, result)
+		tests := []struct {
+			name    string
+			input   int64
+			wantErr bool
+		}{
+			{name: "negative", input: -42, wantErr: false},
+			{name: "zero", input: 0, wantErr: true},
+			{name: "positive", input: 1, wantErr: true},
+		}
 
-		// Invalid: zero
-		_, err = schema.Parse(big.NewInt(0))
-		assert.Error(t, err)
-
-		// Invalid: positive
-		_, err = schema.Parse(big.NewInt(1))
-		assert.Error(t, err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(big.NewInt(tt.input))
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, big.NewInt(tt.input), result)
+				}
+			})
+		}
 	})
 }
 
@@ -352,19 +377,22 @@ func TestBigInt_Coercion(t *testing.T) {
 		schema := CoercedBigInt()
 
 		tests := []struct {
+			name     string
 			input    any
-			expected string // Use string representation for comparison
+			expected string
 		}{
-			{"42", "42"},
-			{int(42), "42"},
-			{int64(84), "84"},
-			{uint(100), "100"},
+			{name: "string", input: "42", expected: "42"},
+			{name: "int", input: int(42), expected: "42"},
+			{name: "int64", input: int64(84), expected: "84"},
+			{name: "uint", input: uint(100), expected: "100"},
 		}
 
 		for _, tt := range tests {
-			result, err := schema.Parse(tt.input)
-			require.NoError(t, err, "Failed to parse %v", tt.input)
-			assert.Equal(t, tt.expected, result.String())
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := schema.Parse(tt.input)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, result.String())
+			})
 		}
 	})
 
