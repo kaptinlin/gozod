@@ -11,10 +11,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
 // ZodLiteralDef defines the configuration for a literal schema.
 type ZodLiteralDef[T comparable] struct {
 	core.ZodTypeDef
@@ -31,10 +27,6 @@ type ZodLiteralInternals[T comparable] struct {
 type ZodLiteral[T comparable, R any] struct {
 	internals *ZodLiteralInternals[T]
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodLiteral[T, R]) Internals() *core.ZodTypeInternals {
@@ -58,18 +50,17 @@ func (z *ZodLiteral[T, R]) withCheck(check core.ZodCheck) *ZodLiteral[T, R] {
 	return z.withInternals(in)
 }
 
-// validateLiteral ensures the value is one of the allowed literal values,
-// then delegates to engine.ApplyChecks for Refine/Check logic.
+// validateLiteral ensures the value is one of the allowed literal values.
 func (z *ZodLiteral[T, R]) validateLiteral(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	if !z.Contains(value) {
 		return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, ctx)
 	}
-	return engine.ApplyChecks[T](value, chks, ctx)
+	return engine.ApplyChecks(value, chks, ctx)
 }
 
 // Parse validates the input value and returns a typed result.
 func (z *ZodLiteral[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	return engine.ParsePrimitive[T, R](
+	return engine.ParsePrimitive(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeLiteral,
@@ -81,7 +72,7 @@ func (z *ZodLiteral[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error
 
 // StrictParse provides compile-time type safety by requiring exact type matching.
 func (z *ZodLiteral[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
-	return engine.ParsePrimitiveStrict[T, R](
+	return engine.ParsePrimitiveStrict(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeLiteral,
@@ -122,10 +113,6 @@ func (z *ZodLiteral[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, 
 	return z.Parse(input, ctx...)
 }
 
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
-
 // Optional returns a schema that accepts nil, with constraint type *T.
 func (z *ZodLiteral[T, R]) Optional() *ZodLiteral[T, *T] {
 	in := z.internals.Clone()
@@ -155,7 +142,7 @@ func (z *ZodLiteral[T, R]) Default(v T) *ZodLiteral[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault sets a prefault value that goes through the full parsing pipeline when input is nil.
+// Prefault sets a prefault value that goes through full parsing when input is nil.
 func (z *ZodLiteral[T, R]) Prefault(v T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
@@ -169,7 +156,7 @@ func (z *ZodLiteral[T, R]) DefaultFunc(fn func() T) *ZodLiteral[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory function that provides the prefault value through the full parsing pipeline.
+// PrefaultFunc sets a factory function that provides the prefault value through full parsing.
 func (z *ZodLiteral[T, R]) PrefaultFunc(fn func() T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -195,10 +182,6 @@ func (z *ZodLiteral[T, R]) Meta(meta core.GlobalMeta) *ZodLiteral[T, R] {
 	return z
 }
 
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
-
 // Refine adds a typed custom validation function.
 func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T, R] {
 	wrapper := func(data any) bool {
@@ -208,15 +191,17 @@ func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T,
 			if data == nil {
 				return true
 			}
-			if typed, ok := data.(T); ok {
-				return fn(typed)
+			typed, ok := data.(T)
+			if !ok {
+				return false
 			}
-			return false
+			return fn(typed)
 		default:
-			if typed, ok := data.(T); ok {
-				return fn(typed)
+			typed, ok := data.(T)
+			if !ok {
+				return false
 			}
-			return false
+			return fn(typed)
 		}
 	}
 	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
@@ -226,10 +211,6 @@ func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T,
 func (z *ZodLiteral[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodLiteral[T, R] {
 	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
-
-// =============================================================================
-// TYPE-SPECIFIC METHODS
-// =============================================================================
 
 // Value returns the single literal value. Panics if the schema has multiple values.
 func (z *ZodLiteral[T, R]) Value() T {
@@ -253,10 +234,6 @@ func (z *ZodLiteral[T, R]) Contains(v T) bool {
 	return slices.Contains(z.internals.Def.Values, v)
 }
 
-// =============================================================================
-// HELPER AND PRIVATE METHODS
-// =============================================================================
-
 // withInternals creates a new instance preserving the generic constraint type R.
 func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[T, R] {
 	return &ZodLiteral[T, R]{internals: &ZodLiteralInternals[T]{
@@ -272,10 +249,6 @@ func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiter
 		Def:              z.internals.Def,
 	}}
 }
-
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
 
 // newZodLiteralFromDef constructs a new ZodLiteral from the given definition.
 func newZodLiteralFromDef[T comparable, R any](def *ZodLiteralDef[T]) *ZodLiteral[T, R] {

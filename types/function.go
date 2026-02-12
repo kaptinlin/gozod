@@ -52,7 +52,7 @@ func (z *ZodFunction[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional reports whether this schema accepts undefined/missing values.
+// IsOptional reports whether this schema accepts undefined or missing values.
 func (z *ZodFunction[T]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
@@ -77,7 +77,6 @@ func newFuncTypeError(v any, ctx *core.ParseContext) error {
 
 // convertResult converts the engine result to the constraint type T.
 func (z *ZodFunction[T]) convertResult(result any) T {
-	var zero T
 	typ := reflect.TypeOf((*T)(nil)).Elem()
 
 	if typ.Kind() == reflect.Ptr && typ.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
@@ -89,6 +88,7 @@ func (z *ZodFunction[T]) convertResult(result any) T {
 	}
 
 	if result == nil {
+		var zero T
 		return zero
 	}
 	return any(result).(T) //nolint:unconvert
@@ -334,7 +334,7 @@ func (z *ZodFunction[T]) Implement(fn any) (any, error) {
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// extractFunction extracts a function from input.
+// extractFunction extracts a function from the input value.
 func (z *ZodFunction[T]) extractFunction(v any) (any, bool) {
 	if v == nil {
 		return nil, false
@@ -345,25 +345,25 @@ func (z *ZodFunction[T]) extractFunction(v any) (any, bool) {
 	return nil, false
 }
 
-// extractFunctionPtr extracts a pointer to function from input.
+// extractFunctionPtr extracts a pointer to a function from the input value.
 func (z *ZodFunction[T]) extractFunctionPtr(v any) (*any, bool) {
 	if v == nil {
 		return nil, true
 	}
-	if ptr, ok := v.(*any); ok {
-		if ptr == nil {
-			return nil, true
-		}
-		if val := *ptr; val != nil {
-			if reflect.ValueOf(val).Kind() == reflect.Func {
-				return ptr, true
-			}
-		}
+	ptr, ok := v.(*any)
+	if !ok {
+		return nil, false
+	}
+	if ptr == nil {
+		return nil, true
+	}
+	if val := *ptr; val != nil && reflect.ValueOf(val).Kind() == reflect.Func {
+		return ptr, true
 	}
 	return nil, false
 }
 
-// validateFunction validates that input is a function.
+// validateFunction validates that the input value is a function.
 func (z *ZodFunction[T]) validateFunction(v any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	if v == nil {
 		in := z.Internals()
@@ -380,7 +380,7 @@ func (z *ZodFunction[T]) validateFunction(v any, checks []core.ZodCheck, ctx *co
 	return engine.ApplyChecks[any](v, checks, ctx)
 }
 
-// makeValidated creates a wrapper function with input/output validation.
+// makeValidated creates a wrapper function with input and output validation.
 func (z *ZodFunction[T]) makeValidated(fn reflect.Value) (any, error) {
 	wrapper := reflect.MakeFunc(fn.Type(), func(args []reflect.Value) []reflect.Value {
 		if z.internals.Input != nil {
@@ -418,7 +418,7 @@ func (z *ZodFunction[T]) validateInput(args []reflect.Value) error {
 	return err
 }
 
-// validateOutput validates function results against the Output schema.
+// validateOutput validates function return values against the Output schema.
 func (z *ZodFunction[T]) validateOutput(results []reflect.Value) error {
 	if z.internals.Output == nil {
 		return nil
@@ -475,10 +475,7 @@ func convertToFuncType[T FunctionConstraint](v any) (T, bool) {
 
 	if v == nil {
 		typ := reflect.TypeOf((*T)(nil)).Elem()
-		if typ.Kind() == reflect.Ptr {
-			return zero, true
-		}
-		return zero, false
+		return zero, typ.Kind() == reflect.Ptr
 	}
 
 	rv := reflect.ValueOf(v)
@@ -526,11 +523,13 @@ func FunctionTyped[T FunctionConstraint](params ...any) *ZodFunction[T] {
 
 	var input, output core.ZodType[any]
 	for _, p := range params {
-		if fp, ok := p.(FunctionParams); ok {
-			input = fp.Input
-			output = fp.Output
-			break
+		fp, ok := p.(FunctionParams)
+		if !ok {
+			continue
 		}
+		input = fp.Input
+		output = fp.Output
+		break
 	}
 
 	def := &ZodFunctionDef{

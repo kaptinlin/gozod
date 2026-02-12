@@ -17,13 +17,13 @@ type ZodNeverDef struct {
 	core.ZodTypeDef
 }
 
-// ZodNeverInternals contains never validator internal state.
+// ZodNeverInternals contains the internal state for never validators.
 type ZodNeverInternals struct {
 	core.ZodTypeInternals
 	Def *ZodNeverDef
 }
 
-// ZodNever represents a never validation schema that always rejects input.
+// ZodNever represents a validation schema that always rejects input.
 // T is the base type and R is the constraint type (may be a pointer for
 // modifiers like Optional/Nilable).
 type ZodNever[T any, R any] struct {
@@ -49,8 +49,8 @@ func (z *ZodNever[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// validateNeverValue rejects all values with an invalid type error.
-// Checks are applied first to support custom refinement error messages.
+// validateNeverValue rejects all values with an invalid type error. Checks are
+// applied first to support custom refinement error messages.
 func validateNeverValue[T any](value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	if len(chks) > 0 {
 		validated, err := engine.ApplyChecks[T](value, chks, ctx)
@@ -64,8 +64,8 @@ func validateNeverValue[T any](value T, chks []core.ZodCheck, ctx *core.ParseCon
 	return zero, issues.CreateInvalidTypeError(core.ZodTypeNever, value, ctx)
 }
 
-// newNeverValidator creates a validator that supports custom error messages
-// from schema parameters via the internals' Error field.
+// newNeverValidator creates a validator that supports custom error messages from
+// schema parameters via the internals' Error field.
 func newNeverValidator[T any](internals *core.ZodTypeInternals) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
 	return func(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 		if len(chks) > 0 {
@@ -162,41 +162,46 @@ func (z *ZodNever[T, R]) Nullish() *ZodNever[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a default value returned when input is nil.
+// Default sets a default value that is returned when the input is nil. The
+// default value bypasses validation (short-circuit behavior).
 func (z *ZodNever[T, R]) Default(value T) *ZodNever[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(value)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a function that provides the default value.
+// DefaultFunc sets a function that provides the default value when the input is
+// nil. The default value bypasses validation (short-circuit behavior).
 func (z *ZodNever[T, R]) DefaultFunc(fn func() T) *ZodNever[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault sets a fallback value that goes through the full parsing pipeline.
+// Prefault sets a fallback value that is used when the input is nil. Unlike
+// Default, the prefault value goes through the full parsing pipeline.
 func (z *ZodNever[T, R]) Prefault(value T) *ZodNever[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(value)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a function that provides the fallback value.
+// PrefaultFunc sets a function that provides the fallback value when the input
+// is nil. Unlike DefaultFunc, the prefault value goes through the full parsing
+// pipeline.
 func (z *ZodNever[T, R]) PrefaultFunc(fn func() T) *ZodNever[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this schema.
+// Meta stores metadata for this schema in the global registry.
 func (z *ZodNever[T, R]) Meta(meta core.GlobalMeta) *ZodNever[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
-// Describe registers a description in the global registry.
+// Describe registers a description for this schema in the global registry.
 func (z *ZodNever[T, R]) Describe(description string) *ZodNever[T, R] {
 	newInternals := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
@@ -233,7 +238,7 @@ func (z *ZodNever[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine adds a custom validation function with constraint type R.
+// Refine adds a custom validation function that operates on the constraint type R.
 func (z *ZodNever[T, R]) Refine(fn func(R) bool, params ...any) *ZodNever[T, R] {
 	wrapper := func(v any) bool {
 		if converted, ok := convertToNeverConstraintValue[T, R](v); ok {
@@ -247,7 +252,7 @@ func (z *ZodNever[T, R]) Refine(fn func(R) bool, params ...any) *ZodNever[T, R] 
 	return z.withInternals(newInternals)
 }
 
-// RefineAny adds a custom validation function with any type.
+// RefineAny adds a custom validation function that operates on any type.
 func (z *ZodNever[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNever[T, R] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.Clone()
@@ -259,7 +264,7 @@ func (z *ZodNever[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNever[T
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withPtrInternals creates a new ZodNever with pointer constraint type.
+// withPtrInternals creates a new ZodNever instance with pointer constraint type.
 func (z *ZodNever[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNever[T, *T] {
 	return &ZodNever[T, *T]{internals: &ZodNeverInternals{
 		ZodTypeInternals: *in,
@@ -267,7 +272,7 @@ func (z *ZodNever[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNever[T
 	}}
 }
 
-// withInternals creates a new ZodNever preserving the current constraint type.
+// withInternals creates a new ZodNever instance preserving the current constraint type.
 func (z *ZodNever[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNever[T, R] {
 	return &ZodNever[T, R]{internals: &ZodNeverInternals{
 		ZodTypeInternals: *in,
@@ -275,19 +280,19 @@ func (z *ZodNever[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNever[T, R
 	}}
 }
 
-// CloneFrom copies configuration from another schema of the same type.
+// CloneFrom copies the configuration from another schema of the same type.
 func (z *ZodNever[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodNever[T, R]); ok {
 		z.internals = src.internals
 	}
 }
 
-// Unwrap returns the schema itself.
+// Unwrap returns the schema itself (implements unwrapping interface).
 func (z *ZodNever[T, R]) Unwrap() *ZodNever[T, R] {
 	return z
 }
 
-// extractNeverValue extracts base type T from constraint type R.
+// extractNeverValue extracts the base type T from the constraint type R.
 func extractNeverValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
@@ -301,16 +306,16 @@ func extractNeverValue[T any, R any](value R) T {
 	}
 }
 
-// convertToNeverConstraintValue converts any value to constraint type R.
+// convertToNeverConstraintValue converts any value to the constraint type R.
 func convertToNeverConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
-	// Direct type match
+	// Direct type match.
 	if r, ok := any(value).(R); ok { //nolint:unconvert
 		return r, true
 	}
 
-	// Handle pointer constraint: wrap value in *any
+	// Handle pointer constraint: wrap value in *any.
 	if _, ok := any(zero).(*any); ok {
 		if value == nil {
 			return any((*any)(nil)).(R), true
@@ -325,7 +330,7 @@ func convertToNeverConstraintValue[T any, R any](value any) (R, bool) {
 // CONSTRUCTORS AND FACTORY FUNCTIONS
 // =============================================================================
 
-// newZodNeverFromDef constructs a new ZodNever from the given definition.
+// newZodNeverFromDef constructs a new ZodNever instance from the given definition.
 func newZodNeverFromDef[T any, R any](def *ZodNeverDef) *ZodNever[T, R] {
 	internals := &ZodNeverInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
@@ -360,7 +365,7 @@ func Never(params ...any) *ZodNever[any, any] {
 	return NeverTyped[any, any](params...)
 }
 
-// NeverPtr creates a never schema with pointer constraint.
+// NeverPtr creates a never schema with pointer constraint type.
 func NeverPtr(params ...any) *ZodNever[any, *any] {
 	return NeverTyped[any, *any](params...)
 }
