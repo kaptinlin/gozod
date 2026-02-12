@@ -29,10 +29,6 @@ var (
 	ErrValueValidationFailed       = errors.New("value validation failed for key")
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
 // ZodRecordDef defines the configuration for a record schema.
 type ZodRecordDef struct {
 	core.ZodTypeDef
@@ -55,29 +51,35 @@ type ZodRecord[T any, R any] struct {
 	internals *ZodRecordInternals
 }
 
-// =============================================================================
-// CORE METHODS
-// =============================================================================
-
 // Internals returns the internal state of the schema.
 func (z *ZodRecord[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
 // KeyType returns the key schema for this record.
-func (z *ZodRecord[T, R]) KeyType() any { return z.internals.KeyType }
+func (z *ZodRecord[T, R]) KeyType() any {
+	return z.internals.KeyType
+}
 
 // ValueType returns the value schema for this record.
-func (z *ZodRecord[T, R]) ValueType() any { return z.internals.ValueType }
+func (z *ZodRecord[T, R]) ValueType() any {
+	return z.internals.ValueType
+}
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodRecord[T, R]) IsOptional() bool { return z.internals.IsOptional() }
+func (z *ZodRecord[T, R]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodRecord[T, R]) IsNilable() bool { return z.internals.IsNilable() }
+func (z *ZodRecord[T, R]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
 
 // IsLoose reports whether non-matching keys pass through unchanged.
-func (z *ZodRecord[T, R]) IsLoose() bool { return z.internals.Loose }
+func (z *ZodRecord[T, R]) IsLoose() bool {
+	return z.internals.Loose
+}
 
 // Parse validates input using unified ParseComplex API.
 func (z *ZodRecord[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
@@ -158,10 +160,6 @@ func (z *ZodRecord[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R 
 func (z *ZodRecord[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional creates an optional record schema that returns a pointer constraint.
 func (z *ZodRecord[T, R]) Optional() *ZodRecord[T, *T] {
@@ -277,10 +275,6 @@ func (z *ZodRecord[T, R]) Describe(description string) *ZodRecord[T, R] {
 	return clone
 }
 
-// =============================================================================
-// VALIDATION METHODS
-// =============================================================================
-
 // Min sets the minimum number of entries.
 func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
 	return z.withCheck(checks.MinSize(minLen, extractErrorMessage(params...)))
@@ -295,10 +289,6 @@ func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
 func (z *ZodRecord[T, R]) Size(exactLen int, params ...any) *ZodRecord[T, R] {
 	return z.withCheck(checks.Size(exactLen, extractErrorMessage(params...)))
 }
-
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
 
 // Transform applies a transformation function to the parsed record value.
 func (z *ZodRecord[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
@@ -328,10 +318,6 @@ func (z *ZodRecord[T, R]) Overwrite(transform func(R) R, params ...any) *ZodReco
 	return z.withCheck(checks.NewZodCheckOverwrite(transformAny, params...))
 }
 
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
-
 // Refine applies type-safe validation with constraint type R.
 func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R] {
 	wrapper := func(v any) bool {
@@ -347,10 +333,6 @@ func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R
 func (z *ZodRecord[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodRecord[T, R] {
 	return z.withCheck(checks.NewCustom[any](fn, extractErrorMessage(params...)))
 }
-
-// =============================================================================
-// HELPER METHODS
-// =============================================================================
 
 // withCheck clones internals, adds a check, and returns a new instance.
 func (z *ZodRecord[T, R]) withCheck(check core.ZodCheck) *ZodRecord[T, R] {
@@ -369,23 +351,27 @@ func extractErrorMessage(params ...any) any {
 }
 
 func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord[T, *T] {
-	return &ZodRecord[T, *T]{internals: &ZodRecordInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		KeyType:          z.internals.KeyType,
-		ValueType:        z.internals.ValueType,
-		Loose:            z.internals.Loose,
-	}}
+	return &ZodRecord[T, *T]{
+		internals: &ZodRecordInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			KeyType:          z.internals.KeyType,
+			ValueType:        z.internals.ValueType,
+			Loose:            z.internals.Loose,
+		},
+	}
 }
 
 func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T, R] {
-	return &ZodRecord[T, R]{internals: &ZodRecordInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		KeyType:          z.internals.KeyType,
-		ValueType:        z.internals.ValueType,
-		Loose:            z.internals.Loose,
-	}}
+	return &ZodRecord[T, R]{
+		internals: &ZodRecordInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			KeyType:          z.internals.KeyType,
+			ValueType:        z.internals.ValueType,
+			Loose:            z.internals.Loose,
+		},
+	}
 }
 
 // CloneFrom copies configuration from another schema
@@ -394,10 +380,6 @@ func (z *ZodRecord[T, R]) CloneFrom(source any) {
 		z.internals = src.internals
 	}
 }
-
-// =============================================================================
-// EXTRACTION AND VALIDATION HELPERS
-// =============================================================================
 
 // extractRecordType extracts T from input for ParseComplex.
 func (z *ZodRecord[T, R]) extractRecordType(input any) (T, bool) {
@@ -514,11 +496,7 @@ func (z *ZodRecord[T, R]) validateRecordValue(value T, checks []core.ZodCheck, c
 	return value, ErrInternalCannotConvertRecord
 }
 
-// =============================================================================
-// TYPE CONVERSION HELPERS
-// =============================================================================
-
-// extractRecordValue extracts base type T from constraint type R
+// extractRecordValue extracts base type T from constraint type R.
 func extractRecordValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *map[string]any:
@@ -619,10 +597,6 @@ func convertToRecordType[T any, R any](v any) (R, bool) {
 	return zero, false
 }
 
-// =============================================================================
-// EXTRACTION AND VALIDATION
-// =============================================================================
-
 // extractRecord converts input to map[string]any.
 func (z *ZodRecord[T, R]) extractRecord(value any) (map[string]any, error) {
 	if recordVal, ok := value.(map[string]any); ok {
@@ -685,7 +659,8 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 
 	// --- Key Validation ---
 	if isExhaustive {
-		seenKeys, unrecognizedKeys := make(map[string]bool), []string{}
+		seenKeys := make(map[string]bool)
+		unrecognizedKeys := []string{}
 		for key := range value {
 			if !slices.Contains(allowedKeys, key) {
 				unrecognizedKeys = append(unrecognizedKeys, key)
@@ -698,29 +673,35 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 			rawIssues = append(rawIssues, rawIssue)
 		}
 
-		if !isPartial { // Exhaustiveness check for non-partial records.
+		// Exhaustiveness check for non-partial records.
+		if !isPartial {
 			valueTypeName := core.ZodTypeAny
 			if valType, ok := z.internals.ValueType.(core.ZodType[any]); ok {
 				valueTypeName = valType.Internals().Type
 			}
 			for _, k := range allowedKeys {
 				if !seenKeys[k] {
-					issue := issues.NewRawIssue(core.InvalidType, nil, issues.WithExpected(string(valueTypeName)), issues.WithPath([]any{k}))
+					issue := issues.NewRawIssue(
+						core.InvalidType,
+						nil,
+						issues.WithExpected(string(valueTypeName)),
+						issues.WithPath([]any{k}),
+					)
 					rawIssues = append(rawIssues, issue)
 				}
 			}
 		}
 	} else if z.internals.KeyType != nil {
 		// Non-exhaustive key validation (e.g., string with pattern, or numeric keys).
-		// Track key transformations for later use
+		// Track key transformations for later use.
 		keyTransformations := make(map[string]string) // original key -> transformed key
 
 		for key := range value {
 			transformedKey, keyErr := z.parseKeyWithSchema(key)
 			if keyErr != nil {
-				// In loose mode, pass through non-matching keys unchanged
+				// In loose mode, pass through non-matching keys unchanged.
 				if z.internals.Loose {
-					continue // Skip this key, it will be preserved as-is
+					continue // Skip this key, it will be preserved as-is.
 				}
 				// For non-ZodError errors, propagate immediately to match strict validation behavior.
 				var zodErr *issues.ZodError
@@ -732,7 +713,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 					return nil, keyErr
 				}
 			} else if transformedKeyStr, ok := transformedKey.(string); ok && transformedKeyStr != key {
-				// Key was transformed (e.g., by numeric schema with Overwrite)
+				// Key was transformed (e.g., by numeric schema with Overwrite).
 				keyTransformations[key] = transformedKeyStr
 			}
 		}
@@ -754,10 +735,10 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 	// --- Value Validation ---
 	if z.internals.ValueType != nil {
 		for key, val := range value {
-			// In loose mode, only validate values for keys that match the key schema
+			// In loose mode, only validate values for keys that match the key schema.
 			if z.internals.Loose && z.internals.KeyType != nil {
 				if _, keyErr := z.parseKeyWithSchema(key); keyErr != nil {
-					// Key doesn't match pattern, skip value validation (pass through unchanged)
+					// Key doesn't match pattern, skip value validation (pass through unchanged).
 					continue
 				}
 			}
@@ -765,12 +746,13 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 			// Pre-emptive check for obviously wrong types for numeric schemas to prevent panics.
 			if vs, ok := z.internals.ValueType.(core.ZodType[any]); ok {
 				internals := vs.Internals()
-				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumeric(val) {
+				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) &&
+					!reflectx.IsNumeric(val) {
 					return nil, issues.CreateInvalidTypeError(core.ZodTypeFloat, val, ctx)
 				}
 			}
 
-			// Use generic validateValue helper to leverage existing reflection logic
+			// Use generic validateValue helper to leverage existing reflection logic.
 			if err := z.validateValue(val, z.internals.ValueType, ctx, key); err != nil {
 				return nil, err
 			}
@@ -796,14 +778,14 @@ func isNumericKeySchema(keySchema any) bool {
 		return false
 	}
 
-	// Try to get internals via interface
+	// Try to get internals via interface.
 	if zt, ok := keySchema.(interface{ Internals() *core.ZodTypeInternals }); ok {
 		t := zt.Internals().Type
-		switch t { //nolint:exhaustive // only checking numeric types
+		switch t { //nolint:exhaustive // Only checking numeric types.
 		case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64,
 			core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64, core.ZodTypeUintptr,
 			core.ZodTypeFloat, core.ZodTypeFloat32, core.ZodTypeFloat64,
-			core.ZodTypeInteger, core.ZodTypeNumber: // Also handle generic integer/number types
+			core.ZodTypeInteger, core.ZodTypeNumber: // Also handle generic integer/number types.
 			return true
 		}
 	}
@@ -831,25 +813,25 @@ func convertToSchemaNumericType(floatValue float64, keySchema any) any {
 
 	t := zt.Internals().Type
 
-	// For integer types, check if value is actually an integer
+	// For integer types, check if value is actually an integer.
 	isInt := floatValue == float64(int64(floatValue))
 
-	switch t { //nolint:exhaustive // only handling numeric types
+	switch t { //nolint:exhaustive // Only handling numeric types.
 	case core.ZodTypeInt:
 		if isInt {
 			return int(int64(floatValue))
 		}
 	case core.ZodTypeInt8:
 		if isInt && floatValue >= math.MinInt8 && floatValue <= math.MaxInt8 {
-			return int8(int64(floatValue)) //nolint:gosec // bounds checked above
+			return int8(int64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeInt16:
 		if isInt && floatValue >= math.MinInt16 && floatValue <= math.MaxInt16 {
-			return int16(int64(floatValue)) //nolint:gosec // bounds checked above
+			return int16(int64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeInt32:
 		if isInt && floatValue >= math.MinInt32 && floatValue <= math.MaxInt32 {
-			return int32(int64(floatValue)) //nolint:gosec // bounds checked above
+			return int32(int64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeInt64, core.ZodTypeInteger:
 		if isInt {
@@ -861,15 +843,15 @@ func convertToSchemaNumericType(floatValue float64, keySchema any) any {
 		}
 	case core.ZodTypeUint8:
 		if isInt && floatValue >= 0 && floatValue <= math.MaxUint8 {
-			return uint8(uint64(floatValue)) //nolint:gosec // bounds checked above
+			return uint8(uint64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeUint16:
 		if isInt && floatValue >= 0 && floatValue <= math.MaxUint16 {
-			return uint16(uint64(floatValue)) //nolint:gosec // bounds checked above
+			return uint16(uint64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeUint32:
 		if isInt && floatValue >= 0 && floatValue <= math.MaxUint32 {
-			return uint32(uint64(floatValue)) //nolint:gosec // bounds checked above
+			return uint32(uint64(floatValue)) //nolint:gosec // Bounds checked above.
 		}
 	case core.ZodTypeUint64:
 		if isInt && floatValue >= 0 {
@@ -885,33 +867,33 @@ func convertToSchemaNumericType(floatValue float64, keySchema any) any {
 		return floatValue
 	}
 
-	// Return original float value if no conversion applies
+	// Return original float value if no conversion applies.
 	return floatValue
 }
 
 // parseKeyWithSchema parses a key using the key schema via reflection.
-// This handles any schema type (ZodString, ZodLiteral, etc.)
+// This handles any schema type (ZodString, ZodLiteral, etc.).
 // For numeric key schemas, it supports parsing string keys as numbers (Zod v4 feature).
 func (z *ZodRecord[T, R]) parseKeyWithSchema(key string) (any, error) {
 	if z.internals.KeyType == nil {
 		return key, nil
 	}
 
-	// First try parsing the key as a string
+	// First try parsing the key as a string.
 	result, err := z.parseSchemaValueAny(key, z.internals.KeyType)
 
 	// If string parsing failed and key schema expects numeric type,
-	// try parsing the string as a number (Zod v4 numeric string keys feature)
+	// try parsing the string as a number (Zod v4 numeric string keys feature).
 	if err != nil && isNumericKeySchema(z.internals.KeyType) && isNumericString(key) {
 		floatValue, parseErr := strconv.ParseFloat(key, 64)
 		if parseErr == nil {
-			// Convert to the appropriate Go type based on the schema
+			// Convert to the appropriate Go type based on the schema.
 			numValue := convertToSchemaNumericType(floatValue, z.internals.KeyType)
 
 			numResult, numErr := z.parseSchemaValueAny(numValue, z.internals.KeyType)
 			if numErr == nil {
-				// Return the transformed key as string for Go map compatibility
-				// The numeric value may have been transformed (e.g., by Overwrite)
+				// Return the transformed key as string for Go map compatibility.
+				// The numeric value may have been transformed (e.g., by Overwrite).
 				return fmt.Sprintf("%v", numResult), nil
 			}
 		}
@@ -944,7 +926,7 @@ func (z *ZodRecord[T, R]) parseSchemaValueAny(value any, schema any) (any, error
 
 	parseAnyMethod := schemaValue.MethodByName("ParseAny")
 	if !parseAnyMethod.IsValid() {
-		// Fall back to Parse method
+		// Fall back to Parse method.
 		parseMethod := schemaValue.MethodByName("Parse")
 		if !parseMethod.IsValid() {
 			return value, nil
@@ -963,7 +945,7 @@ func (z *ZodRecord[T, R]) parseSchemaValueAny(value any, schema any) (any, error
 		return value, nil
 	}
 
-	// Call ParseAny method
+	// Call ParseAny method.
 	results := parseAnyMethod.Call([]reflect.Value{reflect.ValueOf(value)})
 	if len(results) >= 2 {
 		if errInterface := results[1].Interface(); errInterface != nil {
@@ -978,13 +960,13 @@ func (z *ZodRecord[T, R]) parseSchemaValueAny(value any, schema any) (any, error
 	return value, nil
 }
 
-// validateValue validates a single value using the provided schema
+// validateValue validates a single value using the provided schema.
 func (z *ZodRecord[T, R]) validateValue(value any, schema any, ctx *core.ParseContext, key string) error {
 	if schema == nil {
 		return nil
 	}
 
-	// Try using reflection to call Parse method - this handles all schema types
+	// Try using reflection to call Parse method - this handles all schema types.
 	schemaValue := reflect.ValueOf(schema)
 	if !schemaValue.IsValid() || schemaValue.IsNil() {
 		return nil
@@ -1000,14 +982,14 @@ func (z *ZodRecord[T, R]) validateValue(value any, schema any, ctx *core.ParseCo
 		return nil
 	}
 
-	// Build arguments for Parse call
+	// Build arguments for Parse call.
 	args := []reflect.Value{reflect.ValueOf(value)}
 	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
-		// Add context parameter if expected
+		// Add context parameter if expected.
 		args = append(args, reflect.ValueOf(ctx))
 	}
 
-	// Call Parse method
+	// Call Parse method.
 	results := parseMethod.Call(args)
 	if len(results) >= 2 {
 		// Check if there's an error (second return value)
@@ -1060,11 +1042,7 @@ func tryGetExpectedKeys(schema any) ([]string, bool) {
 	return nil, false
 }
 
-// =============================================================================
-// CONSTRUCTOR FUNCTIONS
-// =============================================================================
-
-// newZodRecordFromDef constructs new ZodRecord from definition
+// newZodRecordFromDef constructs new ZodRecord from definition.
 func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
 	internals := &ZodRecordInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
@@ -1094,10 +1072,6 @@ func newZodRecordFromDef[T any, R any](def *ZodRecordDef) *ZodRecord[T, R] {
 
 	return &ZodRecord[T, R]{internals: internals}
 }
-
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
 
 // Record creates a record schema with key and value schemas.
 func Record(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[map[string]any, map[string]any] {

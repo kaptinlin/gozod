@@ -12,7 +12,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// ZodSetDef is the configuration for a set schema.
+// ZodSetDef defines the configuration for a set schema.
 type ZodSetDef struct {
 	core.ZodTypeDef
 	ValueType any
@@ -26,7 +26,8 @@ type ZodSetInternals[T comparable] struct {
 }
 
 // ZodSet is a type-safe set validation schema.
-// T is the element type (must be comparable), R is the constraint type (value or pointer).
+// T is the element type (must be comparable).
+// R is the constraint type (value or pointer).
 type ZodSet[T comparable, R any] struct {
 	internals *ZodSetInternals[T]
 }
@@ -36,11 +37,15 @@ func (z *ZodSet[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodSet[T, R]) IsOptional() bool { return z.internals.IsOptional() }
+// IsOptional reports whether this schema accepts undefined or missing values.
+func (z *ZodSet[T, R]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodSet[T, R]) IsNilable() bool { return z.internals.IsNilable() }
+func (z *ZodSet[T, R]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
 
 func (z *ZodSet[T, R]) withCheck(c core.ZodCheck) *ZodSet[T, R] {
 	in := z.internals.Clone()
@@ -130,16 +135,20 @@ func (z *ZodSet[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 }
 
 // ValueType returns the value schema for this set.
-func (z *ZodSet[T, R]) ValueType() any { return z.internals.ValueType }
+func (z *ZodSet[T, R]) ValueType() any {
+	return z.internals.ValueType
+}
 
-// Optional returns a schema that accepts nil, with constraint type *map[T]struct{}.
+// Optional returns a schema that accepts nil.
+// The constraint type becomes *map[T]struct{}.
 func (z *ZodSet[T, R]) Optional() *ZodSet[T, *map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable returns a schema that accepts nil, with constraint type *map[T]struct{}.
+// Nilable returns a schema that accepts nil.
+// The constraint type becomes *map[T]struct{}.
 func (z *ZodSet[T, R]) Nilable() *ZodSet[T, *map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
@@ -166,7 +175,8 @@ func (z *ZodSet[T, R]) NonOptional() *ZodSet[T, map[T]struct{}] {
 	}}
 }
 
-// Default sets a value returned when input is nil, bypassing validation.
+// Default sets a value returned when input is nil.
+// The default value bypasses validation.
 func (z *ZodSet[T, R]) Default(v map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
@@ -187,7 +197,8 @@ func (z *ZodSet[T, R]) Prefault(v map[T]struct{}) *ZodSet[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory for the prefault value through full validation.
+// PrefaultFunc sets a factory for the prefault value.
+// The prefault value goes through full validation.
 func (z *ZodSet[T, R]) PrefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -243,7 +254,8 @@ func (z *ZodSet[T, R]) Size(exactLen int, params ...any) *ZodSet[T, R] {
 	return z.withCheck(checks.Size(exactLen, errMsg))
 }
 
-// NonEmpty ensures the set has at least one element. Equivalent to Min(1).
+// NonEmpty ensures the set has at least one element.
+// This is equivalent to Min(1).
 func (z *ZodSet[T, R]) NonEmpty(params ...any) *ZodSet[T, R] {
 	return z.Min(1, params...)
 }
@@ -358,7 +370,7 @@ func (z *ZodSet[T, R]) extractForEngine(value any) (map[T]struct{}, bool) {
 		return nil, false
 	}
 
-	// Fall back to reflection for non-standard map/slice types.
+	// Fall back to reflection for non-standard map or slice types.
 	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Map && rv.Type().Elem() == reflect.TypeOf(struct{}{}) {
 		set := make(map[T]struct{}, rv.Len())
@@ -585,7 +597,8 @@ func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T,
 
 	schema := newZodSetFromDef[T, R](def)
 
-	// Register a pass-through check so the engine invokes validateForEngine for element validation.
+	// Register a pass-through check so the engine invokes validateForEngine
+	// for element validation.
 	if valueSchema != nil {
 		schema.internals.AddCheck(checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}))
 	}

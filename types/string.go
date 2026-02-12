@@ -35,16 +35,62 @@ type ZodString[T StringConstraint] struct {
 	internals *ZodStringInternals
 }
 
+// String creates a new string schema.
+func String(params ...any) *ZodString[string] {
+	return StringTyped[string](params...)
+}
+
+// StringPtr creates a new string schema with pointer type.
+func StringPtr(params ...any) *ZodString[*string] {
+	return StringTyped[*string](params...)
+}
+
+// StringTyped creates a new string schema with a specific constraint type.
+func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
+	schemaParams := utils.NormalizeParams(params...)
+	def := &ZodStringDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:     core.ZodTypeString,
+			Required: true,
+			Checks:   []core.ZodCheck{},
+		},
+	}
+
+	if schemaParams != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	}
+
+	return newZodStringFromDef[T](def)
+}
+
+// CoercedString creates a new string schema with coercion enabled.
+func CoercedString(params ...any) *ZodString[string] {
+	schema := StringTyped[string](params...)
+	schema.internals.Coerce = true
+	return schema
+}
+
+// CoercedStringPtr creates a new string schema with pointer type and coercion.
+func CoercedStringPtr(params ...any) *ZodString[*string] {
+	schema := StringTyped[*string](params...)
+	schema.internals.Coerce = true
+	return schema
+}
+
 // Internals returns the internal state of the schema.
 func (z *ZodString[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodString[T]) IsOptional() bool { return z.internals.IsOptional() }
+func (z *ZodString[T]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodString[T]) IsNilable() bool { return z.internals.IsNilable() }
+func (z *ZodString[T]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
 
 // Coerce converts input to string.
 func (z *ZodString[T]) Coerce(input any) (any, bool) {
@@ -242,7 +288,6 @@ func (z *ZodString[T]) MAC(params ...any) *ZodString[T] {
 		return z.withCheck(checks.MAC())
 	}
 
-	// Single param: check for delimiter or MACOptions.
 	if len(params) == 1 {
 		switch v := params[0].(type) {
 		case string:
@@ -256,7 +301,6 @@ func (z *ZodString[T]) MAC(params ...any) *ZodString[T] {
 		return z.withCheck(checks.MAC(params...))
 	}
 
-	// Multiple params: first may be a delimiter followed by error/options.
 	if delim, ok := params[0].(string); ok && isDelimiter(delim) {
 		return z.withCheck(checks.MACWithDelimiter(delim, params[1:]...))
 	}
@@ -301,9 +345,10 @@ func isDelimiter(s string) bool {
 
 // isJWTAlgorithm reports whether s looks like a JWA algorithm identifier.
 func isJWTAlgorithm(s string) bool {
-	return len(s) > 0 && len(s) <= 10 && (strings.HasPrefix(s, "HS") || strings.HasPrefix(s, "RS") ||
-		strings.HasPrefix(s, "ES") || strings.HasPrefix(s, "PS") ||
-		strings.HasPrefix(s, "Ed") || s == "none")
+	return len(s) > 0 && len(s) <= 10 &&
+		(strings.HasPrefix(s, "HS") || strings.HasPrefix(s, "RS") ||
+			strings.HasPrefix(s, "ES") || strings.HasPrefix(s, "PS") ||
+			strings.HasPrefix(s, "Ed") || s == "none")
 }
 
 // Describe attaches a description to this schema via the global registry.
@@ -346,6 +391,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 			fn(val, payload)
 			return
 		}
+
 		// Handle pointer type: T is *string but value is string.
 		var zero T
 		if _, ok := any(zero).(*string); ok {
@@ -372,19 +418,23 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 			if v == nil {
 				return false
 			}
-			if strVal, ok := v.(string); ok {
-				return fn(any(strVal).(T))
+			strVal, ok := v.(string)
+			if !ok {
+				return false
 			}
-			return false
+			return fn(any(strVal).(T))
+
 		case *string:
 			if v == nil {
-				return true // Allow nil for nilable types
+				return true
 			}
-			if strVal, ok := v.(string); ok {
-				sCopy := strVal
-				return fn(any(&sCopy).(T))
+			strVal, ok := v.(string)
+			if !ok {
+				return false
 			}
-			return false
+			sCopy := strVal
+			return fn(any(&sCopy).(T))
+
 		default:
 			return false
 		}
@@ -398,19 +448,11 @@ func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T]
 }
 
 // And creates an intersection with another schema.
-//
-// Example:
-//
-//	schema := gozod.String().Min(3).And(gozod.String().Max(10))
 func (z *ZodString[T]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
 }
 
 // Or creates a union with another schema.
-//
-// Example:
-//
-//	schema := gozod.String().Or(gozod.Int())
 func (z *ZodString[T]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
@@ -577,68 +619,28 @@ func newZodStringFromDef[T StringConstraint](def *ZodStringDef) *ZodString[T] {
 	}
 }
 
-// String creates a new string schema.
-func String(params ...any) *ZodString[string] {
-	return StringTyped[string](params...)
-}
-
-// StringPtr creates a new string schema with pointer type.
-func StringPtr(params ...any) *ZodString[*string] {
-	return StringTyped[*string](params...)
-}
-
-// StringTyped creates a new string schema with a specific constraint type.
-func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
-	schemaParams := utils.NormalizeParams(params...)
-	def := &ZodStringDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:     core.ZodTypeString,
-			Required: true,
-			Checks:   []core.ZodCheck{},
-		},
-	}
-
-	if schemaParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
-	}
-
-	return newZodStringFromDef[T](def)
-}
-
-// CoercedString creates a new string schema with coercion enabled.
-func CoercedString(params ...any) *ZodString[string] {
-	schema := StringTyped[string](params...)
-	schema.internals.Coerce = true
-	return schema
-}
-
-// CoercedStringPtr creates a new string schema with pointer type and coercion.
-func CoercedStringPtr(params ...any) *ZodString[*string] {
-	schema := StringTyped[*string](params...)
-	schema.internals.Coerce = true
-	return schema
-}
-
 // Lowercase validates that the string contains no uppercase letters.
-// Matches Zod v4's regex: /^[^A-Z]*$/
 func (z *ZodString[T]) Lowercase(params ...any) *ZodString[T] {
 	return z.withCheck(checks.Lowercase(params...))
 }
 
 // Uppercase validates that the string contains no lowercase letters.
-// Matches Zod v4's regex: /^[^a-z]*$/
 func (z *ZodString[T]) Uppercase(params ...any) *ZodString[T] {
 	return z.withCheck(checks.Uppercase(params...))
 }
 
 // ToLowerCase transforms the string to lower case.
 func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {
-	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToLower) }, params...)
+	return z.Overwrite(func(val T) T {
+		return applyStringTransform(val, strings.ToLower)
+	}, params...)
 }
 
 // ToUpperCase transforms the string to upper case.
 func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
-	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToUpper) }, params...)
+	return z.Overwrite(func(val T) T {
+		return applyStringTransform(val, strings.ToUpper)
+	}, params...)
 }
 
 // Normalize transforms the string using Unicode normalization.
@@ -649,27 +651,17 @@ func (z *ZodString[T]) Normalize(form ...string) *ZodString[T] {
 		normForm = form[0]
 	}
 	return z.Overwrite(func(val T) T {
-		return applyStringTransform(val, func(s string) string { return normalizeUnicode(s, normForm) })
+		return applyStringTransform(val, func(s string) string {
+			return normalizeUnicode(s, normForm)
+		})
 	})
-}
-
-// normalizeUnicode normalizes a string using the specified Unicode form.
-func normalizeUnicode(s string, form string) string {
-	switch form {
-	case "NFD":
-		return norm.NFD.String(s)
-	case "NFKC":
-		return norm.NFKC.String(s)
-	case "NFKD":
-		return norm.NFKD.String(s)
-	default: // "NFC" is the default
-		return norm.NFC.String(s)
-	}
 }
 
 // Slugify transforms the string to a URL-friendly slug.
 func (z *ZodString[T]) Slugify(params ...any) *ZodString[T] {
-	return z.Overwrite(func(val T) T { return applyStringTransform(val, transform.Slugify) }, params...)
+	return z.Overwrite(func(val T) T {
+		return applyStringTransform(val, transform.Slugify)
+	}, params...)
 }
 
 // NonOptional removes the optional flag and returns a required string schema.
@@ -683,5 +675,19 @@ func (z *ZodString[T]) NonOptional() *ZodString[string] {
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
+	}
+}
+
+// normalizeUnicode normalizes a string using the specified Unicode form.
+func normalizeUnicode(s string, form string) string {
+	switch form {
+	case "NFD":
+		return norm.NFD.String(s)
+	case "NFKC":
+		return norm.NFKC.String(s)
+	case "NFKD":
+		return norm.NFKD.String(s)
+	default:
+		return norm.NFC.String(s)
 	}
 }

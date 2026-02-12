@@ -16,13 +16,12 @@ import (
 
 // Sentinel errors for object schema operations.
 var (
-	ErrNilObjectPointer  = errors.New("nil pointer cannot convert to object")
-	ErrPickRefinements   = errors.New("pick cannot be used on schemas with refinements")
-	ErrOmitRefinements   = errors.New("omit cannot be used on schemas with refinements")
-	ErrExtendRefinements = errors.New("extend cannot overwrite keys on schemas with refinements, use SafeExtend")
-	ErrUnrecognizedKey   = errors.New("unrecognized key")
-	// Deprecated: Use ErrNilObjectPointer instead.
-	ErrNilPointerCannotConvertToObject = ErrNilObjectPointer
+	ErrNilObjectPointer                = errors.New("nil pointer cannot convert to object")
+	ErrPickRefinements                 = errors.New("pick cannot be used on schemas with refinements")
+	ErrOmitRefinements                 = errors.New("omit cannot be used on schemas with refinements")
+	ErrExtendRefinements               = errors.New("extend cannot overwrite keys on schemas with refinements, use SafeExtend")
+	ErrUnrecognizedKey                 = errors.New("unrecognized key")
+	ErrNilPointerCannotConvertToObject = ErrNilObjectPointer // Deprecated: Use ErrNilObjectPointer instead.
 )
 
 // ObjectMode defines how to handle unknown keys in object validation.
@@ -66,16 +65,24 @@ func (z *ZodObject[T, R]) Internals() *core.ZodTypeInternals {
 }
 
 // GetUnknownKeys returns the unknown keys handling mode.
-func (z *ZodObject[T, R]) GetUnknownKeys() ObjectMode { return z.internals.UnknownKeys }
+func (z *ZodObject[T, R]) GetUnknownKeys() ObjectMode {
+	return z.internals.UnknownKeys
+}
 
 // GetCatchall returns the catchall schema for unknown fields.
-func (z *ZodObject[T, R]) GetCatchall() core.ZodSchema { return z.internals.Catchall }
+func (z *ZodObject[T, R]) GetCatchall() core.ZodSchema {
+	return z.internals.Catchall
+}
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodObject[T, R]) IsOptional() bool { return z.internals.IsOptional() }
+func (z *ZodObject[T, R]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodObject[T, R]) IsNilable() bool { return z.internals.IsNilable() }
+func (z *ZodObject[T, R]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
 
 // withCheck clones internals, adds a check, and returns a new instance.
 func (z *ZodObject[T, R]) withCheck(check core.ZodCheck) *ZodObject[T, R] {
@@ -88,7 +95,7 @@ func (z *ZodObject[T, R]) withCheck(check core.ZodCheck) *ZodObject[T, R] {
 func (z *ZodObject[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
-	result, err := engine.ParseComplex[map[string]any](
+	result, err := engine.ParseComplex(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeObject,
@@ -131,7 +138,7 @@ func (z *ZodObject[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 func (z *ZodObject[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
 	constraintInput := convertToObjectConstraintType[T, R](input)
 
-	return engine.ParseComplexStrict[map[string]any, R](
+	return engine.ParseComplexStrict(
 		constraintInput,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeObject,
@@ -254,10 +261,14 @@ func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...
 }
 
 // Shape returns the object shape (field schemas).
-func (z *ZodObject[T, R]) Shape() core.ObjectSchema { return maps.Clone(z.internals.Shape) }
+func (z *ZodObject[T, R]) Shape() core.ObjectSchema {
+	return maps.Clone(z.internals.Shape)
+}
 
 // Properties is an alias for Shape.
-func (z *ZodObject[T, R]) Properties() core.ObjectSchema { return z.Shape() }
+func (z *ZodObject[T, R]) Properties() core.ObjectSchema {
+	return z.Shape()
+}
 
 // Pick creates a new object with only the specified keys.
 // Returns an error if any key does not exist or the schema contains refinements.
@@ -320,7 +331,9 @@ func (z *ZodObject[T, R]) MustOmit(keys []string, params ...any) *ZodObject[T, R
 }
 
 // hasRefinements reports whether the schema has user-defined refinements.
-func (z *ZodObject[T, R]) hasRefinements() bool { return z.internals.HasUserRefinements }
+func (z *ZodObject[T, R]) hasRefinements() bool {
+	return z.internals.HasUserRefinements
+}
 
 // Extend creates a new object by extending with additional fields.
 // Returns an error if the schema has refinements and augmentation overlaps existing keys.
@@ -392,10 +405,14 @@ func (z *ZodObject[T, R]) Required(fields ...[]string) *ZodObject[T, R] {
 }
 
 // Strict sets strict mode (rejects unknown keys).
-func (z *ZodObject[T, R]) Strict() *ZodObject[T, R] { return z.withUnknownKeys(ObjectModeStrict) }
+func (z *ZodObject[T, R]) Strict() *ZodObject[T, R] {
+	return z.withUnknownKeys(ObjectModeStrict)
+}
 
 // Strip sets strip mode (removes unknown keys).
-func (z *ZodObject[T, R]) Strip() *ZodObject[T, R] { return z.withUnknownKeys(ObjectModeStrip) }
+func (z *ZodObject[T, R]) Strip() *ZodObject[T, R] {
+	return z.withUnknownKeys(ObjectModeStrip)
+}
 
 // Passthrough sets passthrough mode (allows unknown keys).
 func (z *ZodObject[T, R]) Passthrough() *ZodObject[T, R] {
@@ -424,7 +441,7 @@ func (z *ZodObject[T, R]) Transform(fn func(T, *core.RefinementContext) (any, er
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(extractObjectValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform(z, wrapperFn)
 }
 
 // Overwrite transforms the value while preserving the original type.
@@ -444,7 +461,7 @@ func (z *ZodObject[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractObjectValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, wrapperFn)
+	return core.NewZodPipe(z, target, wrapperFn)
 }
 
 // Refine applies type-safe validation using constraint type.
@@ -685,10 +702,15 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 
 		if !exists {
 			if !z.isFieldOptional(schema, name) {
-				raw := issues.CreateIssue(core.InvalidType, fmt.Sprintf("missing required field: %s", name), map[string]any{
-					"expected": "nonoptional",
-					"received": "undefined",
-				}, nil)
+				raw := issues.CreateIssue(
+					core.InvalidType,
+					fmt.Sprintf("missing required field: %s", name),
+					map[string]any{
+						"expected": "nonoptional",
+						"received": "undefined",
+					},
+					nil,
+				)
 				raw.Path = []any{name}
 				errs = append(errs, raw)
 			}
@@ -696,10 +718,15 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 		}
 
 		if val == nil && z.isFieldExactOptional(schema) {
-			raw := issues.CreateIssue(core.InvalidType, fmt.Sprintf("field %s cannot be explicitly nil (use absent key instead)", name), map[string]any{
-				"expected": "string",
-				"received": "nil",
-			}, nil)
+			raw := issues.CreateIssue(
+				core.InvalidType,
+				fmt.Sprintf("field %s cannot be explicitly nil (use absent key instead)", name),
+				map[string]any{
+					"expected": "string",
+					"received": "nil",
+				},
+				nil,
+			)
 			raw.Path = []any{name}
 			errs = append(errs, raw)
 			continue
@@ -736,9 +763,12 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 	}
 
 	if len(unknown) > 0 {
-		raw := issues.CreateIssue(core.UnrecognizedKeys, "", map[string]any{
-			"keys": unknown,
-		}, value)
+		raw := issues.CreateIssue(
+			core.UnrecognizedKeys,
+			"",
+			map[string]any{"keys": unknown},
+			value,
+		)
 		errs = append(errs, raw)
 	}
 

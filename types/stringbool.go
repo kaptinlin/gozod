@@ -17,9 +17,9 @@ type StringBoolConstraint interface {
 
 // StringBoolOptions configures truthy/falsy values and case sensitivity.
 type StringBoolOptions struct {
-	Truthy []string // values that evaluate to true
-	Falsy  []string // values that evaluate to false
-	Case   string   // "sensitive" or "insensitive"
+	Truthy []string // Values that evaluate to true.
+	Falsy  []string // Values that evaluate to false.
+	Case   string   // "sensitive" or "insensitive".
 }
 
 // ZodStringBoolDef holds the configuration for string-boolean validation.
@@ -50,17 +50,23 @@ func (z *ZodStringBool[T]) Internals() *core.ZodTypeInternals {
 }
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodStringBool[T]) IsOptional() bool { return z.internals.IsOptional() }
+func (z *ZodStringBool[T]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodStringBool[T]) IsNilable() bool { return z.internals.IsNilable() }
+func (z *ZodStringBool[T]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
 
 // Coerce converts input to a recognized truthy/falsy string.
 func (z *ZodStringBool[T]) Coerce(input any) (any, bool) {
-	if s, err := coerce.ToString(input); err == nil {
-		if _, ok := z.toBool(s); ok {
-			return s, true
-		}
+	s, err := coerce.ToString(input)
+	if err != nil {
+		return input, false
+	}
+	if _, ok := z.toBool(s); ok {
+		return s, true
 	}
 	return input, false
 }
@@ -327,16 +333,16 @@ func convertToStringBoolType[T StringBoolConstraint](v any) (T, bool) {
 	var zero T
 
 	if v == nil {
-		switch any(zero).(type) {
-		case *bool:
+		if _, ok := any(zero).(*bool); ok {
 			return zero, true
-		default:
-			return zero, false
 		}
+		return zero, false
 	}
 
-	var b bool
-	var ok bool
+	var (
+		b  bool
+		ok bool
+	)
 
 	switch val := v.(type) {
 	case bool:
@@ -380,22 +386,26 @@ func (z *ZodStringBool[T]) withCheck(check core.ZodCheck) *ZodStringBool[T] {
 
 // withPtrInternals creates a new *bool schema from cloned internals.
 func (z *ZodStringBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodStringBool[*bool] {
-	return &ZodStringBool[*bool]{internals: &ZodStringBoolInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Truthy:           z.internals.Truthy,
-		Falsy:            z.internals.Falsy,
-	}}
+	return &ZodStringBool[*bool]{
+		internals: &ZodStringBoolInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Truthy:           z.internals.Truthy,
+			Falsy:            z.internals.Falsy,
+		},
+	}
 }
 
 // withInternals creates a new schema preserving generic type T.
 func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBool[T] {
-	return &ZodStringBool[T]{internals: &ZodStringBoolInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Truthy:           z.internals.Truthy,
-		Falsy:            z.internals.Falsy,
-	}}
+	return &ZodStringBool[T]{
+		internals: &ZodStringBoolInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Truthy:           z.internals.Truthy,
+			Falsy:            z.internals.Falsy,
+		},
+	}
 }
 
 // CloneFrom copies configuration from another schema of the same type.
@@ -444,7 +454,8 @@ func (z *ZodStringBool[T]) extract(input any) (bool, bool) {
 	}
 
 	if z.internals.IsCoerce() {
-		if coerced, ok := z.Coerce(input); ok {
+		coerced, ok := z.Coerce(input)
+		if ok {
 			return z.extract(coerced)
 		}
 	}
@@ -481,6 +492,7 @@ func newZodStringBoolFromDef[T StringBoolConstraint](def *ZodStringBoolDef) *Zod
 		}
 		in.Truthy[key] = struct{}{}
 	}
+
 	for _, v := range def.Falsy {
 		key := v
 		if def.Case == "insensitive" {
@@ -519,8 +531,10 @@ func StringBoolPtr(params ...any) *ZodStringBool[*bool] {
 
 // StringBoolTyped is the generic constructor for string-boolean schemas.
 func StringBoolTyped[T StringBoolConstraint](params ...any) *ZodStringBool[T] {
-	var opts *StringBoolOptions
-	var rest []any
+	var (
+		opts *StringBoolOptions
+		rest []any
+	)
 
 	if len(params) > 0 {
 		switch v := params[0].(type) {
