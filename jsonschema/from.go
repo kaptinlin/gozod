@@ -89,28 +89,64 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 	}
 
 	// Handle composition keywords first
-	if len(s.AllOf) > 0 {
-		return ctx.convertAllOf(s)
-	}
-	if len(s.AnyOf) > 0 {
-		return ctx.convertAnyOf(s)
-	}
-	if len(s.OneOf) > 0 {
-		return ctx.convertOneOf(s)
+	var result core.ZodSchema
+	var convErr error
+
+	switch {
+	case len(s.AllOf) > 0:
+		result, convErr = ctx.convertAllOf(s)
+	case len(s.AnyOf) > 0:
+		result, convErr = ctx.convertAnyOf(s)
+	case len(s.OneOf) > 0:
+		result, convErr = ctx.convertOneOf(s)
+	case s.Const != nil:
+		result, convErr = ctx.convertConst(s)
+	case len(s.Enum) > 0:
+		result, convErr = ctx.convertEnum(s)
+	default:
+		result, convErr = ctx.convertByType(s)
 	}
 
-	// Handle const
-	if s.Const != nil {
-		return ctx.convertConst(s)
+	if convErr != nil {
+		return nil, convErr
 	}
 
-	// Handle enum
-	if len(s.Enum) > 0 {
-		return ctx.convertEnum(s)
+	// Extract metadata from JSON Schema and attach to the GoZod schema.
+	ctx.attachMeta(s, result)
+	return result, nil
+}
+
+// attachMeta extracts metadata fields from a JSON Schema node and attaches them
+// to the GoZod schema via the global registry (Zod v4: 456af1ea).
+// Captures: $id, title, description, examples.
+func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchema) {
+	if schema == nil {
+		return
 	}
 
-	// Handle type-based conversion
-	return ctx.convertByType(s)
+	var meta core.GlobalMeta
+	hasMeta := false
+
+	if s.ID != "" {
+		meta.ID = s.ID
+		hasMeta = true
+	}
+	if s.Title != nil && *s.Title != "" {
+		meta.Title = *s.Title
+		hasMeta = true
+	}
+	if s.Description != nil && *s.Description != "" {
+		meta.Description = *s.Description
+		hasMeta = true
+	}
+	if len(s.Examples) > 0 {
+		meta.Examples = s.Examples
+		hasMeta = true
+	}
+
+	if hasMeta {
+		core.GlobalRegistry.Add(schema, meta)
+	}
 }
 
 // checkUnsupportedFeatures returns an error if unsupported keywords are present.

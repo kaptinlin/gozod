@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	lib "github.com/kaptinlin/jsonschema"
+	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -389,5 +390,52 @@ func TestFromJSONSchema_PrefixItems(t *testing.T) {
 		// Rest elements must be boolean
 		_, err = zodSchema.ParseAny([]any{"hello", "not-bool"})
 		assert.Error(t, err)
+	})
+}
+
+func TestFromJSONSchema_Metadata(t *testing.T) {
+	t.Run("extracts title and description", func(t *testing.T) {
+		title := "User Name"
+		desc := "The user's full name"
+		schema := &lib.Schema{
+			Title:       &title,
+			Description: &desc,
+		}
+		schema.Type = []string{"string"}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		meta, ok := core.GlobalRegistry.Get(zodSchema)
+		require.True(t, ok, "Expected metadata to be registered")
+		assert.Equal(t, "User Name", meta.Title)
+		assert.Equal(t, "The user's full name", meta.Description)
+	})
+
+	t.Run("extracts $id and examples", func(t *testing.T) {
+		schema := &lib.Schema{
+			ID:       "https://example.com/schemas/name",
+			Examples: []any{"John", "Jane"},
+		}
+		schema.Type = []string{"string"}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		meta, ok := core.GlobalRegistry.Get(zodSchema)
+		require.True(t, ok, "Expected metadata to be registered")
+		assert.Equal(t, "https://example.com/schemas/name", meta.ID)
+		assert.Equal(t, []any{"John", "Jane"}, meta.Examples)
+	})
+
+	t.Run("no metadata when fields are empty", func(t *testing.T) {
+		schema := &lib.Schema{}
+		schema.Type = []string{"integer"}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, ok := core.GlobalRegistry.Get(zodSchema)
+		assert.False(t, ok, "Expected no metadata when all fields are empty")
 	})
 }
