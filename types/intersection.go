@@ -70,9 +70,9 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeIntersection,
-		z.extractIntersectionType,
-		z.extractIntersectionPtr,
-		z.validateIntersectionValue,
+		z.extractType,
+		z.extractPtr,
+		z.validateValue,
 		parseCtx,
 	)
 	if err != nil {
@@ -82,21 +82,34 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 	return convertToIntersectionConstraintType[T, R](result), nil
 }
 
-// extractIntersectionType extracts the intersection type from input
-func (z *ZodIntersection[T, R]) extractIntersectionType(input any) (any, bool) {
+// extractType extracts the intersection type from input
+func (z *ZodIntersection[T, R]) extractType(input any) (any, bool) {
 	return input, true
 }
 
-// extractIntersectionPtr extracts pointer type from input
-func (z *ZodIntersection[T, R]) extractIntersectionPtr(input any) (*any, bool) {
+// extractPtr extracts pointer type from input
+func (z *ZodIntersection[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
 	}
 	return &input, true
 }
 
-// validateIntersectionValue validates value using intersection logic
-func (z *ZodIntersection[T, R]) validateIntersectionValue(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
+// collectSchemaIssues extracts ZodIssues from a schema validation error.
+func collectSchemaIssues(err error, input any, ctx *core.ParseContext) []core.ZodIssue {
+	if err == nil {
+		return nil
+	}
+	var zErr *issues.ZodError
+	if issues.IsZodError(err, &zErr) {
+		return zErr.Issues
+	}
+	issue := issues.NewRawIssue(core.Custom, input, issues.WithMessage(err.Error()))
+	return []core.ZodIssue{issues.FinalizeIssue(issue, ctx, core.GetConfig())}
+}
+
+// validateValue validates value using intersection logic
+func (z *ZodIntersection[T, R]) validateValue(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	// Parse with left schema using ParseAny
 	leftResult, leftErr := z.internals.Left.ParseAny(value, ctx)
 
@@ -104,25 +117,8 @@ func (z *ZodIntersection[T, R]) validateIntersectionValue(value any, checks []co
 	rightResult, rightErr := z.internals.Right.ParseAny(value, ctx)
 
 	// Collect issues from both sides
-	var leftIssues, rightIssues []core.ZodIssue
-	if leftErr != nil {
-		var zErr *issues.ZodError
-		if issues.IsZodError(leftErr, &zErr) {
-			leftIssues = zErr.Issues
-		} else {
-			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(leftErr.Error()))
-			leftIssues = append(leftIssues, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
-		}
-	}
-	if rightErr != nil {
-		var zErr *issues.ZodError
-		if issues.IsZodError(rightErr, &zErr) {
-			rightIssues = zErr.Issues
-		} else {
-			issue := issues.NewRawIssue(core.Custom, value, issues.WithMessage(rightErr.Error()))
-			rightIssues = append(rightIssues, issues.FinalizeIssue(issue, ctx, core.GetConfig()))
-		}
-	}
+	leftIssues := collectSchemaIssues(leftErr, value, ctx)
+	rightIssues := collectSchemaIssues(rightErr, value, ctx)
 
 	// Merge unrecognized_keys issues (Zod v4 behavior)
 	// Keys recognized by either side should not be reported as unrecognized
@@ -250,25 +246,8 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 	rightResult, rightErr := z.internals.Right.ParseAny(convertedInput, parseCtx)
 
 	// Collect issues from both sides
-	var leftIssues, rightIssues []core.ZodIssue
-	if leftErr != nil {
-		var zErr *issues.ZodError
-		if issues.IsZodError(leftErr, &zErr) {
-			leftIssues = zErr.Issues
-		} else {
-			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(leftErr.Error()))
-			leftIssues = append(leftIssues, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
-		}
-	}
-	if rightErr != nil {
-		var zErr *issues.ZodError
-		if issues.IsZodError(rightErr, &zErr) {
-			rightIssues = zErr.Issues
-		} else {
-			issue := issues.NewRawIssue(core.Custom, convertedInput, issues.WithMessage(rightErr.Error()))
-			rightIssues = append(rightIssues, issues.FinalizeIssue(issue, parseCtx, core.GetConfig()))
-		}
-	}
+	leftIssues := collectSchemaIssues(leftErr, convertedInput, parseCtx)
+	rightIssues := collectSchemaIssues(rightErr, convertedInput, parseCtx)
 
 	// Merge unrecognized_keys issues (Zod v4 behavior)
 	// Keys recognized by either side should not be reported as unrecognized
@@ -579,23 +558,23 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 		// Convert value to pointer
 		valueCopy := value
 		return any(&valueCopy).(R)
-	} else {
-		// R is not a pointer type (like any, string, int, etc.)
-		// Check if value is a pointer and R is not a pointer type
-		// This handles values that come as *any but need to be converted to any
-		if reflect.TypeOf(value).Kind() == reflect.Ptr {
-			// Dereference the pointer
-			valueReflect := reflect.ValueOf(value)
-			if !valueReflect.IsNil() {
-				dereferencedValue := valueReflect.Elem().Interface()
-				return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
-			}
-			var zero R
-			return zero
-		}
-		// Direct conversion
-		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
+
+	// R is not a pointer type (like any, string, int, etc.)
+	// Check if value is a pointer and R is not a pointer type
+	// This handles values that come as *any but need to be converted to any
+	if reflect.TypeOf(value).Kind() == reflect.Ptr {
+		// Dereference the pointer
+		valueReflect := reflect.ValueOf(value)
+		if !valueReflect.IsNil() {
+			dereferencedValue := valueReflect.Elem().Interface()
+			return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
+		}
+		var zero R
+		return zero
+	}
+	// Direct conversion
+	return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
 }
 
 // extractIntersectionValue extracts base type T from constraint type R
@@ -746,9 +725,9 @@ func structToMap(v reflect.Value) map[string]any {
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	result := make(map[string]any)
 	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
+	result := make(map[string]any, t.NumField())
+	for i := range t.NumField() {
 		field := t.Field(i)
 		if !field.IsExported() {
 			continue
@@ -796,10 +775,8 @@ func newZodIntersectionFromDef[T any, R any](def *ZodIntersectionDef) *ZodInters
 	}
 
 	// Set checks if provided
-	if len(def.Checks) > 0 {
-		for _, check := range def.Checks {
-			internals.AddCheck(check)
-		}
+	for _, check := range def.Checks {
+		internals.AddCheck(check)
 	}
 
 	return schema

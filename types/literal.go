@@ -2,6 +2,7 @@ package types
 
 import (
 	"reflect"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -10,84 +11,95 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// ZodLiteralDef defines the structure of a literal schema
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+// ZodLiteralDef defines the configuration for a literal schema.
 type ZodLiteralDef[T comparable] struct {
 	core.ZodTypeDef
 	Values []T
 }
 
-// ZodLiteralInternals holds the internal state of a literal schema
+// ZodLiteralInternals contains literal validator internal state.
 type ZodLiteralInternals[T comparable] struct {
 	core.ZodTypeInternals
 	Def *ZodLiteralDef[T]
 }
 
+// ZodLiteral represents a literal validation schema for exact value matching.
 type ZodLiteral[T comparable, R any] struct {
 	internals *ZodLiteralInternals[T]
 }
 
+// =============================================================================
+// CORE METHODS
+// =============================================================================
+
+// GetInternals returns the internal state of the schema.
 func (z *ZodLiteral[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// Parse validates the input value and returns a typed result.
-// It leverages engine.ParsePrimitive so that all modifiers, checks, and transforms
-// work consistently across the code-base.
-func (z *ZodLiteral[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	// Validator ensures the value is one of the allowed literal values and then
-	// delegates to engine.ApplyChecks to run Refine / Check logic.
-	validator := func(value T, checks []core.ZodCheck, c *core.ParseContext) (T, error) {
-		if !z.Contains(value) {
-			// Re-use standardized invalid type error helper so error formatting
-			// matches other primitives. We treat a wrong literal as invalid type.
-			return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, c)
-		}
-		// Apply additional checks (Refine, Overwrite, etc.).
-		return engine.ApplyChecks[T](value, checks, c)
-	}
+// IsOptional reports whether this schema accepts undefined/missing values.
+func (z *ZodLiteral[T, R]) IsOptional() bool {
+	return z.internals.IsOptional()
+}
 
+// IsNilable reports whether this schema accepts nil values.
+func (z *ZodLiteral[T, R]) IsNilable() bool {
+	return z.internals.IsNilable()
+}
+
+// withCheck clones internals, adds a check, and returns a new instance.
+func (z *ZodLiteral[T, R]) withCheck(check core.ZodCheck) *ZodLiteral[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
+// validateLiteral ensures the value is one of the allowed literal values,
+// then delegates to engine.ApplyChecks for Refine/Check logic.
+func (z *ZodLiteral[T, R]) validateLiteral(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+	if !z.Contains(value) {
+		return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, ctx)
+	}
+	return engine.ApplyChecks[T](value, chks, ctx)
+}
+
+// Parse validates the input value and returns a typed result.
+func (z *ZodLiteral[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeLiteral,
-		validator,
+		z.validateLiteral,
 		engine.ConvertToConstraintType[T, R],
-		ctx..., // pass-through context
+		ctx...,
 	)
 }
 
 // StrictParse provides compile-time type safety by requiring exact type matching.
 func (z *ZodLiteral[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
-	// Validator ensures the value is one of the allowed literal values and then
-	// delegates to engine.ApplyChecks to run Refine / Check logic.
-	validator := func(value T, checks []core.ZodCheck, c *core.ParseContext) (T, error) {
-		if !z.Contains(value) {
-			// Re-use standardized invalid type error helper so error formatting
-			// matches other primitives. We treat a wrong literal as invalid type.
-			return value, issues.CreateInvalidTypeError(core.ZodTypeLiteral, value, c)
-		}
-		// Apply additional checks (Refine, Overwrite, etc.).
-		return engine.ApplyChecks[T](value, checks, c)
-	}
-
 	return engine.ParsePrimitiveStrict[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeLiteral,
-		validator,
-		ctx..., // pass-through context
+		z.validateLiteral,
+		ctx...,
 	)
 }
 
+// MustParse validates input and panics on error.
 func (z *ZodLiteral[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
-	val, err := z.Parse(input, ctx...)
+	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return val
+	return result
 }
 
-// MustStrictParse is the strict mode variant that panics on error.
+// MustStrictParse validates input with strict type matching and panics on error.
 func (z *ZodLiteral[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -96,49 +108,39 @@ func (z *ZodLiteral[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R
 	return result
 }
 
+// MustParseAny validates input and panics on error, returning an untyped result.
 func (z *ZodLiteral[T, R]) MustParseAny(input any, ctx ...*core.ParseContext) any {
-	val, err := z.ParseAny(input, ctx...)
+	result, err := z.ParseAny(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return val
+	return result
 }
 
-// ParseAny is a zero-overhead wrapper around Parse and is used by reflection-based
-// callers that don’t know the concrete type parameters at compile-time.
+// ParseAny validates input and returns an untyped result for runtime scenarios.
 func (z *ZodLiteral[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
-	res, err := z.Parse(input, ctx...)
-	if err != nil {
-		return nil, err
-	}
-	return any(res), nil
+	return z.Parse(input, ctx...)
 }
 
-func (z *ZodLiteral[T, R]) IsOptional() bool {
-	return z.internals.IsOptional()
-}
+// =============================================================================
+// MODIFIER METHODS
+// =============================================================================
 
-func (z *ZodLiteral[T, R]) IsNilable() bool {
-	return z.internals.IsNilable()
-}
-
-// Optional returns a new schema that allows the value to be nil.
-// It changes the constraint type from R to *T.
+// Optional returns a schema that accepts nil, with constraint type *T.
 func (z *ZodLiteral[T, R]) Optional() *ZodLiteral[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable returns a new schema that allows the value to be nil.
-// It changes the constraint type from R to *T.
+// Nilable returns a schema that accepts nil, with constraint type *T.
 func (z *ZodLiteral[T, R]) Nilable() *ZodLiteral[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers.
+// Nullish combines optional and nilable modifiers for maximum flexibility.
 func (z *ZodLiteral[T, R]) Nullish() *ZodLiteral[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -146,46 +148,64 @@ func (z *ZodLiteral[T, R]) Nullish() *ZodLiteral[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a default value for the schema.
+// Default sets a default value returned when input is nil, bypassing validation.
 func (z *ZodLiteral[T, R]) Default(v T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// Prefault sets a fallback value if parsing fails.
+// Prefault sets a prefault value that goes through the full parsing pipeline when input is nil.
 func (z *ZodLiteral[T, R]) Prefault(v T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
+// DefaultFunc sets a factory function that provides the default value when input is nil.
 func (z *ZodLiteral[T, R]) DefaultFunc(fn func() T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
+// PrefaultFunc sets a factory function that provides the prefault value through the full parsing pipeline.
 func (z *ZodLiteral[T, R]) PrefaultFunc(fn func() T) *ZodLiteral[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Refine adds a custom validation check to the schema.
+// Describe registers a description in the global registry.
+func (z *ZodLiteral[T, R]) Describe(description string) *ZodLiteral[T, R] {
+	newInternals := z.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		existing = core.GlobalMeta{}
+	}
+	existing.Description = description
+	clone := z.withInternals(newInternals)
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
+
+// Meta stores metadata for this literal schema.
+func (z *ZodLiteral[T, R]) Meta(meta core.GlobalMeta) *ZodLiteral[T, R] {
+	core.GlobalRegistry.Add(z, meta)
+	return z
+}
+
+// =============================================================================
+// REFINEMENT METHODS
+// =============================================================================
+
+// Refine adds a typed custom validation function.
 func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T, R] {
-	// Wrapper that handles both T and *T constraint types
 	wrapper := func(data any) bool {
 		var zero R
-
 		switch any(zero).(type) {
 		case *T:
-			// Schema output is *T – handle nil and convert to T for validation
 			if data == nil {
-				// For nil input with *T constraint, we need to decide:
-				// - If nilable, nil should pass validation (return true)
-				// - But the user's function expects T, so we can't call it with nil
-				// In Zod v4, refinements on nilable schemas should allow nil to pass
 				return true
 			}
 			if typed, ok := data.(T); ok {
@@ -193,29 +213,25 @@ func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T,
 			}
 			return false
 		default:
-			// Schema output is T – direct validation
 			if typed, ok := data.(T); ok {
 				return fn(typed)
 			}
 			return false
 		}
 	}
-
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
-// RefineAny adds a custom validation check to the schema, accepting `any`.
+// RefineAny adds a flexible custom validation function accepting any input.
 func (z *ZodLiteral[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodLiteral[T, R] {
-	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
-// Value returns the first literal value. Useful for single-value literals.
+// =============================================================================
+// TYPE-SPECIFIC METHODS
+// =============================================================================
+
+// Value returns the single literal value. Panics if the schema has multiple values.
 func (z *ZodLiteral[T, R]) Value() T {
 	if len(z.internals.Def.Values) == 0 {
 		var zero T
@@ -232,17 +248,16 @@ func (z *ZodLiteral[T, R]) Values() []T {
 	return z.internals.Def.Values
 }
 
-// Contains checks if a given value is one of the allowed literal values.
+// Contains reports whether v is one of the allowed literal values.
 func (z *ZodLiteral[T, R]) Contains(v T) bool {
-	for _, val := range z.internals.Def.Values {
-		if val == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(z.internals.Def.Values, v)
 }
 
-// withInternals creates a new instance with the same constraint type R.
+// =============================================================================
+// HELPER AND PRIVATE METHODS
+// =============================================================================
+
+// withInternals creates a new instance preserving the generic constraint type R.
 func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[T, R] {
 	return &ZodLiteral[T, R]{internals: &ZodLiteralInternals[T]{
 		ZodTypeInternals: *in,
@@ -250,7 +265,7 @@ func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[
 	}}
 }
 
-// withPtrInternals creates a new instance with a pointer constraint type *T.
+// withPtrInternals creates a new instance with pointer constraint type *T.
 func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiteral[T, *T] {
 	return &ZodLiteral[T, *T]{internals: &ZodLiteralInternals[T]{
 		ZodTypeInternals: *in,
@@ -258,6 +273,11 @@ func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiter
 	}}
 }
 
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
+
+// newZodLiteralFromDef constructs a new ZodLiteral from the given definition.
 func newZodLiteralFromDef[T comparable, R any](def *ZodLiteralDef[T]) *ZodLiteral[T, R] {
 	internals := &ZodLiteralInternals[T]{
 		core.ZodTypeInternals{
@@ -268,14 +288,10 @@ func newZodLiteralFromDef[T comparable, R any](def *ZodLiteralDef[T]) *ZodLitera
 
 	values := make(map[any]struct{})
 	if len(def.Values) > 0 {
-		// Disallow pointer literals – they introduce identity semantics and are
-		// not supported by design (see tests).
 		firstValRV := reflect.ValueOf(def.Values[0])
-		if firstValRV.Kind() == reflect.Ptr {
+		if firstValRV.Kind() == reflect.Pointer {
 			panic("pointer literals are not supported in Literal() constructor")
 		}
-
-		// Use reflection to check if the type is comparable before adding to the map.
 		if firstValRV.Type().Comparable() {
 			for _, val := range def.Values {
 				values[val] = struct{}{}
@@ -284,48 +300,42 @@ func newZodLiteralFromDef[T comparable, R any](def *ZodLiteralDef[T]) *ZodLitera
 	}
 	internals.Values = values
 
-	schema := &ZodLiteral[T, R]{
-		internals: internals,
-	}
-	return schema
+	return &ZodLiteral[T, R]{internals: internals}
 }
 
+// LiteralTyped creates a literal schema with explicit type parameters.
 func LiteralTyped[T comparable, R any](value T, params ...any) *ZodLiteral[T, R] {
 	def := &ZodLiteralDef[T]{
 		Values: []T{value},
 	}
-
 	if len(params) > 0 {
-		normalizedParams := utils.NormalizeParams(params...)
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+		utils.ApplySchemaParams(&def.ZodTypeDef, utils.NormalizeParams(params...))
 	}
-
 	return newZodLiteralFromDef[T, R](def)
 }
 
+// Literal creates a literal schema for a single value with type inference.
 func Literal[T comparable](value T, params ...any) *ZodLiteral[T, T] {
 	return LiteralTyped[T, T](value, params...)
 }
 
-// LiteralPtr creates a literal schema for a single value with a pointer return type
+// LiteralPtr creates a literal schema for a single value with a pointer return type.
 func LiteralPtr[T comparable](value T, params ...any) *ZodLiteral[T, *T] {
 	return Literal(value, params...).Nilable()
 }
 
+// LiteralOf creates a multi-value literal schema with type inference.
 func LiteralOf[T comparable](values []T, params ...any) *ZodLiteral[T, T] {
 	def := &ZodLiteralDef[T]{
 		Values: values,
 	}
-
 	if len(params) > 0 {
-		normalizedParams := utils.NormalizeParams(params...)
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+		utils.ApplySchemaParams(&def.ZodTypeDef, utils.NormalizeParams(params...))
 	}
-
 	return newZodLiteralFromDef[T, T](def)
 }
 
-// LiteralPtrOf creates a multi-value literal schema with a pointer return type
+// LiteralPtrOf creates a multi-value literal schema with a pointer return type.
 func LiteralPtrOf[T comparable](values []T, params ...any) *ZodLiteral[T, *T] {
-	return LiteralOf[T](values, params...).Nilable()
+	return LiteralOf(values, params...).Nilable()
 }

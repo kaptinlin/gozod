@@ -77,7 +77,6 @@ func TestIPv4_BasicFunctionality(t *testing.T) {
 		schema := IPv4(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeIPv4, schema.internals.Def.Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
@@ -754,7 +753,6 @@ func TestIPv6_BasicFunctionality(t *testing.T) {
 		schema := IPv6(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeIPv6, schema.internals.Def.Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)

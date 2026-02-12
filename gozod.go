@@ -91,15 +91,15 @@ type (
 	ZodHex[T types.StringConstraint]       = types.ZodHex[T]
 
 	// Network formats
-	ZodIPv4[T types.NetworkConstraint]     = types.ZodIPv4[T]
-	ZodIPv6[T types.NetworkConstraint]     = types.ZodIPv6[T]
-	ZodCIDRv4[T types.NetworkConstraint]   = types.ZodCIDRv4[T]
-	ZodCIDRv6[T types.NetworkConstraint]   = types.ZodCIDRv6[T]
-	ZodURL[T types.NetworkConstraint]      = types.ZodURL[T]
-	ZodHostname[T types.NetworkConstraint] = types.ZodHostname[T]
-	ZodMAC[T types.NetworkConstraint]      = types.ZodMAC[T]
-	ZodE164[T types.NetworkConstraint]     = types.ZodE164[T]
-	URLOptions                             = types.URLOptions
+	ZodIPv4[T types.StringConstraint]     = types.ZodIPv4[T]
+	ZodIPv6[T types.StringConstraint]     = types.ZodIPv6[T]
+	ZodCIDRv4[T types.StringConstraint]   = types.ZodCIDRv4[T]
+	ZodCIDRv6[T types.StringConstraint]   = types.ZodCIDRv6[T]
+	ZodURL[T types.StringConstraint]      = types.ZodURL[T]
+	ZodHostname[T types.StringConstraint] = types.ZodHostname[T]
+	ZodMAC[T types.StringConstraint]      = types.ZodMAC[T]
+	ZodE164[T types.StringConstraint]     = types.ZodE164[T]
+	URLOptions                            = types.URLOptions
 
 	// ISO 8601 formats
 	ZodIso[T types.IsoConstraint] = types.ZodIso[T]
