@@ -263,7 +263,7 @@ func TestAccessorEdgeCases(t *testing.T) {
 			Minimum:      0, // Zero value should still be accessible
 		}
 
-		minimum, ok := issue.GetMinimum()
+		minimum, ok := issue.MinValue()
 		require.True(t, ok)
 		assert.Equal(t, 0, minimum)
 	})
@@ -279,7 +279,7 @@ func TestAccessorEdgeCases(t *testing.T) {
 			Minimum:      nil, // Nil any
 		}
 
-		minimum, ok := issue.GetMinimum()
+		minimum, ok := issue.MinValue()
 		assert.False(t, ok)
 		assert.Nil(t, minimum)
 	})
@@ -365,10 +365,10 @@ func TestAccessorPerformance(t *testing.T) {
 
 		// Test that type checking and access is efficient
 		for i := 0; i < 1000; i++ {
-			_, _ = issue.GetExpected()
-			_, _ = issue.GetReceived()
-			_, _ = issue.GetMinimum() // Should return false quickly
-			_, _ = issue.GetMaximum() // Should return false quickly
+			_, _ = issue.ExpectedType()
+			_, _ = issue.ReceivedType()
+			_, _ = issue.MinValue() // Should return false quickly
+			_, _ = issue.MaxValue() // Should return false quickly
 		}
 	})
 }

@@ -75,7 +75,7 @@ func mockPtrExtractor[T any](shouldExtract bool) func(any) (*T, bool) {
 // mockCheck creates a simple check for testing
 type mockCheck struct{}
 
-func (m *mockCheck) GetZod() *core.ZodCheckInternals {
+func (m *mockCheck) Zod() *core.ZodCheckInternals {
 	return &core.ZodCheckInternals{
 		Def: &core.ZodCheckDef{
 			Check: "mock",

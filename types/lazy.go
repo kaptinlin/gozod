@@ -21,7 +21,7 @@ type LazyConstraint interface {
 
 // ZodSchemaType represents any Zod schema type that implements the basic interface.
 type ZodSchemaType interface {
-	GetInternals() *core.ZodTypeInternals
+	Internals() *core.ZodTypeInternals
 }
 
 // =============================================================================
@@ -58,8 +58,8 @@ type ZodLazyTyped[S ZodSchemaType] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodLazy[T]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodLazy[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -422,9 +422,9 @@ func (w *schemaWrapper) MustParse(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-func (w *schemaWrapper) GetInternals() *core.ZodTypeInternals {
-	if s, ok := w.inner.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		return s.GetInternals()
+func (w *schemaWrapper) Internals() *core.ZodTypeInternals {
+	if s, ok := w.inner.(interface{ Internals() *core.ZodTypeInternals }); ok {
+		return s.Internals()
 	}
 	return &core.ZodTypeInternals{}
 }
@@ -452,8 +452,8 @@ func (w *schemaWrapper) IsNilable() bool {
 	return false
 }
 
-// GetInner returns the wrapped inner schema for JSON Schema conversion.
-func (w *schemaWrapper) GetInner() any {
+// Inner returns the wrapped inner schema for JSON Schema conversion.
+func (w *schemaWrapper) Inner() any {
 	return w.inner
 }
 
@@ -488,7 +488,7 @@ func (z *ZodLazy[T]) extractLazyPtr(value any) (*any, bool) {
 // validateLazy validates that the lazy schema can be resolved and the value is valid.
 func (z *ZodLazy[T]) validateLazy(value any, chks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	if value == nil {
-		internals := z.GetInternals()
+		internals := z.Internals()
 		if internals.Optional || internals.Nilable {
 			return value, nil
 		}
@@ -638,7 +638,7 @@ func (z *ZodLazyTyped[S]) MustParse(input any, ctx ...*core.ParseContext) any {
 	return z.ZodLazy.MustParse(input, ctx...)
 }
 
-// GetInnerSchema returns the inner schema with its original type.
+// InnerSchema returns the inner schema with its original type.
 func (z *ZodLazyTyped[S]) GetInnerSchema() S {
 	return z.getter()
 }

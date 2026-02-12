@@ -10,8 +10,8 @@ type ZodCheckDescribe struct {
 	internals *core.ZodCheckInternals
 }
 
-// GetZod returns the internal check structure for execution.
-func (c *ZodCheckDescribe) GetZod() *core.ZodCheckInternals {
+// Zod returns the internal check structure for execution.
+func (c *ZodCheckDescribe) Zod() *core.ZodCheckInternals {
 	return c.internals
 }
 
@@ -44,8 +44,8 @@ type ZodCheckMeta struct {
 	internals *core.ZodCheckInternals
 }
 
-// GetZod returns the internal check structure for execution.
-func (c *ZodCheckMeta) GetZod() *core.ZodCheckInternals {
+// Zod returns the internal check structure for execution.
+func (c *ZodCheckMeta) Zod() *core.ZodCheckInternals {
 	return c.internals
 }
 

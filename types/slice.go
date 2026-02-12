@@ -44,8 +44,8 @@ type ZodSlice[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodSlice[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodSlice[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -419,13 +419,13 @@ func (z *ZodSlice[T, R]) validateSlice(value []T, checks []core.ZodCheck, ctx *c
 	result := engine.RunChecksOnValue(value, checks, payload, ctx)
 
 	if result.HasIssues() {
-		collectedIssues = append(collectedIssues, result.GetIssues()...)
+		collectedIssues = append(collectedIssues, result.Issues()...)
 	}
 
 	// Use the potentially transformed value for element validation.
 	validatedValue := value
-	if result.GetValue() != nil {
-		if converted, ok := result.GetValue().([]T); ok {
+	if result.Value() != nil {
+		if converted, ok := result.Value().([]T); ok {
 			validatedValue = converted
 		}
 	}
@@ -635,7 +635,7 @@ func SliceTyped[T any, R any](elementSchema any, paramArgs ...any) *ZodSlice[T, 
 // Check adds a custom validation function that can push multiple issues.
 func (z *ZodSlice[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodSlice[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -645,7 +645,7 @@ func (z *ZodSlice[T, R]) Check(fn func(value R, payload *core.ParsePayload), par
 		zeroTyp := reflect.TypeOf(zero)
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
 			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				ptr := reflect.New(elemTyp)
 				ptr.Elem().Set(valRV)

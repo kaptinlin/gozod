@@ -41,8 +41,8 @@ type ZodIntersection[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema
-func (z *ZodIntersection[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema
+func (z *ZodIntersection[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -105,7 +105,7 @@ func collectSchemaIssues(err error, input any, ctx *core.ParseContext) []core.Zo
 		return zErr.Issues
 	}
 	issue := issues.NewRawIssue(core.Custom, input, issues.WithMessage(err.Error()))
-	return []core.ZodIssue{issues.FinalizeIssue(issue, ctx, core.GetConfig())}
+	return []core.ZodIssue{issues.FinalizeIssue(issue, ctx, core.Config())}
 }
 
 // validateValue validates value using intersection logic
@@ -133,7 +133,7 @@ func (z *ZodIntersection[T, R]) validateValue(value any, checks []core.ZodCheck,
 	merged, mergeErr := mergeValues(leftResult, rightResult)
 	if mergeErr != nil {
 		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, value)
-		finalIssue := issues.FinalizeIssue(issue, ctx, core.GetConfig())
+		finalIssue := issues.FinalizeIssue(issue, ctx, core.Config())
 		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}
 
@@ -263,7 +263,7 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 	merged, mergeErr := mergeValues(leftResult, rightResult)
 	if mergeErr != nil {
 		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, convertedInput)
-		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.GetConfig())
+		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.Config())
 		var zero R
 		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
 	}

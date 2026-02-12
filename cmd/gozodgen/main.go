@@ -17,16 +17,14 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"strings"
 )
 
-// Static error variables to comply with err113
-var (
-	ErrConfigNil = fmt.Errorf("config cannot be nil")
-)
+var errConfigNil = errors.New("config cannot be nil")
 
 // Command line flags
 var (
@@ -194,7 +192,7 @@ type CodeGenerator struct {
 // NewCodeGenerator creates a new code generator instance.
 func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	if config == nil {
-		return nil, ErrConfigNil
+		return nil, errConfigNil
 	}
 
 	analyzer, err := NewStructAnalyzer()

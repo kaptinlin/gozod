@@ -56,7 +56,7 @@ type IsoTimeOptions struct {
 func newIso[T IsoConstraint](s *ZodString[T]) *ZodIso[T] { return &ZodIso[T]{s} }
 
 func (z *ZodIso[T]) cloneWithCheck(check core.ZodCheck) *ZodIso[T] {
-	in := z.GetInternals().Clone()
+	in := z.Internals().Clone()
 	in.AddCheck(check)
 	return newIso(z.withInternals(in))
 }
@@ -240,5 +240,5 @@ func IsoDurationTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 // PROXY METHODS
 // =============================================================================
 
-// GetInternals returns the schema's internal configuration.
-func (z *ZodIso[T]) GetInternals() *core.ZodTypeInternals { return z.ZodString.GetInternals() }
+// Internals returns the schema's internal configuration.
+func (z *ZodIso[T]) Internals() *core.ZodTypeInternals { return z.ZodString.Internals() }

@@ -119,7 +119,7 @@ func filterNilChecks(checks []core.ZodCheck) []core.ZodCheck {
 		if c == nil {
 			continue
 		}
-		ci := c.GetZod()
+		ci := c.Zod()
 		if ci == nil || ci.Def == nil {
 			continue
 		}

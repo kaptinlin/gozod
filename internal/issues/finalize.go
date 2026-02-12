@@ -79,15 +79,15 @@ func ExtractSchemaLevelError(iss core.ZodRawIssue) string {
 			return (*errorMap)(iss)
 		}
 
-	case interface{ GetInternals() *core.ZodTypeInternals }:
-		if internals := inst.GetInternals(); internals != nil && internals.Error != nil {
+	case interface{ Internals() *core.ZodTypeInternals }:
+		if internals := inst.Internals(); internals != nil && internals.Error != nil {
 			return (*internals.Error)(iss)
 		}
 
 	case interface {
-		GetZod() *core.ZodCheckInternals
+		Zod() *core.ZodCheckInternals
 	}:
-		if checkInternals := inst.GetZod(); checkInternals != nil &&
+		if checkInternals := inst.Zod(); checkInternals != nil &&
 			checkInternals.Def != nil && checkInternals.Def.Error != nil {
 			return (*checkInternals.Def.Error)(iss)
 		}
@@ -214,7 +214,7 @@ func ConvertRawIssuesToIssues(rawIssues []core.ZodRawIssue, ctx *core.ParseConte
 		return nil
 	}
 
-	config := core.GetConfig()
+	config := core.Config()
 
 	issues := make([]core.ZodIssue, len(rawIssues))
 	for i, rawIssue := range rawIssues {

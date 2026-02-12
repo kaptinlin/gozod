@@ -17,9 +17,9 @@ func MinFileSize(minimum int64, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			size := getFileSize(payload.GetValue())
+			size := getFileSize(payload.Value())
 			if size < minimum {
-				payload.AddIssue(issues.CreateTooSmallIssue(minimum, false, "file", payload.GetValue()))
+				payload.AddIssue(issues.CreateTooSmallIssue(minimum, false, "file", payload.Value()))
 			}
 		},
 		OnAttach: []func(any){
@@ -37,9 +37,9 @@ func MaxFileSize(maximum int64, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			size := getFileSize(payload.GetValue())
+			size := getFileSize(payload.Value())
 			if size > maximum {
-				payload.AddIssue(issues.CreateTooBigIssue(maximum, false, "file", payload.GetValue()))
+				payload.AddIssue(issues.CreateTooBigIssue(maximum, false, "file", payload.Value()))
 			}
 		},
 		OnAttach: []func(any){
@@ -57,12 +57,12 @@ func FileSize(expected int64, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			size := getFileSize(payload.GetValue())
+			size := getFileSize(payload.Value())
 			if size != expected {
 				if size > expected {
-					payload.AddIssue(issues.CreateTooBigIssue(expected, true, "file", payload.GetValue()))
+					payload.AddIssue(issues.CreateTooBigIssue(expected, true, "file", payload.Value()))
 				} else {
-					payload.AddIssue(issues.CreateTooSmallIssue(expected, true, "file", payload.GetValue()))
+					payload.AddIssue(issues.CreateTooSmallIssue(expected, true, "file", payload.Value()))
 				}
 			}
 		},
@@ -92,7 +92,7 @@ func Mime(mimeTypes []string, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			var contentType string
-			value := payload.GetValue()
+			value := payload.Value()
 			switch f := value.(type) {
 			case *multipart.FileHeader:
 				contentType = f.Header.Get("Content-Type")
@@ -138,5 +138,5 @@ func addInvalidValueIssue(mimeTypes []string, payload *core.ParsePayload) {
 	for i, v := range mimeTypes {
 		values[i] = v
 	}
-	payload.AddIssue(issues.CreateInvalidValueIssue(values, payload.GetValue()))
+	payload.AddIssue(issues.CreateInvalidValueIssue(values, payload.Value()))
 }

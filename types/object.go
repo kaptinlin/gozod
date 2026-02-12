@@ -66,8 +66,8 @@ type ZodObject[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodObject[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodObject[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -264,7 +264,7 @@ func (z *ZodObject[T, R]) Size(exactLen int, params ...any) *ZodObject[T, R] {
 
 // Property validates a specific property using the provided schema.
 func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...any) *ZodObject[T, R] {
-	return z.withCheck(checks.NewProperty(key, schema, params...).GetZod())
+	return z.withCheck(checks.NewProperty(key, schema, params...).Zod())
 }
 
 // =============================================================================
@@ -779,9 +779,9 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, checks []core.Zod
 		payload := core.NewParsePayload(resultObject)
 		result := engine.RunChecksOnValue(resultObject, checks, payload, ctx)
 		if result.HasIssues() {
-			collectedIssues = append(collectedIssues, result.GetIssues()...)
+			collectedIssues = append(collectedIssues, result.Issues()...)
 		}
-		if v := result.GetValue(); v != nil {
+		if v := result.Value(); v != nil {
 			if transformed, ok := v.(map[string]any); ok {
 				resultObject = transformed
 			}
@@ -843,7 +843,7 @@ func (z *ZodObject[T, R]) validateField(element any, schema any, ctx *core.Parse
 
 // internalsProvider is a local interface for type-safe access to schema internals.
 type internalsProvider interface {
-	GetInternals() *core.ZodTypeInternals
+	Internals() *core.ZodTypeInternals
 }
 
 // isFieldOptional reports whether a field is optional based on schema or partial state.
@@ -860,7 +860,7 @@ func (z *ZodObject[T, R]) isFieldOptional(schema any, fieldName string) bool {
 		}
 	}
 	if ip, ok := schema.(internalsProvider); ok {
-		return ip.GetInternals().Optional
+		return ip.Internals().Optional
 	}
 	return false
 }
@@ -871,7 +871,7 @@ func (z *ZodObject[T, R]) isFieldExactOptional(schema any) bool {
 		return false
 	}
 	if ip, ok := schema.(internalsProvider); ok {
-		return ip.GetInternals().ExactOptional
+		return ip.Internals().ExactOptional
 	}
 	return false
 }
@@ -969,7 +969,7 @@ func LooseObjectPtr(shape core.ObjectSchema, params ...any) *ZodObject[map[strin
 // Check adds a custom validation function that can report multiple issues.
 func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodObject[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -977,7 +977,7 @@ func (z *ZodObject[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		rType := reflect.TypeFor[R]()
 		if rType.Kind() == reflect.Pointer {
 			elemTyp := rType.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				ptr := reflect.New(elemTyp)
 				ptr.Elem().Set(valRV)

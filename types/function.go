@@ -47,8 +47,8 @@ type ZodFunction[T FunctionConstraint] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodFunction[T]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodFunction[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -375,7 +375,7 @@ func (z *ZodFunction[T]) extractFunctionPtr(value any) (*any, bool) {
 // validateFunction validates that input is a function.
 func (z *ZodFunction[T]) validateFunction(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	if value == nil {
-		internals := z.GetInternals()
+		internals := z.Internals()
 		if internals.Optional || internals.Nilable {
 			return value, nil
 		}

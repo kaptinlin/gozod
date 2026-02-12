@@ -14,14 +14,14 @@ func TestDescribeGlobalFunction(t *testing.T) {
 		// Create describe check
 		describeCheck := gozod.Describe("A user email address")
 		assert.NotNil(t, describeCheck)
-		assert.NotNil(t, describeCheck.GetZod())
-		assert.Equal(t, "describe", describeCheck.GetZod().Def.Check)
+		assert.NotNil(t, describeCheck.Zod())
+		assert.Equal(t, "describe", describeCheck.Zod().Def.Check)
 	})
 
 	t.Run("Describe check is no-op for validation", func(t *testing.T) {
 		// The describe check function should be a no-op
 		describeCheck := gozod.Describe("Test description")
-		internals := describeCheck.GetZod()
+		internals := describeCheck.Zod()
 
 		// Check function should exist and be callable without error
 		assert.NotNil(t, internals.Check)
@@ -41,14 +41,14 @@ func TestMetaGlobalFunction(t *testing.T) {
 			Description: "User's age in years",
 		})
 		assert.NotNil(t, metaCheck)
-		assert.NotNil(t, metaCheck.GetZod())
-		assert.Equal(t, "meta", metaCheck.GetZod().Def.Check)
+		assert.NotNil(t, metaCheck.Zod())
+		assert.Equal(t, "meta", metaCheck.Zod().Def.Check)
 	})
 
 	t.Run("Meta check is no-op for validation", func(t *testing.T) {
 		// The meta check function should be a no-op
 		metaCheck := gozod.Meta(gozod.GlobalMeta{Title: "Count"})
-		internals := metaCheck.GetZod()
+		internals := metaCheck.Zod()
 
 		// Check function should exist and be callable without error
 		assert.NotNil(t, internals.Check)
@@ -65,7 +65,7 @@ func TestMetaGlobalFunction(t *testing.T) {
 			Examples:    []any{"user@example.com", "admin@test.org"},
 		})
 
-		internals := metaCheck.GetZod()
+		internals := metaCheck.Zod()
 		assert.NotNil(t, internals)
 		assert.NotEmpty(t, internals.OnAttach)
 	})
@@ -115,7 +115,7 @@ func TestMetaWithInstanceMethod(t *testing.T) {
 func TestMetadataCheckOnAttachCallback(t *testing.T) {
 	t.Run("Describe OnAttach registers in global registry", func(t *testing.T) {
 		describeCheck := gozod.Describe("Test description")
-		internals := describeCheck.GetZod()
+		internals := describeCheck.Zod()
 
 		// Verify OnAttach callbacks exist
 		assert.Len(t, internals.OnAttach, 1)
@@ -137,7 +137,7 @@ func TestMetadataCheckOnAttachCallback(t *testing.T) {
 			Title:       "TestTitle",
 			Description: "TestDesc",
 		})
-		internals := metaCheck.GetZod()
+		internals := metaCheck.Zod()
 
 		// Verify OnAttach callbacks exist
 		assert.Len(t, internals.OnAttach, 1)

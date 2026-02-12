@@ -326,13 +326,13 @@ func TestZodXor_OptionsDefensiveCopy(t *testing.T) {
 }
 
 // =============================================================================
-// GetInternals / IsOptional / IsNilable
+// Internals / IsOptional / IsNilable
 // =============================================================================
 
-func TestZodXor_GetInternals(t *testing.T) {
+func TestZodXor_Internals(t *testing.T) {
 	schema := XorOf(String(), Int())
 
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 	require.NotNil(t, internals)
 }
 

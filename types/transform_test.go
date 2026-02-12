@@ -341,19 +341,19 @@ func TestZodTransform_InterfaceMethods(t *testing.T) {
 		assert.Equal(t, "hello", result)
 	})
 
-	t.Run("GetInternals returns valid internals", func(t *testing.T) {
-		assert.NotNil(t, toUpper.GetInternals())
+	t.Run("Internals returns valid internals", func(t *testing.T) {
+		assert.NotNil(t, toUpper.Internals())
 	})
 
 	t.Run("internals Type is ZodTypeTransform", func(t *testing.T) {
-		assert.Equal(t, core.ZodTypeTransform, toUpper.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeTransform, toUpper.Internals().Type)
 	})
 
-	t.Run("GetInner returns the source schema", func(t *testing.T) {
+	t.Run("Inner returns the source schema", func(t *testing.T) {
 		inner := String().Min(5)
 		schema := inner.Transform(func(s string, _ *core.RefinementContext) (any, error) {
 			return s, nil
 		})
-		assert.NotNil(t, schema.GetInner())
+		assert.NotNil(t, schema.Inner())
 	})
 }

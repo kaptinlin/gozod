@@ -454,9 +454,9 @@ func TestSetEdgeCases(t *testing.T) {
 // =============================================================================
 
 func TestSetInternals(t *testing.T) {
-	t.Run("GetInternals returns valid internals", func(t *testing.T) {
+	t.Run("Internals returns valid internals", func(t *testing.T) {
 		schema := types.Set[string](types.String())
-		internals := schema.GetInternals()
+		internals := schema.Internals()
 		assert.NotNil(t, internals)
 	})
 

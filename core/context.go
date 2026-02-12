@@ -140,12 +140,12 @@ func (p *ParsePayload) SetIssues(issues []ZodRawIssue) {
 	p.issues = issues
 }
 
-// GetValue returns the current value being validated.
-func (p *ParsePayload) GetValue() any {
+// Value returns the current value being validated.
+func (p *ParsePayload) Value() any {
 	return p.value
 }
 
-// GetIssues returns a copy of the current validation issues.
-func (p *ParsePayload) GetIssues() []ZodRawIssue {
+// Issues returns a copy of the current validation issues.
+func (p *ParsePayload) Issues() []ZodRawIssue {
 	return slices.Clone(p.issues)
 }

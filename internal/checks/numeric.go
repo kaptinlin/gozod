@@ -15,9 +15,9 @@ func Lt(value any, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if !validate.Lt(payload.GetValue(), value) {
-			origin := utils.NumericOrigin(payload.GetValue())
-			raw := issues.CreateTooBigIssue(value, false, origin, payload.GetValue())
+		if !validate.Lt(payload.Value(), value) {
+			origin := utils.NumericOrigin(payload.Value())
+			raw := issues.CreateTooBigIssue(value, false, origin, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -36,9 +36,9 @@ func Lte(value any, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if !validate.Lte(payload.GetValue(), value) {
-			origin := utils.NumericOrigin(payload.GetValue())
-			raw := issues.CreateTooBigIssue(value, true, origin, payload.GetValue())
+		if !validate.Lte(payload.Value(), value) {
+			origin := utils.NumericOrigin(payload.Value())
+			raw := issues.CreateTooBigIssue(value, true, origin, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -57,9 +57,9 @@ func Gt(value any, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if !validate.Gt(payload.GetValue(), value) {
-			origin := utils.NumericOrigin(payload.GetValue())
-			raw := issues.CreateTooSmallIssue(value, false, origin, payload.GetValue())
+		if !validate.Gt(payload.Value(), value) {
+			origin := utils.NumericOrigin(payload.Value())
+			raw := issues.CreateTooSmallIssue(value, false, origin, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -78,9 +78,9 @@ func Gte(value any, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if !validate.Gte(payload.GetValue(), value) {
-			origin := utils.NumericOrigin(payload.GetValue())
-			raw := issues.CreateTooSmallIssue(value, true, origin, payload.GetValue())
+		if !validate.Gte(payload.Value(), value) {
+			origin := utils.NumericOrigin(payload.Value())
+			raw := issues.CreateTooSmallIssue(value, true, origin, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -99,9 +99,9 @@ func MultipleOf(divisor any, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if !validate.MultipleOf(payload.GetValue(), divisor) {
-			origin := utils.NumericOrigin(payload.GetValue())
-			raw := issues.CreateNotMultipleOfIssue(divisor, origin, payload.GetValue())
+		if !validate.MultipleOf(payload.Value(), divisor) {
+			origin := utils.NumericOrigin(payload.Value())
+			raw := issues.CreateNotMultipleOfIssue(divisor, origin, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}

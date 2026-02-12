@@ -26,7 +26,7 @@ func newFromString[T EmailConstraint](str *ZodString[T]) *ZodEmail[T] {
 func removeEmailChecks(cs []core.ZodCheck) []core.ZodCheck {
 	out := make([]core.ZodCheck, 0, len(cs))
 	for _, c := range cs {
-		if inst := c.GetZod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
+		if inst := c.Zod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
 			continue
 		}
 		out = append(out, c)
@@ -36,7 +36,7 @@ func removeEmailChecks(cs []core.ZodCheck) []core.ZodCheck {
 
 // withEmailPattern replaces existing email checks with check.
 func (z *ZodEmail[T]) withEmailPattern(check core.ZodCheck) *ZodEmail[T] {
-	in := z.GetInternals().Clone()
+	in := z.Internals().Clone()
 	in.Checks = removeEmailChecks(in.Checks)
 	in.AddCheck(check)
 	return newFromString(z.withInternals(in))
@@ -59,12 +59,12 @@ func (z *ZodEmail[T]) Nullish() *ZodEmail[*string] {
 
 // Html5 switches to the HTML5 email pattern.
 func (z *ZodEmail[T]) Html5(params ...any) *ZodEmail[T] {
-	return z.withEmailPattern(checks.Html5Email(params...))
+	return z.withEmailPattern(checks.HTML5Email(params...))
 }
 
 // Rfc5322 switches to the RFC 5322 email pattern.
 func (z *ZodEmail[T]) Rfc5322(params ...any) *ZodEmail[T] {
-	return z.withEmailPattern(checks.Rfc5322Email(params...))
+	return z.withEmailPattern(checks.RFC5322Email(params...))
 }
 
 // Unicode switches to the Unicode-aware email pattern.
@@ -97,7 +97,7 @@ func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 		check = checks.Email(params...)
 	}
 
-	in := base.GetInternals().Clone()
+	in := base.Internals().Clone()
 	in.AddCheck(check)
 	return &ZodEmail[T]{base.withInternals(in)}
 }
@@ -116,7 +116,7 @@ func (z *ZodEmail[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodEmail[T]) GetInternals() *core.ZodTypeInternals {
-	return z.ZodString.GetInternals()
+// Internals returns the internal state of the schema.
+func (z *ZodEmail[T]) Internals() *core.ZodTypeInternals {
+	return z.ZodString.Internals()
 }

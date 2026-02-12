@@ -362,7 +362,7 @@ func TestTuple_Metadata(t *testing.T) {
 func TestTuple_Internals(t *testing.T) {
 	t.Run("get internals returns valid internals", func(t *testing.T) {
 		schema := types.Tuple(gozod.String())
-		internals := schema.GetInternals()
+		internals := schema.Internals()
 		assert.NotNil(t, internals)
 		assert.Equal(t, core.ZodTypeTuple, internals.Type)
 	})

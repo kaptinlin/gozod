@@ -37,8 +37,8 @@ type ZodXor[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state for framework usage.
-func (z *ZodXor[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state for framework usage.
+func (z *ZodXor[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 

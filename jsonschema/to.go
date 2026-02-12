@@ -191,7 +191,7 @@ func newConverter(opts Options) *converter {
 }
 
 // unwrapSchema recursively unwraps well-known wrapper types (Optional, Nilable, etc.)
-// by following a GetInner() method if implemented. This allows features like
+// by following a Inner() method if implemented. This allows features like
 // ID hoisting and reused-schema detection to operate on the underlying core
 // schema rather than wrapper instances.
 func (c *converter) unwrapSchema(s core.ZodSchema) core.ZodSchema {
@@ -210,8 +210,8 @@ func (c *converter) unwrapSchema(s core.ZodSchema) core.ZodSchema {
 			return s
 		}
 		visited[s] = struct{}{}
-		if getter, ok := s.(interface{ GetInner() core.ZodSchema }); ok {
-			inner := getter.GetInner()
+		if getter, ok := s.(interface{ Inner() core.ZodSchema }); ok {
+			inner := getter.Inner()
 			if inner != nil && inner != s {
 				s = inner
 				continue
@@ -255,7 +255,7 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 	placeholder := &lib.Schema{}
 	c.seen[schema] = placeholder
 
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 
 	var finalSchema *lib.Schema
 	var err error
@@ -382,13 +382,13 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 }
 
 func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 	var jsonSchema *lib.Schema
 	var err error
 
 	// Execute OnAttach callbacks so that checks can annotate Bag/metadata
 	for _, chk := range internals.Checks {
-		if zc := chk.GetZod(); zc != nil {
+		if zc := chk.Zod(); zc != nil {
 			for _, fn := range zc.OnAttach {
 				if fn != nil {
 					fn(schema)
@@ -438,12 +438,12 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypePipe, core.ZodTypePipeline:
 		// Handle pipeline schemas differently depending on IO mode.
 		if c.opts.IO == "input" {
-			if inp, ok := schema.(interface{ GetInner() core.ZodSchema }); ok {
-				return c.convert(inp.GetInner())
+			if inp, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+				return c.convert(inp.Inner())
 			}
 		} else { // output mode (default)
-			if outpHolder, ok := schema.(interface{ GetOutput() core.ZodSchema }); ok {
-				tgt := outpHolder.GetOutput()
+			if outpHolder, ok := schema.(interface{ Output() core.ZodSchema }); ok {
+				tgt := outpHolder.Output()
 				if tgt != nil {
 					return c.convert(tgt)
 				}
@@ -457,8 +457,8 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypeTransform:
 		// For transforms, expose input schema in IO:"input"; otherwise treat as unrepresentable.
 		if c.opts.IO == "input" {
-			if inp, ok := schema.(interface{ GetInner() core.ZodSchema }); ok {
-				return c.convert(inp.GetInner())
+			if inp, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+				return c.convert(inp.Inner())
 			}
 		}
 		if c.opts.Unrepresentable == "any" {
@@ -510,8 +510,8 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypeISODuration:
 		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("duration")}
 	case core.ZodTypeOptional, core.ZodTypeNilable, core.ZodTypeDefault, core.ZodTypePrefault, core.ZodTypeRefine, core.ZodTypeCheck:
-		if s, ok := schema.(interface{ GetInner() core.ZodSchema }); ok {
-			return c.convert(s.GetInner())
+		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+			return c.convert(s.Inner())
 		}
 		if c.opts.Unrepresentable == "any" {
 			return &lib.Schema{}, nil
@@ -651,10 +651,10 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 		properties[key] = propJsonSchema
 		c.path = c.path[:len(c.path)-2]
 
-		isRequired := !propSchema.GetInternals().IsOptional()
+		isRequired := !propSchema.Internals().IsOptional()
 		// In "input" mode, fields with defaults are not required.
 		if c.opts.IO == "input" {
-			pInternals := propSchema.GetInternals()
+			pInternals := propSchema.Internals()
 			if pInternals.DefaultValue != nil || pInternals.DefaultFunc != nil {
 				isRequired = false
 			}
@@ -741,10 +741,10 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 			return nil, ErrSliceElementNotSchema
 		}
 	} else if s, ok := schema.(interface {
-		Items() []any
-		Rest() any
+		ElementSchemas() []any
+		RestSchema() any
 	}); ok { // Handle ZodArray (tuples)
-		elements := s.Items()
+		elements := s.ElementSchemas()
 		jsonSchema.PrefixItems = make([]*lib.Schema, len(elements))
 		for i, el := range elements {
 			if itemSchema, ok := el.(core.ZodSchema); ok {
@@ -758,7 +758,7 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 			}
 		}
 
-		if rest := s.Rest(); rest != nil {
+		if rest := s.RestSchema(); rest != nil {
 			if restSchema, ok := rest.(core.ZodSchema); ok {
 				items, err := c.convert(restSchema)
 				if err != nil {
@@ -830,7 +830,7 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 		// Calculate required count (items that are not optional)
 		requiredCount := 0
 		for _, item := range items {
-			if !item.GetInternals().IsOptional() {
+			if !item.Internals().IsOptional() {
 				requiredCount++
 			} else {
 				break // Stop at first optional item
@@ -839,7 +839,7 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 		// Actually, we need to find the last required item
 		lastRequired := -1
 		for i := len(items) - 1; i >= 0; i-- {
-			if !items[i].GetInternals().IsOptional() {
+			if !items[i].Internals().IsOptional() {
 				lastRequired = i
 				break
 			}
@@ -870,8 +870,8 @@ func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 	meta, ok := reg.Get(schema)
 	if !ok {
 		// If no direct meta, check if the schema is a wrapper (e.g., Optional) and has meta on its inner type.
-		if s, ok := schema.(interface{ GetInner() core.ZodSchema }); ok {
-			meta, ok = reg.Get(s.GetInner())
+		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+			meta, ok = reg.Get(s.Inner())
 			if !ok {
 				return
 			}
@@ -908,8 +908,8 @@ func (c *converter) getID(schema core.ZodSchema) string {
 	meta, ok := reg.Get(schema)
 	if !ok {
 		// If no direct meta, check if the schema is a wrapper (e.g., Optional) and has meta on its inner type.
-		if s, ok := schema.(interface{ GetInner() core.ZodSchema }); ok {
-			meta, ok = reg.Get(s.GetInner())
+		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+			meta, ok = reg.Get(s.Inner())
 			if !ok {
 				return ""
 			}
@@ -1094,7 +1094,7 @@ func (c *converter) convertUnion(schema core.ZodSchema) (*lib.Schema, error) {
 		// this is an optional/nilable field
 		if nonNullSchema != nil && nullSchema != nil {
 			// Check if the original schema is Optional (not Nilable)
-			if schema.GetInternals().IsOptional() && !schema.GetInternals().IsNilable() {
+			if schema.Internals().IsOptional() && !schema.Internals().IsNilable() {
 				// For Optional fields, just return the non-null schema
 				// The optionality is handled at the object level (not in required array)
 				return c.convert(nonNullSchema)
@@ -1167,7 +1167,7 @@ func (c *converter) convertXor(schema core.ZodSchema) (*lib.Schema, error) {
 // isNullSchema checks if a schema represents null/nil type
 func isNullSchema(schema core.ZodSchema) bool {
 	// Check the schema type
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 	return internals.Type == core.ZodTypeNil
 }
 
@@ -1339,7 +1339,7 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 		ContentEncoding: ptrToString("binary"),
 	}
 
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 	c.applyBag(s, internals.Bag) // Bag is applied here.
 
 	// Handle multiple MIME types
@@ -1415,8 +1415,8 @@ func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
 			return c.convert(zodSchema)
 		}
 
-		// `inner` is already a core.ZodType[any]; attempt to call GetInner via reflection to unwrap further
-		if method := reflect.ValueOf(inner).MethodByName("GetInner"); method.IsValid() {
+		// `inner` is already a core.ZodType[any]; attempt to call Inner via reflection to unwrap further
+		if method := reflect.ValueOf(inner).MethodByName("Inner"); method.IsValid() {
 			if results := method.Call(nil); len(results) == 1 {
 				actualInner := results[0].Interface()
 				if zodSchema, ok := actualInner.(core.ZodSchema); ok {
@@ -1454,7 +1454,7 @@ func (c *converter) convertMap(schema core.ZodSchema) (*lib.Schema, error) {
 		return nil, ErrMapKeyNotSchema
 	}
 
-	if keySchema.GetInternals().Type != core.ZodTypeString {
+	if keySchema.Internals().Type != core.ZodTypeString {
 		return nil, fmt.Errorf("%w: map with non-string keys", ErrUnrepresentableType)
 	}
 

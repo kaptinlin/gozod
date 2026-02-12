@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Set the global error language to Chinese.
-	gozod.Config(locales.ZhCN())
+	gozod.SetConfig(locales.ZhCN())
 
 	// Define a schema to validate user data.
 	userSchema := gozod.Object(gozod.ObjectSchema{

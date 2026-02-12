@@ -47,8 +47,8 @@ type ZodString[T StringConstraint] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodString[T]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodString[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -399,7 +399,7 @@ func (z *ZodString[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 // Check adds a custom validation function that can push multiple issues.
 func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
 	wrapped := func(payload *core.ParsePayload) {
-		if val, ok := payload.GetValue().(T); ok {
+		if val, ok := payload.Value().(T); ok {
 			fn(val, payload)
 			return
 		}
@@ -408,7 +408,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 		var zero T
 		switch any(zero).(type) {
 		case *string:
-			if strVal, ok := payload.GetValue().(string); ok {
+			if strVal, ok := payload.Value().(string); ok {
 				strCopy := strVal
 				fn(any(&strCopy).(T), payload)
 			}

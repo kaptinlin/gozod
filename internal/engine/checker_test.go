@@ -27,8 +27,8 @@ func TestRunChecks(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.GetIssues()))
+		if len(result.Issues()) != 0 {
+			t.Errorf("Expected no issues, got %d", len(result.Issues()))
 		}
 	})
 
@@ -67,7 +67,7 @@ func TestRunChecks(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) == 0 {
+		if len(result.Issues()) == 0 {
 			t.Error("Expected validation issues, got none")
 		}
 	})
@@ -110,8 +110,8 @@ func TestRunChecksOnValue(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.GetIssues()))
+		if len(result.Issues()) != 0 {
+			t.Errorf("Expected no issues, got %d", len(result.Issues()))
 		}
 	})
 
@@ -150,7 +150,7 @@ func TestRunChecksOnValue(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) == 0 {
+		if len(result.Issues()) == 0 {
 			t.Error("Expected validation issues, got none")
 		}
 	})
@@ -167,7 +167,7 @@ func TestRunChecksOnValue(t *testing.T) {
 
 	t.Run("empty checks", func(t *testing.T) {
 		payload := core.NewParsePayload("initial")
-		initialIssues := len(payload.GetIssues())
+		initialIssues := len(payload.Issues())
 
 		result := RunChecksOnValue("test", []core.ZodCheck{}, payload)
 
@@ -175,7 +175,7 @@ func TestRunChecksOnValue(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) != initialIssues {
+		if len(result.Issues()) != initialIssues {
 			t.Error("Expected no new issues for empty checks")
 		}
 	})
@@ -199,11 +199,11 @@ func TestExecuteChecks(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) == 0 {
+		if len(result.Issues()) == 0 {
 			t.Fatal("Expected validation issues")
 		}
 
-		issue := result.GetIssues()[0]
+		issue := result.Issues()[0]
 		if issue.Message != "Custom error message" {
 			t.Errorf("Expected custom error message, got %s", issue.Message)
 		}
@@ -230,7 +230,7 @@ func TestExecuteChecks(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		issues := result.GetIssues()
+		issues := result.Issues()
 		if len(issues) == 0 {
 			t.Fatal("Expected at least one issue")
 		}
@@ -259,7 +259,7 @@ func TestExecuteChecks(t *testing.T) {
 		}
 
 		// Should have issues from all checks
-		if len(result.GetIssues()) <= 1 {
+		if len(result.Issues()) <= 1 {
 			t.Error("Expected multiple issues from checks")
 		}
 	})
@@ -282,8 +282,8 @@ func TestExecuteChecks(t *testing.T) {
 			t.Fatal("Expected result, got nil")
 		}
 
-		if len(result.GetIssues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.GetIssues()))
+		if len(result.Issues()) != 0 {
+			t.Errorf("Expected no issues, got %d", len(result.Issues()))
 		}
 	})
 }

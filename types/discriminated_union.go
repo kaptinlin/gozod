@@ -44,8 +44,8 @@ type ZodDiscriminatedUnion[T any, R any] struct {
 	internals *ZodDiscriminatedUnionInternals
 }
 
-// GetInternals returns the internal state for framework usage.
-func (z *ZodDiscriminatedUnion[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state for framework usage.
+func (z *ZodDiscriminatedUnion[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -424,7 +424,7 @@ func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([
 		return nil, ErrSchemaIsNil
 	}
 
-	internals := schema.GetInternals()
+	internals := schema.Internals()
 	if internals == nil {
 		return nil, ErrSchemaInternalsIsNil
 	}
@@ -444,9 +444,9 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	}
 
 	if s, ok := schema.(interface {
-		GetInternals() *core.ZodTypeInternals
+		Internals() *core.ZodTypeInternals
 	}); ok {
-		if internals := s.GetInternals(); internals != nil {
+		if internals := s.Internals(); internals != nil {
 			values := extractDiscriminatorFromInternals(internals, discriminatorField)
 			if len(values) > 0 {
 				return values, nil
@@ -459,7 +459,7 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	}); ok {
 		shape := s.Shape()
 		if fieldSchema, exists := shape[discriminatorField]; exists {
-			if fi := fieldSchema.GetInternals(); fi != nil {
+			if fi := fieldSchema.Internals(); fi != nil {
 				values := extractDiscriminatorFromInternals(fi, discriminatorField)
 				if len(values) > 0 {
 					return values, nil
@@ -473,7 +473,7 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	}); ok {
 		shape := s.Shape()
 		if fieldSchema, exists := shape[discriminatorField]; exists {
-			if fi := fieldSchema.GetInternals(); fi != nil {
+			if fi := fieldSchema.Internals(); fi != nil {
 				values := extractDiscriminatorFromInternals(fi, discriminatorField)
 				if len(values) > 0 {
 					return values, nil

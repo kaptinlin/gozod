@@ -43,8 +43,8 @@ type ZodMap[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodMap[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodMap[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -722,7 +722,7 @@ func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMa
 // Check adds a custom validation function that can report multiple issues.
 func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -732,7 +732,7 @@ func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 		zeroTyp := reflect.TypeOf(zero)
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
 			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				ptr := reflect.New(elemTyp)
 				ptr.Elem().Set(valRV)

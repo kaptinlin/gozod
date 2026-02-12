@@ -16,7 +16,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 	t.Run("single value literal", func(t *testing.T) {
 		schema := Literal("hello")
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeLiteral, schema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeLiteral, schema.Internals().Type)
 
 		// Valid input
 		result, err := schema.ParseAny("hello")
@@ -128,7 +128,7 @@ func TestLiteral_BasicFunctionality(t *testing.T) {
 		schema := Literal("valid", core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeLiteral, schema.GetInternals().Type)
+		assert.Equal(t, core.ZodTypeLiteral, schema.Internals().Type)
 
 		_, err := schema.ParseAny("invalid")
 		assert.Error(t, err)

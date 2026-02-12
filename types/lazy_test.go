@@ -992,7 +992,7 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 			return originalString
 		})
 
-		// GetInnerSchema returns the original typed schema
+		// InnerSchema returns the original typed schema
 		innerSchema := schema.GetInnerSchema()
 		assert.Equal(t, originalString, innerSchema)
 
@@ -1030,7 +1030,7 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 			return String()
 		})
 
-		// GetInnerSchema calls the getter function each time, so it's not cached
+		// InnerSchema calls the getter function each time, so it's not cached
 		// This is different from the internal schema caching in Parse operations
 		inner1 := schema.GetInnerSchema()
 		assert.NotNil(t, inner1)
@@ -1039,7 +1039,7 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 		// Second access calls getter again (this is expected behavior)
 		inner2 := schema.GetInnerSchema()
 		assert.NotNil(t, inner2)
-		assert.Equal(t, 2, evaluationCount, "GetInnerSchema calls getter each time")
+		assert.Equal(t, 2, evaluationCount, "InnerSchema calls getter each time")
 
 		// Parse operations also trigger getter calls in the current implementation
 		_, err := schema.Parse("hello")

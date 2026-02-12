@@ -26,8 +26,8 @@ type (
 
 // Global configuration functions
 var (
+	SetConfig = core.SetConfig
 	Config    = core.Config
-	GetConfig = core.GetConfig
 )
 
 // Validation check aliases

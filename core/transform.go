@@ -41,7 +41,7 @@ type ZodTransform[In, Out any] struct {
 // Parse validates input with the source schema, then applies the transformation.
 // Default/DefaultFunc values skip transformation completely (Zod v4 semantics).
 func (z *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (Out, error) {
-	sourceInternals := z.source.GetInternals()
+	sourceInternals := z.source.Internals()
 	isDefaultShortCircuit := isNilInput(input) &&
 		(sourceInternals.DefaultValue != nil || sourceInternals.DefaultFunc != nil)
 
@@ -85,8 +85,8 @@ func (z *ZodTransform[In, Out]) ParseAny(input any, ctx ...*ParseContext) (any, 
 	return z.Parse(input, ctx...)
 }
 
-// GetInternals returns the schema's internal state.
-func (z *ZodTransform[In, Out]) GetInternals() *ZodTypeInternals {
+// Internals returns the schema's internal state.
+func (z *ZodTransform[In, Out]) Internals() *ZodTypeInternals {
 	return z.internals
 }
 
@@ -133,8 +133,8 @@ func (z *ZodPipe[In, Out]) MustParse(input any, ctx ...*ParseContext) Out {
 	return result
 }
 
-// GetInternals returns the schema's internal state.
-func (z *ZodPipe[In, Out]) GetInternals() *ZodTypeInternals {
+// Internals returns the schema's internal state.
+func (z *ZodPipe[In, Out]) Internals() *ZodTypeInternals {
 	return z.internals
 }
 
@@ -150,13 +150,14 @@ func (z *ZodPipe[In, Out]) IsNilable() bool {
 
 // NewZodTransform creates a new transformation schema.
 func NewZodTransform[In, Out any](source ZodType[In], wrapperFn func(In, *RefinementContext) (Out, error)) *ZodTransform[In, Out] {
-	internals := source.GetInternals().Clone()
+	internals := source.Internals().Clone()
 	internals.Type = ZodTypeTransform
 	internals.SetTransform(func(data any, ctx *RefinementContext) (any, error) {
 		if typedData, ok := data.(In); ok {
 			return wrapperFn(typedData, ctx)
 		}
-		return nil, fmt.Errorf("expected %T: %w", *new(In), ErrInvalidTransformType)
+		var zero In
+		return nil, fmt.Errorf("expected %T: %w", zero, ErrInvalidTransformType)
 	})
 	return &ZodTransform[In, Out]{
 		source:    source,
@@ -165,8 +166,8 @@ func NewZodTransform[In, Out any](source ZodType[In], wrapperFn func(In, *Refine
 	}
 }
 
-// GetInner returns the input schema for the transformation.
-func (z *ZodTransform[In, Out]) GetInner() ZodSchema {
+// Inner returns the input schema for the transformation.
+func (z *ZodTransform[In, Out]) Inner() ZodSchema {
 	if schema, ok := z.source.(ZodSchema); ok {
 		return schema
 	}
@@ -175,7 +176,7 @@ func (z *ZodTransform[In, Out]) GetInner() ZodSchema {
 
 // NewZodPipe creates a new pipeline schema.
 func NewZodPipe[In, Out any](source ZodType[In], target ZodType[any], targetFn func(In, *ParseContext) (Out, error)) *ZodPipe[In, Out] {
-	internals := source.GetInternals().Clone()
+	internals := source.Internals().Clone()
 	internals.Type = ZodTypePipe
 	return &ZodPipe[In, Out]{
 		source:    source,
@@ -185,16 +186,16 @@ func NewZodPipe[In, Out any](source ZodType[In], target ZodType[any], targetFn f
 	}
 }
 
-// GetInner returns the input (source) schema.
-func (z *ZodPipe[In, Out]) GetInner() ZodSchema {
+// Inner returns the input (source) schema.
+func (z *ZodPipe[In, Out]) Inner() ZodSchema {
 	if s, ok := z.source.(ZodSchema); ok {
 		return s
 	}
 	return nil
 }
 
-// GetOutput returns the output (target) schema.
-func (z *ZodPipe[In, Out]) GetOutput() ZodSchema {
+// Output returns the output (target) schema.
+func (z *ZodPipe[In, Out]) Output() ZodSchema {
 	if t, ok := z.target.(ZodSchema); ok {
 		return t
 	}

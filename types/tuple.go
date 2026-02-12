@@ -50,8 +50,8 @@ type ZodTuple[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals exposes internal state for framework usage.
-func (z *ZodTuple[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals exposes internal state for framework usage.
+func (z *ZodTuple[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -495,7 +495,7 @@ func convertToTupleType[T any, R any](input T) (R, bool) {
 func calculateRequiredCount(items []core.ZodSchema) int {
 	lastRequired := -1
 	for i := len(items) - 1; i >= 0; i-- {
-		if !items[i].GetInternals().IsOptional() {
+		if !items[i].Internals().IsOptional() {
 			lastRequired = i
 			break
 		}

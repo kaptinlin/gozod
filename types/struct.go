@@ -67,8 +67,8 @@ type ZodStruct[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals exposes internal state for framework usage
-func (z *ZodStruct[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals exposes internal state for framework usage
+func (z *ZodStruct[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -1303,7 +1303,7 @@ func (z *ZodStruct[T, R]) isFieldOptional(schema any, fieldName string) bool {
 	}
 
 	// Try to get internals to check if optional
-	if internalsMethod := schemaValue.MethodByName("GetInternals"); internalsMethod.IsValid() {
+	if internalsMethod := schemaValue.MethodByName("Internals"); internalsMethod.IsValid() {
 		results := internalsMethod.Call(nil)
 		if len(results) > 0 {
 			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
@@ -1433,7 +1433,7 @@ func StructPtr[T any](params ...any) *ZodStruct[T, *T] {
 func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodStruct[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
 		// Attempt direct type assertion first.
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -1444,7 +1444,7 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
 			// zeroTyp is *T, so elemTyp should be T
 			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				// Create a new pointer to the value so it matches R
 				ptr := reflect.New(elemTyp)

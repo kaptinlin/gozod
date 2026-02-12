@@ -59,8 +59,8 @@ type ZodRecord[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodRecord[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodRecord[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -701,7 +701,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 		if !isPartial { // Exhaustiveness check for non-partial records.
 			valueTypeName := core.ZodTypeAny
 			if valType, ok := z.internals.ValueType.(core.ZodType[any]); ok {
-				valueTypeName = valType.GetInternals().Type
+				valueTypeName = valType.Internals().Type
 			}
 			for _, k := range allowedKeys {
 				if !seenKeys[k] {
@@ -764,7 +764,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 
 			// Pre-emptive check for obviously wrong types for numeric schemas to prevent panics.
 			if vs, ok := z.internals.ValueType.(core.ZodType[any]); ok {
-				internals := vs.GetInternals()
+				internals := vs.Internals()
 				if (internals.Type == core.ZodTypeInt || internals.Type == core.ZodTypeFloat) && !reflectx.IsNumeric(val) {
 					return nil, issues.CreateInvalidTypeError(core.ZodTypeFloat, val, ctx)
 				}
@@ -779,7 +779,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 
 	if len(rawIssues) > 0 {
 		finalizedIssues := make([]core.ZodIssue, len(rawIssues))
-		config := core.GetConfig()
+		config := core.Config()
 		for i, raw := range rawIssues {
 			finalizedIssues[i] = issues.FinalizeIssue(raw, ctx, config)
 		}
@@ -797,8 +797,8 @@ func isNumericKeySchema(keySchema any) bool {
 	}
 
 	// Try to get internals via interface
-	if zt, ok := keySchema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
-		t := zt.GetInternals().Type
+	if zt, ok := keySchema.(interface{ Internals() *core.ZodTypeInternals }); ok {
+		t := zt.Internals().Type
 		switch t { //nolint:exhaustive // only checking numeric types
 		case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64,
 			core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64, core.ZodTypeUintptr,
@@ -824,12 +824,12 @@ func convertToSchemaNumericType(floatValue float64, keySchema any) any {
 		return floatValue
 	}
 
-	zt, ok := keySchema.(interface{ GetInternals() *core.ZodTypeInternals })
+	zt, ok := keySchema.(interface{ Internals() *core.ZodTypeInternals })
 	if !ok {
 		return floatValue
 	}
 
-	t := zt.GetInternals().Type
+	t := zt.Internals().Type
 
 	// For integer types, check if value is actually an integer
 	isInt := floatValue == float64(int64(floatValue))
@@ -1192,7 +1192,7 @@ func RecordTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *Zo
 func (z *ZodRecord[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodRecord[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
 		// Try direct assertion.
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -1202,7 +1202,7 @@ func (z *ZodRecord[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		zeroTyp := reflect.TypeOf(zero)
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
 			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				ptr := reflect.New(elemTyp)
 				ptr.Elem().Set(valRV)

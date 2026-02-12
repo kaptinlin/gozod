@@ -36,7 +36,7 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 		assert.Equal(t, core.ZodTypeNumber, finalIssue.Received)
 
 		// Verify type-specific accessors work
-		expected, ok := finalIssue.GetExpected()
+		expected, ok := finalIssue.ExpectedType()
 		require.True(t, ok)
 		assert.Equal(t, core.ZodTypeString, expected)
 	})

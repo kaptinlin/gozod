@@ -5,12 +5,11 @@ import (
 	"testing"
 )
 
-func TestConfig(t *testing.T) {
-	// Test setting config
+func TestSetConfig(t *testing.T) {
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 	localeErr := func(issue ZodRawIssue) string { return "locale" }
 
-	config := Config(&ZodConfig{
+	config := SetConfig(&ZodConfig{
 		CustomError: customErr,
 		LocaleError: localeErr,
 	})
@@ -22,8 +21,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Expected LocaleError to be set")
 	}
 
-	// Test getting config
-	retrieved := GetConfig()
+	retrieved := Config()
 	if retrieved.CustomError == nil {
 		t.Error("Expected retrieved CustomError to be set")
 	}
@@ -31,8 +29,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Expected retrieved LocaleError to be set")
 	}
 
-	// Test resetting config
-	reset := Config(nil)
+	reset := SetConfig(nil)
 	if reset.CustomError != nil {
 		t.Error("Expected CustomError to be nil after reset")
 	}
@@ -41,28 +38,23 @@ func TestConfig(t *testing.T) {
 	}
 }
 
-func TestConfigConcurrent(t *testing.T) {
+func TestSetConfigConcurrent(t *testing.T) {
 	t.Parallel()
-
-	// Reset to clean state
-	Config(nil)
+	SetConfig(nil)
 
 	var wg sync.WaitGroup
 	iterations := 100
 
-	// Concurrent readers
 	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				cfg := GetConfig()
-				_ = cfg // Use the config
+				_ = Config()
 			}
 		}()
 	}
 
-	// Concurrent writers
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 	localeErr := func(issue ZodRawIssue) string { return "locale" }
 
@@ -71,7 +63,7 @@ func TestConfigConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				Config(&ZodConfig{
+				SetConfig(&ZodConfig{
 					CustomError: customErr,
 					LocaleError: localeErr,
 				})
@@ -79,16 +71,15 @@ func TestConfigConcurrent(t *testing.T) {
 		}()
 	}
 
-	// Mixed readers and writers
 	for range 5 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := range iterations {
 				if j%2 == 0 {
-					GetConfig()
+					Config()
 				} else {
-					Config(&ZodConfig{CustomError: customErr})
+					SetConfig(&ZodConfig{CustomError: customErr})
 				}
 			}
 		}()
@@ -97,22 +88,19 @@ func TestConfigConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestConfigPartialUpdate(t *testing.T) {
-	// Reset to clean state
-	Config(nil)
+func TestSetConfigPartialUpdate(t *testing.T) {
+	SetConfig(nil)
 
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 	localeErr := func(issue ZodRawIssue) string { return "locale" }
 
-	// Set both
-	Config(&ZodConfig{
+	SetConfig(&ZodConfig{
 		CustomError: customErr,
 		LocaleError: localeErr,
 	})
 
-	// Update only CustomError (should preserve LocaleError)
 	newCustomErr := func(issue ZodRawIssue) string { return "new" }
-	result := Config(&ZodConfig{
+	result := SetConfig(&ZodConfig{
 		CustomError: newCustomErr,
 	})
 
@@ -123,49 +111,48 @@ func TestConfigPartialUpdate(t *testing.T) {
 		t.Error("Expected LocaleError to be preserved")
 	}
 
-	// Verify GetConfig returns the same
-	retrieved := GetConfig()
+	retrieved := Config()
 	if retrieved.CustomError == nil {
-		t.Error("Expected CustomError to be present in GetConfig")
+		t.Error("Expected CustomError to be present in Config")
 	}
 	if retrieved.LocaleError == nil {
-		t.Error("Expected LocaleError to be preserved in GetConfig")
+		t.Error("Expected LocaleError to be preserved in Config")
 	}
 }
 
-func BenchmarkGetConfig(b *testing.B) {
+func BenchmarkConfig(b *testing.B) {
 	customErr := func(issue ZodRawIssue) string { return "custom" }
-	Config(&ZodConfig{CustomError: customErr})
+	SetConfig(&ZodConfig{CustomError: customErr})
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_ = GetConfig()
+		_ = Config()
 	}
 }
 
-func BenchmarkGetConfigParallel(b *testing.B) {
+func BenchmarkConfigParallel(b *testing.B) {
 	customErr := func(issue ZodRawIssue) string { return "custom" }
-	Config(&ZodConfig{CustomError: customErr})
+	SetConfig(&ZodConfig{CustomError: customErr})
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_ = GetConfig()
+			_ = Config()
 		}
 	})
 }
 
-func BenchmarkConfig(b *testing.B) {
+func BenchmarkSetConfig(b *testing.B) {
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
-		Config(&ZodConfig{CustomError: customErr})
+		SetConfig(&ZodConfig{CustomError: customErr})
 	}
 }

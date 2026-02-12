@@ -16,7 +16,7 @@ import (
 // newNetworkSchema creates a network schema by adding a check to a base string schema.
 // This eliminates repeated clone-addCheck-wrap boilerplate across all network types.
 func newNetworkSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
-	in := base.GetInternals().Clone()
+	in := base.Internals().Clone()
 	in.AddCheck(check)
 	return base.withInternals(in)
 }
@@ -444,56 +444,56 @@ func E164Ptr(params ...any) *ZodE164[*string] {
 // CoercedIPv4 creates a coerced IPv4 schema that attempts string conversion.
 func CoercedIPv4(params ...any) *ZodIPv4[string] {
 	schema := IPv4(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedIPv6 creates a coerced IPv6 schema that attempts string conversion.
 func CoercedIPv6(params ...any) *ZodIPv6[string] {
 	schema := IPv6(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedCIDRv4 creates a coerced CIDRv4 schema that attempts string conversion.
 func CoercedCIDRv4(params ...any) *ZodCIDRv4[string] {
 	schema := CIDRv4(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedCIDRv6 creates a coerced CIDRv6 schema that attempts string conversion.
 func CoercedCIDRv6(params ...any) *ZodCIDRv6[string] {
 	schema := CIDRv6(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedURL creates a coerced URL schema that attempts string conversion.
 func CoercedURL(params ...any) *ZodURL[string] {
 	schema := URL(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedHostname creates a coerced hostname schema that attempts string conversion.
 func CoercedHostname(params ...any) *ZodHostname[string] {
 	schema := Hostname(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedMAC creates a coerced MAC schema that attempts string conversion.
 func CoercedMAC(params ...any) *ZodMAC[string] {
 	schema := MAC(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 
 // CoercedE164 creates a coerced E164 schema that attempts string conversion.
 func CoercedE164(params ...any) *ZodE164[string] {
 	schema := E164(params...)
-	schema.GetInternals().Coerce = true
+	schema.Internals().Coerce = true
 	return schema
 }
 

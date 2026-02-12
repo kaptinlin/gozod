@@ -10,13 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Basic functionality tests
-// =============================================================================
-
 func TestBigInt_BasicFunctionality(t *testing.T) {
 	t.Run("valid big.Int inputs", func(t *testing.T) {
-		schema := BigInt()
+		s := BigInt()
 
 		tests := []struct {
 			name  string
@@ -29,82 +25,63 @@ func TestBigInt_BasicFunctionality(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
+				got, err := s.Parse(tt.input)
 				require.NoError(t, err)
-				assert.Equal(t, tt.input, result)
+				assert.Equal(t, tt.input, got)
 			})
 		}
 	})
 
 	t.Run("invalid type inputs", func(t *testing.T) {
-		schema := BigInt()
-
+		s := BigInt()
 		for _, input := range []any{
 			"not a bigint", 123, 3.14, []byte{1, 2, 3}, nil,
 		} {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "Expected error for input: %v", input)
+			_, err := s.Parse(input)
+			assert.Error(t, err, "Parse(%v) = nil error, want error", input)
 		}
 	})
 
-	t.Run("Parse and MustParse methods", func(t *testing.T) {
-		schema := BigInt()
-		bigVal := big.NewInt(999)
+	t.Run("Parse and MustParse", func(t *testing.T) {
+		s := BigInt()
+		v := big.NewInt(999)
 
-		// Test Parse method
-		result, err := schema.Parse(bigVal)
+		got, err := s.Parse(v)
 		require.NoError(t, err)
-		assert.Equal(t, bigVal, result)
+		assert.Equal(t, v, got)
 
-		// Test MustParse method
-		mustResult := schema.MustParse(bigVal)
-		assert.Equal(t, bigVal, mustResult)
-
-		// Test panic on invalid input
-		assert.Panics(t, func() {
-			schema.MustParse("invalid")
-		})
+		assert.Equal(t, v, s.MustParse(v))
+		assert.Panics(t, func() { s.MustParse("invalid") })
 	})
 }
 
-// =============================================================================
-// Type safety tests
-// =============================================================================
-
 func TestBigInt_TypeSafety(t *testing.T) {
 	t.Run("BigInt returns *big.Int type", func(t *testing.T) {
-		schema := BigInt()
-		require.NotNil(t, schema)
-
-		bigVal := big.NewInt(42)
-		result, err := schema.Parse(bigVal)
+		s := BigInt()
+		v := big.NewInt(42)
+		got, err := s.Parse(v)
 		require.NoError(t, err)
-		assert.Equal(t, bigVal, result)
-		assert.IsType(t, (*big.Int)(nil), result) // Ensure type is *big.Int
+		assert.Equal(t, v, got)
+		assert.IsType(t, (*big.Int)(nil), got)
 	})
 
 	t.Run("BigIntPtr returns **big.Int type", func(t *testing.T) {
-		schema := BigIntPtr()
-		require.NotNil(t, schema)
-
-		bigVal := big.NewInt(42)
-		result, err := schema.Parse(bigVal)
+		s := BigIntPtr()
+		v := big.NewInt(42)
+		got, err := s.Parse(v)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, bigVal, *result)
-		assert.IsType(t, (**big.Int)(nil), result) // Ensure type is **big.Int
+		require.NotNil(t, got)
+		assert.Equal(t, v, *got)
+		assert.IsType(t, (**big.Int)(nil), got)
 	})
 
 	t.Run("MustParse type safety", func(t *testing.T) {
-		bigVal := big.NewInt(123)
+		v := big.NewInt(123)
 
-		// Test *big.Int type
-		bigSchema := BigInt()
-		result := bigSchema.MustParse(bigVal)
-		assert.IsType(t, (*big.Int)(nil), result)
-		assert.Equal(t, bigVal, result)
+		got := BigInt().MustParse(v)
+		assert.IsType(t, (*big.Int)(nil), got)
+		assert.Equal(t, v, got)
 
-		// Test **big.Int type
 		ptrSchema := BigIntPtr().Nilable().Overwrite(func(bi **big.Int) **big.Int {
 			if bi == nil || *bi == nil {
 				return nil
@@ -112,654 +89,490 @@ func TestBigInt_TypeSafety(t *testing.T) {
 			abs := new(big.Int).Abs(*bi)
 			return &abs
 		})
-		ptrResult := ptrSchema.MustParse(bigVal)
-		assert.IsType(t, (**big.Int)(nil), ptrResult)
-		require.NotNil(t, ptrResult)
-		assert.Equal(t, bigVal, *ptrResult)
+		ptrGot := ptrSchema.MustParse(v)
+		assert.IsType(t, (**big.Int)(nil), ptrGot)
+		require.NotNil(t, ptrGot)
+		assert.Equal(t, v, *ptrGot)
 	})
 }
 
-// =============================================================================
-// Modifier methods tests
-// =============================================================================
-
 func TestBigInt_Modifiers(t *testing.T) {
 	t.Run("Optional always returns **big.Int", func(t *testing.T) {
-		// From *big.Int to **big.Int via Optional
-		bigSchema := BigInt()
-		optionalSchema := bigSchema.Optional()
-
-		// Type check: ensure it returns *ZodBigInt[**big.Int]
-		_ = optionalSchema
-
-		// Functionality test
-		bigVal := big.NewInt(42)
-		result, err := optionalSchema.Parse(bigVal)
+		s := BigInt().Optional()
+		v := big.NewInt(42)
+		got, err := s.Parse(v)
 		require.NoError(t, err)
-		assert.IsType(t, (**big.Int)(nil), result)
-		require.NotNil(t, result)
-		assert.Equal(t, bigVal, *result)
+		assert.IsType(t, (**big.Int)(nil), got)
+		require.NotNil(t, got)
+		assert.Equal(t, v, *got)
 	})
 
 	t.Run("Nilable always returns **big.Int", func(t *testing.T) {
-		bigSchema := BigInt()
-		nilableSchema := bigSchema.Nilable()
-
-		_ = nilableSchema
-
-		// Test nil handling
-		result, err := nilableSchema.Parse(nil)
+		s := BigInt().Nilable()
+		got, err := s.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Nil(t, got)
 	})
 
 	t.Run("Default preserves current type", func(t *testing.T) {
-		defaultVal := big.NewInt(100)
-
-		// *big.Int maintains *big.Int
-		bigSchema := BigInt()
-		defaultBigSchema := bigSchema.Default(defaultVal)
-		_ = defaultBigSchema
-
-		// **big.Int maintains **big.Int
-		ptrSchema := BigIntPtr()
-		defaultPtrSchema := ptrSchema.Default(defaultVal)
-		_ = defaultPtrSchema
+		v := big.NewInt(100)
+		_ = BigInt().Default(v)
+		_ = BigIntPtr().Default(v)
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
-		prefaultVal := big.NewInt(50)
-
-		// *big.Int maintains *big.Int
-		bigSchema := BigInt()
-		prefaultBigSchema := bigSchema.Prefault(prefaultVal)
-		_ = prefaultBigSchema
-
-		// **big.Int maintains **big.Int
-		ptrSchema := BigIntPtr()
-		prefaultPtrSchema := ptrSchema.Prefault(prefaultVal)
-		_ = prefaultPtrSchema
+		v := big.NewInt(50)
+		_ = BigInt().Prefault(v)
+		_ = BigIntPtr().Prefault(v)
 	})
 
 	t.Run("Default priority over Prefault", func(t *testing.T) {
-		defaultVal := big.NewInt(100)
-		prefaultVal := big.NewInt(200)
-		schema := BigIntPtr().Min(big.NewInt(150)).Default(defaultVal).Prefault(prefaultVal)
-
-		// Test with nil input - should use default (100), not prefault (200)
-		result, err := schema.Parse(nil)
+		def := big.NewInt(100)
+		s := BigIntPtr().Min(big.NewInt(150)).Default(def).Prefault(big.NewInt(200))
+		got, err := s.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, defaultVal, *result)
+		require.NotNil(t, got)
+		assert.Equal(t, def, *got)
 	})
 
 	t.Run("Default short-circuit bypasses validation", func(t *testing.T) {
-		defaultVal := big.NewInt(5) // This violates Min(10) but should still work
-		schema := BigIntPtr().Min(big.NewInt(10)).Default(defaultVal)
-
-		// Test with nil input - should use default without validation
-		result, err := schema.Parse(nil)
+		def := big.NewInt(5)
+		s := BigIntPtr().Min(big.NewInt(10)).Default(def)
+		got, err := s.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, defaultVal, *result)
+		require.NotNil(t, got)
+		assert.Equal(t, def, *got)
 	})
 
 	t.Run("Prefault only triggers on nil input", func(t *testing.T) {
-		prefaultVal := big.NewInt(100)
-		schema := BigInt().Min(big.NewInt(50)).Prefault(prefaultVal)
+		pf := big.NewInt(100)
+		s := BigInt().Min(big.NewInt(50)).Prefault(pf)
 
-		// Test with nil input - should use prefault
-		result, err := schema.Parse(nil)
+		got, err := s.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, prefaultVal, result)
+		assert.Equal(t, pf, got)
 
-		// Test with invalid non-nil input - should return error, not prefault
-		invalidVal := big.NewInt(10) // Less than Min(50)
-		_, err = schema.Parse(invalidVal)
+		_, err = s.Parse(big.NewInt(10))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Too small: expected bigint to be at least 50")
 	})
 
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		prefaultVal := big.NewInt(5) // This violates Min(10)
-		schema := BigIntPtr().Min(big.NewInt(10)).Prefault(prefaultVal)
-
-		// Test with nil input - prefault should fail validation
-		_, err := schema.Parse(nil)
+		s := BigIntPtr().Min(big.NewInt(10)).Prefault(big.NewInt(5))
+		_, err := s.Parse(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Too small: expected bigint to be at least 10")
 	})
 
 	t.Run("Prefault error handling", func(t *testing.T) {
-		prefaultVal := big.NewInt(5) // This violates Min(10)
-		schema := BigInt().Min(big.NewInt(10)).Prefault(prefaultVal)
-
-		// Test with nil input - should return validation error for prefault value
-		_, err := schema.Parse(nil)
+		s := BigInt().Min(big.NewInt(10)).Prefault(big.NewInt(5))
+		_, err := s.Parse(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Too small: expected bigint to be at least 10")
 	})
 
 	t.Run("BigIntPtr Prefault only on nil input", func(t *testing.T) {
-		prefaultVal := big.NewInt(100)
-		schema := BigIntPtr().Min(big.NewInt(50)).Prefault(prefaultVal)
+		pf := big.NewInt(100)
+		s := BigIntPtr().Min(big.NewInt(50)).Prefault(pf)
 
-		// Test with nil input - should use prefault
-		result, err := schema.Parse(nil)
+		got, err := s.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, prefaultVal, *result)
+		require.NotNil(t, got)
+		assert.Equal(t, pf, *got)
 
-		// Test with invalid non-nil input - should return error, not prefault
-		invalidVal := big.NewInt(10) // Less than Min(50)
-		_, err = schema.Parse(invalidVal)
+		_, err = s.Parse(big.NewInt(10))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Too small: expected bigint to be at least 50")
 	})
 }
 
-// =============================================================================
-// Validation methods tests
-// =============================================================================
-
 func TestBigInt_Validations(t *testing.T) {
 	t.Run("Min validation", func(t *testing.T) {
-		schema := BigInt().Min(big.NewInt(10))
-
+		s := BigInt().Min(big.NewInt(10))
 		tests := []struct {
 			name    string
 			input   int64
 			wantErr bool
 		}{
-			{name: "above minimum", input: 15, wantErr: false},
-			{name: "at minimum", input: 10, wantErr: false},
+			{name: "above minimum", input: 15},
+			{name: "at minimum", input: 10},
 			{name: "below minimum", input: 5, wantErr: true},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(big.NewInt(tt.input))
+				got, err := s.Parse(big.NewInt(tt.input))
 				if tt.wantErr {
 					assert.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					assert.Equal(t, big.NewInt(tt.input), result)
+					assert.Equal(t, big.NewInt(tt.input), got)
 				}
 			})
 		}
 	})
 
 	t.Run("Max validation", func(t *testing.T) {
-		schema := BigInt().Max(big.NewInt(100))
-
+		s := BigInt().Max(big.NewInt(100))
 		tests := []struct {
 			name    string
 			input   int64
 			wantErr bool
 		}{
-			{name: "below maximum", input: 50, wantErr: false},
-			{name: "at maximum", input: 100, wantErr: false},
+			{name: "below maximum", input: 50},
+			{name: "at maximum", input: 100},
 			{name: "above maximum", input: 150, wantErr: true},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(big.NewInt(tt.input))
+				got, err := s.Parse(big.NewInt(tt.input))
 				if tt.wantErr {
 					assert.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					assert.Equal(t, big.NewInt(tt.input), result)
+					assert.Equal(t, big.NewInt(tt.input), got)
 				}
 			})
 		}
 	})
 
 	t.Run("Positive validation", func(t *testing.T) {
-		schema := BigInt().Positive()
-
+		s := BigInt().Positive()
 		tests := []struct {
 			name    string
 			input   int64
 			wantErr bool
 		}{
-			{name: "positive", input: 42, wantErr: false},
+			{name: "positive", input: 42},
 			{name: "zero", input: 0, wantErr: true},
 			{name: "negative", input: -1, wantErr: true},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(big.NewInt(tt.input))
+				got, err := s.Parse(big.NewInt(tt.input))
 				if tt.wantErr {
 					assert.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					assert.Equal(t, big.NewInt(tt.input), result)
+					assert.Equal(t, big.NewInt(tt.input), got)
 				}
 			})
 		}
 	})
 
 	t.Run("Negative validation", func(t *testing.T) {
-		schema := BigInt().Negative()
-
+		s := BigInt().Negative()
 		tests := []struct {
 			name    string
 			input   int64
 			wantErr bool
 		}{
-			{name: "negative", input: -42, wantErr: false},
+			{name: "negative", input: -42},
 			{name: "zero", input: 0, wantErr: true},
 			{name: "positive", input: 1, wantErr: true},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(big.NewInt(tt.input))
+				got, err := s.Parse(big.NewInt(tt.input))
 				if tt.wantErr {
 					assert.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					assert.Equal(t, big.NewInt(tt.input), result)
+					assert.Equal(t, big.NewInt(tt.input), got)
 				}
 			})
 		}
 	})
 }
 
-// =============================================================================
-// Coercion tests
-// =============================================================================
-
 func TestBigInt_Coercion(t *testing.T) {
 	t.Run("basic coercion", func(t *testing.T) {
-		schema := CoercedBigInt()
-
+		s := CoercedBigInt()
 		tests := []struct {
-			name     string
-			input    any
-			expected string
+			name  string
+			input any
+			want  string
 		}{
-			{name: "string", input: "42", expected: "42"},
-			{name: "int", input: int(42), expected: "42"},
-			{name: "int64", input: int64(84), expected: "84"},
-			{name: "uint", input: uint(100), expected: "100"},
+			{name: "string", input: "42", want: "42"},
+			{name: "int", input: int(42), want: "42"},
+			{name: "int64", input: int64(84), want: "84"},
+			{name: "uint", input: uint(100), want: "100"},
 		}
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				result, err := schema.Parse(tt.input)
+				got, err := s.Parse(tt.input)
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result.String())
+				assert.Equal(t, tt.want, got.String())
 			})
 		}
 	})
 
 	t.Run("large number coercion", func(t *testing.T) {
-		schema := CoercedBigInt()
-		largeNumber := "123456789012345678901234567890"
-		result, err := schema.Parse(largeNumber)
+		s := CoercedBigInt()
+		want := "123456789012345678901234567890"
+		got, err := s.Parse(want)
 		require.NoError(t, err)
-		assert.Equal(t, largeNumber, result.String())
+		assert.Equal(t, want, got.String())
 	})
 
 	t.Run("coercion with validation", func(t *testing.T) {
-		schema := CoercedBigInt().Min(big.NewInt(5))
+		s := CoercedBigInt().Min(big.NewInt(5))
 
-		// Coercion then validation passes
-		result, err := schema.Parse("10")
+		got, err := s.Parse("10")
 		require.NoError(t, err)
-		assert.Equal(t, "10", result.String())
+		assert.Equal(t, "10", got.String())
 
-		// Coercion then validation fails
-		_, err = schema.Parse("3")
+		_, err = s.Parse("3")
 		assert.Error(t, err)
 	})
 }
 
-// =============================================================================
-// Chaining and Transform tests
-// =============================================================================
-
 func TestBigInt_Chaining(t *testing.T) {
 	t.Run("chain multiple validations", func(t *testing.T) {
-		schema := BigInt().
-			Min(big.NewInt(10)).
-			Max(big.NewInt(100)).
-			Positive()
+		s := BigInt().Min(big.NewInt(10)).Max(big.NewInt(100)).Positive()
 
-		// Valid value in range
-		result, err := schema.Parse(big.NewInt(50))
+		got, err := s.Parse(big.NewInt(50))
 		require.NoError(t, err)
-		expected := big.NewInt(50)
-		assert.Equal(t, expected, result)
+		assert.Equal(t, big.NewInt(50), got)
 
-		// Invalid: below minimum
-		_, err = schema.Parse(big.NewInt(5))
+		_, err = s.Parse(big.NewInt(5))
 		assert.Error(t, err)
 
-		// Invalid: above maximum
-		_, err = schema.Parse(big.NewInt(150))
+		_, err = s.Parse(big.NewInt(150))
 		assert.Error(t, err)
 	})
 }
 
 func TestBigInt_Transform(t *testing.T) {
 	t.Run("basic transform", func(t *testing.T) {
-		schema := BigInt()
-		transform := schema.Transform(func(val *big.Int, ctx *core.RefinementContext) (any, error) {
-			// Convert to string representation
-			return val.String(), nil
+		tr := BigInt().Transform(func(v *big.Int, _ *core.RefinementContext) (any, error) {
+			return v.String(), nil
 		})
-
-		result, err := transform.Parse(big.NewInt(42))
+		got, err := tr.Parse(big.NewInt(42))
 		require.NoError(t, err)
-		assert.Equal(t, "42", result)
+		assert.Equal(t, "42", got)
 	})
 }
 
-// =============================================================================
-// Overwrite functionality tests
-// =============================================================================
-
 func TestBigInt_Overwrite(t *testing.T) {
 	t.Run("basic transformations", func(t *testing.T) {
-		// Test absolute value transformation
-		absSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		s := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Abs(bi)
 		})
 
-		// Test with positive number
-		positiveInput := big.NewInt(42)
-		result, err := absSchema.Parse(positiveInput)
+		got, err := s.Parse(big.NewInt(42))
 		require.NoError(t, err)
-		assert.Equal(t, int64(42), result.Int64())
+		assert.Equal(t, int64(42), got.Int64())
 
-		// Test with negative number
-		negativeInput := big.NewInt(-42)
-		result, err = absSchema.Parse(negativeInput)
+		got, err = s.Parse(big.NewInt(-42))
 		require.NoError(t, err)
-		assert.Equal(t, int64(42), result.Int64())
+		assert.Equal(t, int64(42), got.Int64())
 	})
 
 	t.Run("arithmetic transformations", func(t *testing.T) {
-		// Test multiplication by 2
-		doubleSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		double := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Mul(bi, big.NewInt(2))
 		})
-
-		input := big.NewInt(21)
-		result, err := doubleSchema.Parse(input)
+		got, err := double.Parse(big.NewInt(21))
 		require.NoError(t, err)
-		assert.Equal(t, int64(42), result.Int64())
+		assert.Equal(t, int64(42), got.Int64())
 
-		// Test addition
-		addTenSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		addTen := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Add(bi, big.NewInt(10))
 		})
-
-		input = big.NewInt(5)
-		result, err = addTenSchema.Parse(input)
+		got, err = addTen.Parse(big.NewInt(5))
 		require.NoError(t, err)
-		assert.Equal(t, int64(15), result.Int64())
+		assert.Equal(t, int64(15), got.Int64())
 	})
 
 	t.Run("modular arithmetic", func(t *testing.T) {
-		// Test modulo operation
-		modSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		s := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Mod(bi, big.NewInt(10))
 		})
 
-		input := big.NewInt(123)
-		result, err := modSchema.Parse(input)
+		got, err := s.Parse(big.NewInt(123))
 		require.NoError(t, err)
-		assert.Equal(t, int64(3), result.Int64())
+		assert.Equal(t, int64(3), got.Int64())
 
-		// Test with negative number
-		input = big.NewInt(-17)
-		result, err = modSchema.Parse(input)
+		got, err = s.Parse(big.NewInt(-17))
 		require.NoError(t, err)
-		assert.Equal(t, int64(3), result.Int64()) // Go's mod behavior: -17 % 10 = 3
+		assert.Equal(t, int64(3), got.Int64())
 	})
 
 	t.Run("power and root operations", func(t *testing.T) {
-		// Test square operation
-		squareSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		square := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Mul(bi, bi)
 		})
-
-		input := big.NewInt(7)
-		result, err := squareSchema.Parse(input)
+		got, err := square.Parse(big.NewInt(7))
 		require.NoError(t, err)
-		assert.Equal(t, int64(49), result.Int64())
+		assert.Equal(t, int64(49), got.Int64())
 
-		// Test exponentiation
-		powerSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		cube := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Exp(bi, big.NewInt(3), nil)
 		})
-
-		input = big.NewInt(4)
-		result, err = powerSchema.Parse(input)
+		got, err = cube.Parse(big.NewInt(4))
 		require.NoError(t, err)
-		assert.Equal(t, int64(64), result.Int64())
+		assert.Equal(t, int64(64), got.Int64())
 	})
 
 	t.Run("conditional transformations", func(t *testing.T) {
-		// Test conditional transformation based on value
-		clampSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
-			// Clamp between 0 and 100
+		clamp := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			if bi.Cmp(big.NewInt(0)) < 0 {
 				return big.NewInt(0)
 			}
 			if bi.Cmp(big.NewInt(100)) > 0 {
 				return big.NewInt(100)
 			}
-			return new(big.Int).Set(bi) // Return a copy
+			return new(big.Int).Set(bi)
 		})
 
-		// Test negative value (should be clamped to 0)
-		result, err := clampSchema.Parse(big.NewInt(-10))
+		got, err := clamp.Parse(big.NewInt(-10))
 		require.NoError(t, err)
-		assert.Equal(t, int64(0), result.Int64())
+		assert.Equal(t, int64(0), got.Int64())
 
-		// Test value within range (should remain unchanged)
-		result, err = clampSchema.Parse(big.NewInt(50))
+		got, err = clamp.Parse(big.NewInt(50))
 		require.NoError(t, err)
-		assert.Equal(t, int64(50), result.Int64())
+		assert.Equal(t, int64(50), got.Int64())
 
-		// Test value above range (should be clamped to 100)
-		result, err = clampSchema.Parse(big.NewInt(150))
+		got, err = clamp.Parse(big.NewInt(150))
 		require.NoError(t, err)
-		assert.Equal(t, int64(100), result.Int64())
+		assert.Equal(t, int64(100), got.Int64())
 	})
 
 	t.Run("chaining with validations", func(t *testing.T) {
-		// Test chaining Overwrite with Min validation
-		positiveDoubleSchema := BigInt().
-			Overwrite(func(bi *big.Int) *big.Int {
-				return new(big.Int).Mul(bi, big.NewInt(2))
-			}).
+		s := BigInt().
+			Overwrite(func(bi *big.Int) *big.Int { return new(big.Int).Mul(bi, big.NewInt(2)) }).
 			Min(big.NewInt(10))
 
-		// Test with value that becomes valid after transformation
-		result, err := positiveDoubleSchema.Parse(big.NewInt(7))
+		got, err := s.Parse(big.NewInt(7))
 		require.NoError(t, err)
-		assert.Equal(t, int64(14), result.Int64())
+		assert.Equal(t, int64(14), got.Int64())
 
-		// Test with value that fails validation even after transformation
-		_, err = positiveDoubleSchema.Parse(big.NewInt(2))
+		_, err = s.Parse(big.NewInt(2))
 		assert.Error(t, err)
 	})
 
 	t.Run("multiple overwrite calls", func(t *testing.T) {
-		// Test chaining multiple Overwrite calls
-		multiTransformSchema := BigInt().
-			Overwrite(func(bi *big.Int) *big.Int {
-				return new(big.Int).Abs(bi) // First: get absolute value
-			}).
-			Overwrite(func(bi *big.Int) *big.Int {
-				return new(big.Int).Mul(bi, big.NewInt(3)) // Second: multiply by 3
-			}).
-			Overwrite(func(bi *big.Int) *big.Int {
-				return new(big.Int).Add(bi, big.NewInt(1)) // Third: add 1
-			})
+		s := BigInt().
+			Overwrite(func(bi *big.Int) *big.Int { return new(big.Int).Abs(bi) }).
+			Overwrite(func(bi *big.Int) *big.Int { return new(big.Int).Mul(bi, big.NewInt(3)) }).
+			Overwrite(func(bi *big.Int) *big.Int { return new(big.Int).Add(bi, big.NewInt(1)) })
 
-		// Test with negative input: -5 -> 5 -> 15 -> 16
-		result, err := multiTransformSchema.Parse(big.NewInt(-5))
+		// -5 -> 5 -> 15 -> 16
+		got, err := s.Parse(big.NewInt(-5))
 		require.NoError(t, err)
-		assert.Equal(t, int64(16), result.Int64())
+		assert.Equal(t, int64(16), got.Int64())
 
-		// Test with positive input: 3 -> 3 -> 9 -> 10
-		result, err = multiTransformSchema.Parse(big.NewInt(3))
+		// 3 -> 3 -> 9 -> 10
+		got, err = s.Parse(big.NewInt(3))
 		require.NoError(t, err)
-		assert.Equal(t, int64(10), result.Int64())
+		assert.Equal(t, int64(10), got.Int64())
 	})
 
 	t.Run("large number handling", func(t *testing.T) {
-		// Test with very large numbers
-		largeNumSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
-			// Add a large number
-			large := new(big.Int)
-			large.SetString("999999999999999999999999999999", 10)
+		large := new(big.Int)
+		large.SetString("999999999999999999999999999999", 10)
+		s := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Add(bi, large)
 		})
 
 		input := new(big.Int)
 		input.SetString("123456789012345678901234567890", 10)
-
-		result, err := largeNumSchema.Parse(input)
+		got, err := s.Parse(input)
 		require.NoError(t, err)
 
-		expected := new(big.Int)
-		expected.SetString("1123456789012345678901234567889", 10)
-		assert.Equal(t, 0, result.Cmp(expected))
+		want := new(big.Int)
+		want.SetString("1123456789012345678901234567889", 10)
+		assert.Equal(t, 0, got.Cmp(want))
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
-		// Test that Overwrite preserves the original type
-		bigIntSchema := BigInt()
-		overwriteSchema := bigIntSchema.Overwrite(func(bi *big.Int) *big.Int {
+		base := BigInt()
+		abs := base.Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Abs(bi)
 		})
+		v := big.NewInt(-42)
 
-		// Both should have the same type
-		testValue := big.NewInt(-42)
+		got1, err := base.Parse(v)
+		require.NoError(t, err)
+		got2, err := abs.Parse(v)
+		require.NoError(t, err)
 
-		result1, err1 := bigIntSchema.Parse(testValue)
-		require.NoError(t, err1)
-
-		result2, err2 := overwriteSchema.Parse(testValue)
-		require.NoError(t, err2)
-
-		// Both results should be of type *big.Int
-		assert.IsType(t, (*big.Int)(nil), result1)
-		assert.IsType(t, (*big.Int)(nil), result2)
+		assert.IsType(t, (*big.Int)(nil), got1)
+		assert.IsType(t, (*big.Int)(nil), got2)
 	})
 
 	t.Run("pointer type handling", func(t *testing.T) {
-		// Pointer Overwrite should now work and preserve pointer identity
-		ptrSchema := BigIntPtr().Nilable().Overwrite(func(bi **big.Int) **big.Int {
+		s := BigIntPtr().Nilable().Overwrite(func(bi **big.Int) **big.Int {
 			if bi == nil || *bi == nil {
 				return nil
 			}
-			abs := new(big.Int).Abs(*bi)
-			return &abs
+			a := new(big.Int).Abs(*bi)
+			return &a
 		})
 
-		// Test with non-nil value
-		testValue := big.NewInt(-42)
-		result, err := ptrSchema.Parse(testValue)
+		got, err := s.Parse(big.NewInt(-42))
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.NotNil(t, *result)
-		assert.Equal(t, int64(42), (*result).Int64())
+		require.NotNil(t, got)
+		require.NotNil(t, *got)
+		assert.Equal(t, int64(42), (*got).Int64())
 
-		// Test with nil value
-		result, err = ptrSchema.Parse(nil)
+		got, err = s.Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Nil(t, got)
 	})
 
 	t.Run("coerced bigint overwrite", func(t *testing.T) {
-		// Test with coerced BigInt schema
-		coercedSchema := CoercedBigInt().Overwrite(func(bi *big.Int) *big.Int {
-			// Always return the square of the input
+		s := CoercedBigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Mul(bi, bi)
 		})
 
-		// Test with string input that can be coerced
-		result, err := coercedSchema.Parse("7")
+		got, err := s.Parse("7")
 		require.NoError(t, err)
-		assert.Equal(t, int64(49), result.Int64())
+		assert.Equal(t, int64(49), got.Int64())
 
-		// Test with int input that can be coerced
-		result, err = coercedSchema.Parse(6)
+		got, err = s.Parse(6)
 		require.NoError(t, err)
-		assert.Equal(t, int64(36), result.Int64())
+		assert.Equal(t, int64(36), got.Int64())
 
-		// Test with float input that can be coerced
-		result, err = coercedSchema.Parse(5.0)
+		got, err = s.Parse(5.0)
 		require.NoError(t, err)
-		assert.Equal(t, int64(25), result.Int64())
+		assert.Equal(t, int64(25), got.Int64())
 	})
 
 	t.Run("error handling", func(t *testing.T) {
-		// Test that invalid inputs still produce errors
-		schema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		s := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Abs(bi)
 		})
-
-		// Invalid input should still cause an error
-		_, err := schema.Parse("not a number")
-		assert.Error(t, err)
-
-		_, err = schema.Parse(3.14)
-		assert.Error(t, err)
-
-		_, err = schema.Parse(nil)
-		assert.Error(t, err)
-
-		_, err = schema.Parse([]int{1, 2, 3})
-		assert.Error(t, err)
+		for _, input := range []any{"not a number", 3.14, nil, []int{1, 2, 3}} {
+			_, err := s.Parse(input)
+			assert.Error(t, err, "Parse(%v) = nil error, want error", input)
+		}
 	})
 
 	t.Run("immutability", func(t *testing.T) {
-		// Test that original values are not modified
-		originalValue := big.NewInt(42)
-		originalCopy := new(big.Int).Set(originalValue)
+		orig := big.NewInt(42)
+		cp := new(big.Int).Set(orig)
 
-		negateSchema := BigInt().Overwrite(func(bi *big.Int) *big.Int {
+		s := BigInt().Overwrite(func(bi *big.Int) *big.Int {
 			return new(big.Int).Neg(bi)
 		})
-
-		result, err := negateSchema.Parse(originalValue)
+		got, err := s.Parse(orig)
 		require.NoError(t, err)
-
-		// Result should be negated
-		assert.Equal(t, int64(-42), result.Int64())
-
-		// Original value should remain unchanged
-		assert.Equal(t, 0, originalValue.Cmp(originalCopy))
-		assert.Equal(t, int64(42), originalValue.Int64())
+		assert.Equal(t, int64(-42), got.Int64())
+		assert.Equal(t, 0, orig.Cmp(cp))
 	})
 }
 
-// =============================================================================
-// NonOptional tests
-// =============================================================================
-
 func TestBigInt_NonOptional(t *testing.T) {
-	// basic
-	schema := BigInt().NonOptional()
+	s := BigInt().NonOptional()
 
 	v := big.NewInt(123)
-	r, err := schema.Parse(v)
+	got, err := s.Parse(v)
 	require.NoError(t, err)
-	assert.Equal(t, v, r)
-	assert.IsType(t, (*big.Int)(nil), r)
+	assert.Equal(t, v, got)
+	assert.IsType(t, (*big.Int)(nil), got)
 
-	_, err = schema.Parse(nil)
+	_, err = s.Parse(nil)
 	assert.Error(t, err)
 	var zErr *issues.ZodError
 	if issues.IsZodError(err, &zErr) {
@@ -767,13 +580,10 @@ func TestBigInt_NonOptional(t *testing.T) {
 		assert.Equal(t, core.ZodTypeNonOptional, zErr.Issues[0].Expected)
 	}
 
-	// Optional().NonOptional()
 	chain := BigInt().Optional().NonOptional()
-	_ = chain
 	_, err = chain.Parse(nil)
 	assert.Error(t, err)
 
-	// object embedding
 	obj := Object(map[string]core.ZodSchema{
 		"id": BigInt().Optional().NonOptional(),
 	})
@@ -782,193 +592,151 @@ func TestBigInt_NonOptional(t *testing.T) {
 	_, err = obj.Parse(map[string]any{"id": nil})
 	assert.Error(t, err)
 
-	// BigIntPtr().NonOptional()
-	ptrSchema := BigIntPtr().NonOptional()
-	_ = ptrSchema
+	ps := BigIntPtr().NonOptional()
 	vv := big.NewInt(456)
-	res2, err := ptrSchema.Parse(&vv)
+	got2, err := ps.Parse(&vv)
 	require.NoError(t, err)
-	assert.Equal(t, vv, res2)
-	_, err = ptrSchema.Parse(nil)
+	assert.Equal(t, vv, got2)
+	_, err = ps.Parse(nil)
 	assert.Error(t, err)
 }
 
-// =============================================================================
-// StrictParse and MustStrictParse tests
-// =============================================================================
-
 func TestBigInt_StrictParse(t *testing.T) {
 	t.Run("basic functionality", func(t *testing.T) {
-		schema := BigInt()
+		s := BigInt()
 
-		// Test StrictParse with exact type match
-		bigVal := big.NewInt(12345)
-		result, err := schema.StrictParse(bigVal)
+		v := big.NewInt(12345)
+		got, err := s.StrictParse(v)
 		require.NoError(t, err)
-		assert.Equal(t, bigVal, result)
-		assert.IsType(t, (*big.Int)(nil), result)
+		assert.Equal(t, v, got)
+		assert.IsType(t, (*big.Int)(nil), got)
 
-		// Test StrictParse with negative value
-		negVal := big.NewInt(-9876)
-		negResult, err := schema.StrictParse(negVal)
+		neg, err := s.StrictParse(big.NewInt(-9876))
 		require.NoError(t, err)
-		assert.Equal(t, negVal, negResult)
+		assert.Equal(t, big.NewInt(-9876), neg)
 
-		// Test StrictParse with zero
-		zeroVal := big.NewInt(0)
-		zeroResult, err := schema.StrictParse(zeroVal)
+		zero, err := s.StrictParse(big.NewInt(0))
 		require.NoError(t, err)
-		assert.Equal(t, zeroVal, zeroResult)
+		assert.Equal(t, big.NewInt(0), zero)
 	})
 
 	t.Run("with validation constraints", func(t *testing.T) {
-		schema := BigInt().Refine(func(b *big.Int) bool {
-			return b.Cmp(big.NewInt(100)) >= 0 // Must be >= 100
+		s := BigInt().Refine(func(b *big.Int) bool {
+			return b.Cmp(big.NewInt(100)) >= 0
 		}, "Must be at least 100")
 
-		// Valid case
-		bigVal := big.NewInt(150)
-		result, err := schema.StrictParse(bigVal)
+		got, err := s.StrictParse(big.NewInt(150))
 		require.NoError(t, err)
-		assert.Equal(t, bigVal, result)
+		assert.Equal(t, big.NewInt(150), got)
 
-		// Invalid case - too small
-		smallVal := big.NewInt(50)
-		_, err = schema.StrictParse(smallVal)
+		_, err = s.StrictParse(big.NewInt(50))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Must be at least 100")
 	})
 
 	t.Run("with pointer types", func(t *testing.T) {
-		schema := BigIntPtr()
-		bigVal := big.NewInt(999)
-
-		// Test with valid pointer input
-		result, err := schema.StrictParse(&bigVal)
+		s := BigIntPtr()
+		v := big.NewInt(999)
+		got, err := s.StrictParse(&v)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, bigVal, *result)
-		assert.IsType(t, (**big.Int)(nil), result)
+		require.NotNil(t, got)
+		assert.Equal(t, v, *got)
+		assert.IsType(t, (**big.Int)(nil), got)
 	})
 
 	t.Run("with default values", func(t *testing.T) {
-		defaultVal := big.NewInt(42)
-		schema := BigIntPtr().Default(defaultVal)
-		var nilPtr **big.Int = nil
+		def := big.NewInt(42)
+		s := BigIntPtr().Default(def)
+		var nilPtr **big.Int
 
-		// Test with nil input (should use default)
-		result, err := schema.StrictParse(nilPtr)
+		got, err := s.StrictParse(nilPtr)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, defaultVal, *result)
+		require.NotNil(t, got)
+		assert.Equal(t, def, *got)
 	})
 
 	t.Run("with prefault values", func(t *testing.T) {
-		prefaultVal := big.NewInt(1000)
-		schema := BigIntPtr().Refine(func(b **big.Int) bool {
+		pf := big.NewInt(1000)
+		s := BigIntPtr().Refine(func(b **big.Int) bool {
 			return b != nil && *b != nil && (*b).Cmp(big.NewInt(500)) >= 0
-		}, "Must be at least 500").Prefault(prefaultVal)
-		smallVal := big.NewInt(100) // Too small
+		}, "Must be at least 500").Prefault(pf)
 
-		// Test with validation failure (should NOT use prefault, should return error)
-		_, err := schema.StrictParse(&smallVal)
+		small := big.NewInt(100)
+		_, err := s.StrictParse(&small)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Must be at least 500")
 
-		// Test with nil input (should use prefault)
-		result, err := schema.StrictParse(nil)
+		got, err := s.StrictParse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, prefaultVal, *result)
+		require.NotNil(t, got)
+		assert.Equal(t, pf, *got)
 	})
 
 	t.Run("large numbers", func(t *testing.T) {
-		schema := BigInt()
+		s := BigInt()
 
-		// Test with very large number
-		largeVal := new(big.Int)
-		largeVal.SetString("123456789012345678901234567890", 10)
-		result, err := schema.StrictParse(largeVal)
+		large := new(big.Int)
+		large.SetString("123456789012345678901234567890", 10)
+		got, err := s.StrictParse(large)
 		require.NoError(t, err)
-		assert.Equal(t, largeVal, result)
+		assert.Equal(t, large, got)
 
-		// Test with very large negative number
-		negLargeVal := new(big.Int)
-		negLargeVal.SetString("-987654321098765432109876543210", 10)
-		negResult, err := schema.StrictParse(negLargeVal)
+		negLarge := new(big.Int)
+		negLarge.SetString("-987654321098765432109876543210", 10)
+		got, err = s.StrictParse(negLarge)
 		require.NoError(t, err)
-		assert.Equal(t, negLargeVal, negResult)
+		assert.Equal(t, negLarge, got)
 	})
 }
 
 func TestBigInt_MustStrictParse(t *testing.T) {
 	t.Run("basic functionality", func(t *testing.T) {
-		schema := BigInt()
+		s := BigInt()
 
-		// Test MustStrictParse with valid input
-		bigVal := big.NewInt(54321)
-		result := schema.MustStrictParse(bigVal)
-		assert.Equal(t, bigVal, result)
-		assert.IsType(t, (*big.Int)(nil), result)
+		got := s.MustStrictParse(big.NewInt(54321))
+		assert.Equal(t, big.NewInt(54321), got)
+		assert.IsType(t, (*big.Int)(nil), got)
 
-		// Test MustStrictParse with zero
-		zeroVal := big.NewInt(0)
-		zeroResult := schema.MustStrictParse(zeroVal)
-		assert.Equal(t, zeroVal, zeroResult)
-
-		// Test MustStrictParse with negative value
-		negVal := big.NewInt(-11111)
-		negResult := schema.MustStrictParse(negVal)
-		assert.Equal(t, negVal, negResult)
+		assert.Equal(t, big.NewInt(0), s.MustStrictParse(big.NewInt(0)))
+		assert.Equal(t, big.NewInt(-11111), s.MustStrictParse(big.NewInt(-11111)))
 	})
 
 	t.Run("panic behavior", func(t *testing.T) {
-		schema := BigInt().Refine(func(b *big.Int) bool {
-			return b.Cmp(big.NewInt(1000)) >= 0 // Must be >= 1000
+		s := BigInt().Refine(func(b *big.Int) bool {
+			return b.Cmp(big.NewInt(1000)) >= 0
 		}, "Must be at least 1000")
 
-		// Test panic with validation failure
-		smallVal := big.NewInt(500)
-		assert.Panics(t, func() {
-			schema.MustStrictParse(smallVal) // Too small, should panic
-		})
+		assert.Panics(t, func() { s.MustStrictParse(big.NewInt(500)) })
 	})
 
 	t.Run("with pointer types", func(t *testing.T) {
-		schema := BigIntPtr()
-		bigVal := big.NewInt(77777)
-
-		// Test with valid pointer input
-		result := schema.MustStrictParse(&bigVal)
-		require.NotNil(t, result)
-		assert.Equal(t, bigVal, *result)
-		assert.IsType(t, (**big.Int)(nil), result)
+		s := BigIntPtr()
+		v := big.NewInt(77777)
+		got := s.MustStrictParse(&v)
+		require.NotNil(t, got)
+		assert.Equal(t, v, *got)
+		assert.IsType(t, (**big.Int)(nil), got)
 	})
 
 	t.Run("with default values", func(t *testing.T) {
-		defaultVal := big.NewInt(88888)
-		schema := BigIntPtr().Default(defaultVal)
-		var nilPtr **big.Int = nil
+		def := big.NewInt(88888)
+		s := BigIntPtr().Default(def)
+		var nilPtr **big.Int
 
-		// Test with nil input (should use default)
-		result := schema.MustStrictParse(nilPtr)
-		require.NotNil(t, result)
-		assert.Equal(t, defaultVal, *result)
+		got := s.MustStrictParse(nilPtr)
+		require.NotNil(t, got)
+		assert.Equal(t, def, *got)
 	})
 
 	t.Run("large numbers", func(t *testing.T) {
-		schema := BigInt()
+		s := BigInt()
 
-		// Test with very large number
-		largeVal := new(big.Int)
-		largeVal.SetString("999888777666555444333222111000", 10)
-		result := schema.MustStrictParse(largeVal)
-		assert.Equal(t, largeVal, result)
+		large := new(big.Int)
+		large.SetString("999888777666555444333222111000", 10)
+		assert.Equal(t, large, s.MustStrictParse(large))
 
-		// Test with very large negative number
-		negLargeVal := new(big.Int)
-		negLargeVal.SetString("-111222333444555666777888999000", 10)
-		negResult := schema.MustStrictParse(negLargeVal)
-		assert.Equal(t, negLargeVal, negResult)
+		negLarge := new(big.Int)
+		negLarge.SetString("-111222333444555666777888999000", 10)
+		assert.Equal(t, negLarge, s.MustStrictParse(negLarge))
 	})
 }

@@ -323,10 +323,7 @@ func TestStructAnalyzer_RealFiles(t *testing.T) {
 	}
 }
 
-func TestStructAnalyzer_NeedsGeneration(t *testing.T) {
-	analyzer, err := NewStructAnalyzer()
-	require.NoError(t, err, "Failed to create analyzer")
-
+func TestNeedsGeneration(t *testing.T) {
 	tests := []struct {
 		name     string
 		info     *GenerationInfo
@@ -364,7 +361,7 @@ func TestStructAnalyzer_NeedsGeneration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := analyzer.NeedsGeneration(tt.info)
+			result := NeedsGeneration(tt.info)
 			assert.Equal(t, tt.expected, result, "Expected %t, got %t", tt.expected, result)
 		})
 	}

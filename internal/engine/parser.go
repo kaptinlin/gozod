@@ -768,7 +768,7 @@ func validateWithChecks[T any](
 // hasOverwriteCheck reports whether any check is an overwrite check.
 func hasOverwriteCheck(checks []core.ZodCheck) bool {
 	for _, c := range checks {
-		if ci := c.GetZod(); ci != nil && ci.Def != nil && ci.Def.Check == "overwrite" {
+		if ci := c.Zod(); ci != nil && ci.Def != nil && ci.Def.Check == "overwrite" {
 			return true
 		}
 	}
@@ -883,13 +883,13 @@ func ApplyChecks[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext)
 	r := RunChecksOnValue(value, checks, payload, ctx)
 
 	if r.HasIssues() {
-		return value, issues.NewZodError(issues.ConvertRawIssuesToIssues(r.GetIssues(), ctx))
+		return value, issues.NewZodError(issues.ConvertRawIssuesToIssues(r.Issues(), ctx))
 	}
 
-	if r.GetValue() == nil {
+	if r.Value() == nil {
 		var zero T
 		return zero, nil
 	}
 
-	return convertResultToType[T](r.GetValue())
+	return convertResultToType[T](r.Value())
 }

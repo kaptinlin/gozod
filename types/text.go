@@ -13,7 +13,7 @@ import (
 // newTextSchema creates a text schema by adding a check to a base string schema.
 // This eliminates repeated clone-addCheck-wrap boilerplate across all text types.
 func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
-	in := base.GetInternals().Clone()
+	in := base.Internals().Clone()
 	in.AddCheck(check)
 	return base.withInternals(in)
 }

@@ -211,7 +211,7 @@ func TestArray_TypeSpecificMethods(t *testing.T) {
 		stringSchema := String()
 		intSchema := Int()
 		schema := Array([]any{stringSchema, intSchema})
-		items := schema.Items()
+		items := schema.ElementSchemas()
 
 		assert.Len(t, items, 2)
 		assert.Equal(t, stringSchema, items[0])

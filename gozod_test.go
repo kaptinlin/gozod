@@ -431,8 +431,8 @@ func TestErrorHandling(t *testing.T) {
 
 	t.Run("config functions", func(t *testing.T) {
 		// Test that config functions are exported
+		_ = SetConfig
 		_ = Config
-		_ = GetConfig
 	})
 }
 
@@ -442,11 +442,11 @@ func TestErrorHandling(t *testing.T) {
 
 func TestInternationalization(t *testing.T) {
 	// Defer resetting the config to avoid affecting other tests
-	defer Config(nil)
+	defer SetConfig(nil)
 
 	t.Run("should return Chinese error messages when locale is set to zh-CN", func(t *testing.T) {
 		// Set the global locale to Simplified Chinese
-		Config(locales.ZhCN())
+		SetConfig(locales.ZhCN())
 
 		// Schema that will fail
 		schema := String().Min(5)
@@ -461,7 +461,7 @@ func TestInternationalization(t *testing.T) {
 
 	t.Run("should return English error messages when locale is set to en", func(t *testing.T) {
 		// Set the global locale to English
-		Config(locales.EN())
+		SetConfig(locales.EN())
 
 		// Schema that will fail
 		schema := String().Min(5)
@@ -476,7 +476,7 @@ func TestInternationalization(t *testing.T) {
 
 	t.Run("should return English error messages by default", func(t *testing.T) {
 		// Reset config to default
-		Config(nil)
+		SetConfig(nil)
 
 		// Schema that will fail
 		schema := String().Min(5)
@@ -788,7 +788,7 @@ func TestApply(t *testing.T) {
 		result := Apply(String(), getDistinctSchema)
 
 		// The result should be the same schema instance from callback
-		assert.Equal(t, distinctSchema.GetInternals(), result.GetInternals())
+		assert.Equal(t, distinctSchema.Internals(), result.Internals())
 	})
 
 	t.Run("apply with slice schema", func(t *testing.T) {

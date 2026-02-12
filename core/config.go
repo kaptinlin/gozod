@@ -26,8 +26,8 @@ func init() {
 	globalConfig.Store(&ZodConfig{})
 }
 
-// Config updates and returns the global configuration
-func Config(config *ZodConfig) *ZodConfig {
+// SetConfig updates and returns the global configuration.
+func SetConfig(config *ZodConfig) *ZodConfig {
 	if config == nil {
 		// Reset to empty config
 		newConfig := &ZodConfig{}
@@ -59,7 +59,7 @@ func Config(config *ZodConfig) *ZodConfig {
 	return newConfig.clone()
 }
 
-// GetConfig returns a read-only copy of the current global configuration
-func GetConfig() *ZodConfig {
+// Config returns a read-only copy of the current global configuration.
+func Config() *ZodConfig {
 	return globalConfig.Load().clone()
 }

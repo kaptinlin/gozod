@@ -27,8 +27,8 @@ func newFormatCheck(
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validateFn(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue(checkID, payload.GetValue(), nil))
+			if !validateFn(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue(checkID, payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -57,13 +57,13 @@ func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			str, ok := payload.GetValue().(string)
+			str, ok := payload.Value().(string)
 			if !ok {
-				payload.AddIssue(issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue()))
+				payload.AddIssue(issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.Value()))
 				return
 			}
 			if !pattern.MatchString(str) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("email", payload.GetValue(), nil))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("email", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -110,8 +110,8 @@ func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.URLWithOptions(payload.GetValue(), options) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("url", payload.GetValue(), nil))
+			if !validate.URLWithOptions(payload.Value(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("url", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -169,8 +169,8 @@ func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MACWithOptions(payload.GetValue(), options) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("mac", payload.GetValue(), nil))
+			if !validate.MACWithOptions(payload.Value(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("mac", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -202,8 +202,8 @@ func Base64(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Base64(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("base64", payload.GetValue(), nil))
+			if !validate.Base64(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("base64", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -226,8 +226,8 @@ func Base64URL(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Base64URL(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("base64url", payload.GetValue(), nil))
+			if !validate.Base64URL(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("base64url", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -260,8 +260,8 @@ func JWTWithOptions(options validate.JWTOptions, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.JWTWithOptions(payload.GetValue(), options) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.GetValue(), nil))
+			if !validate.JWTWithOptions(payload.Value(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("jwt", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -287,8 +287,8 @@ func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) 
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISODateTimeWithOptions(payload.GetValue(), options) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_datetime", payload.GetValue(), nil))
+			if !validate.ISODateTimeWithOptions(payload.Value(), options) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("iso_datetime", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -321,8 +321,8 @@ func ISODateMin(minDate string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if dateStr, ok := payload.GetValue().(string); ok && dateStr < minDate {
-				issue := issues.CreateTooSmallIssue(minDate, true, "date", payload.GetValue())
+			if dateStr, ok := payload.Value().(string); ok && dateStr < minDate {
+				issue := issues.CreateTooSmallIssue(minDate, true, "date", payload.Value())
 				issue.Message = "Date must be on or after " + minDate
 				payload.AddIssue(issue)
 			}
@@ -343,8 +343,8 @@ func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if dateStr, ok := payload.GetValue().(string); ok && dateStr > maxDate {
-				issue := issues.CreateTooBigIssue(maxDate, true, "date", payload.GetValue())
+			if dateStr, ok := payload.Value().(string); ok && dateStr > maxDate {
+				issue := issues.CreateTooBigIssue(maxDate, true, "date", payload.Value())
 				issue.Message = "Date must be on or before " + maxDate
 				payload.AddIssue(issue)
 			}
@@ -366,8 +366,8 @@ func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.Zod
 	check = &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.ISOTimeWithOptions(payload.GetValue(), options) {
-				iss := issues.CreateInvalidFormatIssue("iso_time", payload.GetValue(), nil)
+			if !validate.ISOTimeWithOptions(payload.Value(), options) {
+				iss := issues.CreateInvalidFormatIssue("iso_time", payload.Value(), nil)
 				iss.Inst = check
 				payload.AddIssue(iss)
 			}
@@ -432,8 +432,8 @@ func JSON(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.JSON(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("json", payload.GetValue(), nil))
+			if !validate.JSON(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("json", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){

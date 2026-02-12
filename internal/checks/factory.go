@@ -58,11 +58,11 @@ func ApplySchemaParamsToCheck(def *core.ZodCheckDef, sp *core.SchemaParams) {
 
 // ensureBag initializes and returns the schema's Bag map.
 func ensureBag(schema any) map[string]any {
-	s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals })
+	s, ok := schema.(interface{ Internals() *core.ZodTypeInternals })
 	if !ok {
 		return nil
 	}
-	internals := s.GetInternals()
+	internals := s.Internals()
 	if internals.Bag == nil {
 		internals.Bag = make(map[string]any)
 	}
@@ -163,8 +163,8 @@ type ZodCheckCustom struct {
 	Internals *ZodCheckCustomInternals
 }
 
-// GetZod returns the internal check structure for execution.
-func (c *ZodCheckCustom) GetZod() *core.ZodCheckInternals {
+// Zod returns the internal check structure for execution.
+func (c *ZodCheckCustom) Zod() *core.ZodCheckInternals {
 	return &c.Internals.ZodCheckInternals
 }
 
@@ -287,7 +287,7 @@ func resolveErrorMessage(ci *ZodCheckCustomInternals, input any, path []any) str
 func executeCustomCheck(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	defer func() {
 		if r := recover(); r != nil {
-			handleRefineResult(false, payload, payload.GetValue(), ci)
+			handleRefineResult(false, payload, payload.Value(), ci)
 		}
 	}()
 
@@ -297,13 +297,13 @@ func executeCustomCheck(payload *core.ParsePayload, ci *ZodCheckCustomInternals)
 	case "check":
 		executeCheckFn(payload, ci)
 	default:
-		handleRefineResult(false, payload, payload.GetValue(), ci)
+		handleRefineResult(false, payload, payload.Value(), ci)
 	}
 }
 
 // executeRefine dispatches typed refine functions and reports validation results.
 func executeRefine(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
-	v := payload.GetValue()
+	v := payload.Value()
 	switch fn := ci.Def.Fn.(type) {
 	case func([]any) bool:
 		if arr, ok := v.([]any); ok {
@@ -352,7 +352,7 @@ func executeCheckFn(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	case func(*core.ParsePayload):
 		fn(payload)
 	default:
-		handleRefineResult(false, payload, payload.GetValue(), ci)
+		handleRefineResult(false, payload, payload.Value(), ci)
 	}
 }
 
@@ -373,8 +373,8 @@ type ZodCheckOverwrite struct {
 	Internals *ZodCheckOverwriteInternals
 }
 
-// GetZod returns the internal check structure for execution.
-func (c *ZodCheckOverwrite) GetZod() *core.ZodCheckInternals {
+// Zod returns the internal check structure for execution.
+func (c *ZodCheckOverwrite) Zod() *core.ZodCheckInternals {
 	return &c.Internals.ZodCheckInternals
 }
 
@@ -395,7 +395,7 @@ func NewZodCheckOverwrite(transform func(any) any, args ...any) *ZodCheckOverwri
 		Def: def,
 	}
 	internals.Check = func(payload *core.ParsePayload) {
-		payload.SetValue(transform(payload.GetValue()))
+		payload.SetValue(transform(payload.Value()))
 	}
 
 	return &ZodCheckOverwrite{Internals: internals}
@@ -437,8 +437,8 @@ type ZodCheckProperty struct {
 	Internals *ZodCheckPropertyInternals
 }
 
-// GetZod returns the internal check structure for execution.
-func (c *ZodCheckProperty) GetZod() *core.ZodCheckInternals {
+// Zod returns the internal check structure for execution.
+func (c *ZodCheckProperty) Zod() *core.ZodCheckInternals {
 	return &c.Internals.ZodCheckInternals
 }
 
@@ -470,7 +470,7 @@ func NewProperty(property string, schema core.ZodSchema, args ...any) *ZodCheckP
 
 // executePropertyCheck validates a specific property of an object.
 func executePropertyCheck(payload *core.ParsePayload, pi *ZodCheckPropertyInternals) {
-	obj, ok := payload.GetValue().(map[string]any)
+	obj, ok := payload.Value().(map[string]any)
 	if !ok {
 		return
 	}

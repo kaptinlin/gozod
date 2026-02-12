@@ -34,14 +34,14 @@ func TestCustomValidation_RefineFunctions(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				payload := core.NewParsePayload(tt.input)
-				internals := check.GetZod()
+				internals := check.Zod()
 				internals.Check(payload)
 
 				if tt.valid {
-					assert.Empty(t, payload.GetIssues(), "Should accept valid input")
+					assert.Empty(t, payload.Issues(), "Should accept valid input")
 				} else {
-					require.Len(t, payload.GetIssues(), 1)
-					assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+					require.Len(t, payload.Issues(), 1)
+					assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 				}
 			})
 		}
@@ -74,14 +74,14 @@ func TestCustomValidation_RefineFunctions(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				payload := core.NewParsePayload(tt.input)
-				internals := check.GetZod()
+				internals := check.Zod()
 				internals.Check(payload)
 
 				if tt.valid {
-					assert.Empty(t, payload.GetIssues(), "Should accept valid input")
+					assert.Empty(t, payload.Issues(), "Should accept valid input")
 				} else {
-					require.Len(t, payload.GetIssues(), 1)
-					assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+					require.Len(t, payload.Issues(), 1)
+					assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 				}
 			})
 		}
@@ -119,14 +119,14 @@ func TestCustomValidation_RefineFunctions(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				payload := core.NewParsePayload(tt.input)
-				internals := check.GetZod()
+				internals := check.Zod()
 				internals.Check(payload)
 
 				if tt.valid {
-					assert.Empty(t, payload.GetIssues(), "Should accept valid input")
+					assert.Empty(t, payload.Issues(), "Should accept valid input")
 				} else {
-					require.Len(t, payload.GetIssues(), 1)
-					assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+					require.Len(t, payload.Issues(), 1)
+					assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 				}
 			})
 		}
@@ -136,12 +136,12 @@ func TestCustomValidation_RefineFunctions(t *testing.T) {
 func TestCustomValidation_CheckFunctions(t *testing.T) {
 	t.Run("validates with check function", func(t *testing.T) {
 		checkFn := func(payload *core.ParsePayload) {
-			if str, ok := payload.GetValue().(string); ok {
+			if str, ok := payload.Value().(string); ok {
 				if len(str) < 3 {
 					// Add custom issue using issues package
 					issue := issues.NewRawIssue(
 						"too_short",
-						payload.GetValue(),
+						payload.Value(),
 						issues.WithContinue(true),
 					)
 					payload.AddIssue(issue)
@@ -150,7 +150,7 @@ func TestCustomValidation_CheckFunctions(t *testing.T) {
 				// Add type error using issues package
 				issue := issues.NewRawIssue(
 					"invalid_type",
-					payload.GetValue(),
+					payload.Value(),
 					issues.WithContinue(true),
 				)
 				payload.AddIssue(issue)
@@ -171,13 +171,13 @@ func TestCustomValidation_CheckFunctions(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				payload := core.NewParsePayload(tt.input)
-				internals := check.GetZod()
+				internals := check.Zod()
 				internals.Check(payload)
 
 				if tt.valid {
-					assert.Empty(t, payload.GetIssues(), "Should accept valid input")
+					assert.Empty(t, payload.Issues(), "Should accept valid input")
 				} else {
-					assert.NotEmpty(t, payload.GetIssues(), "Should reject invalid input")
+					assert.NotEmpty(t, payload.Issues(), "Should reject invalid input")
 				}
 			})
 		}
@@ -197,12 +197,12 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 		check := NewCustom[string](refineFn, params)
 
 		payload := core.NewParsePayload("")
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		require.Len(t, payload.GetIssues(), 1)
-		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
-		assert.Empty(t, payload.GetIssues()[0].Path)
+		require.Len(t, payload.Issues(), 1)
+		assert.Equal(t, core.Custom, payload.Issues()[0].Code)
+		assert.Empty(t, payload.Issues()[0].Path)
 	})
 
 	t.Run("validates with custom parameters", func(t *testing.T) {
@@ -219,11 +219,11 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 		check := NewCustom[string](refineFn, params)
 
 		payload := core.NewParsePayload("test")
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		require.Len(t, payload.GetIssues(), 1)
-		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+		require.Len(t, payload.Issues(), 1)
+		assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 		// Note: The Params field access would need to be implemented in the core package
 	})
 
@@ -239,11 +239,11 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 		check := NewCustom[string](refineFn, params)
 
 		payload := core.NewParsePayload("hi")
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		require.Len(t, payload.GetIssues(), 1)
-		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+		require.Len(t, payload.Issues(), 1)
+		assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 		assert.NotNil(t, internals.Def.Error)
 	})
 }
@@ -264,11 +264,11 @@ func TestTransformChecks_Overwrite(t *testing.T) {
 		check := NewZodCheckOverwrite(transform)
 		payload := core.NewParsePayload("hello")
 
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		assert.Equal(t, "hello_transformed", payload.GetValue(), "Should transform value")
-		assert.Empty(t, payload.GetIssues(), "Should not have issues for transform")
+		assert.Equal(t, "hello_transformed", payload.Value(), "Should transform value")
+		assert.Empty(t, payload.Issues(), "Should not have issues for transform")
 	})
 
 	t.Run("preserves non-matching types", func(t *testing.T) {
@@ -282,11 +282,11 @@ func TestTransformChecks_Overwrite(t *testing.T) {
 		check := NewZodCheckOverwrite(transform)
 		payload := core.NewParsePayload(42)
 
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		assert.Equal(t, 42, payload.GetValue(), "Should preserve non-string values")
-		assert.Empty(t, payload.GetIssues(), "Should not have issues")
+		assert.Equal(t, 42, payload.Value(), "Should preserve non-string values")
+		assert.Empty(t, payload.Issues(), "Should not have issues")
 	})
 
 	t.Run("transforms with complex logic", func(t *testing.T) {
@@ -319,11 +319,11 @@ func TestTransformChecks_Overwrite(t *testing.T) {
 				check := NewZodCheckOverwrite(transform)
 				payload := core.NewParsePayload(tt.input)
 
-				internals := check.GetZod()
+				internals := check.Zod()
 				internals.Check(payload)
 
-				assert.Equal(t, tt.expected, payload.GetValue(), "Should transform correctly")
-				assert.Empty(t, payload.GetIssues(), "Should not have issues")
+				assert.Equal(t, tt.expected, payload.Value(), "Should transform correctly")
+				assert.Empty(t, payload.Issues(), "Should not have issues")
 			})
 		}
 	})
@@ -361,7 +361,7 @@ func TestCustomCheckConstructors(t *testing.T) {
 				check := tt.check()
 				require.NotNil(t, check)
 
-				internals := check.GetZod()
+				internals := check.Zod()
 				require.NotNil(t, internals)
 				require.NotNil(t, internals.Def)
 				require.NotNil(t, internals.Check)
@@ -383,7 +383,7 @@ func TestCustomCheckConstructors(t *testing.T) {
 		check := NewCustom[string](func(s string) bool { return len(s) > 0 }, params)
 		require.NotNil(t, check)
 
-		internals := check.GetZod()
+		internals := check.Zod()
 		require.NotNil(t, internals.Def)
 		// Check if error was applied correctly
 		if internals.Def.Error != nil {
@@ -406,11 +406,11 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 		check := NewCustom[string](refineFn)
 
 		payload := core.NewParsePayload("test")
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		require.Len(t, payload.GetIssues(), 1)
-		issue := payload.GetIssues()[0]
+		require.Len(t, payload.Issues(), 1)
+		issue := payload.Issues()[0]
 		assert.Equal(t, core.Custom, issue.Code)
 		assert.NotNil(t, issue.Inst)
 	})
@@ -428,12 +428,12 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 
 		payload := core.NewParsePayload("test")
 		payload.PushPath("parent")
-		internals := check.GetZod()
+		internals := check.Zod()
 		internals.Check(payload)
 
-		require.Len(t, payload.GetIssues(), 1)
+		require.Len(t, payload.Issues(), 1)
 		expectedPath := []any{"parent"}
-		assert.Equal(t, expectedPath, payload.GetIssues()[0].Path)
+		assert.Equal(t, expectedPath, payload.Issues()[0].Path)
 	})
 
 	t.Run("handles type mismatch gracefully", func(t *testing.T) {
@@ -444,7 +444,7 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 		check := NewCustom[string](refineFn)
 
 		payload := core.NewParsePayload(123) // Number instead of string
-		internals := check.GetZod()
+		internals := check.Zod()
 
 		// With our fix, type mismatch should be handled gracefully by creating a validation error
 		assert.NotPanics(t, func() {
@@ -452,8 +452,8 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 		}, "Should not panic on type mismatch")
 
 		// Should create a validation error for type mismatch
-		require.Len(t, payload.GetIssues(), 1)
-		issue := payload.GetIssues()[0]
+		require.Len(t, payload.Issues(), 1)
+		issue := payload.Issues()[0]
 		assert.Equal(t, core.Custom, issue.Code)
 		assert.Equal(t, 123, issue.Input)
 	})
@@ -496,14 +496,14 @@ func TestCustomUtilities(t *testing.T) {
 
 		// Test successful case
 		handleRefineResult(true, payload, "test", internals)
-		assert.Empty(t, payload.GetIssues(), "Should not create issues for successful validation")
+		assert.Empty(t, payload.Issues(), "Should not create issues for successful validation")
 
 		// Test failure case
 		handleRefineResult(false, payload, "test", internals)
-		require.Len(t, payload.GetIssues(), 1)
-		assert.Equal(t, core.Custom, payload.GetIssues()[0].Code)
+		require.Len(t, payload.Issues(), 1)
+		assert.Equal(t, core.Custom, payload.Issues()[0].Code)
 		// Path will only contain the payload path since custom path is no longer appended
-		assert.Equal(t, []any{"base"}, payload.GetIssues()[0].Path)
+		assert.Equal(t, []any{"base"}, payload.Issues()[0].Path)
 	})
 }
 
@@ -516,7 +516,7 @@ func BenchmarkCustomCheck_StringRefine(b *testing.B) {
 		return len(s) > 3 && s[0] >= 'A' && s[0] <= 'Z'
 	}
 	check := NewCustom[string](refineFn)
-	internals := check.GetZod()
+	internals := check.Zod()
 	input := "Hello"
 
 	b.ReportAllocs()
@@ -525,7 +525,7 @@ func BenchmarkCustomCheck_StringRefine(b *testing.B) {
 	for b.Loop() {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
-		if len(payload.GetIssues()) > 0 {
+		if len(payload.Issues()) > 0 {
 			b.Fatal("Unexpected validation failure")
 		}
 	}
@@ -537,7 +537,7 @@ func BenchmarkCustomCheck_MapRefine(b *testing.B) {
 		return hasName && name != nil
 	}
 	check := NewCustom[map[string]any](refineFn)
-	internals := check.GetZod()
+	internals := check.Zod()
 	input := map[string]any{"name": "John", "age": 30}
 
 	b.ReportAllocs()
@@ -546,7 +546,7 @@ func BenchmarkCustomCheck_MapRefine(b *testing.B) {
 	for b.Loop() {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
-		if len(payload.GetIssues()) > 0 {
+		if len(payload.Issues()) > 0 {
 			b.Fatal("Unexpected validation failure")
 		}
 	}
@@ -560,7 +560,7 @@ func BenchmarkCustomCheck_Overwrite(b *testing.B) {
 		return value
 	}
 	check := NewZodCheckOverwrite(transform)
-	internals := check.GetZod()
+	internals := check.Zod()
 	input := "test"
 
 	b.ReportAllocs()
@@ -570,7 +570,7 @@ func BenchmarkCustomCheck_Overwrite(b *testing.B) {
 		payload := core.NewParsePayload(input)
 		internals.Check(payload)
 		// Transform should never generate issues
-		if len(payload.GetIssues()) > 0 {
+		if len(payload.Issues()) > 0 {
 			b.Fatal("Unexpected transform failure")
 		}
 	}

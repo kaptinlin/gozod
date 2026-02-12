@@ -1,11 +1,8 @@
-// Package main provides AST analysis functionality for the gozodgen tool.
-// This module analyzes Go source files to identify structs that require
-// code generation and extracts their field information using the existing
-// pkg/tags infrastructure. It uses go/types for accurate type checking
-// instead of the deprecated ast.Package.
+// Package main provides the gozodgen code generation tool.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -18,11 +15,10 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
-// Static error variables to comply with err113
 var (
-	ErrInvalidRuleFormat = fmt.Errorf("invalid rule format")
-	ErrRuleRequiresParam = fmt.Errorf("rule requires a parameter")
-	ErrEmptyRuleName     = fmt.Errorf("empty rule name")
+	errInvalidRuleFormat = errors.New("invalid rule format")
+	errRuleRequiresParam = errors.New("rule requires a parameter")
+	errEmptyRuleName     = errors.New("empty rule name")
 )
 
 // timeType is a marker type for time.Time detection
@@ -62,51 +58,38 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 	}, nil
 }
 
-// AnalyzePackage analyzes all Go files in a package directory
+// AnalyzePackage analyzes all Go files in a package directory.
 func (a *StructAnalyzer) AnalyzePackage(pkgPath string) ([]*GenerationInfo, error) {
-	// Parse all Go files in the package
-	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments)
+	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments) //nolint:deprecated // ParseDir is sufficient for code generation
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse package %s: %w", pkgPath, err)
+		return nil, fmt.Errorf("parse package %s: %w", pkgPath, err)
 	}
 
 	var allStructs []*GenerationInfo
 
-	// Process each package (usually just one)
 	for pkgName, astPkg := range astPkgs {
-		// Skip test packages
 		if strings.HasSuffix(pkgName, "_test") {
 			continue
 		}
 
-		// Collect all AST files for type checking
 		var files []*ast.File
 		for _, file := range astPkg.Files {
 			files = append(files, file)
 		}
 
-		// Create type checker configuration
-		conf := types.Config{
-			Importer: importer.Default(),
-		}
-
-		// Type check the package
+		conf := types.Config{Importer: importer.Default()}
 		typesPkg, err := conf.Check(pkgName, a.fset, files, a.info)
 		if err != nil {
-			// Continue even if there are type errors, as we might still be able to analyze structs
-			fmt.Printf("Warning: type checking failed for package %s: %v\n", pkgName, err)
+			fmt.Printf("Warning: type checking for package %s: %v\n", pkgName, err)
 		}
-
-		// Store the types package
 		if typesPkg != nil {
 			a.packages[pkgName] = typesPkg
 		}
 
-		// Analyze each file in the package
 		for fileName, file := range astPkg.Files {
 			structs, err := a.analyzeFile(fileName, file, pkgName)
 			if err != nil {
-				return nil, fmt.Errorf("failed to analyze file %s: %w", fileName, err)
+				return nil, fmt.Errorf("analyze file %s: %w", fileName, err)
 			}
 			allStructs = append(allStructs, structs...)
 		}
@@ -115,45 +98,35 @@ func (a *StructAnalyzer) AnalyzePackage(pkgPath string) ([]*GenerationInfo, erro
 	return allStructs, nil
 }
 
-// analyzeFile analyzes a single Go file for structs requiring generation
+// analyzeFile analyzes a single Go file for structs requiring generation.
 func (a *StructAnalyzer) analyzeFile(fileName string, file *ast.File, pkgName string) ([]*GenerationInfo, error) {
 	var structs []*GenerationInfo
-
-	// Extract imports for later use
 	imports := a.extractImports(file)
 
-	// Look for struct declarations
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.TYPE {
 			continue
 		}
 
-		// Check if this declaration has //go:generate gozodgen directive
-		hasGenerate := a.hasGenerateDirective(genDecl.Doc)
+		hasGenerate := hasGenerateDirective(genDecl.Doc)
 
-		// Process each type specification
 		for _, spec := range genDecl.Specs {
 			typeSpec, ok := spec.(*ast.TypeSpec)
 			if !ok {
 				continue
 			}
-
-			// Check if it's a struct type
 			structType, ok := typeSpec.Type.(*ast.StructType)
 			if !ok {
 				continue
 			}
 
-			// Analyze the struct
-			structInfo, err := a.analyzeStruct(typeSpec.Name.Name, structType, pkgName, fileName, imports, hasGenerate)
+			info, err := a.analyzeStruct(typeSpec.Name.Name, structType, pkgName, fileName, imports, hasGenerate)
 			if err != nil {
-				return nil, fmt.Errorf("failed to analyze struct %s: %w", typeSpec.Name.Name, err)
+				return nil, fmt.Errorf("analyze struct %s: %w", typeSpec.Name.Name, err)
 			}
-
-			// Only include structs that have gozod tags or generate directive
-			if structInfo != nil && (len(structInfo.Fields) > 0 || hasGenerate) {
-				structs = append(structs, structInfo)
+			if info != nil && (len(info.Fields) > 0 || hasGenerate) {
+				structs = append(structs, info)
 			}
 		}
 	}
@@ -177,7 +150,7 @@ func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, 
 	var gozodFields []tagparser.FieldInfo
 	for _, pf := range parsed {
 		if len(pf.info.Rules) > 0 || pf.info.Required || pf.hasGozodTag || hasGenerate {
-			pf.info.Optional = pf.info.Type != nil && pf.info.Type.Kind() == reflect.Ptr && !pf.info.Required
+			pf.info.Optional = pf.info.Type != nil && pf.info.Type.Kind() == reflect.Pointer && !pf.info.Required
 			gozodFields = append(gozodFields, pf.info)
 		}
 	}
@@ -209,8 +182,8 @@ func (a *StructAnalyzer) extractImports(file *ast.File) []string {
 	return imports
 }
 
-// hasGenerateDirective checks if comments contain //go:generate gozodgen
-func (a *StructAnalyzer) hasGenerateDirective(comments *ast.CommentGroup) bool {
+// hasGenerateDirective reports whether comments contain //go:generate gozodgen.
+func hasGenerateDirective(comments *ast.CommentGroup) bool {
 	if comments == nil {
 		return false
 	}
@@ -242,7 +215,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 			info := tagparser.FieldInfo{
 				Name:     name.Name,
 				Type:     a.getReflectType(field.Type),
-				TypeName: a.getTypeNameFromAST(field.Type),
+				TypeName: getTypeNameFromAST(field.Type),
 				JsonName: a.extractJSONName(field),
 			}
 
@@ -251,7 +224,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				tagValue := strings.Trim(field.Tag.Value, "`")
 				if strings.Contains(tagValue, "gozod:") {
 					hasGozodTag = true
-					gozodTag := a.extractTagValue(tagValue, "gozod")
+					gozodTag := extractTagValue(tagValue, "gozod")
 					info.GozodTag = gozodTag
 					if gozodTag != "" {
 						rules, err := a.parseTagRules(gozodTag)
@@ -288,136 +261,114 @@ func (a *StructAnalyzer) getReflectType(expr ast.Expr) reflect.Type {
 	return a.getReflectTypeFromAST(expr)
 }
 
-// typesToReflectType converts go/types.Type to reflect.Type
+// typesToReflectType converts go/types.Type to reflect.Type.
 func (a *StructAnalyzer) typesToReflectType(t types.Type) reflect.Type {
 	switch typ := t.(type) {
 	case *types.Basic:
-		switch typ.Kind() {
-		case types.String:
-			return reflect.TypeOf("")
-		case types.Int:
-			return reflect.TypeOf(0)
-		case types.Int8:
-			return reflect.TypeOf(int8(0))
-		case types.Int16:
-			return reflect.TypeOf(int16(0))
-		case types.Int32:
-			return reflect.TypeOf(int32(0))
-		case types.Int64:
-			return reflect.TypeOf(int64(0))
-		case types.Uint:
-			return reflect.TypeOf(uint(0))
-		case types.Uint8:
-			return reflect.TypeOf(uint8(0))
-		case types.Uint16:
-			return reflect.TypeOf(uint16(0))
-		case types.Uint32:
-			return reflect.TypeOf(uint32(0))
-		case types.Uint64:
-			return reflect.TypeOf(uint64(0))
-		case types.Float32:
-			return reflect.TypeOf(float32(0))
-		case types.Float64:
-			return reflect.TypeOf(float64(0))
-		case types.Complex64:
-			return reflect.TypeOf(complex64(0))
-		case types.Complex128:
-			return reflect.TypeOf(complex128(0))
-		case types.Bool:
-			return reflect.TypeOf(false)
-		case types.Invalid, types.Uintptr, types.UnsafePointer:
-			return reflect.TypeOf((*interface{})(nil)).Elem()
-		case types.UntypedBool, types.UntypedInt, types.UntypedRune, types.UntypedFloat, types.UntypedComplex, types.UntypedString, types.UntypedNil:
-			return reflect.TypeOf((*interface{})(nil)).Elem()
-		default:
-			return reflect.TypeOf((*interface{})(nil)).Elem()
-		}
+		return basicKindToReflectType(typ.Kind())
 	case *types.Pointer:
-		baseType := a.typesToReflectType(typ.Elem())
-		return reflect.PointerTo(baseType)
+		return reflect.PointerTo(a.typesToReflectType(typ.Elem()))
 	case *types.Slice:
-		elemType := a.typesToReflectType(typ.Elem())
-		return reflect.SliceOf(elemType)
+		return reflect.SliceOf(a.typesToReflectType(typ.Elem()))
 	case *types.Array:
-		elemType := a.typesToReflectType(typ.Elem())
-		return reflect.SliceOf(elemType) // Treat arrays as slices for simplicity
+		return reflect.SliceOf(a.typesToReflectType(typ.Elem()))
 	case *types.Map:
-		keyType := a.typesToReflectType(typ.Key())
-		valueType := a.typesToReflectType(typ.Elem())
-		return reflect.MapOf(keyType, valueType)
+		return reflect.MapOf(a.typesToReflectType(typ.Key()), a.typesToReflectType(typ.Elem()))
 	case *types.Named:
-		// Handle named types like time.Time
 		obj := typ.Obj()
-		if obj != nil && obj.Pkg() != nil {
-			pkgPath := obj.Pkg().Path()
-			typeName := obj.Name()
-			if pkgPath == "time" && typeName == "Time" {
-				return reflect.TypeOf((*timeType)(nil)).Elem()
-			}
+		if obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "time" && obj.Name() == "Time" {
+			return reflect.TypeFor[timeType]()
 		}
-		// For other named types, try to get the underlying type
 		return a.typesToReflectType(typ.Underlying())
 	case *types.Interface:
-		return reflect.TypeOf((*interface{})(nil)).Elem()
+		return reflect.TypeFor[any]()
 	default:
-		return reflect.TypeOf((*interface{})(nil)).Elem()
+		return reflect.TypeFor[any]()
 	}
 }
 
-// getReflectTypeFromAST is the fallback AST-based type inference
+// basicKindToReflectType maps go/types basic kinds to reflect.Type.
+func basicKindToReflectType(kind types.BasicKind) reflect.Type {
+	switch kind { //nolint:exhaustive // only concrete types need mapping
+	case types.String:
+		return reflect.TypeFor[string]()
+	case types.Int:
+		return reflect.TypeFor[int]()
+	case types.Int8:
+		return reflect.TypeFor[int8]()
+	case types.Int16:
+		return reflect.TypeFor[int16]()
+	case types.Int32:
+		return reflect.TypeFor[int32]()
+	case types.Int64:
+		return reflect.TypeFor[int64]()
+	case types.Uint:
+		return reflect.TypeFor[uint]()
+	case types.Uint8:
+		return reflect.TypeFor[uint8]()
+	case types.Uint16:
+		return reflect.TypeFor[uint16]()
+	case types.Uint32:
+		return reflect.TypeFor[uint32]()
+	case types.Uint64:
+		return reflect.TypeFor[uint64]()
+	case types.Float32:
+		return reflect.TypeFor[float32]()
+	case types.Float64:
+		return reflect.TypeFor[float64]()
+	case types.Complex64:
+		return reflect.TypeFor[complex64]()
+	case types.Complex128:
+		return reflect.TypeFor[complex128]()
+	case types.Bool:
+		return reflect.TypeFor[bool]()
+	default:
+		return reflect.TypeFor[any]()
+	}
+}
+
+// getReflectTypeFromAST is the fallback AST-based type inference.
 func (a *StructAnalyzer) getReflectTypeFromAST(expr ast.Expr) reflect.Type {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		// Basic types
 		switch t.Name {
 		case "string":
-			return reflect.TypeOf("")
+			return reflect.TypeFor[string]()
 		case "int":
-			return reflect.TypeOf(0)
+			return reflect.TypeFor[int]()
 		case "int32":
-			return reflect.TypeOf(int32(0))
+			return reflect.TypeFor[int32]()
 		case "int64":
-			return reflect.TypeOf(int64(0))
+			return reflect.TypeFor[int64]()
 		case "float32":
-			return reflect.TypeOf(float32(0))
+			return reflect.TypeFor[float32]()
 		case "float64":
-			return reflect.TypeOf(float64(0))
+			return reflect.TypeFor[float64]()
 		case "bool":
-			return reflect.TypeOf(false)
+			return reflect.TypeFor[bool]()
 		default:
-			// Unknown type - default to interface{}
-			return reflect.TypeOf((*interface{})(nil)).Elem()
+			return reflect.TypeFor[any]()
 		}
 	case *ast.StarExpr:
-		// Pointer type
-		baseType := a.getReflectTypeFromAST(t.X)
-		return reflect.PointerTo(baseType)
+		return reflect.PointerTo(a.getReflectTypeFromAST(t.X))
 	case *ast.ArrayType:
-		// Slice or array type - treat both as slice for simplicity
-		elemType := a.getReflectTypeFromAST(t.Elt)
-		return reflect.SliceOf(elemType)
+		return reflect.SliceOf(a.getReflectTypeFromAST(t.Elt))
 	case *ast.MapType:
-		// Map type
-		keyType := a.getReflectTypeFromAST(t.Key)
-		valueType := a.getReflectTypeFromAST(t.Value)
-		return reflect.MapOf(keyType, valueType)
+		return reflect.MapOf(a.getReflectTypeFromAST(t.Key), a.getReflectTypeFromAST(t.Value))
 	case *ast.SelectorExpr:
-		// Qualified type (e.g., time.Time)
 		if ident, ok := t.X.(*ast.Ident); ok {
 			if ident.Name == "time" && t.Sel.Name == "Time" {
-				// Return a special marker for time.Time
-				return reflect.TypeOf((*timeType)(nil)).Elem()
+				return reflect.TypeFor[timeType]()
 			}
 		}
-		return reflect.TypeOf((*interface{})(nil)).Elem()
+		return reflect.TypeFor[any]()
 	default:
-		// Unknown type - default to interface{}
-		return reflect.TypeOf((*interface{})(nil)).Elem()
+		return reflect.TypeFor[any]()
 	}
 }
 
 // NeedsGeneration reports whether a struct needs code generation.
-func (a *StructAnalyzer) NeedsGeneration(info *GenerationInfo) bool {
+func NeedsGeneration(info *GenerationInfo) bool {
 	if info.HasGenerate {
 		return true
 	}
@@ -429,7 +380,7 @@ func (a *StructAnalyzer) NeedsGeneration(info *GenerationInfo) bool {
 	return false
 }
 
-// extractJSONName extracts JSON field name from struct tag
+// extractJSONName extracts the JSON field name from a struct tag.
 func (a *StructAnalyzer) extractJSONName(field *ast.Field) string {
 	if field.Tag == nil {
 		if len(field.Names) > 0 {
@@ -439,7 +390,7 @@ func (a *StructAnalyzer) extractJSONName(field *ast.Field) string {
 	}
 
 	tagValue := strings.Trim(field.Tag.Value, "`")
-	jsonTag := a.extractTagValue(tagValue, "json")
+	jsonTag := extractTagValue(tagValue, "json")
 	if jsonTag == "" {
 		if len(field.Names) > 0 {
 			return field.Names[0].Name
@@ -447,24 +398,20 @@ func (a *StructAnalyzer) extractJSONName(field *ast.Field) string {
 		return ""
 	}
 
-	// Extract name before comma (ignore omitempty, etc.)
-	parts := strings.Split(jsonTag, ",")
-	jsonName := strings.TrimSpace(parts[0])
-	if jsonName == "" || jsonName == "-" {
+	name, _, _ := strings.Cut(jsonTag, ",")
+	name = strings.TrimSpace(name)
+	if name == "" || name == "-" {
 		if len(field.Names) > 0 {
 			return field.Names[0].Name
 		}
 		return ""
 	}
-
-	return jsonName
+	return name
 }
 
-// extractTagValue extracts the value for a specific tag name from a tag string
-func (a *StructAnalyzer) extractTagValue(tagString, tagName string) string {
-	// Parse the entire tag string
-	tag := reflect.StructTag(tagString)
-	return tag.Get(tagName)
+// extractTagValue returns the value for a specific tag key.
+func extractTagValue(tagString, tagName string) string {
+	return reflect.StructTag(tagString).Get(tagName)
 }
 
 // parseTagRules parses gozod tag rules with proper handling of complex JSON values
@@ -473,8 +420,7 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 		return nil, nil
 	}
 
-	// Smart split that handles JSON arrays and objects
-	parts := a.smartSplitTagRules(tagValue)
+	parts := smartSplitTagRules(tagValue)
 	rules := make([]tagparser.TagRule, 0, len(parts))
 
 	for _, part := range parts {
@@ -489,14 +435,14 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 		if strings.Contains(part, "=") {
 			ruleParts := strings.SplitN(part, "=", 2)
 			if len(ruleParts) != 2 {
-				return nil, fmt.Errorf("%w: %s", ErrInvalidRuleFormat, part)
+				return nil, fmt.Errorf("%w: %s", errInvalidRuleFormat, part)
 			}
 
 			rule.Name = strings.TrimSpace(ruleParts[0])
 			paramValue := strings.TrimSpace(ruleParts[1])
 
 			if paramValue == "" {
-				return nil, fmt.Errorf("%w: %s", ErrRuleRequiresParam, rule.Name)
+				return nil, fmt.Errorf("%w: %s", errRuleRequiresParam, rule.Name)
 			}
 
 			// Handle complex parameters (JSON arrays/objects) and enum values
@@ -521,7 +467,7 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 		}
 
 		if rule.Name == "" {
-			return nil, ErrEmptyRuleName
+			return nil, errEmptyRuleName
 		}
 
 		rules = append(rules, rule)
@@ -530,26 +476,18 @@ func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, er
 	return rules, nil
 }
 
-// getTypeNameFromAST extracts the type name string from AST expression for circular reference detection
-func (a *StructAnalyzer) getTypeNameFromAST(expr ast.Expr) string {
+// getTypeNameFromAST extracts the type name string from an AST expression.
+func getTypeNameFromAST(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		return t.Name
 	case *ast.StarExpr:
-		// Pointer type - get the base type with * prefix
-		baseTypeName := a.getTypeNameFromAST(t.X)
-		return "*" + baseTypeName
+		return "*" + getTypeNameFromAST(t.X)
 	case *ast.ArrayType:
-		// Slice or array type - treat both as slice for simplicity
-		elemTypeName := a.getTypeNameFromAST(t.Elt)
-		return "[]" + elemTypeName
+		return "[]" + getTypeNameFromAST(t.Elt)
 	case *ast.MapType:
-		// Map type
-		keyTypeName := a.getTypeNameFromAST(t.Key)
-		valueTypeName := a.getTypeNameFromAST(t.Value)
-		return "map[" + keyTypeName + "]" + valueTypeName
+		return "map[" + getTypeNameFromAST(t.Key) + "]" + getTypeNameFromAST(t.Value)
 	case *ast.SelectorExpr:
-		// Qualified type (e.g., time.Time)
 		if ident, ok := t.X.(*ast.Ident); ok {
 			return ident.Name + "." + t.Sel.Name
 		}
@@ -559,8 +497,8 @@ func (a *StructAnalyzer) getTypeNameFromAST(expr ast.Expr) string {
 	}
 }
 
-// smartSplitTagRules splits tag rules by comma while respecting JSON arrays and objects
-func (a *StructAnalyzer) smartSplitTagRules(tagValue string) []string {
+// smartSplitTagRules splits tag rules by comma while respecting JSON arrays and objects.
+func smartSplitTagRules(tagValue string) []string {
 	var parts []string
 	var current strings.Builder
 	var inQuotes bool

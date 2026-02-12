@@ -1293,41 +1293,41 @@ func TestString_Modifiers_IsOptionalAndIsNilable(t *testing.T) {
 		assert.True(t, nilablePtrSchema.IsNilable(), "StringPtr().Nilable() should be nilable")
 	})
 
-	t.Run("consistency with GetInternals", func(t *testing.T) {
+	t.Run("consistency with Internals", func(t *testing.T) {
 		// Test basic string schema
 		basicSchema := String()
-		assert.Equal(t, basicSchema.GetInternals().IsOptional(), basicSchema.IsOptional(),
-			"Basic schema: IsOptional() should match GetInternals().IsOptional()")
-		assert.Equal(t, basicSchema.GetInternals().IsNilable(), basicSchema.IsNilable(),
-			"Basic schema: IsNilable() should match GetInternals().IsNilable()")
+		assert.Equal(t, basicSchema.Internals().IsOptional(), basicSchema.IsOptional(),
+			"Basic schema: IsOptional() should match Internals().IsOptional()")
+		assert.Equal(t, basicSchema.Internals().IsNilable(), basicSchema.IsNilable(),
+			"Basic schema: IsNilable() should match Internals().IsNilable()")
 
 		// Test optional string schema
 		optionalSchema := String().Optional()
-		assert.Equal(t, optionalSchema.GetInternals().IsOptional(), optionalSchema.IsOptional(),
-			"Optional schema: IsOptional() should match GetInternals().IsOptional()")
-		assert.Equal(t, optionalSchema.GetInternals().IsNilable(), optionalSchema.IsNilable(),
-			"Optional schema: IsNilable() should match GetInternals().IsNilable()")
+		assert.Equal(t, optionalSchema.Internals().IsOptional(), optionalSchema.IsOptional(),
+			"Optional schema: IsOptional() should match Internals().IsOptional()")
+		assert.Equal(t, optionalSchema.Internals().IsNilable(), optionalSchema.IsNilable(),
+			"Optional schema: IsNilable() should match Internals().IsNilable()")
 
 		// Test nilable string schema
 		nilableSchema := String().Nilable()
-		assert.Equal(t, nilableSchema.GetInternals().IsOptional(), nilableSchema.IsOptional(),
-			"Nilable schema: IsOptional() should match GetInternals().IsOptional()")
-		assert.Equal(t, nilableSchema.GetInternals().IsNilable(), nilableSchema.IsNilable(),
-			"Nilable schema: IsNilable() should match GetInternals().IsNilable()")
+		assert.Equal(t, nilableSchema.Internals().IsOptional(), nilableSchema.IsOptional(),
+			"Nilable schema: IsOptional() should match Internals().IsOptional()")
+		assert.Equal(t, nilableSchema.Internals().IsNilable(), nilableSchema.IsNilable(),
+			"Nilable schema: IsNilable() should match Internals().IsNilable()")
 
 		// Test nullish string schema
 		nullishSchema := String().Nullish()
-		assert.Equal(t, nullishSchema.GetInternals().IsOptional(), nullishSchema.IsOptional(),
-			"Nullish schema: IsOptional() should match GetInternals().IsOptional()")
-		assert.Equal(t, nullishSchema.GetInternals().IsNilable(), nullishSchema.IsNilable(),
-			"Nullish schema: IsNilable() should match GetInternals().IsNilable()")
+		assert.Equal(t, nullishSchema.Internals().IsOptional(), nullishSchema.IsOptional(),
+			"Nullish schema: IsOptional() should match Internals().IsOptional()")
+		assert.Equal(t, nullishSchema.Internals().IsNilable(), nullishSchema.IsNilable(),
+			"Nullish schema: IsNilable() should match Internals().IsNilable()")
 
 		// Test nonoptional string schema
 		nonoptionalSchema := String().Optional().NonOptional()
-		assert.Equal(t, nonoptionalSchema.GetInternals().IsOptional(), nonoptionalSchema.IsOptional(),
-			"NonOptional schema: IsOptional() should match GetInternals().IsOptional()")
-		assert.Equal(t, nonoptionalSchema.GetInternals().IsNilable(), nonoptionalSchema.IsNilable(),
-			"NonOptional schema: IsNilable() should match GetInternals().IsNilable()")
+		assert.Equal(t, nonoptionalSchema.Internals().IsOptional(), nonoptionalSchema.IsOptional(),
+			"NonOptional schema: IsOptional() should match Internals().IsOptional()")
+		assert.Equal(t, nonoptionalSchema.Internals().IsNilable(), nonoptionalSchema.IsNilable(),
+			"NonOptional schema: IsNilable() should match Internals().IsNilable()")
 	})
 }
 

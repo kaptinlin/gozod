@@ -10,7 +10,7 @@ import (
 
 // InitZodType initializes the common fields of a ZodType.
 func InitZodType[T core.ZodType[any]](schema T, def *core.ZodTypeDef) {
-	i := schema.GetInternals()
+	i := schema.Internals()
 
 	i.Type = def.Type
 	i.Error = def.Error
@@ -37,7 +37,7 @@ func InitZodType[T core.ZodType[any]](schema T, def *core.ZodTypeDef) {
 		if c == nil {
 			continue
 		}
-		if ci := c.GetZod(); ci != nil {
+		if ci := c.Zod(); ci != nil {
 			for _, fn := range ci.OnAttach {
 				fn(any(schema).(core.ZodType[any]))
 			}
@@ -56,8 +56,8 @@ func NewBaseZodTypeInternals(typeName core.ZodTypeCode) core.ZodTypeInternals {
 }
 
 // AddCheck adds a validation check and returns a new schema instance (copy-on-write).
-func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, check core.ZodCheck) core.ZodType[any] {
-	src := schema.GetInternals()
+func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](schema T, check core.ZodCheck) core.ZodType[any] {
+	src := schema.Internals()
 
 	checks := append(append([]core.ZodCheck(nil), src.Checks...), check)
 	def := &core.ZodTypeDef{
@@ -71,7 +71,7 @@ func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, ch
 	}
 
 	dst := src.Constructor(def)
-	di := dst.GetInternals()
+	di := dst.Internals()
 
 	cloned := src.Clone()
 	*di = *cloned
@@ -84,7 +84,7 @@ func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, ch
 	}
 
 	if check != nil {
-		if ci := check.GetZod(); ci != nil {
+		if ci := check.Zod(); ci != nil {
 			for _, fn := range ci.OnAttach {
 				fn(dst)
 			}
@@ -95,8 +95,8 @@ func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, ch
 }
 
 // Clone creates a new schema instance with optional definition modifications (copy-on-write).
-func Clone[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, modify func(*core.ZodTypeDef)) core.ZodType[any] {
-	src := schema.GetInternals()
+func Clone[T interface{ Internals() *core.ZodTypeInternals }](schema T, modify func(*core.ZodTypeDef)) core.ZodType[any] {
+	src := schema.Internals()
 
 	def := &core.ZodTypeDef{
 		Type:   src.Type,
@@ -113,7 +113,7 @@ func Clone[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, modif
 	}
 
 	dst := src.Constructor(def)
-	di := dst.GetInternals()
+	di := dst.Internals()
 
 	cloned := src.Clone()
 	*di = *cloned

@@ -32,8 +32,8 @@ type ZodUnknown[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodUnknown[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodUnknown[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -276,7 +276,7 @@ func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown
 // Check adds a custom validation function that can push multiple issues.
 func (z *ZodUnknown[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodUnknown[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 		}
 	}

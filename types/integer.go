@@ -50,8 +50,8 @@ type ZodInteger[T IntegerConstraint, R any] = ZodIntegerTyped[T, R]
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema
-func (z *ZodIntegerTyped[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema
+func (z *ZodIntegerTyped[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -1148,7 +1148,7 @@ func convertIntDefaultValue[T IntegerConstraint](v int64) any {
 func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodIntegerTyped[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
 		// Attempt direct assertion first
-		if val, ok := payload.GetValue().(R); ok {
+		if val, ok := payload.Value().(R); ok {
 			fn(val, payload)
 			return
 		}
@@ -1158,7 +1158,7 @@ func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayloa
 		zeroTyp := reflect.TypeOf(zero)
 		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
 			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.GetValue())
+			valRV := reflect.ValueOf(payload.Value())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
 				ptr := reflect.New(elemTyp)
 				ptr.Elem().Set(valRV)

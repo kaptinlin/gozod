@@ -39,8 +39,8 @@ type ZodEnum[T comparable, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema.
-func (z *ZodEnum[T, R]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodEnum[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -350,10 +350,10 @@ func (z *ZodEnum[T, R]) validateEnum(value T, chks []core.ZodCheck, ctx *core.Pa
 		payload := core.NewParsePayload(value)
 		result := engine.RunChecksOnValue(value, chks, payload, ctx)
 		if result.HasIssues() {
-			collectedIssues = append(collectedIssues, result.GetIssues()...)
+			collectedIssues = append(collectedIssues, result.Issues()...)
 		}
-		if result.GetValue() != nil {
-			if transformed, ok := result.GetValue().(T); ok {
+		if result.Value() != nil {
+			if transformed, ok := result.Value().(T); ok {
 				value = transformed
 			}
 		}

@@ -64,13 +64,13 @@ type ZodIssueInvalidValue struct {
 	Options []any `json:"options"` // List of valid options
 }
 
-// GetMinimum returns the minimum value and whether it is present.
-func (z *ZodIssue) GetMinimum() (any, bool) {
+// MinValue returns the minimum value and whether it is present.
+func (z *ZodIssue) MinValue() (any, bool) {
 	return z.Minimum, z.Minimum != nil
 }
 
-// GetMaximum returns the maximum value and whether it is present.
-func (z *ZodIssue) GetMaximum() (any, bool) {
+// MaxValue returns the maximum value and whether it is present.
+func (z *ZodIssue) MaxValue() (any, bool) {
 	return z.Maximum, z.Maximum != nil
 }
 
@@ -85,32 +85,32 @@ func (z ZodIssue) String() string {
 		z.Code, z.Message, z.Path)
 }
 
-// GetExpected returns the expected type for invalid_type issues.
-func (z ZodIssue) GetExpected() (ZodTypeCode, bool) {
+// ExpectedType returns the expected type for invalid_type issues.
+func (z ZodIssue) ExpectedType() (ZodTypeCode, bool) {
 	if z.Code != InvalidType {
 		return "", false
 	}
 	return z.Expected, z.Expected != ""
 }
 
-// GetReceived returns the received type for invalid_type issues.
-func (z ZodIssue) GetReceived() (ZodTypeCode, bool) {
+// ReceivedType returns the received type for invalid_type issues.
+func (z ZodIssue) ReceivedType() (ZodTypeCode, bool) {
 	if z.Code != InvalidType {
 		return "", false
 	}
 	return z.Received, z.Received != ""
 }
 
-// GetFormat returns the format for invalid_format issues.
-func (z ZodIssue) GetFormat() (string, bool) {
+// FormatName returns the format for invalid_format issues.
+func (z ZodIssue) FormatName() (string, bool) {
 	if z.Code != InvalidFormat {
 		return "", false
 	}
 	return z.Format, z.Format != ""
 }
 
-// GetDivisor returns the divisor for not_multiple_of issues.
-func (z ZodIssue) GetDivisor() (any, bool) {
+// DivisorValue returns the divisor for not_multiple_of issues.
+func (z ZodIssue) DivisorValue() (any, bool) {
 	if z.Code != NotMultipleOf {
 		return nil, false
 	}

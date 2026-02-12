@@ -17,7 +17,7 @@ func RunChecks(checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.
 		pc = ctx[0]
 	}
 
-	return executeChecks(payload.GetValue(), checks, payload, pc)
+	return executeChecks(payload.Value(), checks, payload, pc)
 }
 
 // RunChecksOnValue executes all validation checks on a specific value.
@@ -41,7 +41,7 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 		return payload
 	}
 
-	cur := payload.GetIssues()
+	cur := payload.Issues()
 	if cap(cur) < len(cur)+n {
 		payload.SetIssues(slices.Grow(cur, n))
 	}
@@ -55,7 +55,7 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 			continue
 		}
 
-		ci := c.GetZod()
+		ci := c.Zod()
 		if ci == nil || ci.Check == nil {
 			continue
 		}
@@ -70,9 +70,9 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 
 		cp := core.NewParsePayloadWithPath(val, path)
 		ci.Check(cp)
-		val = cp.GetValue()
+		val = cp.Value()
 
-		iss := cp.GetIssues()
+		iss := cp.Issues()
 		if len(iss) == 0 {
 			continue
 		}
@@ -98,7 +98,7 @@ func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload
 
 // CheckAborted reports whether any issue from start onwards signals an abort.
 func CheckAborted(x core.ParsePayload, start int) bool {
-	iss := x.GetIssues()
+	iss := x.Issues()
 	if len(iss) == 0 || start >= len(iss) {
 		return false
 	}

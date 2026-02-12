@@ -218,7 +218,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
 			require.NoError(t, err, "Failed to create writer")
 
-			schema, err := writer.generateFieldSchemaCodeForStruct(tt.field, tt.structName)
+			schema, err := writer.generateFieldSchemaCode(tt.field, tt.structName)
 			if tt.expectError {
 				assert.Error(t, err, "Expected error but got none")
 			} else {
@@ -361,7 +361,7 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 				field.Type = reflect.TypeOf(0)
 			}
 
-			result, err := writer.generateFieldSchemaCodeForStruct(field, "TestStruct")
+			result, err := writer.generateFieldSchemaCode(field, "TestStruct")
 			require.NoError(t, err, "Failed to generate field schema")
 
 			if !strings.Contains(result, tt.expected) {
@@ -376,7 +376,7 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 	}
 }
 
-func TestFileWriter_GetBasicTypeConstructor(t *testing.T) {
+func TestBasicTypeConstructor(t *testing.T) {
 	tests := []struct {
 		name     string
 		typeName string
@@ -387,22 +387,18 @@ func TestFileWriter_GetBasicTypeConstructor(t *testing.T) {
 		{name: "int64 type", typeName: "int64", expected: "gozod.Int64()"},
 		{name: "float64 type", typeName: "float64", expected: "gozod.Float64()"},
 		{name: "bool type", typeName: "bool", expected: "gozod.Bool()"},
-		// Note: time.Time is handled by getBaseConstructorFromTypeName, not getBasicTypeConstructor
 		{name: "unknown type", typeName: "CustomType", expected: "gozod.Any()"},
 	}
 
-	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	require.NoError(t, err, "Failed to create writer")
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := writer.getBasicTypeConstructor(tt.typeName)
-			assert.Equal(t, tt.expected, result, "Expected %s, got %s", tt.expected, result)
+			result := basicTypeConstructor(tt.typeName)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestFileWriter_CircularReferenceHandling(t *testing.T) {
+func TestCircularReferenceHandling(t *testing.T) {
 	tests := []struct {
 		name       string
 		typeName   string
@@ -441,23 +437,17 @@ func TestFileWriter_CircularReferenceHandling(t *testing.T) {
 		},
 	}
 
-	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	require.NoError(t, err, "Failed to create writer")
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := writer.getBaseConstructorFromTypeName(tt.typeName, tt.structName)
+			result := baseConstructor(tt.typeName, tt.structName)
 			if !strings.Contains(result, tt.expected) {
-				assert.Equal(t, tt.expected, result, "Expected result to contain %s, got %s", tt.expected, result)
+				assert.Equal(t, tt.expected, result)
 			}
 		})
 	}
 }
 
-func TestFileWriter_GenerateValidatorChain(t *testing.T) {
-	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	require.NoError(t, err, "Failed to create writer")
-
+func TestGenerateValidatorChain(t *testing.T) {
 	tests := []struct {
 		name      string
 		rule      tagparser.TagRule
@@ -495,16 +485,13 @@ func TestFileWriter_GenerateValidatorChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := writer.generateValidatorChain(tt.rule, tt.fieldType)
+			result := generateValidatorChain(tt.rule, tt.fieldType)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestFileWriter_GenerateDefaultValue(t *testing.T) {
-	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	require.NoError(t, err, "Failed to create writer")
-
+func TestGenerateDefaultValue(t *testing.T) {
 	tests := []struct {
 		name      string
 		value     string
@@ -525,21 +512,18 @@ func TestFileWriter_GenerateDefaultValue(t *testing.T) {
 		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Default([]bool{true, false})`},
 		// Map types
 		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Default(map[string]string{"k": "v"})`},
-		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeOf(map[string]interface{}{}), expected: `.Default(map[string]interface{}{"a": 1})`},
+		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeOf(map[string]any{}), expected: `.Default(map[string]any{"a": 1})`},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := writer.generateDefaultValue(tt.value, tt.fieldType)
+			result := generateDefaultValue(tt.value, tt.fieldType)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestFileWriter_GeneratePrefaultValue(t *testing.T) {
-	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
-	require.NoError(t, err, "Failed to create writer")
-
+func TestGeneratePrefaultValue(t *testing.T) {
 	tests := []struct {
 		name      string
 		value     string
@@ -560,12 +544,12 @@ func TestFileWriter_GeneratePrefaultValue(t *testing.T) {
 		{name: "bool slice", value: `[false,true]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Prefault([]bool{false, true})`},
 		// Map types
 		{name: "string map", value: `{"foo":"bar"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Prefault(map[string]string{"foo": "bar"})`},
-		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeOf(map[string]interface{}{}), expected: `.Prefault(map[string]interface{}{"x": 99})`},
+		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeOf(map[string]any{}), expected: `.Prefault(map[string]any{"x": 99})`},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := writer.generatePrefaultValue(tt.value, tt.fieldType)
+			result := generatePrefaultValue(tt.value, tt.fieldType)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

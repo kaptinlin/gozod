@@ -18,7 +18,7 @@ import (
 
 // executeCheck executes the check logic - utility for testing
 func executeCheck(check core.ZodCheck, payload *core.ParsePayload) {
-	if internals := check.GetZod(); internals != nil {
+	if internals := check.Zod(); internals != nil {
 		// check conditional execution
 		if internals.When != nil && !internals.When(payload) {
 			return // skip check
@@ -39,17 +39,17 @@ func TestDirectCheckCreation(t *testing.T) {
 	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if payload.GetValue() == nil {
+			if payload.Value() == nil {
 				return
 			}
-			if str, ok := payload.GetValue().(string); ok && str == "invalid" {
-				payload.AddIssue(issues.CreateCustomIssue("test error", nil, payload.GetValue()))
+			if str, ok := payload.Value().(string); ok && str == "invalid" {
+				payload.AddIssue(issues.CreateCustomIssue("test error", nil, payload.Value()))
 			}
 		},
 	}
 
-	internals := check.GetZod()
-	require.NotNil(t, internals, "GetZod returned nil")
+	internals := check.Zod()
+	require.NotNil(t, internals, "Zod returned nil")
 	assert.Equal(t, "test_check", internals.Def.Check)
 }
 
@@ -61,9 +61,9 @@ func TestCheckExecution(t *testing.T) {
 	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.MaxLength(payload.GetValue(), 5) {
-				origin := utils.OriginFromValue(payload.GetValue())
-				payload.AddIssue(issues.CreateTooBigIssue(5, true, origin, payload.GetValue()))
+			if !validate.MaxLength(payload.Value(), 5) {
+				origin := utils.OriginFromValue(payload.Value())
+				payload.AddIssue(issues.CreateTooBigIssue(5, true, origin, payload.Value()))
 			}
 		},
 	}
@@ -72,16 +72,16 @@ func TestCheckExecution(t *testing.T) {
 
 	executeCheck(check, payload)
 
-	if len(payload.GetIssues()) != 0 {
-		t.Errorf("Expected no issues for valid input, got %d", len(payload.GetIssues()))
+	if len(payload.Issues()) != 0 {
+		t.Errorf("Expected no issues for valid input, got %d", len(payload.Issues()))
 	}
 
 	payload = core.NewParsePayload("this is too long")
 
 	executeCheck(check, payload)
 
-	if len(payload.GetIssues()) != 1 {
-		t.Errorf("Expected 1 issue for invalid input, got %d", len(payload.GetIssues()))
+	if len(payload.Issues()) != 1 {
+		t.Errorf("Expected 1 issue for invalid input, got %d", len(payload.Issues()))
 	}
 }
 
@@ -93,10 +93,10 @@ func TestConditionalExecution(t *testing.T) {
 	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			payload.AddIssue(issues.CreateCustomIssue("should not execute", nil, payload.GetValue()))
+			payload.AddIssue(issues.CreateCustomIssue("should not execute", nil, payload.Value()))
 		},
 		When: func(payload *core.ParsePayload) bool {
-			_, ok := payload.GetValue().(string)
+			_, ok := payload.Value().(string)
 			return ok
 		},
 	}
@@ -105,16 +105,16 @@ func TestConditionalExecution(t *testing.T) {
 
 	executeCheck(check, payload)
 
-	if len(payload.GetIssues()) != 0 {
-		t.Errorf("Expected no issues for skipped check, got %d", len(payload.GetIssues()))
+	if len(payload.Issues()) != 0 {
+		t.Errorf("Expected no issues for skipped check, got %d", len(payload.Issues()))
 	}
 
 	payload = core.NewParsePayload("test")
 
 	executeCheck(check, payload)
 
-	if len(payload.GetIssues()) != 1 {
-		t.Errorf("Expected 1 issue for executed check, got %d", len(payload.GetIssues()))
+	if len(payload.Issues()) != 1 {
+		t.Errorf("Expected 1 issue for executed check, got %d", len(payload.Issues()))
 	}
 }
 
@@ -143,7 +143,7 @@ func BenchmarkCheckExecution(b *testing.B) {
 	check := &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			validate.MaxLength(payload.GetValue(), 10)
+			validate.MaxLength(payload.Value(), 10)
 		},
 	}
 

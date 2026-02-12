@@ -2,20 +2,20 @@ package core
 
 // ZodCheck represents the interface for any validation constraint.
 type ZodCheck interface {
-	GetZod() *ZodCheckInternals
+	Zod() *ZodCheckInternals
 }
 
 // ZodCheckInternals contains the internal state and logic for a check.
 type ZodCheckInternals struct {
 	Def      *ZodCheckDef
-	Issc     *ZodIssueBase
+	Issue    *ZodIssueBase
 	Check    ZodCheckFn
 	OnAttach []func(schema any)
 	When     func(payload *ParsePayload) bool
 }
 
-// GetZod implements ZodCheck.
-func (c *ZodCheckInternals) GetZod() *ZodCheckInternals {
+// Zod implements ZodCheck.
+func (c *ZodCheckInternals) Zod() *ZodCheckInternals {
 	return c
 }
 

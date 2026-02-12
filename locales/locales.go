@@ -1,10 +1,10 @@
 // Package locales provides pre-configured error message formatters for different languages.
-// To use a locale, pass its factory function to gozod.Config().
+// To use a locale, pass its factory function to gozod.SetConfig().
 //
 // Example:
 //
-//	gozod.Config(locales.ZhCN()) // Switch to Chinese messages globally.
-//	gozod.Config(locales.EN())   // Switch back to English.
+//	gozod.SetConfig(locales.ZhCN()) // Switch to Chinese messages globally.
+//	gozod.SetConfig(locales.EN())   // Switch back to English.
 package locales
 
 import (

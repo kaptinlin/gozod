@@ -19,8 +19,8 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Regex(payload.GetValue(), pattern) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("regex", payload.GetValue(), nil))
+			if !validate.Regex(payload.Value(), pattern) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("regex", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -41,9 +41,9 @@ func Includes(substring string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Includes(payload.GetValue(), substring) {
+			if !validate.Includes(payload.Value(), substring) {
 				props := map[string]any{"includes": substring}
-				payload.AddIssue(issues.CreateInvalidFormatIssue("includes", payload.GetValue(), props))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("includes", payload.Value(), props))
 			}
 		},
 		OnAttach: []func(any){
@@ -63,9 +63,9 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.StartsWith(payload.GetValue(), prefix) {
+			if !validate.StartsWith(payload.Value(), prefix) {
 				props := map[string]any{"prefix": prefix}
-				payload.AddIssue(issues.CreateInvalidFormatIssue("starts_with", payload.GetValue(), props))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("starts_with", payload.Value(), props))
 			}
 		},
 		OnAttach: []func(any){
@@ -86,9 +86,9 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.EndsWith(payload.GetValue(), suffix) {
+			if !validate.EndsWith(payload.Value(), suffix) {
 				props := map[string]any{"suffix": suffix}
-				payload.AddIssue(issues.CreateInvalidFormatIssue("ends_with", payload.GetValue(), props))
+				payload.AddIssue(issues.CreateInvalidFormatIssue("ends_with", payload.Value(), props))
 			}
 		},
 		OnAttach: []func(any){
@@ -109,8 +109,8 @@ func Lowercase(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Lowercase(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("lowercase", payload.GetValue(), nil))
+			if !validate.Lowercase(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("lowercase", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -131,8 +131,8 @@ func Uppercase(params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Uppercase(payload.GetValue()) {
-				payload.AddIssue(issues.CreateInvalidFormatIssue("uppercase", payload.GetValue(), nil))
+			if !validate.Uppercase(payload.Value()) {
+				payload.AddIssue(issues.CreateInvalidFormatIssue("uppercase", payload.Value(), nil))
 			}
 		},
 		OnAttach: []func(any){
@@ -153,14 +153,14 @@ func StringGte(minValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if s, ok := reflectx.StringVal(payload.GetValue()); ok {
+		if s, ok := reflectx.StringVal(payload.Value()); ok {
 			if s < minValue {
-				raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.GetValue())
+				raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.Value())
 				raw.Inst = internals
 				payload.AddIssue(raw)
 			}
 		} else {
-			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue())
+			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -177,14 +177,14 @@ func StringLte(maxValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if s, ok := reflectx.StringVal(payload.GetValue()); ok {
+		if s, ok := reflectx.StringVal(payload.Value()); ok {
 			if s > maxValue {
-				raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.GetValue())
+				raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.Value())
 				raw.Inst = internals
 				payload.AddIssue(raw)
 			}
 		} else {
-			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.GetValue())
+			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}

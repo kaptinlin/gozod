@@ -11,41 +11,29 @@ import (
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
 
-// =============================================================================
-// TYPE CONSTRAINTS
-// =============================================================================
-
 // BigIntegerConstraint restricts values to *big.Int or **big.Int.
 type BigIntegerConstraint interface {
 	*big.Int | **big.Int
 }
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodBigIntDef defines the configuration for big.Int validation
+// ZodBigIntDef holds the configuration for big.Int validation.
 type ZodBigIntDef struct {
 	core.ZodTypeDef
 }
 
-// ZodBigIntInternals contains big.Int validator internal state
+// ZodBigIntInternals contains the internal state of a big.Int validator.
 type ZodBigIntInternals struct {
 	core.ZodTypeInternals
-	Def *ZodBigIntDef // Schema definition
+	Def *ZodBigIntDef
 }
 
-// ZodBigInt represents a big.Int validation schema with type safety
+// ZodBigInt is a type-safe big.Int validation schema.
 type ZodBigInt[T BigIntegerConstraint] struct {
 	internals *ZodBigIntInternals
 }
 
-// =============================================================================
-// CORE METHODS
-// =============================================================================
-
-// GetInternals returns the internal state of the schema.
-func (z *ZodBigInt[T]) GetInternals() *core.ZodTypeInternals {
+// Internals returns the internal state of the schema.
+func (z *ZodBigInt[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
@@ -59,85 +47,67 @@ func (z *ZodBigInt[T]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Coerce converts input to *big.Int, implementing the Coercible interface.
+// Coerce converts input to *big.Int.
 func (z *ZodBigInt[T]) Coerce(input any) (any, bool) {
-	result, err := coerce.ToBigInt(input)
-	return result, err == nil
+	r, err := coerce.ToBigInt(input)
+	return r, err == nil
 }
 
 // Parse validates input and returns a value matching the generic type T.
 func (z *ZodBigInt[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	if input == nil {
-		result, newInput, done, err := z.parseNilInput(ctx...)
+		r, sub, done, err := z.parseNilInput(ctx...)
 		if done {
-			return result, err
+			return r, err
 		}
-		input = newInput
+		input = sub
 	}
-
-	return engine.ParsePrimitive[*big.Int, T](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeBigInt,
-		engine.ApplyChecks[*big.Int],
-		engine.ConvertToConstraintType[*big.Int, T],
-		ctx...,
-	)
+	return engine.ParsePrimitive[*big.Int, T](input, &z.internals.ZodTypeInternals, core.ZodTypeBigInt, engine.ApplyChecks[*big.Int], engine.ConvertToConstraintType[*big.Int, T], ctx...)
 }
 
-// MustParse validates input and panics on failure.
+// MustParse panics on validation failure.
 func (z *ZodBigInt[T]) MustParse(input any, ctx ...*core.ParseContext) T {
-	result, err := z.Parse(input, ctx...)
+	r, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
-// ParseAny validates input and returns any type for runtime interface usage.
+// ParseAny validates input and returns an untyped result.
 func (z *ZodBigInt[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// StrictParse provides compile-time type safety by requiring exact type T.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodBigInt[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
-	return engine.ParsePrimitiveStrict[*big.Int, T](
-		input,
-		&z.internals.ZodTypeInternals,
-		core.ZodTypeBigInt,
-		engine.ApplyChecks[*big.Int],
-		ctx...,
-	)
+	return engine.ParsePrimitiveStrict[*big.Int, T](input, &z.internals.ZodTypeInternals, core.ZodTypeBigInt, engine.ApplyChecks[*big.Int], ctx...)
 }
 
-// MustStrictParse provides compile-time type safety and panics on failure.
+// MustStrictParse panics on validation failure with compile-time type safety.
 func (z *ZodBigInt[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
-
-// Optional returns a new schema that accepts nil, with **big.Int constraint.
+// Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodBigInt[T]) Optional() *ZodBigInt[**big.Int] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable returns a new schema that accepts nil values, with **big.Int constraint.
+// Nilable returns a schema that accepts nil values with pointer constraint.
 func (z *ZodBigInt[T]) Nilable() *ZodBigInt[**big.Int] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish returns a new schema combining optional and nilable modifiers.
+// Nullish combines optional and nilable modifiers.
 func (z *ZodBigInt[T]) Nullish() *ZodBigInt[**big.Int] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -146,7 +116,6 @@ func (z *ZodBigInt[T]) Nullish() *ZodBigInt[**big.Int] {
 }
 
 // NonOptional removes the optional flag, returning a *big.Int constraint.
-// Useful after Optional()/Nilable() to disallow nil again.
 func (z *ZodBigInt[T]) NonOptional() *ZodBigInt[*big.Int] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
@@ -160,14 +129,14 @@ func (z *ZodBigInt[T]) NonOptional() *ZodBigInt[*big.Int] {
 	}
 }
 
-// Default sets a fallback value returned when input is nil (short-circuits validation).
+// Default sets a fallback value returned when input is nil (short-circuits).
 func (z *ZodBigInt[T]) Default(v *big.Int) *ZodBigInt[T] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
+// DefaultFunc sets a fallback function called when input is nil (short-circuits).
 func (z *ZodBigInt[T]) DefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -197,51 +166,46 @@ func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
-func (z *ZodBigInt[T]) Describe(description string) *ZodBigInt[T] {
-	newInternals := z.internals.Clone()
+func (z *ZodBigInt[T]) Describe(desc string) *ZodBigInt[T] {
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
+	existing.Description = desc
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
 }
 
-// =============================================================================
-// VALIDATION METHODS
-// =============================================================================
-
 // Min adds minimum value validation (>=).
-func (z *ZodBigInt[T]) Min(minimum *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Gte(minimum, params...))
+func (z *ZodBigInt[T]) Min(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Gte(n, params...))
 }
 
 // Max adds maximum value validation (<=).
-func (z *ZodBigInt[T]) Max(maximum *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Lte(maximum, params...))
+func (z *ZodBigInt[T]) Max(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Lte(n, params...))
 }
 
-// Gt adds greater-than validation (exclusive).
-func (z *ZodBigInt[T]) Gt(value *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Gt(value, params...))
+// Gt adds greater-than validation.
+func (z *ZodBigInt[T]) Gt(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Gt(n, params...))
 }
 
-// Gte adds greater-than-or-equal validation (inclusive).
-func (z *ZodBigInt[T]) Gte(value *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Gte(value, params...))
+// Gte adds greater-than-or-equal validation.
+func (z *ZodBigInt[T]) Gte(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Gte(n, params...))
 }
 
-// Lt adds less-than validation (exclusive).
-func (z *ZodBigInt[T]) Lt(value *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Lt(value, params...))
+// Lt adds less-than validation.
+func (z *ZodBigInt[T]) Lt(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Lt(n, params...))
 }
 
-// Lte adds less-than-or-equal validation (inclusive).
-func (z *ZodBigInt[T]) Lte(value *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.Lte(value, params...))
+// Lte adds less-than-or-equal validation.
+func (z *ZodBigInt[T]) Lte(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.Lte(n, params...))
 }
 
 // Positive adds positive number validation (> 0).
@@ -265,27 +229,23 @@ func (z *ZodBigInt[T]) NonPositive(params ...any) *ZodBigInt[T] {
 }
 
 // MultipleOf adds multiple-of validation.
-func (z *ZodBigInt[T]) MultipleOf(value *big.Int, params ...any) *ZodBigInt[T] {
-	return z.withCheck(checks.MultipleOf(value, params...))
+func (z *ZodBigInt[T]) MultipleOf(n *big.Int, params ...any) *ZodBigInt[T] {
+	return z.withCheck(checks.MultipleOf(n, params...))
 }
-
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
 
 // Transform creates a type-safe transformation pipeline.
 func (z *ZodBigInt[T]) Transform(fn func(*big.Int, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
-	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
+	wrapper := func(input T, ctx *core.RefinementContext) (any, error) {
 		return fn(extractBigInt(input), ctx)
 	}
-	return core.NewZodTransform[T, any](z, wrapperFn)
+	return core.NewZodTransform[T, any](z, wrapper)
 }
 
 // Overwrite transforms the value while preserving the same type.
 func (z *ZodBigInt[T]) Overwrite(transform func(T) T, params ...any) *ZodBigInt[T] {
 	check := checks.NewZodCheckOverwrite(func(input any) any {
-		if converted, ok := convertToBigIntType[T](input); ok {
-			return transform(converted)
+		if v, ok := toBigIntType[T](input); ok {
+			return transform(v)
 		}
 		return input
 	}, params...)
@@ -294,15 +254,11 @@ func (z *ZodBigInt[T]) Overwrite(transform func(T) T, params ...any) *ZodBigInt[
 
 // Pipe creates a validation pipeline to another schema.
 func (z *ZodBigInt[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
-	targetFn := func(input T, ctx *core.ParseContext) (any, error) {
+	fn := func(input T, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractBigInt(input), ctx)
 	}
-	return core.NewZodPipe[T, any](z, target, targetFn)
+	return core.NewZodPipe[T, any](z, target, fn)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine applies a type-safe custom validation function.
 func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
@@ -336,67 +292,57 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 	return z.withCheck(check)
 }
 
-// RefineAny applies a custom validation function that receives the raw value.
+// RefineAny applies a custom validation function on the raw value.
 func (z *ZodBigInt[T]) RefineAny(fn func(any) bool, params ...any) *ZodBigInt[T] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	return z.withCheck(check)
 }
 
-// =============================================================================
-// HELPER AND PRIVATE METHODS
-// =============================================================================
-
-// withCheck clones internals, adds a check, and returns a new schema (Copy-on-Write).
-func (z *ZodBigInt[T]) withCheck(check core.ZodCheck) *ZodBigInt[T] {
+// withCheck clones internals, adds a check, and returns a new schema.
+func (z *ZodBigInt[T]) withCheck(c core.ZodCheck) *ZodBigInt[T] {
 	in := z.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(c)
 	return z.withInternals(in)
 }
 
 // parseNilInput handles nil input by checking modifiers in priority order.
-// Returns (result, _, true, err) when the result is final (default, optional, or error).
-// Returns (_, substituteInput, false, nil) when a prefault value should be parsed.
+// Returns (result, _, true, err) when final, or (_, substitute, false, nil) for prefault.
 func (z *ZodBigInt[T]) parseNilInput(ctx ...*core.ParseContext) (T, any, bool, error) {
 	var zero T
-	var parseCtx *core.ParseContext
+	pctx := &core.ParseContext{}
 	if len(ctx) > 0 {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+		pctx = ctx[0]
 	}
 
-	in := &z.internals.ZodTypeInternals
+	ti := &z.internals.ZodTypeInternals
 
-	if in.NonOptional {
-		return zero, nil, true, issues.CreateNonOptionalError(parseCtx)
+	if ti.NonOptional {
+		return zero, nil, true, issues.CreateNonOptionalError(pctx)
 	}
-
-	// Default short-circuits: return value without validation.
-	if in.DefaultValue != nil {
-		v, err := engine.ConvertToConstraintType[*big.Int, T](in.DefaultValue, parseCtx, core.ZodTypeBigInt)
+	if ti.DefaultValue != nil {
+		v, err := engine.ConvertToConstraintType[*big.Int, T](ti.DefaultValue, pctx, core.ZodTypeBigInt)
 		return v, nil, true, err
 	}
-	if in.DefaultFunc != nil {
-		v, err := engine.ConvertToConstraintType[*big.Int, T](in.DefaultFunc(), parseCtx, core.ZodTypeBigInt)
+	if ti.DefaultFunc != nil {
+		v, err := engine.ConvertToConstraintType[*big.Int, T](ti.DefaultFunc(), pctx, core.ZodTypeBigInt)
 		return v, nil, true, err
 	}
 
-	// Prefault substitutes input and continues through validation.
 	switch {
-	case in.PrefaultValue != nil:
-		return zero, in.PrefaultValue, false, nil
-	case in.PrefaultFunc != nil:
-		return zero, in.PrefaultFunc(), false, nil
-	case in.Optional || in.Nilable:
-		v, err := engine.ConvertToConstraintType[*big.Int, T](nil, parseCtx, core.ZodTypeBigInt)
+	case ti.PrefaultValue != nil:
+		return zero, ti.PrefaultValue, false, nil
+	case ti.PrefaultFunc != nil:
+		return zero, ti.PrefaultFunc(), false, nil
+	case ti.Optional || ti.Nilable:
+		v, err := engine.ConvertToConstraintType[*big.Int, T](nil, pctx, core.ZodTypeBigInt)
 		return v, nil, true, err
 	default:
-		return zero, nil, true, issues.CreateInvalidTypeError(core.ZodTypeBigInt, nil, parseCtx)
+		return zero, nil, true, issues.CreateInvalidTypeError(core.ZodTypeBigInt, nil, pctx)
 	}
 }
 
-// convertToBigIntType converts any value to the specified BigInt constraint type.
-func convertToBigIntType[T BigIntegerConstraint](v any) (T, bool) {
+// toBigIntType converts any value to the specified BigInt constraint type.
+func toBigIntType[T BigIntegerConstraint](v any) (T, bool) {
 	var zero T
 
 	switch any(zero).(type) {
@@ -419,7 +365,7 @@ func convertToBigIntType[T BigIntegerConstraint](v any) (T, bool) {
 	}
 }
 
-// withPtrInternals creates a new **big.Int schema from cloned internals.
+// withPtrInternals creates a **big.Int schema from cloned internals.
 func (z *ZodBigInt[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodBigInt[**big.Int] {
 	return &ZodBigInt[**big.Int]{internals: &ZodBigIntInternals{
 		ZodTypeInternals: *in,
@@ -436,28 +382,28 @@ func (z *ZodBigInt[T]) withInternals(in *core.ZodTypeInternals) *ZodBigInt[T] {
 }
 
 // CloneFrom copies configuration from another schema of the same type.
-func (z *ZodBigInt[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodBigInt[T]); ok {
-		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+func (z *ZodBigInt[T]) CloneFrom(src any) {
+	if s, ok := src.(*ZodBigInt[T]); ok {
+		prev := z.internals.Checks
+		*z.internals = *s.internals
+		z.internals.Checks = prev
 	}
 }
 
-// extractBigInt extracts the underlying *big.Int from a generic constraint type.
-func extractBigInt[T BigIntegerConstraint](value T) *big.Int {
-	if ptr, ok := any(value).(**big.Int); ok {
+// extractBigInt extracts the underlying *big.Int from a constraint type.
+func extractBigInt[T BigIntegerConstraint](v T) *big.Int {
+	if ptr, ok := any(v).(**big.Int); ok {
 		if ptr != nil {
 			return *ptr
 		}
 		return nil
 	}
-	return any(value).(*big.Int)
+	return any(v).(*big.Int)
 }
 
-// newZodBigIntFromDef constructs a new ZodBigInt from a definition.
+// newZodBigIntFromDef constructs a ZodBigInt from a definition.
 func newZodBigIntFromDef[T BigIntegerConstraint](def *ZodBigIntDef) *ZodBigInt[T] {
-	internals := &ZodBigIntInternals{
+	in := &ZodBigIntInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
 			Type:   def.Type,
 			Checks: def.Checks,
@@ -467,24 +413,16 @@ func newZodBigIntFromDef[T BigIntegerConstraint](def *ZodBigIntDef) *ZodBigInt[T
 		Def: def,
 	}
 
-	// Provide constructor for AddCheck functionality
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		bigIntDef := &ZodBigIntDef{
-			ZodTypeDef: *newDef,
-		}
-		return any(newZodBigIntFromDef[T](bigIntDef)).(core.ZodType[any])
+	in.Constructor = func(d *core.ZodTypeDef) core.ZodType[any] {
+		return any(newZodBigIntFromDef[T](&ZodBigIntDef{ZodTypeDef: *d})).(core.ZodType[any])
 	}
 
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
 	}
 
-	return &ZodBigInt[T]{internals: internals}
+	return &ZodBigInt[T]{internals: in}
 }
-
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
 
 // BigInt creates a *big.Int validation schema.
 func BigInt(params ...any) *ZodBigInt[*big.Int] {
@@ -498,32 +436,29 @@ func BigIntPtr(params ...any) *ZodBigInt[**big.Int] {
 
 // BigIntTyped is the generic constructor for big.Int schemas.
 func BigIntTyped[T BigIntegerConstraint](params ...any) *ZodBigInt[T] {
-	schemaParams := utils.NormalizeParams(params...)
-
+	sp := utils.NormalizeParams(params...)
 	def := &ZodBigIntDef{
 		ZodTypeDef: core.ZodTypeDef{
 			Type:   core.ZodTypeBigInt,
 			Checks: []core.ZodCheck{},
 		},
 	}
-
-	if schemaParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
-
 	return newZodBigIntFromDef[T](def)
 }
 
-// CoercedBigInt creates a coerced *big.Int schema that converts input types.
+// CoercedBigInt creates a coerced *big.Int schema.
 func CoercedBigInt(params ...any) *ZodBigInt[*big.Int] {
-	schema := BigInt(params...)
-	schema.internals.SetCoerce(true)
-	return schema
+	s := BigInt(params...)
+	s.internals.SetCoerce(true)
+	return s
 }
 
-// CoercedBigIntPtr creates a coerced **big.Int schema that converts input types.
+// CoercedBigIntPtr creates a coerced **big.Int schema.
 func CoercedBigIntPtr(params ...any) *ZodBigInt[**big.Int] {
-	schema := BigIntPtr(params...)
-	schema.internals.SetCoerce(true)
-	return schema
+	s := BigIntPtr(params...)
+	s.internals.SetCoerce(true)
+	return s
 }

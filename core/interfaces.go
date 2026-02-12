@@ -29,8 +29,8 @@ type ZodType[T any] interface {
 	// MustParse validates input and panics on error.
 	MustParse(input any, ctx ...*ParseContext) T
 
-	// GetInternals provides access to the internal state of this schema.
-	GetInternals() *ZodTypeInternals
+	// Internals provides access to the internal state of this schema.
+	Internals() *ZodTypeInternals
 
 	// IsOptional reports whether this schema accepts missing values.
 	IsOptional() bool
@@ -45,8 +45,8 @@ type ZodSchema interface {
 	// ParseAny validates input and returns an untyped result.
 	ParseAny(input any, ctx ...*ParseContext) (any, error)
 
-	// GetInternals provides access to the internal state of this schema.
-	GetInternals() *ZodTypeInternals
+	// Internals provides access to the internal state of this schema.
+	Internals() *ZodTypeInternals
 }
 
 // Cloneable is an optional interface for schemas that support deep-copying.

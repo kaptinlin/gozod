@@ -1,6 +1,3 @@
-// Package main provides file writing functionality for the gozodgen tool.
-// This module handles the generation and writing of Go code files containing
-// optimized validation schemas based on struct analysis.
 package main
 
 import (
@@ -54,79 +51,68 @@ type FileWriter struct {
 	verbose      bool
 }
 
-// NewFileWriter creates a new file writer instance
+// NewFileWriter creates a new FileWriter instance.
 func NewFileWriter(outputDir, packageName, outputSuffix string, dryRun, verbose bool) (*FileWriter, error) {
-	// Load code generation templates
-	templates, err := loadTemplates()
+	tmpl, err := loadTemplates()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load templates: %w", err)
+		return nil, fmt.Errorf("load templates: %w", err)
 	}
 
 	return &FileWriter{
 		outputDir:    outputDir,
 		packageName:  packageName,
 		outputSuffix: outputSuffix,
-		templates:    templates,
+		templates:    tmpl,
 		dryRun:       dryRun,
 		verbose:      verbose,
 	}, nil
 }
 
-// WriteGeneratedCode writes the generated code for a struct to a file
+// WriteGeneratedCode writes the generated code for a struct to a file.
 func (w *FileWriter) WriteGeneratedCode(info *GenerationInfo) error {
-	// Generate the output file path based on the source file
-	outputPath := w.getOutputPathFromSource(info.FilePath, info.Name)
+	outputPath := w.outputPath(info.FilePath, info.Name)
 
 	if w.verbose {
 		fmt.Printf("Generating code for struct %s -> %s\n", info.Name, outputPath)
 	}
 
-	// Generate the code content
 	content, err := w.generateCode(info)
 	if err != nil {
-		return fmt.Errorf("failed to generate code for %s: %w", info.Name, err)
+		return fmt.Errorf("generate code for %s: %w", info.Name, err)
 	}
 
-	// In dry-run mode, just print the content
 	if w.dryRun {
 		fmt.Printf("=== Generated code for %s ===\n%s\n", info.Name, content)
 		return nil
 	}
 
-	// Ensure output directory exists
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+		return fmt.Errorf("create output directory: %w", err)
 	}
-
-	// Write the file
 	if err := os.WriteFile(outputPath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write file %s: %w", outputPath, err)
+		return fmt.Errorf("write file %s: %w", outputPath, err)
 	}
 
 	if w.verbose {
-		fmt.Printf("Successfully generated %s\n", outputPath)
+		fmt.Printf("Generated %s\n", outputPath)
 	}
-
 	return nil
 }
 
-// generateCode generates the Go code for a struct
+// generateCode generates the Go code for a struct.
 func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
-	// Generate field schemas
-	fieldSchemas, err := w.generateFieldSchemasForStruct(info.Fields, info.Name)
+	fieldSchemas, err := w.generateFieldSchemas(info.Fields, info.Name)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate field schemas: %w", err)
+		return "", fmt.Errorf("generate field schemas: %w", err)
 	}
 
-	// Determine package name
-	packageName := w.packageName
-	if packageName == "" {
-		packageName = info.Package
+	pkgName := w.packageName
+	if pkgName == "" {
+		pkgName = info.Package
 	}
 
-	// Prepare template data
-	templateData := &TemplateData{
-		PackageName:   packageName,
+	data := &TemplateData{
+		PackageName:   pkgName,
 		StructName:    info.Name,
 		Fields:        info.Fields,
 		FieldSchemas:  fieldSchemas,
@@ -134,12 +120,10 @@ func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
 		GeneratedTime: time.Now().Format(time.RFC3339),
 	}
 
-	// Execute the main template
 	var buf strings.Builder
-	if err := w.templates.ExecuteTemplate(&buf, "main", templateData); err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
+	if err := w.templates.ExecuteTemplate(&buf, "main", data); err != nil {
+		return "", fmt.Errorf("execute template: %w", err)
 	}
-
 	return buf.String(), nil
 }
 
@@ -205,112 +189,85 @@ func (w *FileWriter) generateImports(info *GenerationInfo) []string {
 	return result
 }
 
-// generateFieldSchemasForStruct generates schema code for all fields with struct context
-func (w *FileWriter) generateFieldSchemasForStruct(fields []tagparser.FieldInfo, structName string) ([]FieldSchemaInfo, error) {
-	fieldSchemas := make([]FieldSchemaInfo, 0, len(fields))
-
+// generateFieldSchemas generates schema code for all fields.
+func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structName string) ([]FieldSchemaInfo, error) {
+	schemas := make([]FieldSchemaInfo, 0, len(fields))
 	for _, field := range fields {
-		schemaCode, err := w.generateFieldSchemaCodeForStruct(field, structName)
+		code, err := w.generateFieldSchemaCode(field, structName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate schema for field %s: %w", field.Name, err)
+			return nil, fmt.Errorf("generate schema for field %s: %w", field.Name, err)
 		}
-
-		fieldSchemas = append(fieldSchemas, FieldSchemaInfo{
+		schemas = append(schemas, FieldSchemaInfo{
 			FieldName:  field.JsonName,
-			SchemaCode: schemaCode,
+			SchemaCode: code,
 		})
 	}
-
-	return fieldSchemas, nil
+	return schemas, nil
 }
 
-// generateFieldSchemaCodeForStruct generates GoZod schema code for a single field with struct context
-func (w *FileWriter) generateFieldSchemaCodeForStruct(field tagparser.FieldInfo, structName string) (string, error) {
-	// Use AST type name for better circular reference detection
-	fieldTypeName := field.TypeName
-	if fieldTypeName == "" {
-		fieldTypeName = field.Type.String() // fallback to reflection
+// generateFieldSchemaCode generates GoZod schema code for a single field.
+func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structName string) (string, error) {
+	typeName := field.TypeName
+	if typeName == "" {
+		typeName = field.Type.String()
 	}
-	// Check for special UUID case first
-	if w.hasUUIDRule(field.Rules) && w.isStringType(field.Type) {
+
+	// UUID special case
+	if hasUUIDRule(field.Rules) && isStringType(field.Type) {
 		var b strings.Builder
 		b.WriteString("gozod.Uuid()")
-
-		// Apply other validation rules (excluding UUID)
 		for _, rule := range field.Rules {
 			if rule.Name != "uuid" {
-				validatorCode := w.generateValidatorChain(rule, field.Type)
-				if validatorCode != "" {
-					b.WriteString(validatorCode)
+				if code := generateValidatorChain(rule, field.Type); code != "" {
+					b.WriteString(code)
 				}
 			}
 		}
-
-		// Handle optional fields
-		if !field.Required && !w.isPointerType(field.Type) {
+		if !field.Required && !isPointerType(field.Type) {
 			b.WriteString(".Optional()")
 		}
-
 		return b.String(), nil
 	}
 
-	// Check for special Enum case
-	enumRule := w.getEnumRule(field.Rules)
-	if enumRule != nil && w.isStringType(field.Type) {
-		var values []string
-		for _, param := range enumRule.Params {
+	// Enum special case
+	if rule := findEnumRule(field.Rules); rule != nil && isStringType(field.Type) {
+		values := make([]string, 0, len(rule.Params))
+		for _, param := range rule.Params {
 			values = append(values, fmt.Sprintf(`"%s"`, param))
 		}
-
 		var b strings.Builder
 		b.WriteString("gozod.Enum(")
 		b.WriteString(strings.Join(values, ", "))
 		b.WriteByte(')')
-
-		// Apply other validation rules (excluding enum)
-		for _, rule := range field.Rules {
-			if rule.Name != "enum" {
-				validatorCode := w.generateValidatorChain(rule, field.Type)
-				if validatorCode != "" {
-					b.WriteString(validatorCode)
+		for _, r := range field.Rules {
+			if r.Name != "enum" {
+				if code := generateValidatorChain(r, field.Type); code != "" {
+					b.WriteString(code)
 				}
 			}
 		}
-
-		// Handle optional fields
-		if !field.Required && !w.isPointerType(field.Type) {
+		if !field.Required && !isPointerType(field.Type) {
 			b.WriteString(".Optional()")
 		}
-
 		return b.String(), nil
 	}
 
-	// Get base constructor for the field type using AST type name for better circular detection
-	baseConstructor := w.getBaseConstructorFromTypeName(fieldTypeName, structName)
-
+	// General case
 	var b strings.Builder
-	b.WriteString(baseConstructor)
-
-	// Apply validation rules in order
+	b.WriteString(baseConstructor(typeName, structName))
 	for _, rule := range field.Rules {
-		validatorCode := w.generateValidatorChain(rule, field.Type)
-		if validatorCode != "" {
-			b.WriteString(validatorCode)
+		if code := generateValidatorChain(rule, field.Type); code != "" {
+			b.WriteString(code)
 		}
 	}
-
-	// Handle optional fields
-	// Pointer types are always optional
-	// Non-pointer, non-required fields are also optional
-	if w.isPointerType(field.Type) || !field.Required {
+	if isPointerType(field.Type) || !field.Required {
 		b.WriteString(".Optional()")
 	}
-
 	return b.String(), nil
 }
 
-// generateValidatorChain generates validator method chain for a rule
-func (w *FileWriter) generateValidatorChain(rule tagparser.TagRule, fieldType reflect.Type) string {
+// generateValidatorChain returns the validator method chain for a rule.
+func generateValidatorChain(rule tagparser.TagRule, fieldType reflect.Type) string {
 	switch rule.Name {
 	case "required":
 		// Required is handled by the optional logic
@@ -362,34 +319,26 @@ func (w *FileWriter) generateValidatorChain(rule tagparser.TagRule, fieldType re
 		}
 	case "default":
 		if len(rule.Params) > 0 {
-			// Handle default values based on type
 			value := rule.Params[0]
-			// For complex JSON values, don't split by individual words
 			if len(rule.Params) > 1 && !strings.HasPrefix(value, "[") && !strings.HasPrefix(value, "{") {
-				// This might be a single parameter that was incorrectly split
 				value = strings.Join(rule.Params, " ")
 			}
-			return w.generateDefaultValue(value, fieldType)
+			return generateDefaultValue(value, fieldType)
 		}
 	case "prefault":
 		if len(rule.Params) > 0 {
-			// Handle prefault values based on type
 			value := rule.Params[0]
-			// For complex JSON values, don't split by individual words
 			if len(rule.Params) > 1 && !strings.HasPrefix(value, "[") && !strings.HasPrefix(value, "{") {
-				// This might be a single parameter that was incorrectly split
 				value = strings.Join(rule.Params, " ")
 			}
-			return w.generatePrefaultValue(value, fieldType)
+			return generatePrefaultValue(value, fieldType)
 		}
 	case "refine":
 		if len(rule.Params) > 0 {
-			// Generate refine method call with custom function
 			return fmt.Sprintf(".Refine(%s)", rule.Params[0])
 		}
 	case "check":
 		if len(rule.Params) > 0 {
-			// Generate custom check method call
 			return fmt.Sprintf(".Check(%s)", rule.Params[0])
 		}
 	case "trim":
@@ -407,120 +356,85 @@ func (w *FileWriter) generateValidatorChain(rule tagparser.TagRule, fieldType re
 	return ""
 }
 
-// getBaseConstructorFromTypeName creates constructor from AST type name with circular reference detection
-func (w *FileWriter) getBaseConstructorFromTypeName(typeName, structName string) string {
-	// Handle pointer types
-	if strings.HasPrefix(typeName, "*") {
-		baseType := strings.TrimPrefix(typeName, "*")
-		if w.isBasicTypeName(baseType) {
-			return w.getBasicTypeConstructor(baseType)
+// baseConstructor returns the GoZod constructor for a type name with circular reference detection.
+func baseConstructor(typeName, structName string) string {
+	if base, ok := strings.CutPrefix(typeName, "*"); ok {
+		if basicTypes[base] {
+			return basicTypeConstructor(base)
 		}
-		// Check for circular reference
-		if structName != "" && baseType == structName {
-			return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() })", baseType)
+		if structName != "" && base == structName {
+			return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() })", base)
 		}
-		return fmt.Sprintf("gozod.FromStruct[%s]()", baseType)
+		return fmt.Sprintf("gozod.FromStruct[%s]()", base)
 	}
 
-	// Handle slice types
-	if strings.HasPrefix(typeName, "[]") {
-		elemTypeName := strings.TrimPrefix(typeName, "[]")
-		// Remove pointer prefix from element type for comparison
-		cleanElemType := strings.TrimPrefix(elemTypeName, "*")
-
-		// Check for circular reference in slice element
-		if structName != "" && cleanElemType == structName {
-			return fmt.Sprintf("gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", cleanElemType)
+	if elem, ok := strings.CutPrefix(typeName, "[]"); ok {
+		clean := strings.TrimPrefix(elem, "*")
+		if structName != "" && clean == structName {
+			return fmt.Sprintf("gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", clean)
 		}
-
-		elemConstructor := w.getBaseConstructorFromTypeName(elemTypeName, structName)
-		return fmt.Sprintf("gozod.Slice(%s)", elemConstructor)
+		return fmt.Sprintf("gozod.Slice(%s)", baseConstructor(elem, structName))
 	}
 
-	// Handle map types
 	if strings.HasPrefix(typeName, "map[") {
-		// Extract value type from map[K]V
 		if idx := strings.LastIndex(typeName, "]"); idx != -1 && idx < len(typeName)-1 {
-			valueTypeName := typeName[idx+1:]
-			cleanValueType := strings.TrimPrefix(valueTypeName, "*")
-
-			// Check for circular reference in map value
-			if structName != "" && cleanValueType == structName {
-				return fmt.Sprintf("gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", cleanValueType)
+			valType := typeName[idx+1:]
+			clean := strings.TrimPrefix(valType, "*")
+			if structName != "" && clean == structName {
+				return fmt.Sprintf("gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", clean)
 			}
-
-			valueConstructor := w.getBaseConstructorFromTypeName(valueTypeName, structName)
-			return fmt.Sprintf("gozod.Record(%s)", valueConstructor)
+			return fmt.Sprintf("gozod.Record(%s)", baseConstructor(valType, structName))
 		}
 		return "gozod.Record(gozod.Any())"
 	}
 
-	// Handle basic types
-	if w.isBasicTypeName(typeName) {
-		return w.getBasicTypeConstructor(typeName)
+	if basicTypes[typeName] {
+		return basicTypeConstructor(typeName)
 	}
-
-	// Handle special types
 	if typeName == "time.Time" {
 		return "gozod.Time()"
 	}
-
-	// Handle struct types
-	// Check for circular reference
 	if structName != "" && typeName == structName {
 		return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() })", typeName)
 	}
-
-	// Custom struct type
 	if typeName != "unknown" {
 		return fmt.Sprintf("gozod.FromStruct[%s]()", typeName)
 	}
-
 	return "gozod.Any()"
 }
 
-// isBasicTypeName checks if a type name is a basic Go type
-func (w *FileWriter) isBasicTypeName(typeName string) bool {
-	return basicTypes[typeName]
-}
-
-// getBasicTypeConstructor returns the GoZod constructor for basic Go types
-func (w *FileWriter) getBasicTypeConstructor(typeName string) string {
-	if constructor, exists := basicTypeConstructors[typeName]; exists {
-		return constructor
+// basicTypeConstructor returns the GoZod constructor for a basic Go type.
+func basicTypeConstructor(typeName string) string {
+	if c, ok := basicTypeConstructors[typeName]; ok {
+		return c
 	}
 	return "gozod.Any()"
 }
 
-// isPointerType checks if a type is a pointer type
-func (w *FileWriter) isPointerType(t reflect.Type) bool {
-	return t.Kind() == reflect.Ptr
+// isPointerType reports whether t is a pointer type.
+func isPointerType(t reflect.Type) bool {
+	return t.Kind() == reflect.Pointer
 }
 
-// isStringType checks if a type is string or *string
-func (w *FileWriter) isStringType(t reflect.Type) bool {
-	if t.Kind() == reflect.String {
-		return true
-	}
-	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.String {
-		return true
-	}
-	return false
+// isStringType reports whether t is string or *string.
+func isStringType(t reflect.Type) bool {
+	return t.Kind() == reflect.String ||
+		(t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.String)
 }
 
-// generateDefaultValue generates Go code for default values based on type.
-func (w *FileWriter) generateDefaultValue(value string, fieldType reflect.Type) string {
-	return w.generateTypedValue("Default", value, fieldType)
+// generateDefaultValue returns a .Default(...) call formatted for the field type.
+func generateDefaultValue(value string, fieldType reflect.Type) string {
+	return generateTypedValue("Default", value, fieldType)
 }
 
-// generatePrefaultValue generates Go code for prefault values based on type.
-func (w *FileWriter) generatePrefaultValue(value string, fieldType reflect.Type) string {
-	return w.generateTypedValue("Prefault", value, fieldType)
+// generatePrefaultValue returns a .Prefault(...) call formatted for the field type.
+func generatePrefaultValue(value string, fieldType reflect.Type) string {
+	return generateTypedValue("Prefault", value, fieldType)
 }
 
-// generateTypedValue generates a method call (.Default or .Prefault) with
+// generateTypedValue returns a method call (.Default or .Prefault) with
 // the value formatted according to the field's Go type.
-func (w *FileWriter) generateTypedValue(method, value string, fieldType reflect.Type) string {
+func generateTypedValue(method, value string, fieldType reflect.Type) string {
 	switch fieldType.Kind() { //nolint:exhaustive // only special-cased types need distinct formatting
 	case reflect.String:
 		return fmt.Sprintf(`.%s("%s")`, method, value)
@@ -528,8 +442,8 @@ func (w *FileWriter) generateTypedValue(method, value string, fieldType reflect.
 		return generateSliceValue(method, value, fieldType)
 	case reflect.Map:
 		return generateMapValue(method, value, fieldType)
-	case reflect.Ptr:
-		return w.generateTypedValue(method, value, fieldType.Elem())
+	case reflect.Pointer:
+		return generateTypedValue(method, value, fieldType.Elem())
 	default:
 		return fmt.Sprintf(".%s(%s)", method, value)
 	}
@@ -542,7 +456,7 @@ func generateSliceValue(method, value string, fieldType reflect.Type) string {
 		return fmt.Sprintf(".%s(%s)", method, value)
 	}
 
-	var jsonResult []interface{}
+	var jsonResult []any
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
 		elemType := fieldType.Elem()
 		switch elemType.Kind() { //nolint:exhaustive // only common JSON-decodable types need special handling
@@ -593,7 +507,7 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 		return fmt.Sprintf(".%s(%s)", method, value)
 	}
 
-	var jsonResult map[string]interface{}
+	var jsonResult map[string]any
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
 		switch fieldType.Elem().Kind() { //nolint:exhaustive // only string and interface map values are JSON-decodable
 		case reflect.String:
@@ -618,7 +532,7 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 					items = append(items, fmt.Sprintf(`"%s": %v`, k, val))
 				}
 			}
-			return fmt.Sprintf(".%s(map[string]interface{}{%s})", method, strings.Join(items, ", "))
+			return fmt.Sprintf(".%s(map[string]any{%s})", method, strings.Join(items, ", "))
 		default:
 			// Fall through to fallback
 		}
@@ -627,8 +541,8 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 	return fmt.Sprintf(".%s(%s)", method, value)
 }
 
-// hasUUIDRule checks if field has UUID validation rule
-func (w *FileWriter) hasUUIDRule(rules []tagparser.TagRule) bool {
+// hasUUIDRule reports whether rules contain a UUID validation rule.
+func hasUUIDRule(rules []tagparser.TagRule) bool {
 	for _, rule := range rules {
 		if rule.Name == "uuid" {
 			return true
@@ -637,8 +551,8 @@ func (w *FileWriter) hasUUIDRule(rules []tagparser.TagRule) bool {
 	return false
 }
 
-// getEnumRule returns the enum rule if it exists
-func (w *FileWriter) getEnumRule(rules []tagparser.TagRule) *tagparser.TagRule {
+// findEnumRule returns the enum rule if present, or nil.
+func findEnumRule(rules []tagparser.TagRule) *tagparser.TagRule {
 	for _, rule := range rules {
 		if rule.Name == "enum" {
 			return &rule
@@ -647,18 +561,13 @@ func (w *FileWriter) getEnumRule(rules []tagparser.TagRule) *tagparser.TagRule {
 	return nil
 }
 
-// getOutputPathFromSource generates output file path based on source file location
-func (w *FileWriter) getOutputPathFromSource(sourceFilePath, structName string) string {
-	// Get directory from source file
-	sourceDir := filepath.Dir(sourceFilePath)
-
-	// Convert struct name to snake_case for file name
-	fileName := toSnakeCase(structName) + w.outputSuffix
-
-	return filepath.Join(sourceDir, fileName)
+// outputPath generates the output file path based on source file location.
+func (w *FileWriter) outputPath(sourceFilePath, structName string) string {
+	dir := filepath.Dir(sourceFilePath)
+	return filepath.Join(dir, toSnakeCase(structName)+w.outputSuffix)
 }
 
-// TemplateData contains data passed to code generation templates
+// TemplateData contains data passed to code generation templates.
 type TemplateData struct {
 	PackageName   string
 	StructName    string
@@ -668,9 +577,7 @@ type TemplateData struct {
 	GeneratedTime string
 }
 
-// Type definitions are now in main.go
-
-// loadTemplates loads the code generation templates
+// loadTemplates loads the code generation templates.
 func loadTemplates() (*template.Template, error) {
 	// Define the main template for generated code
 	mainTemplate := `// Code generated by gozodgen. DO NOT EDIT.
