@@ -133,6 +133,7 @@ func getFileSize(v any) int64 {
 	return 0
 }
 
+// addInvalidValueIssue reports an invalid MIME type issue.
 func addInvalidValueIssue(mimeTypes []string, payload *core.ParsePayload) {
 	values := make([]any, len(mimeTypes))
 	for i, v := range mimeTypes {

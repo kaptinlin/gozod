@@ -5,38 +5,41 @@ import (
 	"strconv"
 )
 
-// CUID matches strings in CUID format (starts with 'c' or 'C', 9+ chars).
-var CUID = regexp.MustCompile(`^[cC][^\s-]{8,}$`)
+// ID format patterns.
+var (
+	// CUID matches strings in CUID format (starts with 'c' or 'C', 9+ chars).
+	CUID = regexp.MustCompile(`^[cC][^\s-]{8,}$`)
 
-// CUID2 matches strings in CUID2 format (lowercase alphanumeric).
-var CUID2 = regexp.MustCompile(`^[0-9a-z]+$`)
+	// CUID2 matches strings in CUID2 format (lowercase alphanumeric).
+	CUID2 = regexp.MustCompile(`^[0-9a-z]+$`)
 
-// ULID matches strings in ULID format (26 Crockford Base32 chars).
-var ULID = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$`)
+	// ULID matches strings in ULID format (26 Crockford Base32 chars).
+	ULID = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$`)
 
-// XID matches strings in XID format (20 base32 chars).
-var XID = regexp.MustCompile(`^[0-9a-vA-V]{20}$`)
+	// XID matches strings in XID format (20 base32 chars).
+	XID = regexp.MustCompile(`^[0-9a-vA-V]{20}$`)
 
-// KSUID matches strings in KSUID format (27 alphanumeric chars).
-var KSUID = regexp.MustCompile(`^[A-Za-z0-9]{27}$`)
+	// KSUID matches strings in KSUID format (27 alphanumeric chars).
+	KSUID = regexp.MustCompile(`^[A-Za-z0-9]{27}$`)
 
-// NanoID matches strings in NanoID format (21 URL-safe chars).
-var NanoID = regexp.MustCompile(`^[a-zA-Z0-9_-]{21}$`)
+	// NanoID matches strings in NanoID format (21 URL-safe chars).
+	NanoID = regexp.MustCompile(`^[a-zA-Z0-9_-]{21}$`)
 
-// GUID matches any UUID-like identifier with 8-4-4-4-12 hex pattern.
-var GUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	// GUID matches any UUID-like identifier with 8-4-4-4-12 hex pattern.
+	GUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// UUID matches RFC 4122 UUID (versions 1-8) or the nil UUID.
-var UUID = regexp.MustCompile(`^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$`)
+	// UUID matches RFC 4122 UUID (versions 1-8) or the nil UUID.
+	UUID = regexp.MustCompile(`^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$`)
 
-// UUID4 matches version 4 UUIDs.
-var UUID4 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+	// UUID4 matches version 4 UUIDs.
+	UUID4 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-// UUID6 matches version 6 UUIDs.
-var UUID6 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+	// UUID6 matches version 6 UUIDs.
+	UUID6 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-// UUID7 matches version 7 UUIDs.
-var UUID7 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+	// UUID7 matches version 7 UUIDs.
+	UUID7 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+)
 
 // uuidVersionCache holds pre-compiled regexes for UUID versions 1-8.
 var uuidVersionCache = func() [9]*regexp.Regexp {

@@ -47,5 +47,10 @@ func Slugify(s string) string {
 // isSeparator reports whether r is a whitespace or delimiter character
 // that should be collapsed into a single hyphen.
 func isSeparator(r rune) bool {
-	return r == ' ' || r == '_' || r == '-' || r == '\t' || r == '\n' || r == '\r'
+	switch r {
+	case ' ', '_', '-', '\t', '\n', '\r':
+		return true
+	default:
+		return false
+	}
 }

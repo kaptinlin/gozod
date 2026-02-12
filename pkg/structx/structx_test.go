@@ -188,6 +188,52 @@ func TestUnmarshal(t *testing.T) {
 	})
 }
 
+func TestStructValue(t *testing.T) {
+	t.Run("nil returns false", func(t *testing.T) {
+		_, ok := structValue(nil)
+		assert.False(t, ok)
+	})
+
+	t.Run("nil pointer returns false", func(t *testing.T) {
+		var user *testUser
+		_, ok := structValue(user)
+		assert.False(t, ok)
+	})
+
+	t.Run("non-struct returns false", func(t *testing.T) {
+		_, ok := structValue(42)
+		assert.False(t, ok)
+	})
+
+	t.Run("struct value returns true", func(t *testing.T) {
+		v, ok := structValue(testUser{Name: "Alice"})
+		require.True(t, ok)
+		assert.Equal(t, reflect.Struct, v.Kind())
+	})
+
+	t.Run("pointer to struct returns true", func(t *testing.T) {
+		v, ok := structValue(&testUser{Name: "Bob"})
+		require.True(t, ok)
+		assert.Equal(t, reflect.Struct, v.Kind())
+	})
+}
+
+func TestSetField(t *testing.T) {
+	t.Run("convertible type", func(t *testing.T) {
+		var target struct{ Age int }
+		dst := reflect.ValueOf(&target).Elem().Field(0)
+		setField(dst, reflect.ValueOf(int64(42)), dst.Type())
+		assert.Equal(t, 42, target.Age)
+	})
+
+	t.Run("incompatible type is ignored", func(t *testing.T) {
+		var target struct{ Name string }
+		dst := reflect.ValueOf(&target).Elem().Field(0)
+		setField(dst, reflect.ValueOf([]int{1, 2}), dst.Type())
+		assert.Empty(t, target.Name) // unchanged
+	})
+}
+
 func TestFieldName(t *testing.T) {
 	type testStruct struct {
 		WithTag    string `json:"custom_name"`

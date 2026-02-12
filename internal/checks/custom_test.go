@@ -3,15 +3,14 @@ package checks
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 )
 
-// =============================================================================
-// CUSTOM VALIDATION TESTS
-// =============================================================================
+// Custom validation tests
 
 func TestCustomValidation_RefineFunctions(t *testing.T) {
 	t.Run("validates with string refine function", func(t *testing.T) {
@@ -136,20 +135,19 @@ func TestCustomValidation_RefineFunctions(t *testing.T) {
 func TestCustomValidation_CheckFunctions(t *testing.T) {
 	t.Run("validates with check function", func(t *testing.T) {
 		checkFn := func(payload *core.ParsePayload) {
-			if str, ok := payload.Value().(string); ok {
-				if len(str) < 3 {
-					// Add custom issue using issues package
-					issue := issues.NewRawIssue(
-						"too_short",
-						payload.Value(),
-						issues.WithContinue(true),
-					)
-					payload.AddIssue(issue)
-				}
-			} else {
-				// Add type error using issues package
+			str, ok := payload.Value().(string)
+			if !ok {
 				issue := issues.NewRawIssue(
 					"invalid_type",
+					payload.Value(),
+					issues.WithContinue(true),
+				)
+				payload.AddIssue(issue)
+				return
+			}
+			if len(str) < 3 {
+				issue := issues.NewRawIssue(
+					"too_short",
 					payload.Value(),
 					issues.WithContinue(true),
 				)
@@ -248,9 +246,7 @@ func TestCustomValidation_WithParameters(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// OVERWRITE TRANSFORMATION TESTS
-// =============================================================================
+// Overwrite transformation tests
 
 func TestTransformChecks_Overwrite(t *testing.T) {
 	t.Run("transforms values using provided function", func(t *testing.T) {
@@ -329,9 +325,7 @@ func TestTransformChecks_Overwrite(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// CONSTRUCTOR TESTS
-// =============================================================================
+// Constructor tests
 
 func TestCustomCheckConstructors(t *testing.T) {
 	t.Run("creates custom check instances with proper internals", func(t *testing.T) {
@@ -394,9 +388,7 @@ func TestCustomCheckConstructors(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// ERROR HANDLING TESTS
-// =============================================================================
+// Error handling tests
 
 func TestCustomValidation_ErrorHandling(t *testing.T) {
 	t.Run("handles refine failure correctly", func(t *testing.T) {
@@ -459,9 +451,7 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// UTILITY FUNCTION TESTS
-// =============================================================================
+// Utility function tests
 
 func TestCustomUtilities(t *testing.T) {
 	t.Run("PrefixIssues works correctly", func(t *testing.T) {
@@ -507,9 +497,7 @@ func TestCustomUtilities(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// BENCHMARK TESTS
-// =============================================================================
+// Benchmark tests
 
 func BenchmarkCustomCheck_StringRefine(b *testing.B) {
 	refineFn := func(s string) bool {

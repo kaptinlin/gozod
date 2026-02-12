@@ -7,7 +7,9 @@ import (
 )
 
 // stringLengthKey identifies a cached string-length regex by its bounds.
-type stringLengthKey struct{ min, max int }
+type stringLengthKey struct {
+	min, max int
+}
 
 var (
 	stringMu    sync.Mutex
@@ -38,32 +40,35 @@ func StringRegex(min, max int) *regexp.Regexp {
 	return re
 }
 
-// String matches any string with no length restrictions.
-var String = regexp.MustCompile(`^[\s\S]*$`)
+// Primitive type patterns.
+var (
+	// String matches any string with no length restrictions.
+	String = regexp.MustCompile(`^[\s\S]*$`)
 
-// Bigint matches big integers with optional trailing 'n' (e.g., "123n").
-var Bigint = regexp.MustCompile(`^-?\d+n?$`)
+	// Bigint matches big integers with optional trailing 'n' (e.g., "123n").
+	Bigint = regexp.MustCompile(`^-?\d+n?$`)
 
-// Integer matches integers including negative numbers.
-var Integer = regexp.MustCompile(`^-?\d+$`)
+	// Integer matches integers including negative numbers.
+	Integer = regexp.MustCompile(`^-?\d+$`)
 
-// Number matches numbers including decimals and negative numbers.
-var Number = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
+	// Number matches numbers including decimals and negative numbers.
+	Number = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
 
-// Boolean matches boolean values (case-insensitive).
-var Boolean = regexp.MustCompile(`(?i)^(true|false)$`)
+	// Boolean matches boolean values (case-insensitive).
+	Boolean = regexp.MustCompile(`(?i)^(true|false)$`)
 
-// Null matches "null" (case-insensitive).
-var Null = regexp.MustCompile(`(?i)^null$`)
+	// Null matches "null" (case-insensitive).
+	Null = regexp.MustCompile(`(?i)^null$`)
 
-// Undefined matches "undefined" (case-insensitive).
-var Undefined = regexp.MustCompile(`(?i)^undefined$`)
+	// Undefined matches "undefined" (case-insensitive).
+	Undefined = regexp.MustCompile(`(?i)^undefined$`)
 
-// Lowercase matches strings containing no uppercase letters.
-var Lowercase = regexp.MustCompile(`^[^A-Z]*$`)
+	// Lowercase matches strings containing no uppercase letters.
+	Lowercase = regexp.MustCompile(`^[^A-Z]*$`)
 
-// Uppercase matches strings containing no lowercase letters.
-var Uppercase = regexp.MustCompile(`^[^a-z]*$`)
+	// Uppercase matches strings containing no lowercase letters.
+	Uppercase = regexp.MustCompile(`^[^a-z]*$`)
 
-// JSONString matches any string (simplistic; actual validation should be done at runtime).
-var JSONString = regexp.MustCompile(`^[\s\S]*$`)
+	// JSONString matches any string (simplistic; actual validation should be done at runtime).
+	JSONString = regexp.MustCompile(`^[\s\S]*$`)
+)

@@ -18,6 +18,25 @@ var unescaper = strings.NewReplacer(
 	`\\`, `\`,
 )
 
+// TagRule represents a single validation rule parsed from a tag.
+type TagRule struct {
+	Name   string   // e.g., "min", "max", "email"
+	Params []string // e.g., ["2"] for "min=2"
+}
+
+// FieldInfo represents parsed information about a struct field.
+type FieldInfo struct {
+	Name     string       // Go field name
+	Type     reflect.Type // field type
+	TypeName string       // AST type name for circular reference detection
+	JSONName string       // from json tag, or Go field name
+	GoZodTag string       // raw gozod tag value
+	Rules    []TagRule    // parsed validation rules
+	Required bool         // has "required" rule
+	Optional bool         // pointer without required
+	Nilable  bool         // has "nilable" rule
+}
+
 // TagParser handles gozod tag parsing with configurable tag name.
 type TagParser struct {
 	tagName string
@@ -31,25 +50,6 @@ func New() *TagParser {
 // NewWithTagName creates a [TagParser] with a custom tag name.
 func NewWithTagName(name string) *TagParser {
 	return &TagParser{tagName: name}
-}
-
-// FieldInfo represents parsed information about a struct field.
-type FieldInfo struct {
-	Name     string       // Go field name
-	Type     reflect.Type // field type
-	TypeName string       // AST type name for circular reference detection
-	JsonName string       // from json tag, or Go field name
-	GozodTag string       // raw gozod tag value
-	Rules    []TagRule    // parsed validation rules
-	Required bool         // has "required" rule
-	Optional bool         // pointer without required
-	Nilable  bool         // has "nilable" rule
-}
-
-// TagRule represents a single validation rule parsed from a tag.
-type TagRule struct {
-	Name   string   // e.g. "min", "max", "email"
-	Params []string // e.g. ["2"] for "min=2"
 }
 
 // ParseStructTags parses all gozod tags in a struct type
@@ -80,8 +80,8 @@ func (p *TagParser) ParseStructTags(typ reflect.Type) ([]FieldInfo, error) {
 		info := FieldInfo{
 			Name:     f.Name,
 			Type:     f.Type,
-			JsonName: jsonFieldName(f),
-			GozodTag: tag,
+			JSONName: jsonFieldName(f),
+			GoZodTag: tag,
 		}
 
 		if tag != "" {
@@ -130,58 +130,53 @@ func splitParts(tag string) []string {
 	escaped := false
 
 	for i, ch := range tag {
+		if escaped {
+			buf.WriteRune(ch)
+			escaped = false
+			continue
+		}
+
 		switch ch {
 		case '\\':
 			buf.WriteRune(ch)
-			if i+1 < len(tag) {
-				escaped = true
-			}
+			escaped = i+1 < len(tag)
 		case '"', '\'':
-			if !escaped {
-				if !quoted {
-					quoted = true
-					quote = ch
-				} else if ch == quote {
-					quoted = false
-				}
+			if !quoted {
+				quoted = true
+				quote = ch
+			} else if ch == quote {
+				quoted = false
 			}
 			buf.WriteRune(ch)
-			escaped = false
 		case '[':
-			if !quoted && !escaped {
+			if !quoted {
 				brackets++
 			}
 			buf.WriteRune(ch)
-			escaped = false
 		case ']':
-			if !quoted && !escaped {
+			if !quoted {
 				brackets--
 			}
 			buf.WriteRune(ch)
-			escaped = false
 		case '{':
-			if !quoted && !escaped {
+			if !quoted {
 				braces++
 			}
 			buf.WriteRune(ch)
-			escaped = false
 		case '}':
-			if !quoted && !escaped {
+			if !quoted {
 				braces--
 			}
 			buf.WriteRune(ch)
-			escaped = false
 		case ',':
-			if !escaped && !quoted && brackets == 0 && braces == 0 {
+			if !quoted && brackets == 0 && braces == 0 {
 				parts = append(parts, buf.String())
 				buf.Reset()
 			} else {
 				buf.WriteRune(ch)
 			}
-			escaped = false
 		default:
 			buf.WriteRune(ch)
-			escaped = false
 		}
 	}
 
@@ -232,7 +227,8 @@ func jsonFieldName(f reflect.StructField) string {
 	}
 
 	name, _, _ := strings.Cut(tag, ",")
-	if name = strings.TrimSpace(name); name != "" {
+	name = strings.TrimSpace(name)
+	if name != "" {
 		return name
 	}
 

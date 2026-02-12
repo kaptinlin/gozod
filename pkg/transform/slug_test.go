@@ -12,22 +12,62 @@ func TestSlugify(t *testing.T) {
 		want  string
 	}{
 		// Zod v4 reference test cases
-		{name: "basic words", input: "Hello World", want: "hello-world"},
-		{name: "padded spaces", input: "  Hello   World  ", want: "hello-world"},
-		{name: "special chars removed", input: "Hello@World#123", want: "helloworld123"},
-		{name: "preserves hyphens", input: "Hello-World", want: "hello-world"},
-		{name: "underscores to hyphens", input: "Hello_World", want: "hello-world"},
-		{name: "collapses hyphens", input: "---Hello---World---", want: "hello-world"},
-		{name: "collapses spaces", input: "Hello  World", want: "hello-world"},
-		{name: "strips all special", input: "Hello!@#$%^&*()World", want: "helloworld"},
+		{
+			name:  "basic words",
+			input: "Hello World",
+			want:  "hello-world",
+		},
+		{
+			name:  "padded spaces",
+			input: "  Hello   World  ",
+			want:  "hello-world",
+		},
+		{
+			name:  "special chars removed",
+			input: "Hello@World#123",
+			want:  "helloworld123",
+		},
+		{
+			name:  "preserves hyphens",
+			input: "Hello-World",
+			want:  "hello-world",
+		},
+		{
+			name:  "underscores to hyphens",
+			input: "Hello_World",
+			want:  "hello-world",
+		},
+		{
+			name:  "collapses hyphens",
+			input: "---Hello---World---",
+			want:  "hello-world",
+		},
+		{
+			name:  "collapses spaces",
+			input: "Hello  World",
+			want:  "hello-world",
+		},
+		{
+			name:  "strips all special",
+			input: "Hello!@#$%^&*()World",
+			want:  "helloworld",
+		},
 
 		// Additional edge cases
 		{name: "empty", input: "", want: ""},
 		{name: "only special chars", input: "!@#$%^&*()", want: ""},
 		{name: "only spaces", input: "   ", want: ""},
-		{name: "mixed delimiters", input: "a_b-c d", want: "a-b-c-d"},
+		{
+			name:  "mixed delimiters",
+			input: "a_b-c d",
+			want:  "a-b-c-d",
+		},
 		{name: "numbers only", input: "123", want: "123"},
-		{name: "leading trailing hyphens", input: "-Leading-Trailing-", want: "leading-trailing"},
+		{
+			name:  "leading trailing hyphens",
+			input: "-Leading-Trailing-",
+			want:  "leading-trailing",
+		},
 	}
 
 	for _, tt := range tests {

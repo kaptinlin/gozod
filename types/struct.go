@@ -1618,7 +1618,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited
 		if schema != nil {
 			// Apply parsed tag rules
 			schema = applyParsedTagRules(schema, field)
-			schemas[field.JsonName] = schema
+			schemas[field.JSONName] = schema
 		}
 	}
 

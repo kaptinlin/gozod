@@ -216,7 +216,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				Name:     name.Name,
 				Type:     a.getReflectType(field.Type),
 				TypeName: getTypeNameFromAST(field.Type),
-				JsonName: a.extractJSONName(field),
+				JSONName: a.extractJSONName(field),
 			}
 
 			hasGozodTag := false
@@ -225,7 +225,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				if strings.Contains(tagValue, "gozod:") {
 					hasGozodTag = true
 					gozodTag := extractTagValue(tagValue, "gozod")
-					info.GozodTag = gozodTag
+					info.GoZodTag = gozodTag
 					if gozodTag != "" {
 						rules, err := a.parseTagRules(gozodTag)
 						if err != nil {

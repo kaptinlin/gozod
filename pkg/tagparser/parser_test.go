@@ -139,8 +139,8 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 	if nameField == nil {
 		t.Error("Name field not found")
 	} else {
-		if nameField.JsonName != "name" {
-			t.Errorf("Name field JsonName = %q, expected 'name'", nameField.JsonName)
+		if nameField.JSONName != "name" {
+			t.Errorf("Name field JSONName = %q, expected 'name'", nameField.JSONName)
 		}
 		if !nameField.Required {
 			t.Error("Name field should be required")

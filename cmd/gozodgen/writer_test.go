@@ -249,7 +249,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 				Fields: []tagparser.FieldInfo{
 					{
 						Name:     "ID",
-						JsonName: "id",
+						JSONName: "id",
 						Type:     reflect.TypeOf(""),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},
@@ -258,7 +258,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 					},
 					{
 						Name:     "Name",
-						JsonName: "name",
+						JSONName: "name",
 						Type:     reflect.TypeOf(""),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},

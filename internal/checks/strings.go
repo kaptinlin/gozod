@@ -153,14 +153,15 @@ func StringGte(minValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if s, ok := reflectx.StringVal(payload.Value()); ok {
-			if s < minValue {
-				raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.Value())
-				raw.Inst = internals
-				payload.AddIssue(raw)
-			}
-		} else {
+		s, ok := reflectx.StringVal(payload.Value())
+		if !ok {
 			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.Value())
+			raw.Inst = internals
+			payload.AddIssue(raw)
+			return
+		}
+		if s < minValue {
+			raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}
@@ -177,14 +178,15 @@ func StringLte(maxValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if s, ok := reflectx.StringVal(payload.Value()); ok {
-			if s > maxValue {
-				raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.Value())
-				raw.Inst = internals
-				payload.AddIssue(raw)
-			}
-		} else {
+		s, ok := reflectx.StringVal(payload.Value())
+		if !ok {
 			raw := issues.CreateInvalidTypeIssue(core.ZodTypeString, payload.Value())
+			raw.Inst = internals
+			payload.AddIssue(raw)
+			return
+		}
+		if s > maxValue {
+			raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.Value())
 			raw.Inst = internals
 			payload.AddIssue(raw)
 		}

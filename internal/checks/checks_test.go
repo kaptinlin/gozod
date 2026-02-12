@@ -12,22 +12,17 @@ import (
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-// =============================================================================
-// TESTING UTILITIES
-// =============================================================================
-
-// executeCheck executes the check logic - utility for testing
+// executeCheck executes the check logic, respecting conditional execution.
 func executeCheck(check core.ZodCheck, payload *core.ParsePayload) {
-	if internals := check.Zod(); internals != nil {
-		// check conditional execution
-		if internals.When != nil && !internals.When(payload) {
-			return // skip check
-		}
-
-		// execute check function
-		if internals.Check != nil {
-			internals.Check(payload)
-		}
+	internals := check.Zod()
+	if internals == nil {
+		return
+	}
+	if internals.When != nil && !internals.When(payload) {
+		return
+	}
+	if internals.Check != nil {
+		internals.Check(payload)
 	}
 }
 

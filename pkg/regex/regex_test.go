@@ -6,7 +6,7 @@ import (
 )
 
 // matchCase is a table-driven test case for regex matching.
-type matchCase = struct {
+type matchCase struct {
 	input string
 	want  bool
 }

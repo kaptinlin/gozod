@@ -198,7 +198,7 @@ func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structNa
 			return nil, fmt.Errorf("generate schema for field %s: %w", field.Name, err)
 		}
 		schemas = append(schemas, FieldSchemaInfo{
-			FieldName:  field.JsonName,
+			FieldName:  field.JSONName,
 			SchemaCode: code,
 		})
 	}

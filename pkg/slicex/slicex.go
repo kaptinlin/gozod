@@ -8,31 +8,25 @@ import (
 	"strings"
 )
 
-// Sentinel errors for the slicex package.
+// Sentinel errors for input validation.
 var (
 	ErrInvalidReflectValue = errors.New("invalid reflect value")
 	ErrNotCollection       = errors.New("input is not a slice, array, or string")
+)
 
+// Sentinel errors for type conversion.
+var (
+	ErrCannotConvert        = errors.New("cannot convert slice")
 	ErrCannotConvertElement = errors.New("cannot convert element")
 	ErrCannotConvertFirst   = errors.New("cannot convert first slice")
 	ErrCannotConvertSecond  = errors.New("cannot convert second slice")
-	ErrCannotConvert        = errors.New("cannot convert slice")
 )
 
-// toAnySlice converts a typed slice to []any, eliminating repeated
-// make+loop boilerplate across type-switch branches.
-func toAnySlice[T any](v []T) []any {
-	result := make([]any, len(v))
-	for i, item := range v {
-		result[i] = item
-	}
-	return result
-}
+// --- Conversion functions ---
 
 // ToAny converts a slice, array, or string to []any.
-// A nil input returns (nil, nil). A bare string returns a
-// single-element []any. For unrecognized concrete types,
-// reflection is used as a fallback.
+// A nil input returns (nil, nil). A bare string returns a single-element []any.
+// For unrecognized concrete types, reflection is used as a fallback.
 func ToAny(input any) ([]any, error) {
 	if input == nil {
 		return nil, nil
@@ -62,11 +56,8 @@ func ToAny(input any) ([]any, error) {
 }
 
 // ToTyped converts any slice to []T using generics.
-// Each element is first tried via type assertion, then via
-// reflect conversion.
-//
-// Returns ErrCannotConvertElement if an element cannot be
-// converted to the target type.
+// Each element is first tried via type assertion, then via reflect conversion.
+// Returns ErrCannotConvertElement if an element cannot be converted to the target type.
 func ToTyped[T any](input any) ([]T, error) {
 	if input == nil {
 		return nil, nil
@@ -94,8 +85,7 @@ func ToTyped[T any](input any) ([]T, error) {
 	return result, nil
 }
 
-// ToStrings converts any slice to []string by formatting each
-// element with fmt.Sprintf.
+// ToStrings converts any slice to []string by formatting each element with fmt.Sprintf.
 func ToStrings(input any) ([]string, error) {
 	items, err := ToAny(input)
 	if err != nil {
@@ -108,16 +98,13 @@ func ToStrings(input any) ([]string, error) {
 	return result, nil
 }
 
-// FromReflect converts a reflect.Value (slice, array, or string)
-// to []any.
-//
-// Returns ErrInvalidReflectValue for invalid values, and
-// ErrNotCollection for unsupported kinds.
+// FromReflect converts a reflect.Value (slice, array, or string) to []any.
+// Returns ErrInvalidReflectValue for invalid values and ErrNotCollection for unsupported kinds.
 func FromReflect(rv reflect.Value) ([]any, error) {
 	if !rv.IsValid() {
 		return nil, ErrInvalidReflectValue
 	}
-	//nolint:exhaustive // Only Slice, Array, String are valid
+	//nolint:exhaustive // Only Slice, Array, String are valid.
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		result := make([]any, rv.Len())
@@ -128,14 +115,11 @@ func FromReflect(rv reflect.Value) ([]any, error) {
 	case reflect.String:
 		return StringToChars(rv.String()), nil
 	default:
-		return nil, fmt.Errorf(
-			"got %v: %w", rv.Kind(), ErrNotCollection,
-		)
+		return nil, fmt.Errorf("got %v: %w", rv.Kind(), ErrNotCollection)
 	}
 }
 
-// StringToChars converts a string to []any where each element
-// is a single-character string.
+// StringToChars converts a string to []any where each element is a single-character string.
 func StringToChars(s string) []any {
 	runes := []rune(s)
 	result := make([]any, len(runes))
@@ -145,8 +129,9 @@ func StringToChars(s string) []any {
 	return result
 }
 
-// Extract converts input to []any, returning whether the
-// conversion succeeded.
+// --- Extraction functions ---
+
+// Extract converts input to []any, returning whether the conversion succeeded.
 func Extract(input any) ([]any, bool) {
 	result, err := ToAny(input)
 	return result, err == nil
@@ -178,11 +163,12 @@ func ExtractSlice(input any) ([]any, bool) {
 	return result, err == nil
 }
 
-// Merge concatenates two slices. If both inputs share the same
-// concrete slice type, the result preserves that type.
-//
-// Returns ErrCannotConvertFirst or ErrCannotConvertSecond
-// if the respective input cannot be converted.
+// --- Mutation functions ---
+
+// Merge concatenates two slices. If both inputs share the same concrete slice type,
+// the result preserves that type.
+// Returns ErrCannotConvertFirst or ErrCannotConvertSecond if the respective input
+// cannot be converted.
 func Merge(a, b any) (any, error) {
 	if a == nil && b == nil {
 		return nil, nil
@@ -207,8 +193,8 @@ func Merge(a, b any) (any, error) {
 	return restoreType(result, a, b)
 }
 
-// Append appends elements to a slice, preserving the original
-// slice's concrete type when possible.
+// Append appends elements to a slice, preserving the original slice's concrete type
+// when possible.
 func Append(s any, elements ...any) (any, error) {
 	if s == nil {
 		return elements, nil
@@ -223,8 +209,8 @@ func Append(s any, elements ...any) (any, error) {
 	return restoreType(result, s, nil)
 }
 
-// Prepend inserts elements before a slice, preserving the
-// original slice's concrete type when possible.
+// Prepend inserts elements before a slice, preserving the original slice's concrete type
+// when possible.
 func Prepend(s any, elements ...any) (any, error) {
 	if s == nil {
 		return elements, nil
@@ -237,53 +223,6 @@ func Prepend(s any, elements ...any) (any, error) {
 	copy(result, elements)
 	copy(result[len(elements):], items)
 	return restoreType(result, s, nil)
-}
-
-// Length returns the length of a slice, array, or string.
-// Returns ErrNotCollection for other types.
-func Length(input any) (int, error) {
-	if input == nil {
-		return 0, nil
-	}
-	rv := reflect.ValueOf(input)
-	//nolint:exhaustive // Only handling slice, array, and string
-	switch rv.Kind() {
-	case reflect.Slice, reflect.Array, reflect.String:
-		return rv.Len(), nil
-	default:
-		return 0, ErrNotCollection
-	}
-}
-
-// IsEmpty reports whether input is nil, empty, or not a
-// recognized collection type.
-func IsEmpty(input any) bool {
-	length, err := Length(input)
-	return err != nil || length == 0
-}
-
-// Contains reports whether s contains value, compared
-// using reflect.DeepEqual.
-func Contains(s any, value any) bool {
-	items, err := ToAny(s)
-	if err != nil {
-		return false
-	}
-	return slices.ContainsFunc(items, func(v any) bool {
-		return reflect.DeepEqual(v, value)
-	})
-}
-
-// IndexOf returns the index of the first occurrence of value
-// in s, or -1 if not found. Comparison uses reflect.DeepEqual.
-func IndexOf(s any, value any) int {
-	items, err := ToAny(s)
-	if err != nil {
-		return -1
-	}
-	return slices.IndexFunc(items, func(v any) bool {
-		return reflect.DeepEqual(v, value)
-	})
 }
 
 // Reverse returns a new slice with elements in reverse order.
@@ -299,9 +238,8 @@ func Reverse(s any) (any, error) {
 	return restoreType(items, s, nil)
 }
 
-// Unique removes duplicate elements, preserving first-occurrence
-// order. Comparable types use a map; non-comparable types fall
-// back to reflect.DeepEqual.
+// Unique removes duplicate elements, preserving first-occurrence order.
+// Comparable types use a map; non-comparable types fall back to reflect.DeepEqual.
 func Unique(s any) (any, error) {
 	if s == nil {
 		return nil, nil
@@ -327,20 +265,6 @@ func Unique(s any) (any, error) {
 	return restoreType(result, s, nil)
 }
 
-// isDuplicate checks whether v has already been seen.
-func isDuplicate(v any, seen map[any]struct{}, seenOther []any) bool {
-	if v == nil || reflect.TypeOf(v).Comparable() {
-		_, ok := seen[v]
-		return ok
-	}
-	for _, existing := range seenOther {
-		if reflect.DeepEqual(existing, v) {
-			return true
-		}
-	}
-	return false
-}
-
 // Filter returns elements for which fn returns true.
 func Filter(s any, fn func(any) bool) (any, error) {
 	if s == nil {
@@ -359,8 +283,7 @@ func Filter(s any, fn func(any) bool) (any, error) {
 	return restoreType(result, s, nil)
 }
 
-// Map transforms each element using fn and returns the
-// resulting slice.
+// Map transforms each element using fn and returns the resulting slice.
 func Map(s any, fn func(any) any) (any, error) {
 	if s == nil {
 		return nil, nil
@@ -376,8 +299,55 @@ func Map(s any, fn func(any) any) (any, error) {
 	return restoreType(result, s, nil)
 }
 
-// Join formats each element with fmt.Sprintf and joins them
-// with sep. Returns "" for empty or invalid input.
+// --- Query functions ---
+
+// Length returns the length of a slice, array, or string.
+// Returns ErrNotCollection for other types.
+func Length(input any) (int, error) {
+	if input == nil {
+		return 0, nil
+	}
+	rv := reflect.ValueOf(input)
+	//nolint:exhaustive // Only handling slice, array, and string.
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Array, reflect.String:
+		return rv.Len(), nil
+	default:
+		return 0, ErrNotCollection
+	}
+}
+
+// IsEmpty reports whether input is nil, empty, or not a recognized collection type.
+func IsEmpty(input any) bool {
+	length, err := Length(input)
+	return err != nil || length == 0
+}
+
+// Contains reports whether s contains value, compared using reflect.DeepEqual.
+func Contains(s any, value any) bool {
+	items, err := ToAny(s)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(items, func(v any) bool {
+		return reflect.DeepEqual(v, value)
+	})
+}
+
+// IndexOf returns the index of the first occurrence of value in s, or -1 if not found.
+// Comparison uses reflect.DeepEqual.
+func IndexOf(s any, value any) int {
+	items, err := ToAny(s)
+	if err != nil {
+		return -1
+	}
+	return slices.IndexFunc(items, func(v any) bool {
+		return reflect.DeepEqual(v, value)
+	})
+}
+
+// Join formats each element with fmt.Sprintf and joins them with sep.
+// Returns "" for empty or invalid input.
 func Join(s any, sep string) string {
 	items, err := ToAny(s)
 	if err != nil || len(items) == 0 {
@@ -392,22 +362,37 @@ func Join(s any, sep string) string {
 	return strings.Join(strs, sep)
 }
 
-// restoreType attempts to convert []any back to the concrete
-// slice type of the first non-nil original argument.
+// --- Internal helpers ---
+
+// toAnySlice converts a typed slice to []any, eliminating repeated
+// make+loop boilerplate across type-switch branches.
+func toAnySlice[T any](v []T) []any {
+	result := make([]any, len(v))
+	for i, item := range v {
+		result[i] = item
+	}
+	return result
+}
+
+// isDuplicate checks whether v has already been seen.
+func isDuplicate(v any, seen map[any]struct{}, seenOther []any) bool {
+	if v == nil || reflect.TypeOf(v).Comparable() {
+		_, ok := seen[v]
+		return ok
+	}
+	for _, existing := range seenOther {
+		if reflect.DeepEqual(existing, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// restoreType attempts to convert []any back to the concrete slice type
+// of the first non-nil original argument.
 func restoreType(items []any, orig, fallback any) (any, error) {
-	var typ reflect.Type
-	switch {
-	case orig != nil:
-		typ = reflect.TypeOf(orig)
-	case fallback != nil:
-		typ = reflect.TypeOf(fallback)
-	default:
-		return items, nil
-	}
-	if typ == reflect.TypeFor[[]any]() {
-		return items, nil
-	}
-	if typ.Kind() != reflect.Slice {
+	typ := resolveType(orig, fallback)
+	if typ == nil || typ == reflect.TypeFor[[]any]() || typ.Kind() != reflect.Slice {
 		return items, nil
 	}
 	elem := typ.Elem()
@@ -415,13 +400,24 @@ func restoreType(items []any, orig, fallback any) (any, error) {
 	for i, v := range items {
 		rv := reflect.ValueOf(v)
 		switch {
-		case rv.Type().ConvertibleTo(elem):
-			result.Index(i).Set(rv.Convert(elem))
 		case rv.Type().AssignableTo(elem):
 			result.Index(i).Set(rv)
+		case rv.Type().ConvertibleTo(elem):
+			result.Index(i).Set(rv.Convert(elem))
 		default:
 			return items, nil
 		}
 	}
 	return result.Interface(), nil
+}
+
+// resolveType returns the reflect.Type of the first non-nil argument.
+func resolveType(orig, fallback any) reflect.Type {
+	if orig != nil {
+		return reflect.TypeOf(orig)
+	}
+	if fallback != nil {
+		return reflect.TypeOf(fallback)
+	}
+	return nil
 }
