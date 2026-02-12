@@ -149,7 +149,7 @@ type (
 	ZodAny[T any, R any]                        = types.ZodAny[T, R]
 	ZodUnknown[T any, R any]                    = types.ZodUnknown[T, R]
 	ZodNever[T any, R any]                      = types.ZodNever[T, R]
-	ZodNil[T any]                               = types.ZodNil[T]
+	ZodNil[T any, R any]                        = types.ZodNil[T, R]
 	ZodFile[T any, R any]                       = types.ZodFile[T, R]
 	ZodFunction[T types.FunctionConstraint]     = types.ZodFunction[T]
 	ZodStringBool[T types.StringBoolConstraint] = types.ZodStringBool[T]

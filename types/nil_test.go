@@ -559,7 +559,7 @@ func TestNil_GenericArchitecture(t *testing.T) {
 
 	t.Run("NilTyped with explicit constraint types", func(t *testing.T) {
 		// Value constraint
-		valueSchema := NilTyped[string]()
+		valueSchema := NilTyped[string, string]()
 		var _ = valueSchema
 
 		result, err := valueSchema.Parse(nil)
@@ -567,7 +567,7 @@ func TestNil_GenericArchitecture(t *testing.T) {
 		assert.Equal(t, "", result) // Zero value for string
 
 		// Pointer constraint
-		ptrSchema := NilTyped[*string]()
+		ptrSchema := NilTyped[*string, *string]()
 		var _ = ptrSchema
 
 		ptrResult, err := ptrSchema.Parse(nil)
@@ -623,19 +623,19 @@ func TestNil_Errors(t *testing.T) {
 func TestNil_TypeConstraints(t *testing.T) {
 	t.Run("type constraint enforcement", func(t *testing.T) {
 		// String constraint
-		stringSchema := NilTyped[string]()
+		stringSchema := NilTyped[string, string]()
 		result, err := stringSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.IsType(t, "", result)
 
 		// Int constraint
-		intSchema := NilTyped[int]()
+		intSchema := NilTyped[int, int]()
 		intResult, err := intSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.IsType(t, 0, intResult)
 
 		// Pointer constraint
-		ptrSchema := NilTyped[*string]()
+		ptrSchema := NilTyped[*string, *string]()
 		ptrResult, err := ptrSchema.Parse(nil)
 		require.NoError(t, err)
 		assert.IsType(t, (*string)(nil), ptrResult)

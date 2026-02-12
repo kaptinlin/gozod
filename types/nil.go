@@ -13,19 +13,21 @@ import (
 // TYPE DEFINITIONS
 // =============================================================================
 
-// ZodNilDef defines the configuration for nil validation
+// ZodNilDef defines the configuration for nil validation.
 type ZodNilDef struct {
 	core.ZodTypeDef
 }
 
-// ZodNilInternals contains nil validator internal state
+// ZodNilInternals contains nil validator internal state.
 type ZodNilInternals struct {
 	core.ZodTypeInternals
-	Def *ZodNilDef // Schema definition
+	Def *ZodNilDef
 }
 
-// ZodNil represents a nil validation schema with type safety
-type ZodNil[T any] struct {
+// ZodNil represents a nil validation schema that only accepts nil values.
+// T is the base type and R is the constraint type (may be a pointer for
+// modifiers like Optional/Nilable).
+type ZodNil[T any, R any] struct {
 	internals *ZodNilInternals
 }
 
@@ -33,103 +35,66 @@ type ZodNil[T any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema
-func (z *ZodNil[T]) GetInternals() *core.ZodTypeInternals {
+// GetInternals returns the internal state of the schema.
+func (z *ZodNil[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
-func (z *ZodNil[T]) IsOptional() bool {
+// IsOptional reports whether this schema accepts missing values.
+func (z *ZodNil[T, R]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
 
-// IsNilable returns true if this schema accepts nil values
-func (z *ZodNil[T]) IsNilable() bool {
+// IsNilable reports whether this schema accepts nil values.
+func (z *ZodNil[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// validateNilValue is the validator function for Nil type
-// Nil type should only accept nil values
-func validateNilValue[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-	// For Nil type, accept any nil value (including the original nil input)
+// validateNilValue validates that the input is nil.
+// Non-nil values are rejected with an invalid type error.
+func validateNilValue[T any](value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	if any(value) == nil || reflectx.IsNil(value) {
-		// Apply checks to the nil value
-		return engine.ApplyChecks[T](value, checks, ctx)
+		return engine.ApplyChecks(value, chks, ctx)
 	}
-
-	// Reject non-nil values for normal parsing
 	var zero T
 	return zero, issues.CreateInvalidTypeError(core.ZodTypeNil, value, ctx)
 }
 
-// convertNilTypeToConstraint handles type conversion for Nil type, preserving nil values
-// Special handling for Prefault values that may be non-nil
-func convertNilTypeToConstraint[T any](
-	result any,
-	ctx *core.ParseContext,
-	expectedType core.ZodTypeCode,
-) (T, error) {
-	// For nil values, convert directly
-	if result == nil || reflectx.IsNil(result) {
+// newNilValidator creates a validator that supports custom error messages
+// from schema parameters via the internals' Error field.
+func newNilValidator[T any](internals *core.ZodTypeInternals) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
+	return func(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+		if any(value) == nil || reflectx.IsNil(value) {
+			return engine.ApplyChecks(value, chks, ctx)
+		}
 		var zero T
+		return zero, issues.CreateInvalidTypeErrorWithInst(core.ZodTypeNil, value, ctx, internals)
+	}
+}
+
+// convertNilResult converts a parsed result to constraint type R.
+// Nil type needs special handling because nil interface values don't
+// match type switch cases in the generic ConvertToConstraintType.
+func convertNilResult[T any, R any](
+	result any, ctx *core.ParseContext, expectedType core.ZodTypeCode,
+) (R, error) {
+	if result == nil || reflectx.IsNil(result) {
+		var zero R
 		return zero, nil
 	}
-
-	// For non-nil values (e.g., from Prefault), allow conversion
-	// This enables Prefault values to reach the Refine stage
-	converted, ok := convertAnyToConstraintType[T](result)
-	if !ok {
-		// If conversion fails, return an error
-		var zero T
-		return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
-	}
-	return converted, nil
+	return engine.ConvertToConstraintType[T, R](result, ctx, expectedType)
 }
 
-// validateNilValueWithCustomError is the validator function for Nil type with custom error support
-// Nil type should only accept nil values
-func validateNilValueWithCustomError[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext, internals *core.ZodTypeInternals) (T, error) {
-	// For Nil type, accept any nil value (including the original nil input)
-	if any(value) == nil || reflectx.IsNil(value) {
-		// Apply checks to the nil value
-		return engine.ApplyChecks[T](value, checks, ctx)
-	}
-
-	// Reject non-nil values for normal parsing
-	// Use the new function that supports custom error messages
-	var zero T
-	return zero, issues.CreateInvalidTypeErrorWithInst(core.ZodTypeNil, value, ctx, internals)
-}
-
-// Parse returns a value that matches the generic type T with full type safety
-// Nil type uses the standard ParsePrimitive with custom validator and converter
-func (z *ZodNil[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
-	// Use the internally recorded type code by default, fall back to nil if not set
-	expectedType := z.internals.Type
-	if expectedType == "" {
-		expectedType = core.ZodTypeNil
-	}
-
-	internals := &z.internals.ZodTypeInternals
-
-	// Create validator function that captures internals
-	validator := func(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
-		return validateNilValueWithCustomError[any](value, checks, ctx, internals)
-	}
-
-	// Use the standard ParsePrimitive with nil-specific validator and converter
-	return engine.ParsePrimitive[any, T](
-		input,
-		internals,
-		expectedType,
-		validator,
-		convertNilTypeToConstraint[T],
-		ctx...,
+// Parse validates the input and returns the constraint type R.
+func (z *ZodNil[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitive[T, R](
+		input, &z.internals.ZodTypeInternals, core.ZodTypeNil,
+		newNilValidator[T](&z.internals.ZodTypeInternals), convertNilResult[T, R], ctx...,
 	)
 }
 
-// MustParse is the type-safe variant that panics on error.
-func (z *ZodNil[T]) MustParse(input any, ctx ...*core.ParseContext) T {
+// MustParse validates the input and panics on failure.
+func (z *ZodNil[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -137,13 +102,13 @@ func (z *ZodNil[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// ParseAny validates the input value and returns any type (for runtime interface)
-func (z *ZodNil[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+// ParseAny validates the input and returns any type.
+func (z *ZodNil[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// MustParseAny is the any-type variant that panics on error.
-func (z *ZodNil[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
+// MustParseAny validates the input and panics on failure.
+func (z *ZodNil[T, R]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	result, err := z.ParseAny(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -151,29 +116,16 @@ func (z *ZodNil[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
-func (z *ZodNil[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
-	// Use the internally recorded type code by default, fall back to nil if not set
-	expectedType := z.internals.Type
-	if expectedType == "" {
-		expectedType = core.ZodTypeNil
-	}
-
-	return engine.ParsePrimitiveStrict[any, T](
-		input,
-		&z.internals.ZodTypeInternals,
-		expectedType,
-		validateNilValue[any],
-		ctx...,
+// StrictParse requires exact type matching for compile-time type safety.
+func (z *ZodNil[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+	return engine.ParsePrimitiveStrict[T, R](
+		input, &z.internals.ZodTypeInternals, core.ZodTypeNil,
+		validateNilValue[T], ctx...,
 	)
 }
 
-// MustStrictParse provides compile-time type safety and panics on validation failure.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
-func (z *ZodNil[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
+// MustStrictParse requires exact type matching and panics on failure.
+func (z *ZodNil[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -185,67 +137,64 @@ func (z *ZodNil[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional always returns *any because the optional value may be nil or missing.
-func (z *ZodNil[T]) Optional() *ZodNil[*any] {
+// Optional returns a pointer constraint that accepts missing values.
+func (z *ZodNil[T, R]) Optional() *ZodNil[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable always returns *any because the value may be nil.
-func (z *ZodNil[T]) Nilable() *ZodNil[*any] {
+// Nilable returns a pointer constraint that accepts nil values.
+func (z *ZodNil[T, R]) Nilable() *ZodNil[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers for maximum flexibility
-func (z *ZodNil[T]) Nullish() *ZodNil[*any] {
+// Nullish returns a pointer constraint accepting both nil and missing values.
+func (z *ZodNil[T, R]) Nullish() *ZodNil[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Default keeps the current generic type T.
-func (z *ZodNil[T]) Default(v any) *ZodNil[T] {
+// Default sets a default value returned when input is nil.
+func (z *ZodNil[T, R]) Default(value T) *ZodNil[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultValue(v)
+	in.SetDefaultValue(value)
 	return z.withInternals(in)
 }
 
-// DefaultFunc keeps the current generic type T.
-func (z *ZodNil[T]) DefaultFunc(fn func() any) *ZodNil[T] {
+// DefaultFunc sets a function that provides the default value.
+func (z *ZodNil[T, R]) DefaultFunc(fn func() T) *ZodNil[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault keeps the current generic type T.
-func (z *ZodNil[T]) Prefault(v any) *ZodNil[T] {
+// Prefault sets a fallback value that goes through the full parsing pipeline.
+func (z *ZodNil[T, R]) Prefault(value T) *ZodNil[T, R] {
 	in := z.internals.Clone()
-	in.SetPrefaultValue(v)
+	in.SetPrefaultValue(value)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc keeps the current generic type T.
-func (z *ZodNil[T]) PrefaultFunc(fn func() any) *ZodNil[T] {
+// PrefaultFunc sets a function that provides the fallback value.
+func (z *ZodNil[T, R]) PrefaultFunc(fn func() T) *ZodNil[T, R] {
 	in := z.internals.Clone()
-	in.SetPrefaultFunc(fn)
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this nil schema.
-func (z *ZodNil[T]) Meta(meta core.GlobalMeta) *ZodNil[T] {
+// Meta stores metadata for this schema.
+func (z *ZodNil[T, R]) Meta(meta core.GlobalMeta) *ZodNil[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
-func (z *ZodNil[T]) Describe(description string) *ZodNil[T] {
+func (z *ZodNil[T, R]) Describe(description string) *ZodNil[T, R] {
 	newInternals := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
@@ -261,69 +210,42 @@ func (z *ZodNil[T]) Describe(description string) *ZodNil[T] {
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform creates a type-safe transformation using WrapFn pattern
-func (z *ZodNil[T]) Transform(fn func(any, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
-	wrapperFn := func(input T, ctx *core.RefinementContext) (any, error) {
-		nilValue := extractNil(input)
-		return fn(nilValue, ctx)
+// Transform applies a transformation function to the parsed value.
+func (z *ZodNil[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+		return fn(extractNilValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[T, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
-// Pipe creates a pipeline using WrapFn pattern
-func (z *ZodNil[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
-	wrapperFn := func(input T, ctx *core.ParseContext) (any, error) {
-		nilValue := extractNil(input)
-		return target.Parse(nilValue, ctx)
+// Pipe creates a validation pipeline with the given target schema.
+func (z *ZodNil[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
+		return target.Parse(extractNilValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[T, any](z, target, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
-
-// =============================================================================
-// TYPE CONVERSION - NO LONGER NEEDED (USING WRAPFN PATTERN)
-// =============================================================================
 
 // =============================================================================
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies a custom validation function that matches the schema's output
-// type T. The callback will be executed even when the value is nil (for *any
-// schemas) to align with Zod v4 semantics.
-func (z *ZodNil[T]) Refine(fn func(T) bool, params ...any) *ZodNil[T] {
-	// Wrapper converts the raw value (always nil) into T before calling fn.
+// Refine adds a custom validation function with constraint type R.
+func (z *ZodNil[T, R]) Refine(fn func(R) bool, params ...any) *ZodNil[T, R] {
 	wrapper := func(v any) bool {
-		var zero T
-
-		switch any(zero).(type) {
-		case *any:
-			// Schema output is *any – convert incoming value (nil) to *any
-			if v == nil {
-				nilPtr := (*any)(nil)
-				return fn(any(nilPtr).(T))
-			}
-			ptr := &v
-			return fn(any(ptr).(T))
-		case any:
-			// Schema output is any
-			if v == nil {
-				return fn(any(nil).(T))
-			}
-			return fn(any(v).(T)) //nolint:unconvert // Required for generic type constraint conversion
-		default:
-			// Unsupported type – should never happen
-			return false
+		if converted, ok := convertToNilConstraintValue[T, R](v); ok {
+			return fn(converted)
 		}
+		return false
 	}
-
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
 
-// RefineAny adds flexible custom validation logic
-func (z *ZodNil[T]) RefineAny(fn func(any) bool, params ...any) *ZodNil[T] {
+// RefineAny adds a custom validation function with any type.
+func (z *ZodNil[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNil[T, R] {
 	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
@@ -334,79 +256,74 @@ func (z *ZodNil[T]) RefineAny(fn func(any) bool, params ...any) *ZodNil[T] {
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withPtrInternals creates a new ZodNil instance of type *any.
-// Used by modifiers such as Optional, Nilable, and Nullish that must return a pointer type.
-func (z *ZodNil[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodNil[*any] {
-	return &ZodNil[*any]{internals: &ZodNilInternals{
+// withPtrInternals creates a new ZodNil with pointer constraint type.
+func (z *ZodNil[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNil[T, *T] {
+	return &ZodNil[T, *T]{internals: &ZodNilInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
 }
 
-// withInternals creates a new ZodNil instance that keeps the original generic type T.
-// Used by modifiers that retain the original type, such as Default, Prefault, and Transform.
-func (z *ZodNil[T]) withInternals(in *core.ZodTypeInternals) *ZodNil[T] {
-	return &ZodNil[T]{internals: &ZodNilInternals{
+// withInternals creates a new ZodNil preserving the current constraint type.
+func (z *ZodNil[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNil[T, R] {
+	return &ZodNil[T, R]{internals: &ZodNilInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
 }
 
-// CloneFrom copies configuration from another schema
-func (z *ZodNil[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodNil[T]); ok {
-		// Preserve original checks to avoid overwriting them
-		originalChecks := z.internals.Checks
-
-		// Copy all state from source
-		*z.internals = *src.internals
-
-		// Restore the original checks that were set by the constructor
-		z.internals.Checks = originalChecks
+// CloneFrom copies configuration from another schema of the same type.
+func (z *ZodNil[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodNil[T, R]); ok {
+		z.internals = src.internals
 	}
 }
 
-// extractNil extracts nil value from generic type T
-func extractNil[T any](value T) any {
-	if ptr, ok := any(value).(*any); ok {
-		if ptr != nil {
-			return *ptr
-		}
-		return nil
+// extractNilValue extracts base type T from constraint type R.
+// Handles nil values safely since nil is the primary value for this type.
+func extractNilValue[T any, R any](value R) T {
+	if any(value) == nil {
+		var zero T
+		return zero
 	}
-	return any(value)
-}
-
-// convertAnyToConstraintType converts any value to constraint type T if possible
-func convertAnyToConstraintType[T any](value any) (T, bool) {
-	var zero T
-
-	// Handle nil input first
-	if value == nil {
-		return zero, true // zero value for any constraint type
-	}
-
-	// Type conversion logic based on constraint type
-	switch any(zero).(type) {
+	switch v := any(value).(type) {
 	case *any:
-		// For *any constraint, try direct conversion first (in case value is already *any)
-		if converted, ok := any(value).(T); ok { //nolint:unconvert // Required for generic type constraint conversion
-			return converted, true
+		if v != nil {
+			return any(*v).(T) //nolint:unconvert
 		}
-		// For *any constraint, wrap the value in a pointer
-		return any(&value).(T), true
+		var zero T
+		return zero
 	default:
-		// For any constraint, try direct conversion
-		if converted, ok := any(value).(T); ok { //nolint:unconvert // Required for generic type constraint conversion
-			return converted, true
-		}
-		return zero, false
+		return any(value).(T)
 	}
 }
+
+// convertToNilConstraintValue converts any value to constraint type R.
+func convertToNilConstraintValue[T any, R any](value any) (R, bool) {
+	var zero R
+
+	// Direct type match.
+	if r, ok := any(value).(R); ok { //nolint:unconvert
+		return r, true
+	}
+
+	// Handle pointer constraint: wrap value in *any.
+	if _, ok := any(zero).(*any); ok {
+		if value == nil {
+			return any((*any)(nil)).(R), true
+		}
+		return any(&value).(R), true
+	}
+
+	return zero, false
+}
+
+// =============================================================================
+// CONSTRUCTORS AND FACTORY FUNCTIONS
+// =============================================================================
 
 // newZodNilFromDef constructs a new ZodNil from the given definition.
-// Internal helper used by the constructor chain.
-func newZodNilFromDef[T any](def *ZodNilDef) *ZodNil[T] {
+func newZodNilFromDef[T any, R any](def *ZodNilDef) *ZodNil[T, R] {
 	internals := &ZodNilInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
 			Type:   def.Type,
@@ -417,46 +334,39 @@ func newZodNilFromDef[T any](def *ZodNilDef) *ZodNil[T] {
 		Def: def,
 	}
 
-	// Nil type should accept nil values by default
+	// Nil type accepts nil values by default.
 	internals.Nilable = true
 
-	// Provide a constructor so that AddCheck can create new schema instances.
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		nilDef := &ZodNilDef{
-			ZodTypeDef: *newDef,
-		}
-		return any(newZodNilFromDef[T](nilDef)).(core.ZodType[any])
+		nilDef := &ZodNilDef{ZodTypeDef: *newDef}
+		return any(newZodNilFromDef[T, R](nilDef)).(core.ZodType[any])
 	}
 
 	if def.Error != nil {
 		internals.Error = def.Error
 	}
 
-	return &ZodNil[T]{internals: internals}
+	return &ZodNil[T, R]{internals: internals}
 }
 
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
-
-// Nil creates a nil schema following Zod TypeScript v4 pattern
+// Nil creates a nil schema that only accepts nil values.
+//
 // Usage:
 //
 //	Nil()                    // no parameters
 //	Nil("custom error")      // string shorthand
 //	Nil(SchemaParams{...})   // full parameters
-func Nil(params ...any) *ZodNil[any] {
-	return NilTyped[any](params...)
+func Nil(params ...any) *ZodNil[any, any] {
+	return NilTyped[any, any](params...)
 }
 
-// NilPtr creates a schema for *any
-func NilPtr(params ...any) *ZodNil[*any] {
-	return NilTyped[*any](params...)
+// NilPtr creates a nil schema with pointer constraint.
+func NilPtr(params ...any) *ZodNil[any, *any] {
+	return NilTyped[any, *any](params...)
 }
 
-// NilTyped is the underlying generic function for creating nil schemas
-// allowing for explicit type parameterization
-func NilTyped[T any](params ...any) *ZodNil[T] {
+// NilTyped creates a typed nil schema with explicit generic constraints.
+func NilTyped[T any, R any](params ...any) *ZodNil[T, R] {
 	schemaParams := utils.NormalizeParams(params...)
 
 	def := &ZodNilDef{
@@ -466,8 +376,7 @@ func NilTyped[T any](params ...any) *ZodNil[T] {
 		},
 	}
 
-	// Apply the normalized parameters to the schema definition
 	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 
-	return newZodNilFromDef[T](def)
+	return newZodNilFromDef[T, R](def)
 }

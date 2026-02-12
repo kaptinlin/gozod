@@ -16,22 +16,21 @@ import (
 // TYPE DEFINITIONS
 // =============================================================================
 
-// ZodSetDef defines the schema definition for set validation.
-// In Go, sets are idiomatically represented as map[T]struct{}.
+// ZodSetDef defines the configuration for a set schema.
 type ZodSetDef struct {
 	core.ZodTypeDef
-	ValueType any // The value schema (type-erased for flexibility)
+	ValueType any
 }
 
-// ZodSetInternals contains the internal state for set schema
+// ZodSetInternals contains set validator internal state.
 type ZodSetInternals[T comparable] struct {
 	core.ZodTypeInternals
-	Def       *ZodSetDef // Schema definition reference
-	ValueType any        // Value schema for runtime validation
+	Def       *ZodSetDef
+	ValueType any
 }
 
-// ZodSet represents a type-safe set validation schema with dual generic parameters
-// T: element type (must be comparable), R: constraint type (map[T]struct{} or *map[T]struct{})
+// ZodSet represents a type-safe set validation schema.
+// T is the element type (must be comparable), R is the constraint type (value or pointer).
 type ZodSet[T comparable, R any] struct {
 	internals *ZodSetInternals[T]
 }
@@ -40,23 +39,21 @@ type ZodSet[T comparable, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals exposes internal state for framework usage
+// GetInternals returns the internal state of the schema.
 func (z *ZodSet[T, R]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
-func (z *ZodSet[T, R]) IsOptional() bool {
-	return z.internals.IsOptional()
-}
+// IsOptional reports whether this schema accepts undefined/missing values.
+func (z *ZodSet[T, R]) IsOptional() bool { return z.internals.IsOptional() }
 
-// IsNilable returns true if this schema accepts nil values
-func (z *ZodSet[T, R]) IsNilable() bool {
-	return z.internals.IsNilable()
-}
+// IsNilable reports whether this schema accepts nil values.
+func (z *ZodSet[T, R]) IsNilable() bool { return z.internals.IsNilable() }
 
-// Parse validates input using set-specific parsing logic with type safety
+// Parse validates input using set-specific parsing logic.
 func (z *ZodSet[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var zero R
+
 	result, err := engine.ParseComplex[map[T]struct{}](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -67,11 +64,9 @@ func (z *ZodSet[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 		ctx...,
 	)
 	if err != nil {
-		var zero R
 		return zero, err
 	}
 
-	// Handle different return types from ParseComplex
 	switch v := result.(type) {
 	case map[T]struct{}:
 		return convertToSetConstraintType[T, R](v), nil
@@ -88,12 +83,11 @@ func (z *ZodSet[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 		if typedResult, ok := result.(R); ok {
 			return typedResult, nil
 		}
-		var zero R
 		return zero, fmt.Errorf("%w %T", ErrParseComplexUnexpectedType, result)
 	}
 }
 
-// MustParse validates the input value and panics on failure
+// MustParse validates input and panics on error.
 func (z *ZodSet[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -102,11 +96,11 @@ func (z *ZodSet[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type matching.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodSet[T, R]) StrictParse(input map[T]struct{}, ctx ...*core.ParseContext) (R, error) {
 	constraintInput := convertToSetConstraintType[T, R](input)
 
-	result, err := engine.ParseComplexStrict[map[T]struct{}, R](
+	return engine.ParseComplexStrict[map[T]struct{}, R](
 		constraintInput,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeSet,
@@ -115,15 +109,9 @@ func (z *ZodSet[T, R]) StrictParse(input map[T]struct{}, ctx ...*core.ParseConte
 		z.validateSet,
 		ctx...,
 	)
-	if err != nil {
-		var zero R
-		return zero, err
-	}
-
-	return result, nil
 }
 
-// MustStrictParse validates input with compile-time type safety and panics on failure.
+// MustStrictParse validates input with type safety and panics on error.
 func (z *ZodSet[T, R]) MustStrictParse(input map[T]struct{}, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -132,7 +120,7 @@ func (z *ZodSet[T, R]) MustStrictParse(input map[T]struct{}, ctx ...*core.ParseC
 	return result
 }
 
-// ParseAny validates input and returns untyped result for runtime scenarios.
+// ParseAny validates input and returns an untyped result.
 func (z *ZodSet[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -141,21 +129,21 @@ func (z *ZodSet[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional creates optional set schema (always returns pointer constraint)
+// Optional creates an optional set schema that returns a pointer constraint.
 func (z *ZodSet[T, R]) Optional() *ZodSet[T, *map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable allows nil values (always returns pointer constraint)
+// Nilable allows nil values and returns a pointer constraint.
 func (z *ZodSet[T, R]) Nilable() *ZodSet[T, *map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers (always returns pointer constraint)
+// Nullish combines optional and nilable modifiers.
 func (z *ZodSet[T, R]) Nullish() *ZodSet[T, *map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -163,7 +151,7 @@ func (z *ZodSet[T, R]) Nullish() *ZodSet[T, *map[T]struct{}] {
 	return z.withPtrInternals(in)
 }
 
-// NonOptional removes Optional flag and enforces non-nil set constraint.
+// NonOptional removes the Optional flag and enforces a non-nil set constraint.
 func (z *ZodSet[T, R]) NonOptional() *ZodSet[T, map[T]struct{}] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
@@ -178,14 +166,14 @@ func (z *ZodSet[T, R]) NonOptional() *ZodSet[T, map[T]struct{}] {
 	}
 }
 
-// Default preserves current constraint type
+// Default sets a default value when input is nil (short-circuit, bypasses validation).
 func (z *ZodSet[T, R]) Default(v map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc preserves current constraint type
+// DefaultFunc sets a dynamic default value using a function.
 func (z *ZodSet[T, R]) DefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -194,14 +182,14 @@ func (z *ZodSet[T, R]) DefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault provides fallback values on validation failure (preserves constraint type)
+// Prefault provides a fallback value that goes through full validation.
 func (z *ZodSet[T, R]) Prefault(v map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values (preserves constraint type)
+// PrefaultFunc provides a dynamic fallback value using a function.
 func (z *ZodSet[T, R]) PrefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -217,7 +205,6 @@ func (z *ZodSet[T, R]) Meta(meta core.GlobalMeta) *ZodSet[T, R] {
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
 func (z *ZodSet[T, R]) Describe(description string) *ZodSet[T, R] {
 	newInternals := z.internals.Clone()
 
@@ -237,53 +224,38 @@ func (z *ZodSet[T, R]) Describe(description string) *ZodSet[T, R] {
 // VALIDATION METHODS
 // =============================================================================
 
-// Min sets minimum number of elements
+// Min sets the minimum number of elements.
 func (z *ZodSet[T, R]) Min(minLen int, params ...any) *ZodSet[T, R] {
-	check := checks.MinSize(minLen, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.MinSize(minLen, params...))
 }
 
-// Max sets maximum number of elements
+// Max sets the maximum number of elements.
 func (z *ZodSet[T, R]) Max(maxLen int, params ...any) *ZodSet[T, R] {
-	check := checks.MaxSize(maxLen, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.MaxSize(maxLen, params...))
 }
 
-// Size sets exact number of elements
+// Size sets the exact number of elements.
 func (z *ZodSet[T, R]) Size(exactLen int, params ...any) *ZodSet[T, R] {
-	check := checks.Size(exactLen, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Size(exactLen, params...))
 }
 
-// NonEmpty ensures set has at least one element
-// TypeScript Zod v4 equivalent: z.set(...).nonempty()
+// NonEmpty ensures the set has at least one element.
 func (z *ZodSet[T, R]) NonEmpty(params ...any) *ZodSet[T, R] {
-	check := checks.MinSize(1, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.MinSize(1, params...))
 }
 
 // =============================================================================
 // TYPE-SPECIFIC METHODS
 // =============================================================================
 
-// ValueType returns the value schema for this set
-func (z *ZodSet[T, R]) ValueType() any {
-	return z.internals.ValueType
-}
+// ValueType returns the value schema for this set.
+func (z *ZodSet[T, R]) ValueType() any { return z.internals.ValueType }
 
 // =============================================================================
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform applies a transformation function using the WrapFn pattern.
+// Transform applies a transformation function to the parsed set value.
 func (z *ZodSet[T, R]) Transform(fn func(R, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(input, ctx)
@@ -291,20 +263,18 @@ func (z *ZodSet[T, R]) Transform(fn func(R, *core.RefinementContext) (any, error
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
-// Overwrite transforms set value while keeping the same type
+// Overwrite transforms the set value while keeping the same type.
 func (z *ZodSet[T, R]) Overwrite(transform func(R) R, params ...any) *ZodSet[T, R] {
-	check := checks.NewZodCheckOverwrite(func(input any) any {
+	transformAny := func(input any) any {
 		if converted, ok := convertToSetType[T, R](input); ok {
 			return transform(converted)
 		}
 		return input
-	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	}
+	return z.withCheck(checks.NewZodCheckOverwrite(transformAny, params...))
 }
 
-// Pipe creates a pipeline using the WrapFn pattern.
+// Pipe creates a validation pipeline with a target schema.
 func (z *ZodSet[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(input, ctx)
@@ -316,29 +286,19 @@ func (z *ZodSet[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine adds type-safe custom validation with automatic constraint type matching
+// Refine applies type-safe custom validation with constraint type matching.
 func (z *ZodSet[T, R]) Refine(fn func(R) bool, params ...any) *ZodSet[T, R] {
 	wrapper := func(value any) bool {
-		constraintValue := convertToSetConstraintType[T, R](value)
-		return fn(constraintValue)
+		return fn(convertToSetConstraintType[T, R](value))
 	}
-
 	param := utils.FirstParam(params...)
-	customParams := utils.NormalizeCustomParams(param)
-	check := checks.NewCustom[any](wrapper, customParams)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param)))
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny provides flexible validation without type conversion.
 func (z *ZodSet[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSet[T, R] {
 	param := utils.FirstParam(params...)
-	customParams := utils.NormalizeCustomParams(param)
-	check := checks.NewCustom[any](fn, customParams)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(param)))
 }
 
 // =============================================================================
@@ -346,13 +306,11 @@ func (z *ZodSet[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSet[T, R]
 // =============================================================================
 
 // And creates an intersection with another schema.
-// TypeScript Zod v4 equivalent: schema.and(other)
 func (z *ZodSet[T, R]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
 }
 
 // Or creates a union with another schema.
-// TypeScript Zod v4 equivalent: schema.or(other)
 func (z *ZodSet[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
@@ -361,7 +319,14 @@ func (z *ZodSet[T, R]) Or(other any) *ZodUnion[any, any] {
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withInternals creates new instance preserving current constraint type
+// withCheck clones internals, adds a check, and returns a new instance.
+func (z *ZodSet[T, R]) withCheck(check core.ZodCheck) *ZodSet[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
+// withInternals creates a new instance preserving the current constraint type.
 func (z *ZodSet[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSet[T, R] {
 	return &ZodSet[T, R]{internals: &ZodSetInternals[T]{
 		ZodTypeInternals: *in,
@@ -370,7 +335,7 @@ func (z *ZodSet[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSet[T, R] {
 	}}
 }
 
-// withPtrInternals creates new instance with pointer constraint type
+// withPtrInternals creates a new instance with pointer constraint type.
 func (z *ZodSet[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSet[T, *map[T]struct{}] {
 	return &ZodSet[T, *map[T]struct{}]{internals: &ZodSetInternals[T]{
 		ZodTypeInternals: *in,
@@ -379,7 +344,7 @@ func (z *ZodSet[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSet[T, *m
 	}}
 }
 
-// CloneFrom copies configuration from another schema
+// CloneFrom copies configuration from another schema.
 func (z *ZodSet[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodSet[T, R]); ok {
 		originalChecks := z.internals.Checks
@@ -388,14 +353,12 @@ func (z *ZodSet[T, R]) CloneFrom(source any) {
 	}
 }
 
-// extractSet extracts map[T]struct{} from value with proper conversion
+// extractSet extracts map[T]struct{} from value with proper conversion.
 func (z *ZodSet[T, R]) extractSet(value any) (map[T]struct{}, bool) {
-	// Handle direct map[T]struct{}
 	if setVal, ok := value.(map[T]struct{}); ok {
 		return setVal, true
 	}
 
-	// Handle []T conversion (convert slice to set)
 	if slice, ok := value.([]T); ok {
 		set := make(map[T]struct{}, len(slice))
 		for _, elem := range slice {
@@ -404,68 +367,60 @@ func (z *ZodSet[T, R]) extractSet(value any) (map[T]struct{}, bool) {
 		return set, true
 	}
 
-	// Handle []any conversion
 	if anySlice, ok := value.([]any); ok {
 		set := make(map[T]struct{}, len(anySlice))
 		for _, elem := range anySlice {
-			if typedElem, ok := elem.(T); ok {
-				set[typedElem] = struct{}{}
-			} else {
+			typedElem, ok := elem.(T)
+			if !ok {
 				return nil, false
 			}
+			set[typedElem] = struct{}{}
 		}
 		return set, true
 	}
 
-	// Try reflection for map types
-	if value != nil {
-		rv := reflect.ValueOf(value)
-		if rv.Kind() == reflect.Map {
-			// Check if it's a set-like map (values are struct{})
-			if rv.Type().Elem() == reflect.TypeOf(struct{}{}) {
-				set := make(map[T]struct{}, rv.Len())
-				for _, key := range rv.MapKeys() {
-					if typedKey, ok := key.Interface().(T); ok {
-						set[typedKey] = struct{}{}
-					} else {
-						return nil, false
-					}
-				}
-				return set, true
+	if value == nil {
+		return nil, false
+	}
+
+	// Fall back to reflection for non-standard map/slice types.
+	rv := reflect.ValueOf(value)
+	if rv.Kind() == reflect.Map && rv.Type().Elem() == reflect.TypeOf(struct{}{}) {
+		set := make(map[T]struct{}, rv.Len())
+		for _, key := range rv.MapKeys() {
+			typedKey, ok := key.Interface().(T)
+			if !ok {
+				return nil, false
 			}
+			set[typedKey] = struct{}{}
 		}
-		// Try slice via reflection
-		if rv.Kind() == reflect.Slice {
-			set := make(map[T]struct{}, rv.Len())
-			for i := range rv.Len() {
-				elem := rv.Index(i).Interface()
-				if typedElem, ok := elem.(T); ok {
-					set[typedElem] = struct{}{}
-				} else {
-					return nil, false
-				}
+		return set, true
+	}
+	if rv.Kind() == reflect.Slice {
+		set := make(map[T]struct{}, rv.Len())
+		for i := range rv.Len() {
+			typedElem, ok := rv.Index(i).Interface().(T)
+			if !ok {
+				return nil, false
 			}
-			return set, true
+			set[typedElem] = struct{}{}
 		}
+		return set, true
 	}
 
 	return nil, false
 }
 
-// extractSetPtr extracts *map[T]struct{} from value
+// extractSetPtr extracts *map[T]struct{} from value.
 func (z *ZodSet[T, R]) extractSetPtr(value any) (*map[T]struct{}, bool) {
-	// Handle direct *map[T]struct{}
 	if setVal, ok := value.(*map[T]struct{}); ok {
 		return setVal, true
 	}
 
-	// Handle map[T]struct{}
 	if setVal, ok := value.(map[T]struct{}); ok {
-		ptrSet := &setVal
-		return ptrSet, true
+		return &setVal, true
 	}
 
-	// Try extractSet and return pointer
 	if setVal, ok := z.extractSet(value); ok {
 		return &setVal, true
 	}
@@ -473,41 +428,32 @@ func (z *ZodSet[T, R]) extractSetPtr(value any) (*map[T]struct{}, bool) {
 	return nil, false
 }
 
-// validateSet validates set elements using value schema with multiple error collection
+// validateSet validates set elements using the value schema.
 func (z *ZodSet[T, R]) validateSet(value map[T]struct{}, checksToRun []core.ZodCheck, ctx *core.ParseContext) (map[T]struct{}, error) {
 	var collectedIssues []core.ZodRawIssue
 
-	// Apply set-level checks (size, etc.) and collect any issues
 	payload := core.NewParsePayload(value)
 	result := engine.RunChecksOnValue(value, checksToRun, payload, ctx)
 
-	// Collect any set-level issues
 	if result.HasIssues() {
-		setIssues := result.GetIssues()
-		collectedIssues = append(collectedIssues, setIssues...)
+		collectedIssues = append(collectedIssues, result.GetIssues()...)
 	}
 
-	// Get the potentially transformed value for element validation
-	var validatedValue map[T]struct{}
+	// Use the potentially transformed value for element validation.
+	validatedValue := value
 	if result.GetValue() != nil {
 		if converted, ok := result.GetValue().(map[T]struct{}); ok {
 			validatedValue = converted
-		} else {
-			validatedValue = value
 		}
-	} else {
-		validatedValue = value
 	}
 
-	// Validate each element if value schema is provided
 	if z.internals.ValueType != nil {
 		for elem := range validatedValue {
 			if err := z.validateElement(elem, z.internals.ValueType, ctx); err != nil {
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
 					for _, elementIssue := range zodErr.Issues {
-						rawIssue := issues.ConvertZodIssueToRawWithProperties(elementIssue, []any{elem})
-						collectedIssues = append(collectedIssues, rawIssue)
+						collectedIssues = append(collectedIssues, issues.ConvertZodIssueToRawWithProperties(elementIssue, []any{elem}))
 					}
 				} else {
 					rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, elem)
@@ -518,7 +464,6 @@ func (z *ZodSet[T, R]) validateSet(value map[T]struct{}, checksToRun []core.ZodC
 		}
 	}
 
-	// If we collected any issues, return them as a combined error
 	if len(collectedIssues) > 0 {
 		var zero map[T]struct{}
 		return zero, issues.CreateArrayValidationIssues(collectedIssues)
@@ -527,7 +472,7 @@ func (z *ZodSet[T, R]) validateSet(value map[T]struct{}, checksToRun []core.ZodC
 	return validatedValue, nil
 }
 
-// validateElement validates a single element using the provided schema
+// validateElement validates a single element using the provided schema.
 func (z *ZodSet[T, R]) validateElement(element T, schema any, ctx *core.ParseContext) error {
 	if schema == nil {
 		return nil
@@ -565,7 +510,7 @@ func (z *ZodSet[T, R]) validateElement(element T, schema any, ctx *core.ParseCon
 	return nil
 }
 
-// convertToSetType converts any value to the specified set constraint type
+// convertToSetType converts any value to the specified set constraint type.
 func convertToSetType[T comparable, R any](v any) (R, bool) {
 	var zero R
 
@@ -580,7 +525,7 @@ func convertToSetType[T comparable, R any](v any) (R, bool) {
 	return zero, false
 }
 
-// convertToSetConstraintType converts values to the constraint type R
+// convertToSetConstraintType converts values to the constraint type R.
 func convertToSetConstraintType[T comparable, R any](value any) R {
 	var zero R
 	zeroType := reflect.TypeOf(zero)
@@ -589,8 +534,7 @@ func convertToSetConstraintType[T comparable, R any](value any) R {
 		return zero
 	}
 
-	// Check if R is a pointer type (*map[T]struct{})
-	if zeroType != nil && zeroType.Kind() == reflect.Ptr {
+	if zeroType != nil && zeroType.Kind() == reflect.Pointer {
 		switch v := value.(type) {
 		case map[T]struct{}:
 			ptr := &v
@@ -616,7 +560,7 @@ func convertToSetConstraintType[T comparable, R any](value any) R {
 	return zero
 }
 
-// newZodSetFromDef constructs new ZodSet from definition
+// newZodSetFromDef constructs a new ZodSet from a definition.
 func newZodSetFromDef[T comparable, R any](def *ZodSetDef) *ZodSet[T, R] {
 	internals := &ZodSetInternals[T]{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
@@ -624,7 +568,7 @@ func newZodSetFromDef[T comparable, R any](def *ZodSetDef) *ZodSet[T, R] {
 		ValueType:        def.ValueType,
 	}
 
-	// Provide constructor for AddCheck functionality
+	// Provide constructor for AddCheck functionality.
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		setDef := &ZodSetDef{
 			ZodTypeDef: *newDef,
@@ -652,19 +596,17 @@ func newZodSetFromDef[T comparable, R any](def *ZodSetDef) *ZodSet[T, R] {
 // CONSTRUCTORS AND FACTORY FUNCTIONS
 // =============================================================================
 
-// Set creates set schema with element validation (returns value constraint)
-// In Go, sets are represented as map[T]struct{} where T must be comparable.
-// TypeScript Zod v4 equivalent: z.set(schema)
+// Set creates a set schema with element validation.
 func Set[T comparable](valueSchema any, paramArgs ...any) *ZodSet[T, map[T]struct{}] {
 	return SetTyped[T, map[T]struct{}](valueSchema, paramArgs...)
 }
 
-// SetPtr creates set schema with pointer constraint (returns pointer constraint)
+// SetPtr creates a set schema returning a pointer constraint.
 func SetPtr[T comparable](valueSchema any, paramArgs ...any) *ZodSet[T, *map[T]struct{}] {
 	return SetTyped[T, *map[T]struct{}](valueSchema, paramArgs...)
 }
 
-// SetTyped creates set schema with explicit constraint type (universal constructor)
+// SetTyped creates a typed set schema with generic constraints.
 func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T, R] {
 	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
@@ -683,7 +625,7 @@ func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T,
 
 	setSchema := newZodSetFromDef[T, R](def)
 
-	// Ensure validator is called when value schema exists
+	// Ensure validator is called when value schema exists.
 	if valueSchema != nil {
 		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
 		setSchema.internals.AddCheck(alwaysPassCheck)
@@ -692,7 +634,7 @@ func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T,
 	return setSchema
 }
 
-// Check adds a custom validation function for set schema that can push multiple issues.
+// Check adds a custom validation function that can report multiple issues.
 func (z *ZodSet[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodSet[T, R] {
 	wrapper := func(payload *core.ParsePayload) {
 		if val, ok := payload.GetValue().(R); ok {
@@ -702,7 +644,7 @@ func (z *ZodSet[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 
 		var zero R
 		zeroTyp := reflect.TypeOf(zero)
-		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
+		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
 			elemTyp := zeroTyp.Elem()
 			valRV := reflect.ValueOf(payload.GetValue())
 			if valRV.IsValid() && valRV.Type() == elemTyp {
@@ -714,14 +656,10 @@ func (z *ZodSet[T, R]) Check(fn func(value R, payload *core.ParsePayload), param
 			}
 		}
 	}
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
-// With is an alias for Check - adds a custom validation function.
-// TypeScript Zod v4 equivalent: schema.with(...)
+// With is an alias for Check.
 func (z *ZodSet[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodSet[T, R] {
 	return z.Check(fn, params...)
 }

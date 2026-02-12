@@ -377,7 +377,7 @@ func TestTypeAliasExports(t *testing.T) {
 		_ = (*ZodAny[any, any])(nil)
 		_ = (*ZodUnknown[any, any])(nil)
 		_ = (*ZodNever[any, any])(nil)
-		_ = (*ZodNil[any])(nil)
+		_ = (*ZodNil[any, any])(nil)
 		_ = (*ZodFile[any, any])(nil)
 		_ = (*ZodFunction[func()])(nil)
 		_ = (*ZodStringBool[bool])(nil)

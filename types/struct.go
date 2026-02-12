@@ -3264,9 +3264,9 @@ func applyOptionalToSchema(schema core.ZodSchema) core.ZodSchema {
 		return s.Optional()
 	case *ZodNever[any, *any]:
 		return s.Optional() // Makes it accept nil
-	case *ZodNil[any]:
+	case *ZodNil[any, any]:
 		return s.Optional()
-	case *ZodNil[*any]:
+	case *ZodNil[any, *any]:
 		return s.Optional() // Makes it accept nil
 	case *ZodLazy[any]:
 		return s.Optional()

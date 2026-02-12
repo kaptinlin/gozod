@@ -27,18 +27,18 @@ type StringConstraint interface {
 // TYPE DEFINITIONS
 // =============================================================================
 
-// ZodStringDef defines the configuration for string validation
+// ZodStringDef defines the configuration for a string schema.
 type ZodStringDef struct {
 	core.ZodTypeDef
 }
 
-// ZodStringInternals contains string validator internal state
+// ZodStringInternals contains string validator internal state.
 type ZodStringInternals struct {
 	core.ZodTypeInternals
-	Def *ZodStringDef // Schema definition
+	Def *ZodStringDef
 }
 
-// ZodString represents a string validation schema with type safety
+// ZodString represents a type-safe string validation schema.
 type ZodString[T StringConstraint] struct {
 	internals *ZodStringInternals
 }
@@ -47,46 +47,36 @@ type ZodString[T StringConstraint] struct {
 // CORE METHODS
 // =============================================================================
 
-// GetInternals returns the internal state of the schema
+// GetInternals returns the internal state of the schema.
 func (z *ZodString[T]) GetInternals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
-func (z *ZodString[T]) IsOptional() bool {
-	return z.internals.IsOptional()
-}
+// IsOptional reports whether this schema accepts undefined/missing values.
+func (z *ZodString[T]) IsOptional() bool { return z.internals.IsOptional() }
 
-// IsNilable returns true if this schema accepts nil values
-func (z *ZodString[T]) IsNilable() bool {
-	return z.internals.IsNilable()
-}
+// IsNilable reports whether this schema accepts nil values.
+func (z *ZodString[T]) IsNilable() bool { return z.internals.IsNilable() }
 
-// Coerce implements Coercible interface for string type conversion
+// Coerce converts input to string, implementing the Coercible interface.
 func (z *ZodString[T]) Coerce(input any) (any, bool) {
 	result, err := coerce.ToString(input)
 	return result, err == nil
 }
 
-// Parse returns a value that matches the generic type T with full type safety.
+// Parse validates input and returns a value matching the generic type T.
 func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
-	// Use the internally recorded type code by default, fall back to string if not set
-	expectedType := z.internals.Type
-	if expectedType == "" {
-		expectedType = core.ZodTypeString
-	}
-
 	return engine.ParsePrimitive[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
-		expectedType,
+		z.expectedType(),
 		engine.ApplyChecks[string],
 		engine.ConvertToConstraintType[string, T],
 		ctx...,
 	)
 }
 
-// MustParse is the type-safe variant that panics on error.
+// MustParse validates input and panics on failure.
 func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -95,27 +85,18 @@ func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
+// StrictParse provides compile-time type safety by requiring exact type T.
 func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
-	// Use the internally recorded type code by default, fall back to string if not set
-	expectedType := z.internals.Type
-	if expectedType == "" {
-		expectedType = core.ZodTypeString
-	}
-
 	return engine.ParsePrimitiveStrict[string, T](
 		input,
 		&z.internals.ZodTypeInternals,
-		expectedType,
+		z.expectedType(),
 		engine.ApplyChecks[string],
 		ctx...,
 	)
 }
 
-// MustStrictParse is the strict mode variant that panics on error.
-// Provides compile-time type safety with maximum performance.
+// MustStrictParse provides compile-time type safety and panics on failure.
 func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -124,7 +105,7 @@ func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// MustParseAny validates the input value and panics on failure
+// MustParseAny validates input and panics on failure.
 func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	result, err := z.ParseAny(input, ctx...)
 	if err != nil {
@@ -133,8 +114,7 @@ func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// ParseAny validates input and returns untyped result for runtime scenarios.
-// Zero-overhead wrapper around Parse to eliminate reflection calls.
+// ParseAny validates input and returns any type for runtime interface usage.
 func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -143,7 +123,7 @@ func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional always returns *string because the optional value may be nil.
+// Optional returns a new schema that accepts nil, with *string constraint.
 func (z *ZodString[T]) Optional() *ZodString[*string] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -151,23 +131,21 @@ func (z *ZodString[T]) Optional() *ZodString[*string] {
 }
 
 // ExactOptional accepts absent keys but rejects explicit nil values.
-// Unlike Optional(), which accepts both absent keys AND nil values,
-// ExactOptional() only accepts absent keys in object fields.
-// The output type remains the same as the input type (no | undefined).
+// Unlike Optional, ExactOptional only accepts absent keys in object fields.
 func (z *ZodString[T]) ExactOptional() *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetExactOptional(true)
 	return z.withInternals(in)
 }
 
-// Nilable always returns *string because the value may be nil.
+// Nilable returns a new schema that accepts nil values, with *string constraint.
 func (z *ZodString[T]) Nilable() *ZodString[*string] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers for maximum flexibility
+// Nullish returns a new schema combining optional and nilable modifiers.
 func (z *ZodString[T]) Nullish() *ZodString[*string] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -175,14 +153,14 @@ func (z *ZodString[T]) Nullish() *ZodString[*string] {
 	return z.withPtrInternals(in)
 }
 
-// Default keeps the current generic type T.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodString[T]) Default(v string) *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc keeps the current generic type T.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -191,14 +169,14 @@ func (z *ZodString[T]) DefaultFunc(fn func() string) *ZodString[T] {
 	return z.withInternals(in)
 }
 
-// Prefault keeps the current generic type T.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodString[T]) Prefault(v string) *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc keeps the current generic type T.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -208,119 +186,67 @@ func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
 }
 
 // Meta stores metadata for this schema in the global registry.
-// This does not clone internals because metadata does not affect validation.
 func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
-	// Create a shallow clone so that metadata can differ per usage (parity with TS Zod .describe()).
-	clone := z.withInternals(&z.internals.ZodTypeInternals)
-
-	// Propagate existing metadata from the source (if any) so we don't lose previously set fields.
-	if m, ok := core.GlobalRegistry.Get(z); ok {
-		combined := m
-		if meta.ID != "" {
-			combined.ID = meta.ID
-		}
-		if meta.Title != "" {
-			combined.Title = meta.Title
-		}
-		if meta.Description != "" {
-			combined.Description = meta.Description
-		}
-		if len(meta.Examples) > 0 {
-			combined.Examples = meta.Examples
-		}
-		core.GlobalRegistry.Add(clone, combined)
-	} else {
-		core.GlobalRegistry.Add(clone, meta)
-	}
-
-	return clone
+	return z.withMeta(meta)
 }
 
 // =============================================================================
 // VALIDATION METHODS
 // =============================================================================
 
-// Min adds minimum length validation
+// Min adds minimum length validation.
 func (z *ZodString[T]) Min(minLen int, params ...any) *ZodString[T] {
-	check := checks.MinLength(minLen, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.MinLength(minLen, params...))
 }
 
-// Max adds maximum length validation
+// Max adds maximum length validation.
 func (z *ZodString[T]) Max(maxLen int, params ...any) *ZodString[T] {
-	check := checks.MaxLength(maxLen, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.MaxLength(maxLen, params...))
 }
 
-// Length adds exact length validation
+// Length adds exact length validation.
 func (z *ZodString[T]) Length(length int, params ...any) *ZodString[T] {
-	check := checks.Length(length, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Length(length, params...))
 }
 
-// Regex adds custom regex validation
+// Regex adds custom regex validation.
 func (z *ZodString[T]) Regex(pattern *regexp.Regexp, params ...any) *ZodString[T] {
-	check := checks.Regex(pattern, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Regex(pattern, params...))
 }
 
-// RegexString adds custom regex validation using string pattern (convenience method)
+// RegexString adds custom regex validation using a string pattern.
 func (z *ZodString[T]) RegexString(pattern string, params ...any) *ZodString[T] {
-	compiled := regexp.MustCompile(pattern)
-	return z.Regex(compiled, params...)
+	return z.Regex(regexp.MustCompile(pattern), params...)
 }
 
-// StartsWith adds prefix validation
+// StartsWith adds prefix validation.
 func (z *ZodString[T]) StartsWith(prefix string, params ...any) *ZodString[T] {
-	check := checks.StartsWith(prefix, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.StartsWith(prefix, params...))
 }
 
-// EndsWith adds suffix validation
+// EndsWith adds suffix validation.
 func (z *ZodString[T]) EndsWith(suffix string, params ...any) *ZodString[T] {
-	check := checks.EndsWith(suffix, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.EndsWith(suffix, params...))
 }
 
-// Includes adds substring validation
+// Includes adds substring validation.
 func (z *ZodString[T]) Includes(substring string, params ...any) *ZodString[T] {
-	check := checks.Includes(substring, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Includes(substring, params...))
 }
 
-// Trim adds string trimming transformation
+// Trim adds string trimming transformation.
 func (z *ZodString[T]) Trim(params ...any) *ZodString[T] {
 	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.TrimSpace) }, params...)
 }
 
-// JSON adds JSON format validation
+// JSON adds JSON format validation.
 func (z *ZodString[T]) JSON(params ...any) *ZodString[T] {
-	check := checks.JSON(params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.JSON(params...))
 }
 
-// Email adds email format validation
+// Email adds email format validation.
 func (z *ZodString[T]) Email(params ...any) *ZodString[T] {
-	check := checks.Email(params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Email(params...))
 }
 
 // MAC adds MAC address format validation with flexible parameter support.
@@ -376,9 +302,7 @@ func (z *ZodString[T]) MAC(params ...any) *ZodString[T] {
 		}
 	}
 
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
 // JWT adds JWT token format validation.
@@ -425,9 +349,7 @@ func (z *ZodString[T]) JWT(params ...any) *ZodString[T] {
 		}
 	}
 
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(check)
 }
 
 func isLikelyAlg(s string) bool {
@@ -437,35 +359,16 @@ func isLikelyAlg(s string) bool {
 		strings.HasPrefix(s, "Ed") || s == "none")
 }
 
-// Describe adds a description to the schema.
-// This description is stored in the GlobalRegistry and can be used for documentation or JSON Schema generation.
-//
-// Example:
-//
-//	schema := gozod.String().Describe("User's email address")
+// Describe registers a description in the global registry.
 func (z *ZodString[T]) Describe(description string) *ZodString[T] {
-	// Follow Enhanced Copy-on-Write pattern
-	newInternals := z.internals.Clone()
-
-	// Get existing metadata or create new
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-
-	// Create new schema instance with cloned internals
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-
-	return clone
+	return z.withMeta(core.GlobalMeta{Description: description})
 }
 
 // =============================================================================
 // TRANSFORMATION METHODS
 // =============================================================================
 
-// Transform applies a transformation function to the validated string
+// Transform applies a transformation function to the validated string.
 func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
 	return core.NewZodTransform(z, func(input T, ctx *core.RefinementContext) (any, error) {
 		str := extractString(input)
@@ -473,27 +376,19 @@ func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, 
 	})
 }
 
-// Overwrite applies a transformation function that must return the same type T
+// Overwrite applies a transformation that returns the same type T.
 func (z *ZodString[T]) Overwrite(transform func(T) T, params ...any) *ZodString[T] {
-	// Create a transformation function that works with the exact type T
 	transformAny := func(input any) any {
-		// Try to convert input to type T
 		converted, ok := convertToStringType[T](input)
 		if !ok {
-			// If conversion fails, return original value unchanged
 			return input
 		}
-		// Apply transformation directly on type T
 		return transform(converted)
 	}
-
-	check := checks.NewZodCheckOverwrite(transformAny, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewZodCheckOverwrite(transformAny, params...))
 }
 
-// Pipe creates a pipeline with another schema
+// Pipe creates a pipeline with another schema.
 func (z *ZodString[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	return core.NewZodPipe(z, target, func(input T, ctx *core.ParseContext) (any, error) {
 		str := extractString(input)
@@ -501,43 +396,30 @@ func (z *ZodString[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	})
 }
 
-// Check adds a custom validation function that can push multiple issues via ParsePayload.
+// Check adds a custom validation function that can push multiple issues.
 func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
-	// Wrap the user callback to support both value and pointer generic forms transparently.
 	wrapped := func(payload *core.ParsePayload) {
-		// First attempt: direct type assertion to the generic type T.
 		if val, ok := payload.GetValue().(T); ok {
 			fn(val, payload)
 			return
 		}
 
-		// Special handling when T is a pointer type (*string) but the underlying value is its base type (string).
+		// Handle pointer type: T is *string but value is string.
 		var zero T
-		// Use type switch on the zero value's dynamic type to detect pointer scenarios without reflection overhead.
 		switch any(zero).(type) {
 		case *string:
 			if strVal, ok := payload.GetValue().(string); ok {
-				strCopy := strVal // Create a new copy to take address safely
-				ptr := &strCopy
-				fn(any(ptr).(T), payload)
+				strCopy := strVal
+				fn(any(&strCopy).(T), payload)
 			}
-		// Additional pointer specialisations can be added here if required in the future.
 		default:
-			// No convertible path found – do nothing.
+			// No convertible path found.
 		}
 	}
-
-	check := checks.NewCustom[T](wrapped, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[T](wrapped, utils.NormalizeCustomParams(params...)))
 }
 
-// With is an alias for Check - adds a custom validation function.
-// TypeScript Zod v4 equivalent: schema.with(...)
-//
-// This method exists for TypeScript Zod v4 API compatibility, where .with() is
-// simply an alias for .check().
+// With is an alias for Check (Zod v4 API compatibility).
 func (z *ZodString[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
 	return z.Check(fn, params...)
 }
@@ -546,15 +428,12 @@ func (z *ZodString[T]) With(fn func(value T, payload *core.ParsePayload), params
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies a custom validation function that matches the schema's output type T.
+// Refine applies a custom validation function matching the schema's output type T.
 func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
-	// Wrapper converts the raw value (always string or nil) into T before calling fn.
 	wrapper := func(v any) bool {
 		var zero T
-
 		switch any(zero).(type) {
 		case string:
-			// Schema output is string
 			if v == nil {
 				return false
 			}
@@ -563,33 +442,24 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 			}
 			return false
 		case *string:
-			// Schema output is *string – convert incoming value (string or nil) to *string
 			if v == nil {
-				return true // Allow nil to pass refinement for nilable types
+				return true // Allow nil for nilable types
 			}
 			if strVal, ok := v.(string); ok {
 				sCopy := strVal
-				ptr := &sCopy
-				return fn(any(ptr).(T))
+				return fn(any(&sCopy).(T))
 			}
 			return false
 		default:
 			return false
 		}
 	}
-
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
-// RefineAny adds flexible custom validation logic
+// RefineAny adds flexible custom validation logic.
 func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T] {
-	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // =============================================================================
@@ -597,26 +467,19 @@ func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T]
 // =============================================================================
 
 // And creates an intersection with another schema.
-// Enables chaining: schema.And(other).And(another)
-// TypeScript Zod v4 equivalent: schema.and(other)
 //
 // Example:
 //
 //	schema := gozod.String().Min(3).And(gozod.String().Max(10))
-//	result, _ := schema.Parse("hello") // Must satisfy both constraints
 func (z *ZodString[T]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
 }
 
 // Or creates a union with another schema.
-// Enables chaining: schema.Or(other).Or(another)
-// TypeScript Zod v4 equivalent: schema.or(other)
 //
 // Example:
 //
 //	schema := gozod.String().Or(gozod.Int())
-//	result, _ := schema.Parse("hello") // Accepts string
-//	result, _ = schema.Parse(42)       // Accepts int
 func (z *ZodString[T]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
@@ -624,6 +487,45 @@ func (z *ZodString[T]) Or(other any) *ZodUnion[any, any] {
 // =============================================================================
 // INTERNAL HELPER METHODS
 // =============================================================================
+
+// expectedType returns the schema's type code, defaulting to ZodTypeString.
+func (z *ZodString[T]) expectedType() core.ZodTypeCode {
+	if z.internals.Type != "" {
+		return z.internals.Type
+	}
+	return core.ZodTypeString
+}
+
+// withCheck clones internals, adds a check, and returns a new schema (Copy-on-Write).
+func (z *ZodString[T]) withCheck(check core.ZodCheck) *ZodString[T] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
+// withMeta clones internals, merges metadata, and returns a new schema.
+func (z *ZodString[T]) withMeta(meta core.GlobalMeta) *ZodString[T] {
+	clone := z.withInternals(&z.internals.ZodTypeInternals)
+	existing, ok := core.GlobalRegistry.Get(z)
+	if !ok {
+		core.GlobalRegistry.Add(clone, meta)
+		return clone
+	}
+	if meta.ID != "" {
+		existing.ID = meta.ID
+	}
+	if meta.Title != "" {
+		existing.Title = meta.Title
+	}
+	if meta.Description != "" {
+		existing.Description = meta.Description
+	}
+	if len(meta.Examples) > 0 {
+		existing.Examples = meta.Examples
+	}
+	core.GlobalRegistry.Add(clone, existing)
+	return clone
+}
 
 // withPtrInternals creates a new ZodString instance of type *string.
 func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*string] {
@@ -639,7 +541,7 @@ func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*s
 	return clone
 }
 
-// withInternals creates a new ZodString instance that keeps the original generic type T.
+// withInternals creates a new ZodString instance keeping the original generic type T.
 func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 	clone := &ZodString[T]{
 		internals: &ZodStringInternals{
@@ -653,7 +555,7 @@ func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 	return clone
 }
 
-// CloneFrom copies the internal state from another schema
+// CloneFrom copies the internal state from another schema.
 func (z *ZodString[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodString[T]); ok && src != nil {
 		z.internals = &ZodStringInternals{
@@ -708,7 +610,7 @@ func convertToStringType[T StringConstraint](v any) (T, bool) {
 	return zero, false
 }
 
-// extractString extracts the string value from a StringConstraint type
+// extractString extracts the string value from a StringConstraint type.
 func extractString[T StringConstraint](value T) string {
 	switch v := any(value).(type) {
 	case string:
@@ -756,17 +658,17 @@ func newZodStringFromDef[T StringConstraint](def *ZodStringDef) *ZodString[T] {
 // CONSTRUCTOR FUNCTIONS
 // =============================================================================
 
-// String creates a new string schema
+// String creates a new string schema.
 func String(params ...any) *ZodString[string] {
 	return StringTyped[string](params...)
 }
 
-// StringPtr creates a new string schema with pointer type
+// StringPtr creates a new string schema with pointer type.
 func StringPtr(params ...any) *ZodString[*string] {
 	return StringTyped[*string](params...)
 }
 
-// StringTyped creates a new string schema with specific type
+// StringTyped creates a new string schema with a specific constraint type.
 func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
 	schemaParams := utils.NormalizeParams(params...)
 	def := &ZodStringDef{
@@ -785,14 +687,14 @@ func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
 	return newZodStringFromDef[T](def)
 }
 
-// CoercedString creates a new string schema with coercion enabled
+// CoercedString creates a new string schema with coercion enabled.
 func CoercedString(params ...any) *ZodString[string] {
 	schema := StringTyped[string](params...)
 	schema.internals.Coerce = true
 	return schema
 }
 
-// CoercedStringPtr creates a new string schema with pointer type and coercion enabled
+// CoercedStringPtr creates a new string schema with pointer type and coercion.
 func CoercedStringPtr(params ...any) *ZodString[*string] {
 	schema := StringTyped[*string](params...)
 	schema.internals.Coerce = true
@@ -804,60 +706,38 @@ func CoercedStringPtr(params ...any) *ZodString[*string] {
 // =============================================================================
 
 // Lowercase validates that the string contains no uppercase letters.
-// TypeScript Zod v4 equivalent: z.string().lowercase()
 // Matches Zod v4's regex: /^[^A-Z]*$/
-// Empty strings pass validation (consistent with Zod v4).
 func (z *ZodString[T]) Lowercase(params ...any) *ZodString[T] {
-	check := checks.Lowercase(params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Lowercase(params...))
 }
 
 // Uppercase validates that the string contains no lowercase letters.
-// TypeScript Zod v4 equivalent: z.string().uppercase()
 // Matches Zod v4's regex: /^[^a-z]*$/
-// Empty strings pass validation (consistent with Zod v4).
 func (z *ZodString[T]) Uppercase(params ...any) *ZodString[T] {
-	check := checks.Uppercase(params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Uppercase(params...))
 }
 
 // =============================================================================
 // STRING TRANSFORMATION METHODS
 // =============================================================================
 
-// ToLowerCase transforms the string to lower case
+// ToLowerCase transforms the string to lower case.
 func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {
 	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToLower) }, params...)
 }
 
-// ToUpperCase transforms the string to upper case
+// ToUpperCase transforms the string to upper case.
 func (z *ZodString[T]) ToUpperCase(params ...any) *ZodString[T] {
 	return z.Overwrite(func(val T) T { return applyStringTransform(val, strings.ToUpper) }, params...)
 }
 
 // Normalize transforms the string using Unicode normalization.
-// TypeScript Zod v4 equivalent: z.string().normalize(form?)
-// Supported normalization forms:
-//   - "NFC"  - Canonical Decomposition, followed by Canonical Composition (default)
-//   - "NFD"  - Canonical Decomposition
-//   - "NFKC" - Compatibility Decomposition, followed by Canonical Composition
-//   - "NFKD" - Compatibility Decomposition
-//
-// Example:
-//
-//	z.String().Normalize().Parse("café")      // Uses NFC by default
-//	z.String().Normalize("NFD").Parse("café") // Uses NFD
+// Supported forms: "NFC" (default), "NFD", "NFKC", "NFKD".
 func (z *ZodString[T]) Normalize(form ...string) *ZodString[T] {
-	// Default to NFC if no form specified
 	normForm := "NFC"
 	if len(form) > 0 && form[0] != "" {
 		normForm = form[0]
 	}
-
 	return z.Overwrite(func(val T) T {
 		return applyStringTransform(val, func(s string) string { return normalizeUnicode(s, normForm) })
 	})
@@ -878,23 +758,11 @@ func normalizeUnicode(s string, form string) string {
 }
 
 // Slugify transforms the string to a URL-friendly slug.
-// Matches Zod v4's z.string().slugify() implementation:
-// 1. Lowercase the string
-// 2. Trim whitespace
-// 3. Remove non-word/non-space/non-hyphen characters
-// 4. Replace spaces and underscores with hyphens
-// 5. Trim leading/trailing hyphens
-//
-// Example:
-//
-//	z.String().Slugify().Parse("Hello World")      // -> "hello-world"
-//	z.String().Slugify().Parse("  Hello   World  ") // -> "hello-world"
-//	z.String().Slugify().Parse("Hello@World#123")  // -> "helloworld123"
 func (z *ZodString[T]) Slugify(params ...any) *ZodString[T] {
 	return z.Overwrite(func(val T) T { return applyStringTransform(val, transform.Slugify) }, params...)
 }
 
-// NonOptional removes the optional flag and returns a new schema with string value type
+// NonOptional removes the optional flag and returns a required string schema.
 func (z *ZodString[T]) NonOptional() *ZodString[string] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
