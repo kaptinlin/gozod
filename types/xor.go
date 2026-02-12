@@ -54,11 +54,9 @@ func (z *ZodXor[T, R]) IsNilable() bool {
 
 // Parse validates input ensuring exactly one option matches.
 func (z *ZodXor[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
+	parseCtx := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
 	}
 
 	result, err := engine.ParseComplex[any](
@@ -74,7 +72,7 @@ func (z *ZodXor[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 		var zero R
 		return zero, err
 	}
-	return convertToUnionConstraintType[T, R](result), nil
+	return unionToConstraint[T, R](result), nil
 }
 
 func (z *ZodXor[T, R]) extractType(input any) (any, bool) {
@@ -116,18 +114,17 @@ func (z *ZodXor[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *core.
 		successes = append(successes, result)
 	}
 
-	if len(successes) == 1 {
+	switch len(successes) {
+	case 1:
 		return successes[0], nil
-	}
-
-	if len(successes) == 0 {
+	case 0:
 		if len(allErrors) == 0 {
 			return nil, issues.CreateInvalidSchemaError("no xor options provided", input, parseCtx)
 		}
 		return nil, issues.CreateInvalidUnionError(allErrors, input, parseCtx)
+	default:
+		return nil, issues.CreateInvalidXorError(len(successes), input, parseCtx)
 	}
-
-	return nil, issues.CreateInvalidXorError(len(successes), input, parseCtx)
 }
 
 // MustParse is like Parse but panics on validation failure.
@@ -142,17 +139,18 @@ func (z *ZodXor[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 // StrictParse validates input with compile-time type safety.
 // The input must exactly match the schema's base type T.
 func (z *ZodXor[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	constraintInput, ok := convertToUnionConstraintValue[T, R](input)
+	constraintInput, ok := asConstraint[T, R](input)
 	if !ok {
 		var zero R
-		if len(ctx) == 0 {
-			ctx = []*core.ParseContext{core.NewParseContext()}
+		parseCtx := core.NewParseContext()
+		if len(ctx) > 0 {
+			parseCtx = ctx[0]
 		}
 		return zero, issues.CreateTypeConversionError(
 			fmt.Sprintf("%T", input),
 			"xor constraint type",
 			any(input),
-			ctx[0],
+			parseCtx,
 		)
 	}
 
@@ -288,7 +286,7 @@ func (z *ZodXor[T, R]) Options() []core.ZodSchema {
 // Transform creates a type-safe transformation pipeline.
 func (z *ZodXor[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		return fn(extractUnionValue[T, R](input), ctx)
+		return fn(unwrapValue[T, R](input), ctx)
 	}
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
@@ -296,7 +294,7 @@ func (z *ZodXor[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error
 // Pipe chains this schema's output into another schema for further validation.
 func (z *ZodXor[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		return target.Parse(extractUnionValue[T, R](input), ctx)
+		return target.Parse(unwrapValue[T, R](input), ctx)
 	}
 	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
@@ -308,10 +306,11 @@ func (z *ZodXor[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // Refine adds a custom validation check with type-safe access to the parsed value.
 func (z *ZodXor[T, R]) Refine(fn func(R) bool, params ...any) *ZodXor[T, R] {
 	wrapper := func(v any) bool {
-		if cv, ok := convertToUnionConstraintValue[T, R](v); ok {
-			return fn(cv)
+		cv, ok := asConstraint[T, R](v)
+		if !ok {
+			return false
 		}
-		return false
+		return fn(cv)
 	}
 
 	schemaParams := utils.NormalizeParams(params...)
@@ -359,24 +358,29 @@ func (z *ZodXor[T, R]) Or(other any) *ZodUnion[any, any] {
 // =============================================================================
 
 func (z *ZodXor[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodXor[T, *T] {
-	return &ZodXor[T, *T]{internals: &ZodXorInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Options:          z.internals.Options,
-	}}
+	return &ZodXor[T, *T]{
+		internals: &ZodXorInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Options:          z.internals.Options,
+		},
+	}
 }
 
 func (z *ZodXor[T, R]) withInternals(in *core.ZodTypeInternals) *ZodXor[T, R] {
-	return &ZodXor[T, R]{internals: &ZodXorInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Options:          z.internals.Options,
-	}}
+	return &ZodXor[T, R]{
+		internals: &ZodXorInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Options:          z.internals.Options,
+		},
+	}
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodXor[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodXor[T, R]); ok {
+	src, ok := source.(*ZodXor[T, R])
+	if ok {
 		z.internals = src.internals
 	}
 }

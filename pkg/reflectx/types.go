@@ -51,16 +51,24 @@ func IsNumeric(v any) bool {
 }
 
 // IsArray reports whether v is an array.
-func IsArray(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Array }
+func IsArray(v any) bool {
+	return v != nil && reflect.TypeOf(v).Kind() == reflect.Array
+}
 
 // IsSlice reports whether v is a slice.
-func IsSlice(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Slice }
+func IsSlice(v any) bool {
+	return v != nil && reflect.TypeOf(v).Kind() == reflect.Slice
+}
 
 // IsMap reports whether v is a map.
-func IsMap(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Map }
+func IsMap(v any) bool {
+	return v != nil && reflect.TypeOf(v).Kind() == reflect.Map
+}
 
 // IsStruct reports whether v is a struct.
-func IsStruct(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Struct }
+func IsStruct(v any) bool {
+	return v != nil && reflect.TypeOf(v).Kind() == reflect.Struct
+}
 
 // ParsedType returns the [core.ParsedType] for runtime type detection.
 // It corresponds to Zod v4's getParsedType() function.
@@ -123,30 +131,24 @@ func parsedTypeByKind(v any) core.ParsedType {
 // ParsedCategory returns a broad human-readable category for v:
 // "nil", "bool", "string", "number", "array", "object", or "unknown".
 func ParsedCategory(v any) string {
-	if v == nil {
-		return "nil"
-	}
+	return parsedTypeCategory(ParsedType(v))
+}
 
-	// Fast path: type switch covers primitives without reflection.
-	switch v.(type) {
-	case bool:
-		return "bool"
-	case string:
-		return "string"
-	case int, int8, int16, int32, int64,
-		uint, uint8, uint16, uint32, uint64, uintptr,
-		float32, float64,
-		complex64, complex128,
-		*big.Int, big.Int:
-		return "number"
-	}
-
-	// Slow path: reflection for composite types.
+// parsedTypeCategory maps a [core.ParsedType] to its broad category string.
+func parsedTypeCategory(pt core.ParsedType) string {
 	//nolint:exhaustive // default handles all other cases
-	switch reflect.TypeOf(v).Kind() {
-	case reflect.Array, reflect.Slice:
+	switch pt {
+	case core.ParsedTypeNil:
+		return "nil"
+	case core.ParsedTypeBool:
+		return "bool"
+	case core.ParsedTypeString:
+		return "string"
+	case core.ParsedTypeNumber, core.ParsedTypeFloat, core.ParsedTypeComplex, core.ParsedTypeBigint:
+		return "number"
+	case core.ParsedTypeArray, core.ParsedTypeSlice:
 		return "array"
-	case reflect.Map, reflect.Struct:
+	case core.ParsedTypeMap, core.ParsedTypeStruct:
 		return "object"
 	default:
 		return "unknown"

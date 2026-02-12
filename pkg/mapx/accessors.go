@@ -1,24 +1,5 @@
 package mapx
 
-import "maps"
-
-// Merge returns a new map containing all entries from both maps.
-// Entries in b take precedence over entries in a.
-func Merge(a, b map[string]any) map[string]any {
-	if a == nil && b == nil {
-		return nil
-	}
-	if a == nil {
-		return Copy(b)
-	}
-	if b == nil {
-		return Copy(a)
-	}
-	result := Copy(a)
-	maps.Copy(result, b)
-	return result
-}
-
 // String returns the string value for key.
 func String(m map[string]any, key string) (string, bool) {
 	return ValueOf[string](m, key)

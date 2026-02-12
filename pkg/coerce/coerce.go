@@ -13,7 +13,6 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// Sentinel errors for coercion failures.
 var (
 	ErrUnsupported = errors.New("conversion not supported")
 	ErrNilPointer  = errors.New("nil pointer")
@@ -24,37 +23,30 @@ var (
 	ErrNotWhole    = errors.New("not whole number")
 )
 
-// NewUnsupportedError creates a detailed unsupported conversion error.
 func NewUnsupportedError(from, to string) error {
 	return fmt.Errorf("cannot convert %s to %s: %w", from, to, ErrUnsupported)
 }
 
-// NewFormatError creates a detailed format error with the problematic value.
 func NewFormatError(value, target string) error {
 	return fmt.Errorf("cannot parse %q as %s: %w", value, target, ErrInvalidFmt)
 }
 
-// NewOverflowError creates a detailed overflow error with the problematic value.
 func NewOverflowError(value any, target string) error {
 	return fmt.Errorf("value %v overflows %s: %w", value, target, ErrOverflow)
 }
 
-// NewEmptyInputError creates a detailed empty input error for a target type.
 func NewEmptyInputError(target string) error {
 	return fmt.Errorf("empty input cannot convert to %s: %w", target, ErrEmptyInput)
 }
 
-// NewNegativeError creates a detailed negative to unsigned conversion error.
 func NewNegativeError(value any, target string) error {
 	return fmt.Errorf("negative value %v cannot convert to %s: %w", value, target, ErrNegative)
 }
 
-// NewNotWholeError creates a detailed non-whole number error.
 func NewNotWholeError(value any) error {
 	return fmt.Errorf("value %v is not a whole number: %w", value, ErrNotWhole)
 }
 
-// NewNilPointerError creates a detailed nil pointer conversion error.
 func NewNilPointerError(target string) error {
 	return fmt.Errorf("cannot convert nil pointer to %s: %w", target, ErrNilPointer)
 }
@@ -71,30 +63,12 @@ func ToBool(v any) (bool, error) {
 		return x, nil
 	case string:
 		return stringToBool(x)
-	case int:
-		return x != 0, nil
-	case int64:
-		return x != 0, nil
-	case int32:
-		return x != 0, nil
-	case int8:
-		return x != 0, nil
-	case int16:
-		return x != 0, nil
-	case uint:
-		return x != 0, nil
-	case uint64:
-		return x != 0, nil
-	case uint32:
-		return x != 0, nil
-	case uint8:
-		return x != 0, nil
-	case uint16:
-		return x != 0, nil
-	case float32:
-		return x != 0, nil
-	case float64:
-		return x != 0, nil
+	case int, int8, int16, int32, int64:
+		return reflect.ValueOf(x).Int() != 0, nil
+	case uint, uint8, uint16, uint32, uint64:
+		return reflect.ValueOf(x).Uint() != 0, nil
+	case float32, float64:
+		return reflect.ValueOf(x).Float() != 0, nil
 	default:
 		return false, NewUnsupportedError(fmt.Sprintf("%T", d), "bool")
 	}
@@ -122,37 +96,21 @@ func ToString(v any) (string, error) {
 	switch x := d.(type) {
 	case string:
 		return x, nil
+	case []byte:
+		return string(x), nil
+	case bool:
+		return strconv.FormatBool(x), nil
 	case int:
 		return strconv.Itoa(x), nil
-	case int8:
-		return strconv.FormatInt(int64(x), 10), nil
-	case int16:
-		return strconv.FormatInt(int64(x), 10), nil
-	case int32:
-		return strconv.FormatInt(int64(x), 10), nil
-	case int64:
-		return strconv.FormatInt(x, 10), nil
-	case uint:
-		return strconv.FormatUint(uint64(x), 10), nil
-	case uint8:
-		return strconv.FormatUint(uint64(x), 10), nil
-	case uint16:
-		return strconv.FormatUint(uint64(x), 10), nil
-	case uint32:
-		return strconv.FormatUint(uint64(x), 10), nil
-	case uint64:
-		return strconv.FormatUint(x, 10), nil
+	case int8, int16, int32, int64:
+		return strconv.FormatInt(reflect.ValueOf(x).Int(), 10), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return strconv.FormatUint(reflect.ValueOf(x).Uint(), 10), nil
 	case float32:
 		return strconv.FormatFloat(float64(x), 'g', -1, 32), nil
 	case float64:
 		return strconv.FormatFloat(x, 'g', -1, 64), nil
-	case bool:
-		return strconv.FormatBool(x), nil
-	case []byte:
-		return string(x), nil
-	case complex64:
-		return fmt.Sprintf("%g", x), nil
-	case complex128:
+	case complex64, complex128:
 		return fmt.Sprintf("%g", x), nil
 	case *big.Int:
 		if x == nil {
@@ -220,25 +178,15 @@ func ToInt64(v any) (int64, error) {
 	switch x := d.(type) {
 	case int64:
 		return x, nil
-	case int:
-		return int64(x), nil
-	case int8:
-		return int64(x), nil
-	case int16:
-		return int64(x), nil
-	case int32:
-		return int64(x), nil
+	case int, int8, int16, int32:
+		return reflect.ValueOf(x).Int(), nil
+	case uint8, uint16, uint32:
+		return int64(reflect.ValueOf(x).Uint()), nil //nolint:gosec // uint8/16/32 always fit in int64
 	case uint:
 		if uint64(x) > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
 		}
 		return int64(x), nil //nolint:gosec // overflow checked above
-	case uint8:
-		return int64(x), nil
-	case uint16:
-		return int64(x), nil
-	case uint32:
-		return int64(x), nil
 	case uint64:
 		if x > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
@@ -299,32 +247,14 @@ func ToFloat64(v any) (float64, error) {
 			return 0, NewFormatError("NaN", "float64")
 		}
 		return float64(x), nil
-	case int:
-		return float64(x), nil
-	case int8:
-		return float64(x), nil
-	case int16:
-		return float64(x), nil
-	case int32:
-		return float64(x), nil
-	case int64:
-		return float64(x), nil
-	case uint:
-		return float64(x), nil
-	case uint8:
-		return float64(x), nil
-	case uint16:
-		return float64(x), nil
-	case uint32:
-		return float64(x), nil
-	case uint64:
-		return float64(x), nil
+	case int, int8, int16, int32, int64:
+		return float64(reflect.ValueOf(x).Int()), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return float64(reflect.ValueOf(x).Uint()), nil
 	case *big.Int:
-		// Precision loss is acceptable when converting big.Int to float64.
 		f, _ := x.Float64()
 		return f, nil
 	case big.Int:
-		// Precision loss is acceptable when converting big.Int to float64.
 		f, _ := x.Float64()
 		return f, nil
 	case complex64:
@@ -369,26 +299,10 @@ func ToBigInt(v any) (*big.Int, error) {
 			return nil, fmt.Errorf("cannot convert nil *big.Int: %w", ErrNilPointer)
 		}
 		return new(big.Int).Set(x), nil
-	case int:
-		return big.NewInt(int64(x)), nil
-	case int8:
-		return big.NewInt(int64(x)), nil
-	case int16:
-		return big.NewInt(int64(x)), nil
-	case int32:
-		return big.NewInt(int64(x)), nil
-	case int64:
-		return big.NewInt(x), nil
-	case uint:
-		return new(big.Int).SetUint64(uint64(x)), nil
-	case uint8:
-		return new(big.Int).SetUint64(uint64(x)), nil
-	case uint16:
-		return new(big.Int).SetUint64(uint64(x)), nil
-	case uint32:
-		return new(big.Int).SetUint64(uint64(x)), nil
-	case uint64:
-		return new(big.Int).SetUint64(x), nil
+	case int, int8, int16, int32, int64:
+		return big.NewInt(reflect.ValueOf(x).Int()), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return new(big.Int).SetUint64(reflect.ValueOf(x).Uint()), nil
 	case float32:
 		if float32(int64(x)) != x {
 			return nil, NewNotWholeError(x)
@@ -442,27 +356,15 @@ func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uin
 	var err error
 
 	switch x := d.(type) {
-	case int64:
-		val = x
-	case int:
-		val = int64(x)
-	case int8:
-		val = int64(x)
-	case int16:
-		val = int64(x)
-	case int32:
-		val = int64(x)
+	case int, int8, int16, int32, int64:
+		val = reflect.ValueOf(x).Int()
+	case uint8, uint16, uint32:
+		val = int64(reflect.ValueOf(x).Uint()) //nolint:gosec // uint8/16/32 always fit in int64
 	case uint:
 		if uint64(x) > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
 		}
 		val = int64(x) //nolint:gosec // overflow checked above
-	case uint8:
-		val = int64(x)
-	case uint16:
-		val = int64(x)
-	case uint32:
-		val = int64(x)
 	case uint64:
 		if x > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
@@ -611,26 +513,10 @@ func toComplex128(v any, target string) (complex128, error) {
 		return x, nil
 	case complex64:
 		return complex128(x), nil
-	case int:
-		return complex(float64(x), 0), nil
-	case int8:
-		return complex(float64(x), 0), nil
-	case int16:
-		return complex(float64(x), 0), nil
-	case int32:
-		return complex(float64(x), 0), nil
-	case int64:
-		return complex(float64(x), 0), nil
-	case uint:
-		return complex(float64(x), 0), nil
-	case uint8:
-		return complex(float64(x), 0), nil
-	case uint16:
-		return complex(float64(x), 0), nil
-	case uint32:
-		return complex(float64(x), 0), nil
-	case uint64:
-		return complex(float64(x), 0), nil
+	case int, int8, int16, int32, int64:
+		return complex(float64(reflect.ValueOf(x).Int()), 0), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return complex(float64(reflect.ValueOf(x).Uint()), 0), nil
 	case float32:
 		return complex(float64(x), 0), nil
 	case float64:
@@ -659,20 +545,20 @@ func ToComplexFromString(s string) (complex128, error) {
 	// Try pure imaginary number.
 	if strings.HasSuffix(s, "i") || strings.HasSuffix(s, "j") {
 		raw := s[:len(s)-1]
-		if raw == "" || raw == "+" {
+		switch raw {
+		case "", "+":
 			return complex(0, 1), nil
-		}
-		if raw == "-" {
+		case "-":
 			return complex(0, -1), nil
-		}
-		if im, err := strconv.ParseFloat(raw, 64); err == nil {
-			return complex(0, im), nil
+		default:
+			if im, err := strconv.ParseFloat(raw, 64); err == nil {
+				return complex(0, im), nil
+			}
 		}
 	}
 
 	// Try complex number with real and imaginary parts (e.g. "3+4i").
-	pos := findComplexSplit(s)
-	if pos > 0 {
+	if pos := findComplexSplit(s); pos > 0 {
 		return parseComplexParts(s, pos)
 	}
 	return 0, NewFormatError(s, "complex number")
@@ -889,26 +775,10 @@ func ToLiteral(v any) (any, error) {
 		if math.Mod(n, 1) == 0 {
 			return intLiteralFromInt64(int64(n)), nil
 		}
-	case int:
-		return intLiteralFromInt64(int64(n)), nil
-	case int8:
-		return intLiteralFromInt64(int64(n)), nil
-	case int16:
-		return intLiteralFromInt64(int64(n)), nil
-	case int32:
-		return intLiteralFromInt64(int64(n)), nil
-	case int64:
-		return intLiteralFromInt64(n), nil
-	case uint:
-		return uintLiteralFromUint64(uint64(n)), nil
-	case uint8:
-		return uintLiteralFromUint64(uint64(n)), nil
-	case uint16:
-		return uintLiteralFromUint64(uint64(n)), nil
-	case uint32:
-		return uintLiteralFromUint64(uint64(n)), nil
-	case uint64:
-		return uintLiteralFromUint64(n), nil
+	case int, int8, int16, int32, int64:
+		return intLiteralFromInt64(reflect.ValueOf(n).Int()), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return uintLiteralFromUint64(reflect.ValueOf(n).Uint()), nil
 	}
 	return v, nil
 }

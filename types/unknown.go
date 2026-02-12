@@ -7,30 +7,22 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodUnknownDef defines the configuration for unknown value validation.
+// ZodUnknownDef holds the configuration for unknown value validation.
 type ZodUnknownDef struct {
 	core.ZodTypeDef
 }
 
-// ZodUnknownInternals contains unknown validator internal state.
+// ZodUnknownInternals contains the internal state of an unknown validator.
 type ZodUnknownInternals struct {
 	core.ZodTypeInternals
 	Def *ZodUnknownDef
 }
 
 // ZodUnknown validates unknown values with dual generic parameters.
-// T is the base type (any), R is the constraint type (any or *any).
+// T is the base type, R is the constraint type (T or *T).
 type ZodUnknown[T any, R any] struct {
 	internals *ZodUnknownInternals
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodUnknown[T, R]) Internals() *core.ZodTypeInternals {
@@ -49,11 +41,7 @@ func (z *ZodUnknown[T, R]) IsNilable() bool {
 
 // convertUnknownResult handles nil and pointer conversion for the unknown type,
 // where engine.ConvertToConstraintType cannot distinguish nil any.
-func convertUnknownResult[T any, R any](
-	result any,
-	_ *core.ParseContext,
-	_ core.ZodTypeCode,
-) (R, error) {
+func convertUnknownResult[T any, R any](result any, _ *core.ParseContext, _ core.ZodTypeCode) (R, error) {
 	var zero R
 	if result == nil {
 		return zero, nil
@@ -61,10 +49,10 @@ func convertUnknownResult[T any, R any](
 	if r, ok := result.(R); ok {
 		return r, nil
 	}
-	// Handle R=*any: wrap value in pointer.
+	// R=*any: wrap value in pointer.
 	if _, ok := any(zero).(*any); ok {
-		valueCopy := result
-		return any(&valueCopy).(R), nil
+		v := result
+		return any(&v).(R), nil
 	}
 	return zero, nil
 }
@@ -94,30 +82,26 @@ func (z *ZodUnknown[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, e
 
 // MustParse panics on validation error.
 func (z *ZodUnknown[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
-	result, err := z.Parse(input, ctx...)
+	r, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // MustStrictParse panics on validation error with compile-time type safety.
 func (z *ZodUnknown[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // ParseAny validates input and returns an untyped result.
 func (z *ZodUnknown[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional returns a pointer-typed schema that accepts missing values.
 func (z *ZodUnknown[T, R]) Optional() *ZodUnknown[T, *T] {
@@ -196,33 +180,29 @@ func (z *ZodUnknown[T, R]) Meta(meta core.GlobalMeta) *ZodUnknown[T, R] {
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodUnknown[T, R]) Describe(description string) *ZodUnknown[T, R] {
-	newInternals := z.internals.Clone()
+func (z *ZodUnknown[T, R]) Describe(desc string) *ZodUnknown[T, R] {
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
+	existing.Description = desc
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
 }
 
-// =============================================================================
-// VALIDATION METHODS
-// =============================================================================
-
 // Overwrite applies data transformation while preserving type structure.
 func (z *ZodUnknown[T, R]) Overwrite(transform func(T) T, params ...any) *ZodUnknown[T, R] {
-	transformFunc := checks.NewZodCheckOverwrite(func(value any) any {
+	check := checks.NewZodCheckOverwrite(func(value any) any {
 		if v, ok := value.(T); ok {
 			return transform(v)
 		}
 		return value
 	}, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(transformFunc)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
 // Refine applies a custom validation function matching the schema's output type R.
@@ -231,46 +211,46 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 		if r, ok := v.(R); ok {
 			return fn(r)
 		}
-		// Handle *any: wrap value in pointer for pointer constraint types.
+		// R=*any: wrap value in pointer for pointer constraint types.
 		var zero R
 		if _, ok := any(zero).(*any); ok {
 			if v == nil {
 				return fn(any((*any)(nil)).(R))
 			}
-			valueCopy := v
-			return fn(any(&valueCopy).(R))
+			val := v
+			return fn(any(&val).(R))
 		}
 		return false
 	}
 
 	param := utils.FirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
+	norm := utils.NormalizeParams(param)
 
-	var errorMessage any
-	if normalizedParams.Error != nil {
-		errorMessage = normalizedParams
+	var msg any
+	if norm.Error != nil {
+		msg = norm
 	}
 
-	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	check := checks.NewCustom[any](wrapper, msg)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
 // RefineAny provides flexible validation without type conversion.
 func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown[T, R] {
 	param := utils.FirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
+	norm := utils.NormalizeParams(param)
 
-	var errorMessage any
-	if normalizedParams.Error != nil {
-		errorMessage = normalizedParams
+	var msg any
+	if norm.Error != nil {
+		msg = norm
 	}
 
-	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	check := checks.NewCustom[any](fn, msg)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
 // Check adds a custom validation function that can push multiple issues.
@@ -281,9 +261,9 @@ func (z *ZodUnknown[T, R]) Check(fn func(value R, payload *core.ParsePayload), p
 		}
 	}
 	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
 // With is an alias for Check for Zod v4 API compatibility.
@@ -291,29 +271,21 @@ func (z *ZodUnknown[T, R]) With(fn func(value R, payload *core.ParsePayload), pa
 	return z.Check(fn, params...)
 }
 
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
-
 // Transform applies a transformation function.
 func (z *ZodUnknown[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(extractUnknownValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapper)
 }
 
 // Pipe creates a pipeline to another schema.
 func (z *ZodUnknown[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+	fn := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractUnknownValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, targetFn)
+	return core.NewZodPipe[R, any](z, target, fn)
 }
-
-// =============================================================================
-// COMPOSITION METHODS
-// =============================================================================
 
 // And creates an intersection with another schema.
 func (z *ZodUnknown[T, R]) And(other any) *ZodIntersection[any, any] {
@@ -324,10 +296,6 @@ func (z *ZodUnknown[T, R]) And(other any) *ZodIntersection[any, any] {
 func (z *ZodUnknown[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
-
-// =============================================================================
-// HELPER METHODS
-// =============================================================================
 
 func (z *ZodUnknown[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnknown[T, *T] {
 	return &ZodUnknown[T, *T]{internals: &ZodUnknownInternals{
@@ -346,9 +314,9 @@ func (z *ZodUnknown[T, R]) withInternals(in *core.ZodTypeInternals) *ZodUnknown[
 // CloneFrom copies configuration from another schema.
 func (z *ZodUnknown[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodUnknown[T, R]); ok {
-		originalChecks := z.internals.Checks
+		orig := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+		z.internals.Checks = orig
 	}
 }
 
@@ -360,13 +328,9 @@ func extractUnknownValue[T any, R any](value R) T {
 	return any(value).(T)
 }
 
-// =============================================================================
-// CONSTRUCTORS
-// =============================================================================
-
 // newZodUnknownFromDef constructs a new ZodUnknown from the given definition.
 func newZodUnknownFromDef[T any, R any](def *ZodUnknownDef) *ZodUnknown[T, R] {
-	internals := &ZodUnknownInternals{
+	in := &ZodUnknownInternals{
 		ZodTypeInternals: core.ZodTypeInternals{
 			Type:   def.Type,
 			Checks: def.Checks,
@@ -376,23 +340,19 @@ func newZodUnknownFromDef[T any, R any](def *ZodUnknownDef) *ZodUnknown[T, R] {
 	}
 
 	// Unknown type defaults to accepting nil values like Zod v4.
-	internals.Nilable = true
+	in.Nilable = true
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		unknownDef := &ZodUnknownDef{ZodTypeDef: *newDef}
-		return any(newZodUnknownFromDef[T, R](unknownDef)).(core.ZodType[any])
+	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		d := &ZodUnknownDef{ZodTypeDef: *newDef}
+		return any(newZodUnknownFromDef[T, R](d)).(core.ZodType[any])
 	}
 
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
 	}
 
-	return &ZodUnknown[T, R]{internals: internals}
+	return &ZodUnknown[T, R]{internals: in}
 }
-
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
 
 // Unknown creates a schema that accepts unknown values.
 func Unknown(params ...any) *ZodUnknown[any, any] {
@@ -406,17 +366,16 @@ func UnknownPtr(params ...any) *ZodUnknown[any, *any] {
 
 // UnknownTyped creates a typed unknown schema with generic constraints.
 func UnknownTyped[T any, R any](params ...any) *ZodUnknown[T, R] {
-	schemaParams := utils.NormalizeParams(params...)
+	p := utils.NormalizeParams(params...)
 
 	def := &ZodUnknownDef{
 		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeUnknown,
-			Checks: []core.ZodCheck{},
+			Type: core.ZodTypeUnknown,
 		},
 	}
 
-	if schemaParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	if p != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, p)
 	}
 
 	return newZodUnknownFromDef[T, R](def)

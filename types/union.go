@@ -11,17 +11,13 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodUnionDef defines the schema definition for union validation.
+// ZodUnionDef holds the configuration for union validation.
 type ZodUnionDef struct {
 	core.ZodTypeDef
 	Options []core.ZodSchema
 }
 
-// ZodUnionInternals contains the internal state for union schema.
+// ZodUnionInternals holds the internal state for a union schema.
 type ZodUnionInternals struct {
 	core.ZodTypeInternals
 	Def     *ZodUnionDef
@@ -34,88 +30,74 @@ type ZodUnion[T any, R any] struct {
 	internals *ZodUnionInternals
 }
 
-// =============================================================================
-// CORE METHODS
-// =============================================================================
-
 // Internals returns the internal state for framework usage.
 func (z *ZodUnion[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodUnion[T, R]) IsOptional() bool {
-	return z.internals.IsOptional()
-}
+func (z *ZodUnion[T, R]) IsOptional() bool { return z.internals.IsOptional() }
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodUnion[T, R]) IsNilable() bool {
-	return z.internals.IsNilable()
-}
+func (z *ZodUnion[T, R]) IsNilable() bool { return z.internals.IsNilable() }
 
 // Parse validates input against all union member schemas, returning the first match.
 func (z *ZodUnion[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
-	}
+	parseCtx := resolveCtx(ctx)
 
 	result, err := engine.ParseComplex[any](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeUnion,
-		z.extractUnionType,
-		z.extractUnionPtr,
-		z.validateUnionValue,
+		z.extractType,
+		z.extractPtr,
+		z.validate,
 		parseCtx,
 	)
 	if err != nil {
 		var zero R
 		return zero, err
 	}
-	return convertToUnionConstraintType[T, R](result), nil
+	return unionToConstraint[T, R](result), nil
 }
 
-func (z *ZodUnion[T, R]) extractUnionType(input any) (any, bool) {
+func (z *ZodUnion[T, R]) extractType(input any) (any, bool) {
 	return input, true
 }
 
-func (z *ZodUnion[T, R]) extractUnionPtr(input any) (*any, bool) {
+func (z *ZodUnion[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
 	}
 	return &input, true
 }
 
-// validateUnionValue tries each member schema and returns the first successful match.
+// validate tries each member schema and returns the first successful match.
 // It prefers the schema whose result type matches the original input type.
-func (z *ZodUnion[T, R]) validateUnionValue(input any, checks []core.ZodCheck, parseCtx *core.ParseContext) (any, error) {
+func (z *ZodUnion[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *core.ParseContext) (any, error) {
 	var (
-		firstSuccess any
-		successFound bool
-		allErrors    []error
+		match   any
+		matched bool
+		errs    []error
 	)
 
 	inputType := reflect.TypeOf(input)
 
-	for i, option := range z.internals.Options {
-		if option == nil {
+	for i, opt := range z.internals.Options {
+		if opt == nil {
 			continue
 		}
 
-		result, err := option.ParseAny(input, parseCtx)
+		result, err := opt.ParseAny(input, parseCtx)
 		if err != nil {
-			allErrors = append(allErrors, fmt.Errorf("option %d: %w", i, err))
+			errs = append(errs, fmt.Errorf("option %d: %w", i, err))
 			continue
 		}
 
-		// Apply custom checks on the union itself.
-		if len(checks) > 0 {
-			result, err = engine.ApplyChecks[any](result, checks, parseCtx)
+		if len(chks) > 0 {
+			result, err = engine.ApplyChecks[any](result, chks, parseCtx)
 			if err != nil {
-				allErrors = append(allErrors, fmt.Errorf("option %d: %w", i, err))
+				errs = append(errs, fmt.Errorf("option %d: %w", i, err))
 				continue
 			}
 		}
@@ -125,20 +107,20 @@ func (z *ZodUnion[T, R]) validateUnionValue(input any, checks []core.ZodCheck, p
 			return result, nil
 		}
 
-		if !successFound {
-			firstSuccess = result
-			successFound = true
+		if !matched {
+			match = result
+			matched = true
 		}
 	}
 
-	if successFound {
-		return firstSuccess, nil
+	if matched {
+		return match, nil
 	}
 
-	if len(allErrors) == 0 {
+	if len(errs) == 0 {
 		return nil, issues.CreateInvalidSchemaError("no union options provided", input, parseCtx)
 	}
-	return nil, issues.CreateInvalidUnionError(allErrors, input, parseCtx)
+	return nil, issues.CreateInvalidUnionError(errs, input, parseCtx)
 }
 
 // MustParse is like Parse but panics on validation failure.
@@ -151,9 +133,8 @@ func (z *ZodUnion[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 }
 
 // StrictParse validates input with compile-time type safety.
-// The input must exactly match the schema's base type T.
 func (z *ZodUnion[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	constraintInput, ok := convertToUnionConstraintValue[T, R](input)
+	constrained, ok := asConstraint[T, R](input)
 	if !ok {
 		var zero R
 		if len(ctx) == 0 {
@@ -168,12 +149,12 @@ func (z *ZodUnion[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 	}
 
 	return engine.ParseComplexStrict[any, R](
-		constraintInput,
+		constrained,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeUnion,
-		z.extractUnionType,
-		z.extractUnionPtr,
-		z.validateUnionValue,
+		z.extractType,
+		z.extractPtr,
+		z.validate,
 		ctx...,
 	)
 }
@@ -187,17 +168,12 @@ func (z *ZodUnion[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// ParseAny validates input and returns an untyped result for runtime scenarios.
+// ParseAny validates input and returns an untyped result.
 func (z *ZodUnion[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
-
 // Optional returns a new schema that accepts undefined/missing values.
-// The result type changes to *T to represent the optional nature.
 func (z *ZodUnion[T, R]) Optional() *ZodUnion[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -224,13 +200,11 @@ func (z *ZodUnion[T, R]) NonOptional() *ZodUnion[T, T] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
-	return &ZodUnion[T, T]{
-		internals: &ZodUnionInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Options:          z.internals.Options,
-		},
-	}
+	return &ZodUnion[T, T]{internals: &ZodUnionInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Options:          z.internals.Options,
+	}}
 }
 
 // Default sets a value to use when input is nil, bypassing validation.
@@ -243,9 +217,7 @@ func (z *ZodUnion[T, R]) Default(v T) *ZodUnion[T, R] {
 // DefaultFunc sets a function to produce the default value when input is nil.
 func (z *ZodUnion[T, R]) DefaultFunc(fn func() T) *ZodUnion[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
@@ -270,107 +242,86 @@ func (z *ZodUnion[T, R]) Meta(meta core.GlobalMeta) *ZodUnion[T, R] {
 }
 
 // Describe sets a human-readable description for this schema.
-func (z *ZodUnion[T, R]) Describe(description string) *ZodUnion[T, R] {
-	newInternals := z.internals.Clone()
+func (z *ZodUnion[T, R]) Describe(desc string) *ZodUnion[T, R] {
+	in := z.internals.Clone()
 
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
+	existing.Description = desc
 
-	clone := z.withInternals(newInternals)
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
 }
 
-// =============================================================================
-// TYPE-SPECIFIC METHODS
-// =============================================================================
-
 // Options returns a copy of all union member schemas.
 func (z *ZodUnion[T, R]) Options() []core.ZodSchema {
-	result := make([]core.ZodSchema, len(z.internals.Options))
-	copy(result, z.internals.Options)
-	return result
+	out := make([]core.ZodSchema, len(z.internals.Options))
+	copy(out, z.internals.Options)
+	return out
 }
-
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
 
 // Transform creates a type-safe transformation pipeline.
 func (z *ZodUnion[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		return fn(extractUnionValue[T, R](input), ctx)
+	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
+		return fn(unwrapValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapper)
 }
 
 // Pipe chains this schema's output into another schema for further validation.
 func (z *ZodUnion[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		return target.Parse(extractUnionValue[T, R](input), ctx)
+	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
+		return target.Parse(unwrapValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapper)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine adds a custom validation check with type-safe access to the parsed value.
 func (z *ZodUnion[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnion[T, R] {
 	wrapper := func(v any) bool {
-		if cv, ok := convertToUnionConstraintValue[T, R](v); ok {
-			return fn(cv)
+		cv, ok := asConstraint[T, R](v)
+		if !ok {
+			return false
 		}
-		return false
+		return fn(cv)
 	}
 
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](wrapper, msg))
+	return z.withInternals(in)
 }
 
 // RefineAny adds a custom validation check operating on the raw value.
 func (z *ZodUnion[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodUnion[T, R] {
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](fn, msg))
+	return z.withInternals(in)
 }
-
-// =============================================================================
-// COMPOSITION METHODS (Zod v4 Compatibility)
-// =============================================================================
 
 // And creates an intersection of this schema with another.
 func (z *ZodUnion[T, R]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
 }
 
-// Or creates a union of this schema with another, enabling chaining.
+// Or creates a union of this schema with another.
 func (z *ZodUnion[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
-
-// =============================================================================
-// HELPER METHODS
-// =============================================================================
 
 func (z *ZodUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnion[T, *T] {
 	return &ZodUnion[T, *T]{internals: &ZodUnionInternals{
@@ -395,13 +346,17 @@ func (z *ZodUnion[T, R]) CloneFrom(source any) {
 	}
 }
 
-// =============================================================================
-// TYPE CONVERSION HELPERS
-// =============================================================================
+// resolveCtx returns the first non-nil ParseContext or a new empty one.
+func resolveCtx(ctx []*core.ParseContext) *core.ParseContext {
+	if len(ctx) > 0 && ctx[0] != nil {
+		return ctx[0]
+	}
+	return &core.ParseContext{}
+}
 
-// convertToUnionConstraintType converts a value to constraint type R,
+// unionToConstraint converts a value to constraint type R,
 // handling pointer wrapping/unwrapping based on whether R is a pointer type.
-func convertToUnionConstraintType[T any, R any](value any) R {
+func unionToConstraint[T any, R any](value any) R {
 	rType := reflect.TypeFor[R]()
 
 	if value == nil {
@@ -414,46 +369,46 @@ func convertToUnionConstraintType[T any, R any](value any) R {
 
 	if rType.Kind() == reflect.Pointer {
 		if reflect.TypeOf(value).Kind() == reflect.Pointer {
-			return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
+			return any(value).(R) //nolint:unconvert // generic constraint conversion
 		}
-		valueCopy := value
-		return any(&valueCopy).(R)
+		v := value
+		return any(&v).(R)
 	}
 
-	// R is a non-pointer type; dereference if value is a pointer.
+	// R is non-pointer; dereference if value is a pointer.
 	if reflect.TypeOf(value).Kind() == reflect.Pointer {
 		rv := reflect.ValueOf(value)
 		if !rv.IsNil() {
-			return any(rv.Elem().Interface()).(R) //nolint:unconvert // Required for generic type constraint conversion
+			return any(rv.Elem().Interface()).(R) //nolint:unconvert // generic constraint conversion
 		}
 		var zero R
 		return zero
 	}
 
-	return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
+	return any(value).(R) //nolint:unconvert // generic constraint conversion
 }
 
-// extractUnionValue unwraps a constraint type R back to base type T.
-func extractUnionValue[T any, R any](value R) T {
+// unwrapValue extracts the base type T from constraint type R.
+func unwrapValue[T any, R any](value R) T {
 	if v, ok := any(value).(*any); ok && v != nil {
-		return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
+		return any(*v).(T) //nolint:unconvert // generic constraint conversion
 	}
 	return any(value).(T)
 }
 
-// convertToUnionConstraintValue attempts to convert a value to constraint type R.
-func convertToUnionConstraintValue[T any, R any](value any) (R, bool) {
+// asConstraint attempts to convert a value to constraint type R.
+func asConstraint[T any, R any](value any) (R, bool) {
 	var zero R
 
-	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
+	if r, ok := any(value).(R); ok { //nolint:unconvert // generic constraint conversion
 		return r, true
 	}
 
 	// Handle pointer conversion: wrap value as *any when R is *any.
 	if _, ok := any(zero).(*any); ok {
 		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R), true
+			v := value
+			return any(&v).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}
@@ -461,40 +416,32 @@ func convertToUnionConstraintValue[T any, R any](value any) (R, bool) {
 	return zero, false
 }
 
-// =============================================================================
-// CONSTRUCTOR FUNCTIONS
-// =============================================================================
-
 func newZodUnionFromDef[T any, R any](def *ZodUnionDef) *ZodUnion[T, R] {
-	internals := &ZodUnionInternals{
+	in := &ZodUnionInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Options:          def.Options,
 	}
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		unionDef := &ZodUnionDef{
+	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		d := &ZodUnionDef{
 			ZodTypeDef: *newDef,
 			Options:    def.Options,
 		}
-		return any(newZodUnionFromDef[T, R](unionDef)).(core.ZodType[any])
+		return any(newZodUnionFromDef[T, R](d)).(core.ZodType[any])
 	}
 
-	schema := &ZodUnion[T, R]{internals: internals}
+	schema := &ZodUnion[T, R]{internals: in}
 
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
 	}
-	for _, check := range def.Checks {
-		internals.AddCheck(check)
+	for _, chk := range def.Checks {
+		in.AddCheck(chk)
 	}
 
 	return schema
 }
-
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
 
 // Union creates a union schema that accepts one of multiple types.
 func Union(options []any, args ...any) *ZodUnion[any, any] {
@@ -518,19 +465,18 @@ func UnionOfPtr(schemas ...any) *ZodUnion[any, *any] {
 
 // UnionTyped creates a typed union schema with generic constraints.
 func UnionTyped[T any, R any](options []any, args ...any) *ZodUnion[T, R] {
-	param := utils.FirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
+	params := utils.NormalizeParams(utils.FirstParam(args...))
 
-	wrappedOptions := make([]core.ZodSchema, len(options))
-	for i, option := range options {
-		if option == nil {
+	schemas := make([]core.ZodSchema, len(options))
+	for i, opt := range options {
+		if opt == nil {
 			continue
 		}
-		zodSchema, err := core.ConvertToZodSchema(option)
+		s, err := core.ConvertToZodSchema(opt)
 		if err != nil {
 			panic(fmt.Sprintf("Union option %d: %v", i, err))
 		}
-		wrappedOptions[i] = zodSchema
+		schemas[i] = s
 	}
 
 	def := &ZodUnionDef{
@@ -538,10 +484,10 @@ func UnionTyped[T any, R any](options []any, args ...any) *ZodUnion[T, R] {
 			Type:   core.ZodTypeUnion,
 			Checks: []core.ZodCheck{},
 		},
-		Options: wrappedOptions,
+		Options: schemas,
 	}
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	if params != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, params)
 	}
 
 	schema := newZodUnionFromDef[T, R](def)
