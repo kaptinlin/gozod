@@ -54,9 +54,11 @@ func (z *ZodXor[T, R]) IsNilable() bool {
 
 // Parse validates input ensuring exactly one option matches.
 func (z *ZodXor[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	parseCtx := &core.ParseContext{}
+	var parseCtx *core.ParseContext
 	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
+	} else {
+		parseCtx = &core.ParseContext{}
 	}
 
 	result, err := engine.ParseComplex[any](
@@ -83,7 +85,8 @@ func (z *ZodXor[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
 	}
-	return &input, true
+	val := input
+	return &val, true
 }
 
 // validate checks that exactly one option matches (Zod v4 exclusive union semantics).
@@ -142,9 +145,11 @@ func (z *ZodXor[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error
 	constraintInput, ok := asConstraint[T, R](input)
 	if !ok {
 		var zero R
-		parseCtx := core.NewParseContext()
+		var parseCtx *core.ParseContext
 		if len(ctx) > 0 {
 			parseCtx = ctx[0]
+		} else {
+			parseCtx = core.NewParseContext()
 		}
 		return zero, issues.CreateTypeConversionError(
 			fmt.Sprintf("%T", input),
@@ -380,9 +385,10 @@ func (z *ZodXor[T, R]) withInternals(in *core.ZodTypeInternals) *ZodXor[T, R] {
 // CloneFrom copies configuration from another schema.
 func (z *ZodXor[T, R]) CloneFrom(source any) {
 	src, ok := source.(*ZodXor[T, R])
-	if ok {
-		z.internals = src.internals
+	if !ok {
+		return
 	}
+	z.internals = src.internals
 }
 
 // =============================================================================

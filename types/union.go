@@ -74,7 +74,11 @@ func (z *ZodUnion[T, R]) extractPtr(input any) (*any, bool) {
 
 // validate tries each member schema and returns the first successful match.
 // It prefers the schema whose result type matches the original input type.
-func (z *ZodUnion[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *core.ParseContext) (any, error) {
+func (z *ZodUnion[T, R]) validate(
+	input any,
+	chks []core.ZodCheck,
+	parseCtx *core.ParseContext,
+) (any, error) {
 	var (
 		match   any
 		matched bool
@@ -118,7 +122,11 @@ func (z *ZodUnion[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *cor
 	}
 
 	if len(errs) == 0 {
-		return nil, issues.CreateInvalidSchemaError("no union options provided", input, parseCtx)
+		return nil, issues.CreateInvalidSchemaError(
+			"no union options provided",
+			input,
+			parseCtx,
+		)
 	}
 	return nil, issues.CreateInvalidUnionError(errs, input, parseCtx)
 }
@@ -264,7 +272,9 @@ func (z *ZodUnion[T, R]) Options() []core.ZodSchema {
 }
 
 // Transform creates a type-safe transformation pipeline.
-func (z *ZodUnion[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+func (z *ZodUnion[T, R]) Transform(
+	fn func(T, *core.RefinementContext) (any, error),
+) *core.ZodTransform[R, any] {
 	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(unwrapValue[T, R](input), ctx)
 	}
@@ -272,7 +282,9 @@ func (z *ZodUnion[T, R]) Transform(fn func(T, *core.RefinementContext) (any, err
 }
 
 // Pipe chains this schema's output into another schema for further validation.
-func (z *ZodUnion[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+func (z *ZodUnion[T, R]) Pipe(
+	target core.ZodType[any],
+) *core.ZodPipe[R, any] {
 	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(unwrapValue[T, R](input), ctx)
 	}
@@ -280,7 +292,10 @@ func (z *ZodUnion[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 }
 
 // Refine adds a custom validation check with type-safe access to the parsed value.
-func (z *ZodUnion[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnion[T, R] {
+func (z *ZodUnion[T, R]) Refine(
+	fn func(R) bool,
+	params ...any,
+) *ZodUnion[T, R] {
 	wrapper := func(v any) bool {
 		cv, ok := asConstraint[T, R](v)
 		if !ok {
@@ -301,7 +316,10 @@ func (z *ZodUnion[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnion[T, R] 
 }
 
 // RefineAny adds a custom validation check operating on the raw value.
-func (z *ZodUnion[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodUnion[T, R] {
+func (z *ZodUnion[T, R]) RefineAny(
+	fn func(any) bool,
+	params ...any,
+) *ZodUnion[T, R] {
 	sp := utils.NormalizeParams(params...)
 	var msg any
 	if sp.Error != nil {
@@ -323,7 +341,9 @@ func (z *ZodUnion[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
 
-func (z *ZodUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnion[T, *T] {
+func (z *ZodUnion[T, R]) withPtrInternals(
+	in *core.ZodTypeInternals,
+) *ZodUnion[T, *T] {
 	return &ZodUnion[T, *T]{internals: &ZodUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
@@ -331,7 +351,9 @@ func (z *ZodUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnion[T
 	}}
 }
 
-func (z *ZodUnion[T, R]) withInternals(in *core.ZodTypeInternals) *ZodUnion[T, R] {
+func (z *ZodUnion[T, R]) withInternals(
+	in *core.ZodTypeInternals,
+) *ZodUnion[T, R] {
 	return &ZodUnion[T, R]{internals: &ZodUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,

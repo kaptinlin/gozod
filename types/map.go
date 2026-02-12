@@ -35,6 +35,42 @@ type ZodMap[T any, R any] struct {
 	internals *ZodMapInternals
 }
 
+// Map creates a map schema with key and value validation returning a value constraint.
+func Map(keySchema, valueSchema any, paramArgs ...any) *ZodMap[map[any]any, map[any]any] {
+	return MapTyped[map[any]any, map[any]any](keySchema, valueSchema, paramArgs...)
+}
+
+// MapPtr creates a map schema returning a pointer constraint.
+func MapPtr(keySchema, valueSchema any, paramArgs ...any) *ZodMap[map[any]any, *map[any]any] {
+	return MapTyped[map[any]any, *map[any]any](keySchema, valueSchema, paramArgs...)
+}
+
+// MapTyped creates a typed map schema with explicit generic constraints.
+func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMap[T, R] {
+	p := utils.FirstParam(paramArgs...)
+	sp := utils.NormalizeParams(p)
+
+	def := &ZodMapDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeMap,
+			Checks: []core.ZodCheck{},
+		},
+		KeyType:   keySchema,
+		ValueType: valueSchema,
+	}
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
+	}
+
+	schema := newZodMapFromDef[T, R](def)
+
+	// Register a pass-through check so the engine invokes validateMap for key/value validation.
+	if keySchema != nil || valueSchema != nil {
+		schema.internals.AddCheck(checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}))
+	}
+	return schema
+}
+
 // Internals returns the internal state of the schema.
 func (z *ZodMap[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
@@ -50,10 +86,21 @@ func (z *ZodMap[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-func (z *ZodMap[T, R]) withCheck(c core.ZodCheck) *ZodMap[T, R] {
-	in := z.internals.Clone()
-	in.AddCheck(c)
-	return z.withInternals(in)
+// KeyType returns the key schema for this map.
+func (z *ZodMap[T, R]) KeyType() any {
+	return z.internals.KeyType
+}
+
+// ValueType returns the value schema for this map.
+func (z *ZodMap[T, R]) ValueType() any {
+	return z.internals.ValueType
+}
+
+// CloneFrom copies configuration from another schema of the same type.
+func (z *ZodMap[T, R]) CloneFrom(source any) {
+	if src, ok := source.(*ZodMap[T, R]); ok {
+		z.internals = src.internals
+	}
 }
 
 // Parse validates input using map-specific parsing logic.
@@ -140,12 +187,6 @@ func (z *ZodMap[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 func (z *ZodMap[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// KeyType returns the key schema for this map.
-func (z *ZodMap[T, R]) KeyType() any { return z.internals.KeyType }
-
-// ValueType returns the value schema for this map.
-func (z *ZodMap[T, R]) ValueType() any { return z.internals.ValueType }
 
 // Optional returns a schema that accepts nil, with constraint type *T.
 func (z *ZodMap[T, R]) Optional() *ZodMap[T, *T] {
@@ -259,7 +300,8 @@ func (z *ZodMap[T, R]) Size(exactLen int, params ...any) *ZodMap[T, R] {
 	return z.withCheck(checks.Size(exactLen, errMsg))
 }
 
-// NonEmpty ensures the map has at least one entry. Equivalent to Min(1).
+// NonEmpty ensures the map has at least one entry.
+// Equivalent to Min(1).
 func (z *ZodMap[T, R]) NonEmpty(params ...any) *ZodMap[T, R] {
 	return z.Min(1, params...)
 }
@@ -331,6 +373,43 @@ func (z *ZodMap[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodMap[T, R]
 	return z.withCheck(checks.NewCustom[any](fn, errMsg))
 }
 
+// Check adds a custom validation function that can report multiple issues.
+func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
+	wrap := func(payload *core.ParsePayload) {
+		if val, ok := payload.Value().(R); ok {
+			fn(val, payload)
+			return
+		}
+
+		// Handle pointer/value mismatch when R is *map but value is map.
+		var zero R
+		zt := reflect.TypeOf(zero)
+		if zt != nil && zt.Kind() == reflect.Pointer {
+			et := zt.Elem()
+			rv := reflect.ValueOf(payload.Value())
+			if rv.IsValid() && rv.Type() == et {
+				ptr := reflect.New(et)
+				ptr.Elem().Set(rv)
+				if casted, ok := ptr.Interface().(R); ok {
+					fn(casted, payload)
+				}
+			}
+		}
+	}
+	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
+}
+
+// With is an alias for Check.
+func (z *ZodMap[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
+	return z.Check(fn, params...)
+}
+
+func (z *ZodMap[T, R]) withCheck(c core.ZodCheck) *ZodMap[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(c)
+	return z.withInternals(in)
+}
+
 func (z *ZodMap[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodMap[T, *T] {
 	return &ZodMap[T, *T]{internals: &ZodMapInternals{
 		ZodTypeInternals: *in,
@@ -349,11 +428,162 @@ func (z *ZodMap[T, R]) withInternals(in *core.ZodTypeInternals) *ZodMap[T, R] {
 	}}
 }
 
-// CloneFrom copies configuration from another schema of the same type.
-func (z *ZodMap[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodMap[T, R]); ok {
-		z.internals = src.internals
+func (z *ZodMap[T, R]) extractType(value any, ctx *core.ParseContext) (map[any]any, error) {
+	if m, ok := value.(map[any]any); ok {
+		return m, nil
 	}
+	if ptr, ok := value.(*map[any]any); ok {
+		if ptr != nil {
+			return *ptr, nil
+		}
+		return nil, issues.CreateNonOptionalError(ctx)
+	}
+	if reflectx.IsMap(value) {
+		if converted, err := mapx.ToGeneric(value); err == nil && converted != nil {
+			return converted, nil
+		}
+	}
+	return nil, issues.CreateInvalidTypeError(core.ZodTypeMap, value, ctx)
+}
+
+func (z *ZodMap[T, R]) validateMap(value map[any]any, chks []core.ZodCheck, ctx *core.ParseContext) (map[any]any, error) {
+	transformed, err := engine.ApplyChecks[any](value, chks, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := transformed.(type) {
+	case map[any]any:
+		value = v
+	case *map[any]any:
+		if v != nil {
+			value = *v
+		}
+	default:
+		// Keep original value if transformation returned unexpected type.
+	}
+
+	var collected []core.ZodRawIssue
+
+	for key, val := range value {
+		if z.internals.KeyType != nil {
+			collected = z.collectErrors(key, z.internals.KeyType, key, ctx, collected)
+		}
+		if z.internals.ValueType != nil {
+			collected = z.collectErrors(val, z.internals.ValueType, key, ctx, collected)
+		}
+	}
+
+	if len(collected) > 0 {
+		return nil, issues.CreateArrayValidationIssues(collected)
+	}
+	return value, nil
+}
+
+func (z *ZodMap[T, R]) collectErrors(value, schema, pathKey any, ctx *core.ParseContext, dst []core.ZodRawIssue) []core.ZodRawIssue {
+	err := z.validateDirect(value, schema, ctx)
+	if err == nil {
+		return dst
+	}
+
+	var zodErr *issues.ZodError
+	if errors.As(err, &zodErr) {
+		for _, issue := range zodErr.Issues {
+			dst = append(dst, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{pathKey}))
+		}
+	} else {
+		raw := issues.CreateIssue(core.Custom, err.Error(), nil, value)
+		raw.Path = []any{pathKey}
+		dst = append(dst, raw)
+	}
+	return dst
+}
+
+func (z *ZodMap[T, R]) validateDirect(value, schema any, ctx *core.ParseContext) error {
+	if schema == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = core.NewParseContext()
+	}
+
+	sv := reflect.ValueOf(schema)
+	if !sv.IsValid() || sv.IsNil() {
+		return nil
+	}
+
+	method := sv.MethodByName("Parse")
+	if !method.IsValid() {
+		return nil
+	}
+
+	mt := method.Type()
+	if mt.NumIn() < 1 {
+		return nil
+	}
+
+	args := []reflect.Value{reflect.ValueOf(value)}
+	if mt.NumIn() > 1 && mt.In(1).String() == "*core.ParseContext" {
+		args = append(args, reflect.ValueOf(ctx))
+	}
+
+	results := method.Call(args)
+	if len(results) >= 2 {
+		if ei := results[1].Interface(); ei != nil {
+			if err, ok := ei.(error); ok {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (z *ZodMap[T, R]) extractForEngine(input any) (map[any]any, bool) {
+	result, err := z.extractType(input, core.NewParseContext())
+	return result, err == nil
+}
+
+func (z *ZodMap[T, R]) extractPtrForEngine(input any) (*map[any]any, bool) {
+	if ptr, ok := input.(*map[any]any); ok {
+		return ptr, true
+	}
+	result, err := z.extractType(input, core.NewParseContext())
+	if err != nil {
+		return nil, false
+	}
+	return &result, true
+}
+
+func (z *ZodMap[T, R]) validateForEngine(value map[any]any, chks []core.ZodCheck, ctx *core.ParseContext) (map[any]any, error) {
+	return z.validateMap(value, chks, ctx)
+}
+
+func newZodMapFromDef[T any, R any](def *ZodMapDef) *ZodMap[T, R] {
+	in := &ZodMapInternals{
+		ZodTypeInternals: core.ZodTypeInternals{
+			Type:   def.Type,
+			Checks: def.Checks,
+			Coerce: def.Coerce,
+			Bag:    make(map[string]any),
+		},
+		Def:       def,
+		KeyType:   def.KeyType,
+		ValueType: def.ValueType,
+	}
+
+	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		md := &ZodMapDef{
+			ZodTypeDef: *newDef,
+			KeyType:    def.KeyType,
+			ValueType:  def.ValueType,
+		}
+		return any(newZodMapFromDef[T, R](md)).(core.ZodType[any])
+	}
+
+	if def.Error != nil {
+		in.Error = def.Error
+	}
+	return &ZodMap[T, R]{internals: in}
 }
 
 func convertFromGeneric[T any, R any](m map[any]any) R {
@@ -483,233 +713,4 @@ func toConstraintValue[T any, R any](value any) (R, bool) {
 	}
 
 	return zero, false
-}
-
-func (z *ZodMap[T, R]) extractType(value any, ctx *core.ParseContext) (map[any]any, error) {
-	if m, ok := value.(map[any]any); ok {
-		return m, nil
-	}
-	if ptr, ok := value.(*map[any]any); ok {
-		if ptr != nil {
-			return *ptr, nil
-		}
-		return nil, issues.CreateNonOptionalError(ctx)
-	}
-	if reflectx.IsMap(value) {
-		if converted, err := mapx.ToGeneric(value); err == nil && converted != nil {
-			return converted, nil
-		}
-	}
-	return nil, issues.CreateInvalidTypeError(core.ZodTypeMap, value, ctx)
-}
-
-// validateMap validates map entries and collects all errors.
-func (z *ZodMap[T, R]) validateMap(value map[any]any, chks []core.ZodCheck, ctx *core.ParseContext) (map[any]any, error) {
-	transformed, err := engine.ApplyChecks[any](value, chks, ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	switch v := transformed.(type) {
-	case map[any]any:
-		value = v
-	case *map[any]any:
-		if v != nil {
-			value = *v
-		}
-	default:
-		// Keep original value if transformation returned unexpected type.
-	}
-
-	var collected []core.ZodRawIssue
-
-	for key, val := range value {
-		if z.internals.KeyType != nil {
-			collected = z.collectErrors(key, z.internals.KeyType, key, ctx, collected)
-		}
-		if z.internals.ValueType != nil {
-			collected = z.collectErrors(val, z.internals.ValueType, key, ctx, collected)
-		}
-	}
-
-	if len(collected) > 0 {
-		return nil, issues.CreateArrayValidationIssues(collected)
-	}
-	return value, nil
-}
-
-func (z *ZodMap[T, R]) collectErrors(value, schema, pathKey any, ctx *core.ParseContext, dst []core.ZodRawIssue) []core.ZodRawIssue {
-	err := z.validateDirect(value, schema, ctx)
-	if err == nil {
-		return dst
-	}
-
-	var zodErr *issues.ZodError
-	if errors.As(err, &zodErr) {
-		for _, issue := range zodErr.Issues {
-			dst = append(dst, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{pathKey}))
-		}
-	} else {
-		raw := issues.CreateIssue(core.Custom, err.Error(), nil, value)
-		raw.Path = []any{pathKey}
-		dst = append(dst, raw)
-	}
-	return dst
-}
-
-// validateDirect validates a single value against a schema using reflection.
-func (z *ZodMap[T, R]) validateDirect(value, schema any, ctx *core.ParseContext) error {
-	if schema == nil {
-		return nil
-	}
-	if ctx == nil {
-		ctx = core.NewParseContext()
-	}
-
-	sv := reflect.ValueOf(schema)
-	if !sv.IsValid() || sv.IsNil() {
-		return nil
-	}
-
-	method := sv.MethodByName("Parse")
-	if !method.IsValid() {
-		return nil
-	}
-
-	mt := method.Type()
-	if mt.NumIn() < 1 {
-		return nil
-	}
-
-	args := []reflect.Value{reflect.ValueOf(value)}
-	if mt.NumIn() > 1 && mt.In(1).String() == "*core.ParseContext" {
-		args = append(args, reflect.ValueOf(ctx))
-	}
-
-	results := method.Call(args)
-	if len(results) >= 2 {
-		if ei := results[1].Interface(); ei != nil {
-			if err, ok := ei.(error); ok {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func newZodMapFromDef[T any, R any](def *ZodMapDef) *ZodMap[T, R] {
-	in := &ZodMapInternals{
-		ZodTypeInternals: core.ZodTypeInternals{
-			Type:   def.Type,
-			Checks: def.Checks,
-			Coerce: def.Coerce,
-			Bag:    make(map[string]any),
-		},
-		Def:       def,
-		KeyType:   def.KeyType,
-		ValueType: def.ValueType,
-	}
-
-	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		md := &ZodMapDef{
-			ZodTypeDef: *newDef,
-			KeyType:    def.KeyType,
-			ValueType:  def.ValueType,
-		}
-		return any(newZodMapFromDef[T, R](md)).(core.ZodType[any])
-	}
-
-	if def.Error != nil {
-		in.Error = def.Error
-	}
-	return &ZodMap[T, R]{internals: in}
-}
-
-// Map creates a map schema with key and value validation returning a value constraint.
-func Map(keySchema, valueSchema any, paramArgs ...any) *ZodMap[map[any]any, map[any]any] {
-	return MapTyped[map[any]any, map[any]any](keySchema, valueSchema, paramArgs...)
-}
-
-// MapPtr creates a map schema returning a pointer constraint.
-func MapPtr(keySchema, valueSchema any, paramArgs ...any) *ZodMap[map[any]any, *map[any]any] {
-	return MapTyped[map[any]any, *map[any]any](keySchema, valueSchema, paramArgs...)
-}
-
-// MapTyped creates a typed map schema with explicit generic constraints.
-func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMap[T, R] {
-	p := utils.FirstParam(paramArgs...)
-	sp := utils.NormalizeParams(p)
-
-	def := &ZodMapDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeMap,
-			Checks: []core.ZodCheck{},
-		},
-		KeyType:   keySchema,
-		ValueType: valueSchema,
-	}
-	if sp != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
-	}
-
-	schema := newZodMapFromDef[T, R](def)
-
-	// Register a pass-through check so the engine invokes validateMap for key/value validation.
-	if keySchema != nil || valueSchema != nil {
-		schema.internals.AddCheck(checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}))
-	}
-	return schema
-}
-
-// Check adds a custom validation function that can report multiple issues.
-func (z *ZodMap[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
-	wrap := func(payload *core.ParsePayload) {
-		if val, ok := payload.Value().(R); ok {
-			fn(val, payload)
-			return
-		}
-
-		// Handle pointer/value mismatch when R is *map but value is map.
-		var zero R
-		zt := reflect.TypeOf(zero)
-		if zt != nil && zt.Kind() == reflect.Pointer {
-			et := zt.Elem()
-			rv := reflect.ValueOf(payload.Value())
-			if rv.IsValid() && rv.Type() == et {
-				ptr := reflect.New(et)
-				ptr.Elem().Set(rv)
-				if casted, ok := ptr.Interface().(R); ok {
-					fn(casted, payload)
-				}
-			}
-		}
-	}
-	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
-}
-
-// With is an alias for Check.
-func (z *ZodMap[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodMap[T, R] {
-	return z.Check(fn, params...)
-}
-
-// extractForEngine extracts map[any]any from input for engine.ParseComplex.
-func (z *ZodMap[T, R]) extractForEngine(input any) (map[any]any, bool) {
-	result, err := z.extractType(input, core.NewParseContext())
-	return result, err == nil
-}
-
-// extractPtrForEngine extracts pointer to map[any]any for engine.ParseComplex.
-func (z *ZodMap[T, R]) extractPtrForEngine(input any) (*map[any]any, bool) {
-	if ptr, ok := input.(*map[any]any); ok {
-		return ptr, true
-	}
-	result, err := z.extractType(input, core.NewParseContext())
-	if err != nil {
-		return nil, false
-	}
-	return &result, true
-}
-
-func (z *ZodMap[T, R]) validateForEngine(value map[any]any, chks []core.ZodCheck, ctx *core.ParseContext) (map[any]any, error) {
-	return z.validateMap(value, chks, ctx)
 }

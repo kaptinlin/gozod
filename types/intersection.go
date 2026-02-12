@@ -34,33 +34,33 @@ type ZodIntersection[T any, R any] struct {
 }
 
 // Internals returns the internal state of the schema.
-func (z *ZodIntersection[T, R]) Internals() *core.ZodTypeInternals {
-	return &z.internals.ZodTypeInternals
+func (i *ZodIntersection[T, R]) Internals() *core.ZodTypeInternals {
+	return &i.internals.ZodTypeInternals
 }
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodIntersection[T, R]) IsOptional() bool {
-	return z.internals.IsOptional()
+func (i *ZodIntersection[T, R]) IsOptional() bool {
+	return i.internals.IsOptional()
 }
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodIntersection[T, R]) IsNilable() bool {
-	return z.internals.IsNilable()
+func (i *ZodIntersection[T, R]) IsNilable() bool {
+	return i.internals.IsNilable()
 }
 
 // Parse validates input using engine.ParseComplex for unified Default/Prefault handling.
-func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+func (i *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	pc := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
 		pc = ctx[0]
 	}
 	result, err := engine.ParseComplex[any](
 		input,
-		&z.internals.ZodTypeInternals,
+		&i.internals.ZodTypeInternals,
 		core.ZodTypeIntersection,
-		z.extractType,
-		z.extractPtr,
-		z.validateValue,
+		i.extractType,
+		i.extractPtr,
+		i.validateValue,
 		pc,
 	)
 	if err != nil {
@@ -71,12 +71,12 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 }
 
 // extractType extracts the intersection type from input.
-func (z *ZodIntersection[T, R]) extractType(input any) (any, bool) {
+func (i *ZodIntersection[T, R]) extractType(input any) (any, bool) {
 	return input, true
 }
 
 // extractPtr extracts pointer type from input.
-func (z *ZodIntersection[T, R]) extractPtr(input any) (*any, bool) {
+func (i *ZodIntersection[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
 	}
@@ -97,9 +97,9 @@ func collectSchemaIssues(err error, input any, ctx *core.ParseContext) []core.Zo
 }
 
 // validateValue validates value using intersection logic.
-func (z *ZodIntersection[T, R]) validateValue(value any, chks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
-	leftResult, leftErr := z.internals.Left.ParseAny(value, ctx)
-	rightResult, rightErr := z.internals.Right.ParseAny(value, ctx)
+func (i *ZodIntersection[T, R]) validateValue(value any, chks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
+	leftResult, leftErr := i.internals.Left.ParseAny(value, ctx)
+	rightResult, rightErr := i.internals.Right.ParseAny(value, ctx)
 
 	leftIssues := collectSchemaIssues(leftErr, value, ctx)
 	rightIssues := collectSchemaIssues(rightErr, value, ctx)
@@ -179,8 +179,8 @@ func mergeUnrecognizedKeysIssues(leftIssues, rightIssues []core.ZodIssue) []core
 }
 
 // MustParse panics if Parse returns an error.
-func (z *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
-	result, err := z.Parse(input, ctx...)
+func (i *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
+	result, err := i.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -188,12 +188,12 @@ func (z *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) 
 }
 
 // ParseAny validates input and returns an untyped result for runtime scenarios.
-func (z *ZodIntersection[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
-	return z.Parse(input, ctx...)
+func (i *ZodIntersection[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return i.Parse(input, ctx...)
 }
 
 // StrictParse validates input with compile-time type safety.
-func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
+func (i *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
 	pc := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
 		pc = ctx[0]
@@ -201,8 +201,8 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 
 	converted := convertToIntersectionConstraintType[T, R](input)
 
-	leftResult, leftErr := z.internals.Left.ParseAny(converted, pc)
-	rightResult, rightErr := z.internals.Right.ParseAny(converted, pc)
+	leftResult, leftErr := i.internals.Left.ParseAny(converted, pc)
+	rightResult, rightErr := i.internals.Right.ParseAny(converted, pc)
 
 	leftIssues := collectSchemaIssues(leftErr, converted, pc)
 	rightIssues := collectSchemaIssues(rightErr, converted, pc)
@@ -220,8 +220,8 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 		return zero, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(iss, pc, core.Config())})
 	}
 
-	if len(z.internals.Checks) > 0 {
-		checked, err := engine.ApplyChecks[any](merged, z.internals.Checks, pc)
+	if len(i.internals.Checks) > 0 {
+		checked, err := engine.ApplyChecks[any](merged, i.internals.Checks, pc)
 		if err != nil {
 			var zero R
 			return zero, err
@@ -233,8 +233,8 @@ func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 }
 
 // MustStrictParse panics if StrictParse returns an error.
-func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
-	result, err := z.StrictParse(input, ctx...)
+func (i *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
+	result, err := i.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
@@ -242,118 +242,118 @@ func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseConte
 }
 
 // Optional returns a schema that accepts T or nil, with constraint type *T.
-func (z *ZodIntersection[T, R]) Optional() *ZodIntersection[T, *T] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) Optional() *ZodIntersection[T, *T] {
+	in := i.internals.Clone()
 	in.SetOptional(true)
-	return z.withPtrInternals(in)
+	return i.withPtrInternals(in)
 }
 
 // Nilable returns a schema that accepts T or nil, with constraint type *T.
-func (z *ZodIntersection[T, R]) Nilable() *ZodIntersection[T, *T] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) Nilable() *ZodIntersection[T, *T] {
+	in := i.internals.Clone()
 	in.SetNilable(true)
-	return z.withPtrInternals(in)
+	return i.withPtrInternals(in)
 }
 
 // Nullish combines optional and nilable modifiers.
-func (z *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
+	in := i.internals.Clone()
 	in.SetOptional(true)
 	in.SetNilable(true)
-	return z.withPtrInternals(in)
+	return i.withPtrInternals(in)
 }
 
 // NonOptional removes the optional flag and returns a value constraint (T).
-func (z *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
+	in := i.internals.Clone()
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 
 	return &ZodIntersection[T, T]{
 		internals: &ZodIntersectionInternals{
 			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Left:             z.internals.Left,
-			Right:            z.internals.Right,
+			Def:              i.internals.Def,
+			Left:             i.internals.Left,
+			Right:            i.internals.Right,
 		},
 	}
 }
 
 // Default sets a default value, preserving constraint type R.
-func (z *ZodIntersection[T, R]) Default(v T) *ZodIntersection[T, R] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) Default(v T) *ZodIntersection[T, R] {
+	in := i.internals.Clone()
 	in.SetDefaultValue(v)
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // DefaultFunc sets a default value function, preserving constraint type R.
-func (z *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] {
+	in := i.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // Prefault sets a prefault value that goes through the full parsing pipeline.
-func (z *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
+	in := i.internals.Clone()
 	in.SetPrefaultValue(v)
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // PrefaultFunc sets a prefault value function, preserving constraint type R.
-func (z *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
-	in := z.internals.Clone()
+func (i *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
+	in := i.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // Meta stores metadata for this schema.
-func (z *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+func (i *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
+	core.GlobalRegistry.Add(i, meta)
+	return i
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodIntersection[T, R]) Describe(description string) *ZodIntersection[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
+func (i *ZodIntersection[T, R]) Describe(description string) *ZodIntersection[T, R] {
+	in := i.internals.Clone()
+	existing, ok := core.GlobalRegistry.Get(i)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
 	existing.Description = description
-	clone := z.withInternals(in)
+	clone := i.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
 }
 
 // Left returns the left schema of the intersection.
-func (z *ZodIntersection[T, R]) Left() core.ZodSchema {
-	return z.internals.Left
+func (i *ZodIntersection[T, R]) Left() core.ZodSchema {
+	return i.internals.Left
 }
 
 // Right returns the right schema of the intersection.
-func (z *ZodIntersection[T, R]) Right() core.ZodSchema {
-	return z.internals.Right
+func (i *ZodIntersection[T, R]) Right() core.ZodSchema {
+	return i.internals.Right
 }
 
 // Transform creates a type-safe transformation pipeline.
-func (z *ZodIntersection[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+func (i *ZodIntersection[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(extractIntersectionValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapper)
+	return core.NewZodTransform[R, any](i, wrapper)
 }
 
 // Pipe creates a validation pipeline to another schema.
-func (z *ZodIntersection[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+func (i *ZodIntersection[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractIntersectionValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, wrapper)
+	return core.NewZodPipe[R, any](i, target, wrapper)
 }
 
 // Refine applies type-safe validation with constraint type R.
-func (z *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodIntersection[T, R] {
+func (i *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodIntersection[T, R] {
 	wrapper := func(v any) bool {
 		if cv, ok := convertToIntersectionConstraintValue[T, R](v); ok {
 			return fn(cv)
@@ -366,22 +366,22 @@ func (z *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodInter
 		msg = p.Error
 	}
 	check := checks.NewCustom[any](wrapper, msg)
-	in := z.internals.Clone()
+	in := i.internals.Clone()
 	in.AddCheck(check)
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // RefineAny applies flexible validation without type conversion.
-func (z *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntersection[T, R] {
+func (i *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntersection[T, R] {
 	p := utils.NormalizeParams(params...)
 	var msg any
 	if p.Error != nil {
 		msg = p.Error
 	}
 	check := checks.NewCustom[any](fn, msg)
-	in := z.internals.Clone()
+	in := i.internals.Clone()
 	in.AddCheck(check)
-	return z.withInternals(in)
+	return i.withInternals(in)
 }
 
 // And creates an intersection with another schema.
@@ -390,8 +390,8 @@ func (z *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *Zod
 //
 //	schema := gozod.String().Min(3).And(gozod.String().Max(10))
 //	result, _ := schema.Parse("hello")
-func (z *ZodIntersection[T, R]) And(other any) *ZodIntersection[any, any] {
-	return Intersection(z, other)
+func (i *ZodIntersection[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(i, other)
 }
 
 // Or creates a union with another schema.
@@ -399,32 +399,32 @@ func (z *ZodIntersection[T, R]) And(other any) *ZodIntersection[any, any] {
 // Example:
 //
 //	schema := gozod.String().And(gozod.String().Min(3)).Or(gozod.Int())
-func (z *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
-	return Union([]any{z, other})
+func (i *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{i, other})
 }
 
-func (z *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
+func (i *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
 	return &ZodIntersection[T, *T]{internals: &ZodIntersectionInternals{
 		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Left:             z.internals.Left,
-		Right:            z.internals.Right,
+		Def:              i.internals.Def,
+		Left:             i.internals.Left,
+		Right:            i.internals.Right,
 	}}
 }
 
-func (z *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntersection[T, R] {
+func (i *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntersection[T, R] {
 	return &ZodIntersection[T, R]{internals: &ZodIntersectionInternals{
 		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Left:             z.internals.Left,
-		Right:            z.internals.Right,
+		Def:              i.internals.Def,
+		Left:             i.internals.Left,
+		Right:            i.internals.Right,
 	}}
 }
 
 // CloneFrom copies configuration from another schema.
-func (z *ZodIntersection[T, R]) CloneFrom(source any) {
+func (i *ZodIntersection[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodIntersection[T, R]); ok {
-		z.internals = src.internals
+		i.internals = src.internals
 	}
 }
 

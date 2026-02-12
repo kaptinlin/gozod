@@ -65,38 +65,37 @@ type ZodStruct[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// Internals exposes internal state for framework usage
+// Internals returns the internal state of the schema.
 func (z *ZodStruct[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
+// IsOptional reports whether this schema accepts undefined/missing values.
 func (z *ZodStruct[T, R]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
 
-// IsNilable returns true if this schema accepts nil values
+// IsNilable reports whether this schema accepts nil values.
 func (z *ZodStruct[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Shape returns the struct field schemas for JSON Schema conversion
+// Shape returns the struct field schemas.
 func (z *ZodStruct[T, R]) Shape() core.StructSchema {
 	return z.internals.Shape
 }
 
-// GetUnknownKeys returns the unknown keys handling mode for JSON Schema conversion
-// Structs are strict by default (don't allow additional properties)
+// GetUnknownKeys returns the unknown keys handling mode.
 func (z *ZodStruct[T, R]) GetUnknownKeys() string {
 	return "strict"
 }
 
-// GetCatchall returns nil since structs don't support catchall by default
+// GetCatchall returns nil.
 func (z *ZodStruct[T, R]) GetCatchall() core.ZodSchema {
 	return nil
 }
 
-// Parse validates input using struct-specific parsing logic with engine.ParseComplex
+// Parse validates input and returns a value of type R.
 func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
@@ -159,7 +158,7 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 	return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", result), "struct", input, parseCtx)
 }
 
-// MustParse validates the input value and panics on failure
+// MustParse panics on validation failure.
 func (z *ZodStruct[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -168,9 +167,7 @@ func (z *ZodStruct[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
-// The input must exactly match the schema's constraint type T.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodStruct[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
 	// Convert T to R for ParseComplexStrict
 	constraintInput := convertToStructConstraintType[T, R](input)
@@ -192,8 +189,7 @@ func (z *ZodStruct[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, er
 	return result, nil
 }
 
-// MustStrictParse validates input with compile-time type safety and panics on failure.
-// This method provides zero-overhead abstraction with strict type constraints.
+// MustStrictParse panics on validation failure with compile-time type safety.
 func (z *ZodStruct[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -202,7 +198,7 @@ func (z *ZodStruct[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R 
 	return result
 }
 
-// ParseAny validates the input value and returns any type (for runtime interface)
+// ParseAny validates input and returns an untyped result.
 func (z *ZodStruct[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -211,21 +207,21 @@ func (z *ZodStruct[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, e
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional always returns *T constraint because the optional value may be nil.
+// Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodStruct[T, R]) Optional() *ZodStruct[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable always returns *T constraint because the value may be nil.
+// Nilable returns a schema that accepts nil values with pointer constraint.
 func (z *ZodStruct[T, R]) Nilable() *ZodStruct[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers for maximum flexibility
+// Nullish combines optional and nilable modifiers.
 func (z *ZodStruct[T, R]) Nullish() *ZodStruct[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -233,7 +229,7 @@ func (z *ZodStruct[T, R]) Nullish() *ZodStruct[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// NonOptional removes Optional flag and enforces non-nil struct value (T).
+// NonOptional enforces non-nil struct value.
 func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
@@ -248,14 +244,14 @@ func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
 	}
 }
 
-// Default keeps the current generic constraint type R.
+// Default sets the default value.
 func (z *ZodStruct[T, R]) Default(v T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc keeps the current generic constraint type R.
+// DefaultFunc sets the default value function.
 func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -264,14 +260,14 @@ func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault provides fallback values on validation failure
+// Prefault sets the prefault value.
 func (z *ZodStruct[T, R]) Prefault(v T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides dynamic fallback values
+// PrefaultFunc sets the prefault value function.
 func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -280,14 +276,13 @@ func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this struct schema.
+// Meta stores metadata.
 func (z *ZodStruct[T, R]) Meta(meta core.GlobalMeta) *ZodStruct[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
 func (z *ZodStruct[T, R]) Describe(description string) *ZodStruct[T, R] {
 	newInternals := z.internals.Clone()
 
@@ -307,7 +302,7 @@ func (z *ZodStruct[T, R]) Describe(description string) *ZodStruct[T, R] {
 // TRANSFORMATION AND PIPELINE METHODS
 // =============================================================================
 
-// Transform creates a type-safe transformation using WrapFn pattern
+// Transform creates a type-safe transformation.
 func (z *ZodStruct[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
 		structValue := extractStructValue[T, R](input)
@@ -317,8 +312,6 @@ func (z *ZodStruct[T, R]) Transform(fn func(T, *core.RefinementContext) (any, er
 }
 
 // Overwrite transforms the input value while preserving the original type.
-// Unlike Transform, this method doesn't change the inferred type and returns an instance of the original class.
-// The transformation function is stored as a check, so it doesn't modify the inferred type.
 func (z *ZodStruct[T, R]) Overwrite(transform func(R) R, params ...any) *ZodStruct[T, R] {
 	// Create a transformation function that works with the constraint type R
 	transformAny := func(input any) any {
@@ -339,7 +332,7 @@ func (z *ZodStruct[T, R]) Overwrite(transform func(R) R, params ...any) *ZodStru
 	return z.withInternals(newInternals)
 }
 
-// Pipe creates a pipeline using WrapFn pattern
+// Pipe creates a pipeline.
 func (z *ZodStruct[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
 		structValue := extractStructValue[T, R](input)
@@ -352,6 +345,7 @@ func (z *ZodStruct[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // REFINEMENT METHODS
 // =============================================================================
 
+// Refine adds a custom validation function.
 func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R] {
 	// Wrapper converts the raw value to R before calling fn
 	wrapper := func(v any) bool {
@@ -369,6 +363,7 @@ func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R
 	return z.withInternals(newInternals)
 }
 
+// RefineAny adds a custom validation function for any type.
 func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct[T, R] {
 	checkParams := checks.NormalizeCheckParams(params...)
 	check := checks.NewCustom[any](fn, checkParams)
@@ -381,7 +376,7 @@ func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct
 // TYPE-SPECIFIC METHODS
 // =============================================================================
 
-// Extend creates a new struct by extending with additional field schemas
+// Extend creates a new struct with additional fields.
 func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) *ZodStruct[T, R] {
 	// Create new shape combining existing + extension fields
 	newShape := make(core.StructSchema)
@@ -406,7 +401,7 @@ func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) 
 	return newZodStructFromDef[T, R](def)
 }
 
-// Partial makes all fields optional by allowing zero values
+// Partial makes all fields optional.
 func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
 	newInternals := z.internals.Clone()
 
@@ -433,7 +428,7 @@ func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
 	}}
 }
 
-// Required makes all fields required (opposite of Partial)
+// Required makes all fields required.
 func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
 	newInternals := z.internals.Clone()
 
@@ -479,7 +474,7 @@ func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T,
 	}}
 }
 
-// CloneFrom allows copying configuration from a source
+// CloneFrom copies configuration from a source.
 func (z *ZodStruct[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodStruct[T, R]); ok {
 		originalChecks := z.internals.Checks
@@ -492,7 +487,7 @@ func (z *ZodStruct[T, R]) CloneFrom(source any) {
 // TYPE CONVERSION HELPERS
 // =============================================================================
 
-// convertToStructConstraintType converts a base type T to constraint type R
+// convertToStructConstraintType converts T to constraint type R.
 func convertToStructConstraintType[T any, R any](value T) R {
 	var zero R
 	switch any(zero).(type) {
@@ -506,7 +501,7 @@ func convertToStructConstraintType[T any, R any](value T) R {
 	}
 }
 
-// extractStructValue extracts the base type T from constraint type R
+// extractStructValue extracts T from constraint type R.
 func extractStructValue[T any, R any](value R) T {
 	// Handle direct assignment (when T == R)
 	if directValue, ok := any(value).(T); ok {
@@ -525,7 +520,7 @@ func extractStructValue[T any, R any](value R) T {
 	return zero
 }
 
-// convertToConstraintValue converts any value to constraint type R if possible
+// convertToConstraintValue converts any value to constraint type R.
 func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
@@ -555,7 +550,7 @@ func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	return zero, false
 }
 
-// convertToStructType converts any value to the struct constraint type R with strict type checking
+// convertToStructType converts any value to constraint type R.
 func convertToStructType[T any, R any](v any) (R, bool) {
 	var zero R
 
@@ -609,7 +604,7 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 // ENGINE INTEGRATION METHODS
 // =============================================================================
 
-// extractStructForEngine extracts struct value T from input for engine processing
+// extractStructForEngine extracts T from input.
 func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
 	var zero T
 
@@ -651,7 +646,7 @@ func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
 	return zero, false
 }
 
-// createStructTypeError creates a specific struct type error with concrete type information
+// createStructTypeError creates a struct type error.
 func (z *ZodStruct[T, R]) createStructTypeError(input any, ctx *core.ParseContext) error {
 	var zero T
 	expectedType := reflect.TypeOf(zero)
@@ -674,7 +669,7 @@ func (z *ZodStruct[T, R]) createStructTypeError(input any, ctx *core.ParseContex
 	return issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 }
 
-// extractStructPtrForEngine extracts pointer to struct *T from input for engine processing
+// extractStructPtrForEngine extracts *T from input.
 func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 	// Handle nil input
 	if input == nil {
@@ -720,7 +715,7 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 	return nil, false
 }
 
-// validateStructForEngine validates struct value using schema checks
+// validateStructForEngine validates struct value.
 func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	// Apply field defaults and validate struct fields if schema is defined
 	transformedValue := value
@@ -755,7 +750,7 @@ func (z *ZodStruct[T, R]) validateStructForEngine(value T, checks []core.ZodChec
 // VALIDATION LOGIC
 // =============================================================================
 
-// parseStructWithDefaults parses struct fields with field schemas, applying defaults and transformations
+// parseStructWithDefaults parses struct fields with defaults.
 func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseContext) (any, error) {
 	if len(z.internals.Shape) == 0 {
 		return input, nil // No field schemas defined, return input as-is
@@ -844,7 +839,7 @@ func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseCont
 	return newStruct.Interface(), nil
 }
 
-// parseFieldWithSchema parses a field value using its associated schema
+// parseFieldWithSchema parses a field value.
 func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, ctx *core.ParseContext) (any, error) {
 	if fieldSchema == nil {
 		return fieldValue, nil
@@ -880,7 +875,7 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 	return results[0].Interface(), nil
 }
 
-// setStructFieldValue sets a field value in a struct by name or json tag
+// setStructFieldValue sets a field value.
 func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structType reflect.Type, fieldName string, value any) error {
 	// First try to find by field name
 	fieldVal := structVal.FieldByName(fieldName)
@@ -911,7 +906,7 @@ func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structTyp
 	return ErrFieldNotFoundOrNotSettable
 }
 
-// setReflectFieldValue sets a reflect.Value field to the given value with proper type conversion
+// setReflectFieldValue sets a reflect.Value field.
 func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any) error {
 	if value == nil {
 		// Set to zero value if nil
@@ -989,7 +984,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 	return ErrCannotAssignToField
 }
 
-// convertMapTypes converts between different map types (e.g., map[any]any to map[string]string)
+// convertMapTypes converts between map types.
 func (z *ZodStruct[T, R]) convertMapTypes(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Map {
@@ -1025,7 +1020,7 @@ func (z *ZodStruct[T, R]) convertMapTypes(sourceValue any, targetType reflect.Ty
 	return newMap.Interface()
 }
 
-// convertValue attempts to convert a value to the target type
+// convertValue converts a value to the target type.
 func (z *ZodStruct[T, R]) convertValue(value any, targetType reflect.Type) any {
 	if value == nil {
 		return reflect.Zero(targetType).Interface()

@@ -39,8 +39,8 @@ func (z *ZodUnknown[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// convertUnknownResult handles nil and pointer conversion for the unknown type,
-// where engine.ConvertToConstraintType cannot distinguish nil any.
+// convertUnknownResult handles nil and pointer conversion for the unknown type.
+// The engine.ConvertToConstraintType cannot distinguish nil any values.
 func convertUnknownResult[T any, R any](result any, _ *core.ParseContext, _ core.ZodTypeCode) (R, error) {
 	var zero R
 	if result == nil {
@@ -49,7 +49,7 @@ func convertUnknownResult[T any, R any](result any, _ *core.ParseContext, _ core
 	if r, ok := result.(R); ok {
 		return r, nil
 	}
-	// R=*any: wrap value in pointer.
+	// For R=*any, wrap value in pointer.
 	if _, ok := any(zero).(*any); ok {
 		v := result
 		return any(&v).(R), nil
@@ -211,7 +211,7 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 		if r, ok := v.(R); ok {
 			return fn(r)
 		}
-		// R=*any: wrap value in pointer for pointer constraint types.
+		// For R=*any, wrap value in pointer for pointer constraint types.
 		var zero R
 		if _, ok := any(zero).(*any); ok {
 			if v == nil {
@@ -298,17 +298,21 @@ func (z *ZodUnknown[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 func (z *ZodUnknown[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnknown[T, *T] {
-	return &ZodUnknown[T, *T]{internals: &ZodUnknownInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-	}}
+	return &ZodUnknown[T, *T]{
+		internals: &ZodUnknownInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
 }
 
 func (z *ZodUnknown[T, R]) withInternals(in *core.ZodTypeInternals) *ZodUnknown[T, R] {
-	return &ZodUnknown[T, R]{internals: &ZodUnknownInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-	}}
+	return &ZodUnknown[T, R]{
+		internals: &ZodUnknownInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
 }
 
 // CloneFrom copies configuration from another schema.

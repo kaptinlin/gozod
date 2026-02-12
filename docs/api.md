@@ -298,7 +298,7 @@ gozod.MAC("-")                             // MAC: "00-1a-2b-3c-4d-5e"
 gozod.E164()                               // E.164 phone: "+14155552671"
 gozod.CIDRv4()                             // IPv4 CIDR: "192.168.1.0/24"
 gozod.CIDRv6()                             // IPv6 CIDR: "2001:db8::/32"
-gozod.HttpURL()                            // HTTP/HTTPS URL only
+gozod.HTTPURL()                            // HTTP/HTTPS URL only
 
 // ISO 8601 date/time formats (types/iso.go)
 gozod.IsoDate()                            // Date: "2024-12-06"

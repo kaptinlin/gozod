@@ -141,7 +141,7 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `z.e164()` | `gozod.E164()` | ✅ | E.164 phone number validation |
 | `z.cidr()` | `gozod.CIDRv4()`, `gozod.CIDRv6()` | ✅ | IPv4/IPv6 CIDR notation validation |
 | `z.guid()` | `gozod.Guid()` | ✅ | GUID format validation (8-4-4-4-12 hex pattern) |
-| - | `gozod.HttpURL()` | ✅ | **Go enhancement**: HTTP/HTTPS URL only |
+| - | `gozod.HTTPURL()` | ✅ | **Go enhancement**: HTTP/HTTPS URL only |
 | - | `gozod.Hex()` | ✅ | **Go enhancement**: Hexadecimal string validation |
 
 ### Hash Validation Checks
@@ -491,7 +491,7 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | **Hostname validation** | `gozod.Hostname()` DNS hostname validation | `z.hostname()` |
 | **MAC validation** | `gozod.MAC()` MAC address validation | `z.mac()` |
 | **E164 validation** | `gozod.E164()` E.164 phone validation | `z.e164()` |
-| **HttpURL** | `gozod.HttpURL()` HTTP/HTTPS only URL validation | No direct equivalent |
+| **HTTPURL** | `gozod.HTTPURL()` HTTP/HTTPS only URL validation | No direct equivalent |
 | **Hex validation** | `gozod.Hex()` hexadecimal string validation | No direct equivalent |
 | **Hash checks** | `checks.MD5()`, `checks.SHA256()`, etc. | No direct equivalent |
 

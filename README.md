@@ -329,7 +329,7 @@ gozod.String().Normalize()  // Unicode NFC normalization
 gozod.Uuid()     // UUID format validator
 gozod.Guid()     // GUID format validator (8-4-4-4-12 hex)
 gozod.URL()      // URL format validator
-gozod.HttpURL()  // HTTP/HTTPS URL only
+gozod.HTTPURL()  // HTTP/HTTPS URL only
 gozod.Email()    // Email format validator
 
 // Network formats

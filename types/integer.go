@@ -13,8 +13,10 @@ import (
 
 // IntegerConstraint restricts values to supported integer types or their pointers.
 type IntegerConstraint interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
-		~*int | ~*int8 | ~*int16 | ~*int32 | ~*int64 | ~*uint | ~*uint8 | ~*uint16 | ~*uint32 | ~*uint64
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
+		~*int | ~*int8 | ~*int16 | ~*int32 | ~*int64 |
+		~*uint | ~*uint8 | ~*uint16 | ~*uint32 | ~*uint64
 }
 
 // ZodIntegerDef is the configuration for integer validation.
@@ -29,12 +31,15 @@ type ZodIntegerInternals struct {
 }
 
 // ZodIntegerTyped is an integer validation schema with dual generic parameters.
-// T is the base type (int, int32, int64, etc.) and R is the constraint type (T or *T).
+//
+// T is the base type (int, int32, int64, etc.) and R is the constraint type
+// (T or *T).
 type ZodIntegerTyped[T IntegerConstraint, R any] struct {
 	internals *ZodIntegerInternals
 }
 
-// ZodInteger is a type alias for ZodIntegerTyped providing a unified interface.
+// ZodInteger is a type alias for ZodIntegerTyped providing a unified
+// interface.
 type ZodInteger[T IntegerConstraint, R any] = ZodIntegerTyped[T, R]
 
 // Internals returns the internal state of the schema.
@@ -62,6 +67,24 @@ func (z *ZodIntegerTyped[T, R]) withCheck(check core.ZodCheck) *ZodIntegerTyped[
 	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
+}
+
+// withInternals creates a new ZodIntegerTyped that keeps the original generic
+// types.
+func (z *ZodIntegerTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, R] {
+	return &ZodIntegerTyped[T, R]{internals: &ZodIntegerInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
+}
+
+// withPtrInternals creates a new ZodIntegerTyped with pointer constraint type
+// *T.
+func (z *ZodIntegerTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, *T] {
+	return &ZodIntegerTyped[T, *T]{internals: &ZodIntegerInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+	}}
 }
 
 // Coerce converts the input to the target integer type.
@@ -105,7 +128,10 @@ func (z *ZodIntegerTyped[T, R]) Coerce(input any) (any, bool) {
 }
 
 // Parse validates input and returns a value matching the constraint type R.
-func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+func (z *ZodIntegerTyped[T, R]) Parse(
+	input any,
+	ctx ...*core.ParseContext,
+) (R, error) {
 	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -117,7 +143,10 @@ func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 }
 
 // MustParse panics if Parse returns an error.
-func (z *ZodIntegerTyped[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
+func (z *ZodIntegerTyped[T, R]) MustParse(
+	input any,
+	ctx ...*core.ParseContext,
+) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -125,8 +154,12 @@ func (z *ZodIntegerTyped[T, R]) MustParse(input any, ctx ...*core.ParseContext) 
 	return result
 }
 
-// StrictParse validates input with compile-time type safety by requiring exact type matching.
-func (z *ZodIntegerTyped[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
+// StrictParse validates input with compile-time type safety by requiring exact
+// type matching.
+func (z *ZodIntegerTyped[T, R]) StrictParse(
+	input R,
+	ctx ...*core.ParseContext,
+) (R, error) {
 	expected := z.typeCode()
 	if z.internals.Type != "" {
 		expected = z.internals.Type
@@ -148,7 +181,10 @@ func (z *ZodIntegerTyped[T, R]) StrictParse(input R, ctx ...*core.ParseContext) 
 //	schema := gozod.Int().Min(0).Max(100)
 //	result := schema.MustStrictParse(42)           // ✅ int → int
 //	result := schema.MustStrictParse(&num)         // ❌ compile error
-func (z *ZodIntegerTyped[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
+func (z *ZodIntegerTyped[T, R]) MustStrictParse(
+	input R,
+	ctx ...*core.ParseContext,
+) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
@@ -156,17 +192,13 @@ func (z *ZodIntegerTyped[T, R]) MustStrictParse(input R, ctx ...*core.ParseConte
 	return result
 }
 
-// ParseAny validates input and returns an untyped result for runtime scenarios.
-func (z *ZodIntegerTyped[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+// ParseAny validates input and returns an untyped result for runtime
+// scenarios.
+func (z *ZodIntegerTyped[T, R]) ParseAny(
+	input any,
+	ctx ...*core.ParseContext,
+) (any, error) {
 	return z.Parse(input, ctx...)
-}
-
-// withPtrInternals creates a new ZodIntegerTyped with pointer constraint type *T.
-func (z *ZodIntegerTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, *T] {
-	return &ZodIntegerTyped[T, *T]{internals: &ZodIntegerInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-	}}
 }
 
 // Optional returns a schema that accepts T or nil, with constraint type *T.
@@ -177,6 +209,7 @@ func (z *ZodIntegerTyped[T, R]) Optional() *ZodIntegerTyped[T, *T] {
 }
 
 // ExactOptional accepts absent keys but rejects explicit nil values.
+//
 // Unlike Optional, ExactOptional only accepts absent keys in object fields.
 func (z *ZodIntegerTyped[T, R]) ExactOptional() *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
@@ -245,13 +278,17 @@ func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R]
 }
 
 // Meta stores metadata for this integer schema in the global registry.
-func (z *ZodIntegerTyped[T, R]) Meta(meta core.GlobalMeta) *ZodIntegerTyped[T, R] {
+func (z *ZodIntegerTyped[T, R]) Meta(
+	meta core.GlobalMeta,
+) *ZodIntegerTyped[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodIntegerTyped[T, R]) Describe(description string) *ZodIntegerTyped[T, R] {
+func (z *ZodIntegerTyped[T, R]) Describe(
+	description string,
+) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 
 	existing, ok := core.GlobalRegistry.Get(z)
@@ -333,7 +370,9 @@ func (z *ZodIntegerTyped[T, R]) Safe(params ...any) *ZodIntegerTyped[T, R] {
 }
 
 // Transform applies a transformation function that extracts int64 values.
-func (z *ZodIntegerTyped[T, R]) Transform(fn func(int64, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
+func (z *ZodIntegerTyped[T, R]) Transform(
+	fn func(int64, *core.RefinementContext) (any, error),
+) *core.ZodTransform[R, any] {
 	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(extractIntegerToInt64[T, R](input), ctx)
 	}
@@ -341,7 +380,10 @@ func (z *ZodIntegerTyped[T, R]) Transform(fn func(int64, *core.RefinementContext
 }
 
 // Overwrite transforms the input value while preserving the original type.
-func (z *ZodIntegerTyped[T, R]) Overwrite(transform func(T) T, params ...any) *ZodIntegerTyped[T, R] {
+func (z *ZodIntegerTyped[T, R]) Overwrite(
+	transform func(T) T,
+	params ...any,
+) *ZodIntegerTyped[T, R] {
 	fn := func(input any) any {
 		converted, ok := convertToIntegerType[T](input)
 		if !ok {
@@ -356,7 +398,9 @@ func (z *ZodIntegerTyped[T, R]) Overwrite(transform func(T) T, params ...any) *Z
 }
 
 // Pipe creates a validation pipeline to another schema.
-func (z *ZodIntegerTyped[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
+func (z *ZodIntegerTyped[T, R]) Pipe(
+	target core.ZodType[any],
+) *core.ZodPipe[R, any] {
 	fn := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractIntegerToInt64[T, R](input), ctx)
 	}
@@ -399,7 +443,10 @@ func extractIntegerToInt64[T IntegerConstraint, R any](value R) int64 {
 }
 
 // Refine applies type-safe custom validation using the base type T.
-func (z *ZodIntegerTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodIntegerTyped[T, R] {
+func (z *ZodIntegerTyped[T, R]) Refine(
+	fn func(T) bool,
+	params ...any,
+) *ZodIntegerTyped[T, R] {
 	wrapper := func(v any) bool {
 		if v == nil && z.IsNilable() {
 			return true
@@ -562,14 +609,6 @@ func (z *ZodIntegerTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *Zod
 	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
-}
-
-// withInternals creates a new ZodIntegerTyped that keeps the original generic types.
-func (z *ZodIntegerTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, R] {
-	return &ZodIntegerTyped[T, R]{internals: &ZodIntegerInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-	}}
 }
 
 // CloneFrom copies configuration from another schema.

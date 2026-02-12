@@ -8,6 +8,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// extractNetworkString extracts string value from generic network type T.
+// Test-only helper moved from network.go to avoid dead code in production.
+func extractNetworkString[T StringConstraint](value T) string {
+	if ptr, ok := any(value).(*string); ok {
+		if ptr != nil {
+			return *ptr
+		}
+		return ""
+	}
+	return any(value).(string)
+}
+
 // =============================================================================
 // Basic functionality tests
 // =============================================================================

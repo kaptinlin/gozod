@@ -50,7 +50,7 @@ type ZodTuple[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// Internals exposes internal state for framework usage.
+// Internals exposes the internal state for framework usage.
 func (z *ZodTuple[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
@@ -65,7 +65,7 @@ func (z *ZodTuple[T, R]) GetRest() core.ZodSchema {
 	return z.internals.Rest
 }
 
-// IsOptional reports whether this schema accepts undefined/missing values.
+// IsOptional reports whether this schema accepts undefined or missing values.
 func (z *ZodTuple[T, R]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
@@ -75,7 +75,7 @@ func (z *ZodTuple[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input and returns a value matching the constraint type R.
+// Parse validates the input and returns a value matching the constraint type R.
 func (z *ZodTuple[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
@@ -124,7 +124,7 @@ func (z *ZodTuple[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type T.
+// StrictParse provides compile-time type safety by requiring the exact type T.
 func (z *ZodTuple[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
@@ -167,7 +167,7 @@ func (z *ZodTuple[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	return result
 }
 
-// ParseAny validates input and returns any type for runtime interface usage.
+// ParseAny validates the input and returns any type for runtime interface usage.
 func (z *ZodTuple[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
@@ -198,7 +198,7 @@ func (z *ZodTuple[T, R]) Nilable() *ZodTuple[T, *[]any] {
 	return &ZodTuple[T, *[]any]{internals: z.withClonedInternals(newInternals)}
 }
 
-// Nullish marks this tuple as nullish (optional + nilable).
+// Nullish marks this tuple as nullish (both optional and nilable).
 func (z *ZodTuple[T, R]) Nullish() *ZodTuple[T, *[]any] {
 	newInternals := z.internals.Clone()
 	newInternals.SetOptional(true)
@@ -217,7 +217,7 @@ func (z *ZodTuple[T, R]) Default(v []any) *ZodTuple[T, R] {
 // VALIDATION METHODS
 // =============================================================================
 
-// Min sets minimum tuple length validation.
+// Min sets the minimum tuple length validation.
 func (z *ZodTuple[T, R]) Min(minimum int, params ...any) *ZodTuple[T, R] {
 	check := checks.MinLength(minimum, params...)
 	newInternals := z.internals.Clone()
@@ -225,7 +225,7 @@ func (z *ZodTuple[T, R]) Min(minimum int, params ...any) *ZodTuple[T, R] {
 	return z.withInternals(newInternals)
 }
 
-// Max sets maximum tuple length validation.
+// Max sets the maximum tuple length validation.
 func (z *ZodTuple[T, R]) Max(maximum int, params ...any) *ZodTuple[T, R] {
 	check := checks.MaxLength(maximum, params...)
 	newInternals := z.internals.Clone()
@@ -233,7 +233,7 @@ func (z *ZodTuple[T, R]) Max(maximum int, params ...any) *ZodTuple[T, R] {
 	return z.withInternals(newInternals)
 }
 
-// Length sets exact tuple length validation.
+// Length sets the exact tuple length validation.
 func (z *ZodTuple[T, R]) Length(length int, params ...any) *ZodTuple[T, R] {
 	check := checks.Length(length, params...)
 	newInternals := z.internals.Clone()
@@ -241,7 +241,7 @@ func (z *ZodTuple[T, R]) Length(length int, params ...any) *ZodTuple[T, R] {
 	return z.withInternals(newInternals)
 }
 
-// NonEmpty ensures tuple has at least one element.
+// NonEmpty ensures the tuple has at least one element.
 func (z *ZodTuple[T, R]) NonEmpty(params ...any) *ZodTuple[T, R] {
 	return z.Min(1, params...)
 }
@@ -299,7 +299,7 @@ func (z *ZodTuple[T, R]) Describe(description string) *ZodTuple[T, R] {
 // TUPLE-SPECIFIC METHODS
 // =============================================================================
 
-// Rest sets a rest element schema for additional elements beyond fixed items.
+// Rest sets a rest element schema for additional elements beyond the fixed items.
 func (z *ZodTuple[T, R]) Rest(restSchema core.ZodSchema) *ZodTuple[T, R] {
 	newDef := &ZodTupleDef{
 		ZodTypeDef: z.internals.Def.ZodTypeDef,
@@ -313,12 +313,12 @@ func (z *ZodTuple[T, R]) Rest(restSchema core.ZodSchema) *ZodTuple[T, R] {
 // ENGINE INTEGRATION METHODS
 // =============================================================================
 
-// extractTupleForEngine extracts tuple type from input for engine.ParseComplex.
+// extractTupleForEngine extracts the tuple type from input for engine.ParseComplex.
 func (z *ZodTuple[T, R]) extractTupleForEngine(input any) ([]any, bool) {
 	return toSliceAny(input)
 }
 
-// extractTuplePtrForEngine extracts pointer to tuple for engine.ParseComplex.
+// extractTuplePtrForEngine extracts a pointer to tuple for engine.ParseComplex.
 func (z *ZodTuple[T, R]) extractTuplePtrForEngine(input any) (*[]any, bool) {
 	if input == nil {
 		return nil, true
@@ -400,13 +400,11 @@ func (z *ZodTuple[T, R]) validateTupleForEngine(arr []any, chks []core.ZodCheck,
 
 	// Apply additional checks.
 	if len(chks) > 0 {
-		checkedResult, err := engine.ApplyChecks[any](result, chks, ctx)
+		checkedResult, err := engine.ApplyChecks[[]any](result, chks, ctx)
 		if err != nil {
 			return nil, err
 		}
-		if arr, ok := checkedResult.([]any); ok {
-			result = arr
-		}
+		result = checkedResult
 	}
 
 	return result, nil
@@ -416,7 +414,7 @@ func (z *ZodTuple[T, R]) validateTupleForEngine(arr []any, chks []core.ZodCheck,
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// toSliceAny converts input to []any.
+// toSliceAny converts the input to []any.
 func toSliceAny(input any) ([]any, bool) {
 	if arr, ok := input.([]any); ok {
 		return arr, true
@@ -434,7 +432,7 @@ func toSliceAny(input any) ([]any, bool) {
 	return result, true
 }
 
-// withInternals creates a new instance preserving type parameters.
+// withInternals creates a new instance while preserving type parameters.
 func (z *ZodTuple[T, R]) withInternals(in *core.ZodTypeInternals) *ZodTuple[T, R] {
 	return &ZodTuple[T, R]{internals: &ZodTupleInternals{
 		ZodTypeInternals: *in,
@@ -445,7 +443,7 @@ func (z *ZodTuple[T, R]) withInternals(in *core.ZodTypeInternals) *ZodTuple[T, R
 	}}
 }
 
-// withClonedInternals creates ZodTupleInternals from cloned ZodTypeInternals.
+// withClonedInternals creates ZodTupleInternals from the cloned ZodTypeInternals.
 func (z *ZodTuple[T, R]) withClonedInternals(in *core.ZodTypeInternals) *ZodTupleInternals {
 	return &ZodTupleInternals{
 		ZodTypeInternals: *in,
@@ -456,7 +454,7 @@ func (z *ZodTuple[T, R]) withClonedInternals(in *core.ZodTypeInternals) *ZodTupl
 	}
 }
 
-// convertToTupleConstraintType converts []any to constraint type R.
+// convertToTupleConstraintType converts []any to the constraint type R.
 func convertToTupleConstraintType[R any](arr []any) R {
 	var zero R
 	zeroType := reflect.TypeOf(zero)
@@ -465,13 +463,13 @@ func convertToTupleConstraintType[R any](arr []any) R {
 		return any(arr).(R)
 	}
 
-	if zeroType.Kind() == reflect.Ptr {
+	if zeroType.Kind() == reflect.Pointer && zeroType.Elem().Kind() == reflect.Slice {
 		return any(&arr).(R)
 	}
 	return any(arr).(R)
 }
 
-// convertToTupleType converts input type T to constraint type R.
+// convertToTupleType converts the input type T to the constraint type R.
 func convertToTupleType[T any, R any](input T) (R, bool) {
 	var zero R
 

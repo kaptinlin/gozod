@@ -8,20 +8,12 @@ import (
 	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
-// =============================================================================
-// INTERNAL HELPERS
-// =============================================================================
-
 // newIDSchema adds a check to a base string schema and returns a new instance.
 func newIDSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
 	in := base.Internals().Clone()
 	in.AddCheck(check)
 	return base.withInternals(in)
 }
-
-// =============================================================================
-// GUID
-// =============================================================================
 
 // ZodGUID validates strings in GUID format (8-4-4-4-12 hex pattern).
 type ZodGUID[T StringConstraint] struct{ *ZodString[T] }
@@ -37,21 +29,27 @@ func (z *ZodGUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodGUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodGUID[T]) Optional() *ZodGUID[*string] { return newGUID(z.ZodString.Optional()) }
+func (z *ZodGUID[T]) Optional() *ZodGUID[*string] {
+	return newGUID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodGUID[T]) Nilable() *ZodGUID[*string] { return newGUID(z.ZodString.Nilable()) }
+func (z *ZodGUID[T]) Nilable() *ZodGUID[*string] {
+	return newGUID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodGUID[T]) Nullish() *ZodGUID[*string] { return newGUID(z.ZodString.Nullish()) }
+func (z *ZodGUID[T]) Nullish() *ZodGUID[*string] {
+	return newGUID(z.ZodString.Nullish())
+}
 
 // Guid creates a GUID schema (8-4-4-4-12 hex pattern).
 func Guid(params ...any) *ZodGUID[string] {
@@ -62,10 +60,6 @@ func Guid(params ...any) *ZodGUID[string] {
 func GuidPtr(params ...any) *ZodGUID[*string] {
 	return newGUID(newIDSchema(StringPtr(params...), checks.GUID(params...)))
 }
-
-// =============================================================================
-// CUID
-// =============================================================================
 
 // ZodCUID validates strings in CUID format.
 type ZodCUID[T StringConstraint] struct{ *ZodString[T] }
@@ -81,21 +75,27 @@ func (z *ZodCUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodCUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodCUID[T]) Optional() *ZodCUID[*string] { return newCUID(z.ZodString.Optional()) }
+func (z *ZodCUID[T]) Optional() *ZodCUID[*string] {
+	return newCUID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodCUID[T]) Nilable() *ZodCUID[*string] { return newCUID(z.ZodString.Nilable()) }
+func (z *ZodCUID[T]) Nilable() *ZodCUID[*string] {
+	return newCUID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodCUID[T]) Nullish() *ZodCUID[*string] { return newCUID(z.ZodString.Nullish()) }
+func (z *ZodCUID[T]) Nullish() *ZodCUID[*string] {
+	return newCUID(z.ZodString.Nullish())
+}
 
 // Cuid creates a CUID schema for collision-resistant unique identifiers.
 func Cuid(params ...any) *ZodCUID[string] {
@@ -106,10 +106,6 @@ func Cuid(params ...any) *ZodCUID[string] {
 func CuidPtr(params ...any) *ZodCUID[*string] {
 	return newCUID(newIDSchema(StringPtr(params...), checks.CUID(params...)))
 }
-
-// =============================================================================
-// CUID2
-// =============================================================================
 
 // ZodCUID2 validates strings in CUID2 format.
 type ZodCUID2[T StringConstraint] struct{ *ZodString[T] }
@@ -125,21 +121,27 @@ func (z *ZodCUID2[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error)
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodCUID2[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodCUID2[T]) Optional() *ZodCUID2[*string] { return newCUID2(z.ZodString.Optional()) }
+func (z *ZodCUID2[T]) Optional() *ZodCUID2[*string] {
+	return newCUID2(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodCUID2[T]) Nilable() *ZodCUID2[*string] { return newCUID2(z.ZodString.Nilable()) }
+func (z *ZodCUID2[T]) Nilable() *ZodCUID2[*string] {
+	return newCUID2(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodCUID2[T]) Nullish() *ZodCUID2[*string] { return newCUID2(z.ZodString.Nullish()) }
+func (z *ZodCUID2[T]) Nullish() *ZodCUID2[*string] {
+	return newCUID2(z.ZodString.Nullish())
+}
 
 // Cuid2 creates a CUID2 schema for next-generation collision-resistant identifiers.
 func Cuid2(params ...any) *ZodCUID2[string] {
@@ -150,10 +152,6 @@ func Cuid2(params ...any) *ZodCUID2[string] {
 func Cuid2Ptr(params ...any) *ZodCUID2[*string] {
 	return newCUID2(newIDSchema(StringPtr(params...), checks.CUID2(params...)))
 }
-
-// =============================================================================
-// ULID
-// =============================================================================
 
 // ZodULID validates strings in ULID format.
 type ZodULID[T StringConstraint] struct{ *ZodString[T] }
@@ -169,21 +167,27 @@ func (z *ZodULID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodULID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodULID[T]) Optional() *ZodULID[*string] { return newULID(z.ZodString.Optional()) }
+func (z *ZodULID[T]) Optional() *ZodULID[*string] {
+	return newULID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodULID[T]) Nilable() *ZodULID[*string] { return newULID(z.ZodString.Nilable()) }
+func (z *ZodULID[T]) Nilable() *ZodULID[*string] {
+	return newULID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodULID[T]) Nullish() *ZodULID[*string] { return newULID(z.ZodString.Nullish()) }
+func (z *ZodULID[T]) Nullish() *ZodULID[*string] {
+	return newULID(z.ZodString.Nullish())
+}
 
 // Ulid creates a ULID schema.
 func Ulid(params ...any) *ZodULID[string] {
@@ -194,10 +198,6 @@ func Ulid(params ...any) *ZodULID[string] {
 func UlidPtr(params ...any) *ZodULID[*string] {
 	return newULID(newIDSchema(StringPtr(params...), checks.ULID(params...)))
 }
-
-// =============================================================================
-// XID
-// =============================================================================
 
 // ZodXID validates strings in XID format.
 type ZodXID[T StringConstraint] struct{ *ZodString[T] }
@@ -213,21 +213,27 @@ func (z *ZodXID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodXID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodXID[T]) Optional() *ZodXID[*string] { return newXID(z.ZodString.Optional()) }
+func (z *ZodXID[T]) Optional() *ZodXID[*string] {
+	return newXID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodXID[T]) Nilable() *ZodXID[*string] { return newXID(z.ZodString.Nilable()) }
+func (z *ZodXID[T]) Nilable() *ZodXID[*string] {
+	return newXID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodXID[T]) Nullish() *ZodXID[*string] { return newXID(z.ZodString.Nullish()) }
+func (z *ZodXID[T]) Nullish() *ZodXID[*string] {
+	return newXID(z.ZodString.Nullish())
+}
 
 // Xid creates an XID schema.
 func Xid(params ...any) *ZodXID[string] {
@@ -238,10 +244,6 @@ func Xid(params ...any) *ZodXID[string] {
 func XidPtr(params ...any) *ZodXID[*string] {
 	return newXID(newIDSchema(StringPtr(params...), checks.XID(params...)))
 }
-
-// =============================================================================
-// KSUID
-// =============================================================================
 
 // ZodKSUID validates strings in KSUID format.
 type ZodKSUID[T StringConstraint] struct{ *ZodString[T] }
@@ -257,21 +259,27 @@ func (z *ZodKSUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error)
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodKSUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodKSUID[T]) Optional() *ZodKSUID[*string] { return newKSUID(z.ZodString.Optional()) }
+func (z *ZodKSUID[T]) Optional() *ZodKSUID[*string] {
+	return newKSUID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodKSUID[T]) Nilable() *ZodKSUID[*string] { return newKSUID(z.ZodString.Nilable()) }
+func (z *ZodKSUID[T]) Nilable() *ZodKSUID[*string] {
+	return newKSUID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodKSUID[T]) Nullish() *ZodKSUID[*string] { return newKSUID(z.ZodString.Nullish()) }
+func (z *ZodKSUID[T]) Nullish() *ZodKSUID[*string] {
+	return newKSUID(z.ZodString.Nullish())
+}
 
 // Ksuid creates a KSUID schema.
 func Ksuid(params ...any) *ZodKSUID[string] {
@@ -282,10 +290,6 @@ func Ksuid(params ...any) *ZodKSUID[string] {
 func KsuidPtr(params ...any) *ZodKSUID[*string] {
 	return newKSUID(newIDSchema(StringPtr(params...), checks.KSUID(params...)))
 }
-
-// =============================================================================
-// NANOID
-// =============================================================================
 
 // ZodNanoID validates strings in NanoID format.
 type ZodNanoID[T StringConstraint] struct{ *ZodString[T] }
@@ -301,21 +305,27 @@ func (z *ZodNanoID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodNanoID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodNanoID[T]) Optional() *ZodNanoID[*string] { return newNanoID(z.ZodString.Optional()) }
+func (z *ZodNanoID[T]) Optional() *ZodNanoID[*string] {
+	return newNanoID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodNanoID[T]) Nilable() *ZodNanoID[*string] { return newNanoID(z.ZodString.Nilable()) }
+func (z *ZodNanoID[T]) Nilable() *ZodNanoID[*string] {
+	return newNanoID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodNanoID[T]) Nullish() *ZodNanoID[*string] { return newNanoID(z.ZodString.Nullish()) }
+func (z *ZodNanoID[T]) Nullish() *ZodNanoID[*string] {
+	return newNanoID(z.ZodString.Nullish())
+}
 
 // Nanoid creates a NanoID schema.
 func Nanoid(params ...any) *ZodNanoID[string] {
@@ -326,10 +336,6 @@ func Nanoid(params ...any) *ZodNanoID[string] {
 func NanoidPtr(params ...any) *ZodNanoID[*string] {
 	return newNanoID(newIDSchema(StringPtr(params...), checks.NanoID(params...)))
 }
-
-// =============================================================================
-// UUID
-// =============================================================================
 
 // ZodUUID validates strings in UUID format.
 type ZodUUID[T StringConstraint] struct{ *ZodString[T] }
@@ -345,21 +351,27 @@ func (z *ZodUUID[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodUUID[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
 
 // Optional returns a new schema that accepts nil values.
-func (z *ZodUUID[T]) Optional() *ZodUUID[*string] { return newUUID(z.ZodString.Optional()) }
+func (z *ZodUUID[T]) Optional() *ZodUUID[*string] {
+	return newUUID(z.ZodString.Optional())
+}
 
 // Nilable returns a new schema that accepts nil values.
-func (z *ZodUUID[T]) Nilable() *ZodUUID[*string] { return newUUID(z.ZodString.Nilable()) }
+func (z *ZodUUID[T]) Nilable() *ZodUUID[*string] {
+	return newUUID(z.ZodString.Nilable())
+}
 
 // Nullish returns a new schema combining optional and nilable.
-func (z *ZodUUID[T]) Nullish() *ZodUUID[*string] { return newUUID(z.ZodString.Nullish()) }
+func (z *ZodUUID[T]) Nullish() *ZodUUID[*string] {
+	return newUUID(z.ZodString.Nullish())
+}
 
 // uuidVersionRE maps version strings to their regex patterns.
 var uuidVersionRE = map[string]*regexp.Regexp{
@@ -408,10 +420,6 @@ func UuidPtr(params ...any) *ZodUUID[*string] {
 	ver, rest := parseUUIDVersion(params)
 	return newUUIDSchema(StringPtr(rest...), ver, rest)
 }
-
-// =============================================================================
-// UUID VERSION CONSTRUCTORS
-// =============================================================================
 
 // Uuidv4 creates a UUID v4 schema.
 func Uuidv4(params ...any) *ZodUUID[string] {
