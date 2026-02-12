@@ -2,47 +2,42 @@ package engine
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/mapx"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 // InitZodType initializes the common fields of a ZodType.
 func InitZodType[T core.ZodType[any]](schema T, def *core.ZodTypeDef) {
-	internals := schema.GetInternals()
+	i := schema.GetInternals()
 
-	internals.Type = def.Type
-	internals.Error = def.Error
+	i.Type = def.Type
+	i.Error = def.Error
 
 	if def.Coerce {
-		internals.SetCoerce(true)
+		i.SetCoerce(true)
 	}
 
-	if internals.Bag == nil {
-		internals.Bag = make(map[string]any)
+	if i.Bag == nil {
+		i.Bag = make(map[string]any)
 	}
-	mapx.Set(internals.Bag, "type", def.Type)
+	mapx.Set(i.Bag, "type", def.Type)
 
-	// Use slicex to safely copy checks
-	if !slicex.IsEmpty(def.Checks) {
-		internals.Checks = make([]core.ZodCheck, 0)
-		for _, check := range def.Checks {
-			internals.AddCheck(check)
-		}
-	} else {
-		internals.Checks = make([]core.ZodCheck, 0)
+	i.Checks = make([]core.ZodCheck, 0)
+	for _, c := range def.Checks {
+		i.AddCheck(c)
 	}
 
-	if internals.Values == nil {
-		internals.Values = make(map[any]struct{})
+	if i.Values == nil {
+		i.Values = make(map[any]struct{})
 	}
 
-	for _, check := range internals.Checks {
-		if check == nil {
+	for _, c := range i.Checks {
+		if c == nil {
 			continue
 		}
-		if ci := check.GetZod(); ci != nil {
+		if ci := c.GetZod(); ci != nil {
 			for _, fn := range ci.OnAttach {
 				fn(any(schema).(core.ZodType[any]))
 			}
@@ -62,101 +57,93 @@ func NewBaseZodTypeInternals(typeName core.ZodTypeCode) core.ZodTypeInternals {
 
 // AddCheck adds a validation check and returns a new schema instance (copy-on-write).
 func AddCheck[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, check core.ZodCheck) core.ZodType[any] {
-	internals := schema.GetInternals()
+	src := schema.GetInternals()
 
-	newChecks := append(append([]core.ZodCheck(nil), internals.Checks...), check)
-	newDef := &core.ZodTypeDef{
-		Type:   internals.Type,
-		Error:  internals.Error,
-		Checks: newChecks,
+	checks := append(append([]core.ZodCheck(nil), src.Checks...), check)
+	def := &core.ZodTypeDef{
+		Type:   src.Type,
+		Error:  src.Error,
+		Checks: checks,
 	}
 
-	if internals.Constructor == nil {
-		panic(fmt.Sprintf("Internal error: no constructor found for type %T. This indicates a framework bug - please report this issue.", schema))
+	if src.Constructor == nil {
+		panic(fmt.Sprintf("no constructor found for type %T: framework bug", schema))
 	}
 
-	newSchema := internals.Constructor(newDef)
-	newInternals := newSchema.GetInternals()
+	dst := src.Constructor(def)
+	di := dst.GetInternals()
 
-	clonedInternals := internals.Clone()
-	*newInternals = *clonedInternals
-	newInternals.Checks = newChecks
+	cloned := src.Clone()
+	*di = *cloned
+	di.Checks = checks
 
-	// Use Cloneable interface to copy type-specific state
-	if cloneable, ok := newSchema.(core.Cloneable); ok {
-		if source, ok := any(schema).(core.Cloneable); ok {
-			cloneable.CloneFrom(source)
+	if c, ok := dst.(core.Cloneable); ok {
+		if s, ok := any(schema).(core.Cloneable); ok {
+			c.CloneFrom(s)
 		}
 	}
 
-	// Execute OnAttach callbacks for the new check
 	if check != nil {
 		if ci := check.GetZod(); ci != nil {
 			for _, fn := range ci.OnAttach {
-				fn(newSchema)
+				fn(dst)
 			}
 		}
 	}
 
-	return newSchema
+	return dst
 }
 
 // Clone creates a new schema instance with optional definition modifications (copy-on-write).
-func Clone[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, modifyDef func(*core.ZodTypeDef)) core.ZodType[any] {
-	internals := schema.GetInternals()
+func Clone[T interface{ GetInternals() *core.ZodTypeInternals }](schema T, modify func(*core.ZodTypeDef)) core.ZodType[any] {
+	src := schema.GetInternals()
 
-	newDef := &core.ZodTypeDef{
-		Type:   internals.Type,
-		Error:  internals.Error,
-		Checks: append([]core.ZodCheck(nil), internals.Checks...),
+	def := &core.ZodTypeDef{
+		Type:   src.Type,
+		Error:  src.Error,
+		Checks: append([]core.ZodCheck(nil), src.Checks...),
 	}
 
-	if modifyDef != nil {
-		modifyDef(newDef)
+	if modify != nil {
+		modify(def)
 	}
 
-	if internals.Constructor == nil {
-		panic(fmt.Sprintf("Internal error: no constructor found for type %T. This indicates a framework bug - please report this issue.", schema))
+	if src.Constructor == nil {
+		panic(fmt.Sprintf("no constructor found for type %T: framework bug", schema))
 	}
 
-	newSchema := internals.Constructor(newDef)
-	newInternals := newSchema.GetInternals()
+	dst := src.Constructor(def)
+	di := dst.GetInternals()
 
-	clonedInternals := internals.Clone()
-	*newInternals = *clonedInternals
+	cloned := src.Clone()
+	*di = *cloned
 
-	newInternals.Type = newDef.Type
-	newInternals.Error = newDef.Error
-	newInternals.Checks = newDef.Checks
+	di.Type = def.Type
+	di.Error = def.Error
+	di.Checks = def.Checks
 
-	// Use Cloneable interface to copy type-specific state
-	if cloneable, ok := newSchema.(core.Cloneable); ok {
-		if sourceAny := any(schema); sourceAny != nil {
-			if sourceCloneable, ok := sourceAny.(core.Cloneable); ok {
-				cloneable.CloneFrom(sourceCloneable)
-			}
+	if c, ok := dst.(core.Cloneable); ok {
+		if s, ok := any(schema).(core.Cloneable); ok {
+			c.CloneFrom(s)
 		}
 	}
 
-	return newSchema
+	return dst
 }
 
-// CopyInternalsState copies all state from source to target internals.
-func CopyInternalsState(target *core.ZodTypeInternals, source *core.ZodTypeInternals) {
-	if source == nil || target == nil {
+// CopyInternalsState copies all state from src to dst.
+func CopyInternalsState(dst, src *core.ZodTypeInternals) {
+	if src == nil || dst == nil {
 		return
 	}
-
-	// Use core's Clone() method and copy the result
-	cloned := source.Clone()
-	if cloned != nil {
-		*target = *cloned
+	if cloned := src.Clone(); cloned != nil {
+		*dst = *cloned
 	}
 }
 
-// CreateInternalsWithState creates new internals with state cloned from source.
-func CreateInternalsWithState(source *core.ZodTypeInternals, typeName core.ZodTypeCode) *core.ZodTypeInternals {
-	if source == nil {
+// CreateInternalsWithState creates new internals with state cloned from src.
+func CreateInternalsWithState(src *core.ZodTypeInternals, typeName core.ZodTypeCode) *core.ZodTypeInternals {
+	if src == nil {
 		return &core.ZodTypeInternals{
 			Type:   typeName,
 			Checks: make([]core.ZodCheck, 0),
@@ -164,75 +151,67 @@ func CreateInternalsWithState(source *core.ZodTypeInternals, typeName core.ZodTy
 			Bag:    make(map[string]any),
 		}
 	}
-
-	// Use core's Clone() method and modify the type
-	cloned := source.Clone()
+	cloned := src.Clone()
 	cloned.Type = typeName
 	return cloned
 }
 
-// MergeInternalsState merges state from source into target, preserving target's identity.
-func MergeInternalsState(target *core.ZodTypeInternals, source *core.ZodTypeInternals) {
-	if source == nil || target == nil {
+// MergeInternalsState merges state from src into dst, preserving dst's identity.
+func MergeInternalsState(dst, src *core.ZodTypeInternals) {
+	if src == nil || dst == nil {
 		return
 	}
 
-	// Use core convenience methods for flag merging
-	if source.IsOptional() {
-		target.SetOptional(true)
+	// Merge flags
+	if src.IsOptional() {
+		dst.SetOptional(true)
 	}
-	if source.IsNilable() {
-		target.SetNilable(true)
+	if src.IsNilable() {
+		dst.SetNilable(true)
 	}
-	if source.IsCoerce() {
-		target.SetCoerce(true)
-	}
-
-	// Use core convenience methods for modifier merging
-	if source.DefaultValue != nil {
-		target.SetDefaultValue(source.DefaultValue)
-	}
-	if source.DefaultFunc != nil {
-		target.SetDefaultFunc(source.DefaultFunc)
-	}
-	if source.PrefaultValue != nil {
-		target.SetPrefaultValue(source.PrefaultValue)
-	}
-	if source.PrefaultFunc != nil {
-		target.SetPrefaultFunc(source.PrefaultFunc)
-	}
-	if source.Transform != nil {
-		target.SetTransform(source.Transform)
+	if src.IsCoerce() {
+		dst.SetCoerce(true)
 	}
 
-	// Merge checks using core's AddCheck method
-	for _, check := range source.Checks {
-		target.AddCheck(check)
+	// Merge modifiers
+	if src.DefaultValue != nil {
+		dst.SetDefaultValue(src.DefaultValue)
+	}
+	if src.DefaultFunc != nil {
+		dst.SetDefaultFunc(src.DefaultFunc)
+	}
+	if src.PrefaultValue != nil {
+		dst.SetPrefaultValue(src.PrefaultValue)
+	}
+	if src.PrefaultFunc != nil {
+		dst.SetPrefaultFunc(src.PrefaultFunc)
+	}
+	if src.Transform != nil {
+		dst.SetTransform(src.Transform)
 	}
 
-	// Merge Values map
-	if len(source.Values) > 0 {
-		if target.Values == nil {
-			target.Values = make(map[any]struct{})
+	for _, c := range src.Checks {
+		dst.AddCheck(c)
+	}
+
+	if len(src.Values) > 0 {
+		if dst.Values == nil {
+			dst.Values = make(map[any]struct{})
 		}
-		for k, v := range source.Values {
-			target.Values[k] = v
-		}
+		maps.Copy(dst.Values, src.Values)
 	}
 
-	// Merge Bag using mapx
-	if len(source.Bag) > 0 {
-		if target.Bag == nil {
-			target.Bag = make(map[string]any)
+	if len(src.Bag) > 0 {
+		if dst.Bag == nil {
+			dst.Bag = make(map[string]any)
 		}
-		target.Bag = mapx.Merge(target.Bag, source.Bag)
+		dst.Bag = mapx.Merge(dst.Bag, src.Bag)
 	}
 
-	// Preserve other important fields
-	if source.Pattern != nil {
-		target.Pattern = source.Pattern
+	if src.Pattern != nil {
+		dst.Pattern = src.Pattern
 	}
-	if source.Constructor != nil {
-		target.Constructor = source.Constructor
+	if src.Constructor != nil {
+		dst.Constructor = src.Constructor
 	}
 }

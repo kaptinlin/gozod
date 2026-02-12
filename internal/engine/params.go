@@ -8,51 +8,36 @@ import (
 	"github.com/kaptinlin/gozod/pkg/structx"
 )
 
-// =============================================================================
-// SCHEMA PARAMETER HELPERS
-// =============================================================================
-
-// WithError creates a SchemaParams with custom error message
-// Convenient helper for creating schema with custom error handling
+// WithError creates a SchemaParams with a custom error message.
 func WithError(message string) core.SchemaParams {
 	return core.SchemaParams{Error: message}
 }
 
-// WithDescription creates a SchemaParams with description
-// Convenient helper for adding documentation to schemas
-func WithDescription(description string) core.SchemaParams {
-	return core.SchemaParams{Description: description}
+// WithDescription creates a SchemaParams with a description.
+func WithDescription(desc string) core.SchemaParams {
+	return core.SchemaParams{Description: desc}
 }
 
-// WithAbort creates a SchemaParams with abort on error enabled
-// Convenient helper for configuring early termination on validation failure
+// WithAbort creates a SchemaParams with abort-on-error enabled.
 func WithAbort() core.SchemaParams {
 	return core.SchemaParams{Abort: true}
 }
 
-// ProcessSchemaParams processes schema parameters and returns a configuration map
-// Uses structx to handle parameter conversion and mapx for merging
+// ProcessSchemaParams merges schema parameters into a configuration map.
 func ProcessSchemaParams(params ...core.SchemaParams) map[string]any {
-	config := make(map[string]any)
-
-	for _, param := range params {
-		// Use structx to handle parameter conversion
-		if paramMap, err := structx.ToMap(param); err == nil {
-			config = mapx.Merge(config, paramMap)
+	cfg := make(map[string]any)
+	for _, p := range params {
+		if m, err := structx.ToMap(p); err == nil {
+			cfg = mapx.Merge(cfg, m)
 		}
 	}
-
-	return config
+	return cfg
 }
 
-// IsValidSchemaType checks if a value implements the core ZodType interface
-// Useful for runtime type checking and validation
+// IsValidSchemaType reports whether value implements core.ZodType.
 func IsValidSchemaType(value any) bool {
 	if value == nil {
 		return false
 	}
-
-	// Use reflection to check if the type implements ZodType interface
-	schemaType := reflect.TypeOf((*core.ZodType[any])(nil)).Elem()
-	return reflect.TypeOf(value).Implements(schemaType)
+	return reflect.TypeOf(value).Implements(reflect.TypeFor[core.ZodType[any]]())
 }

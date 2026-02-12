@@ -4,11 +4,7 @@ import (
 	"github.com/kaptinlin/gozod/core"
 )
 
-// =============================================================================
-// RE-EXPORTED TYPES FROM CORE
-// =============================================================================
-
-// IssueCode represents validation issue types - re-exported from core
+// IssueCode represents validation issue types.
 type IssueCode = core.IssueCode
 
 // Re-export issue code constants for convenient access
@@ -33,11 +29,7 @@ type ZodIssueBase = core.ZodIssueBase
 type ZodRawIssue = core.ZodRawIssue
 type ZodIssue = core.ZodIssue
 
-// =============================================================================
-// ISSUE SUBTYPES
-// =============================================================================
-
-// ZodIssueInvalidType represents a type validation error
+// ZodIssueInvalidType represents a type validation error.
 // Corresponds to Zod v4's $ZodIssueInvalidType
 // See: .reference/zod/packages/zod/src/v4/core/errors.ts:20-24
 type ZodIssueInvalidType struct {
@@ -114,11 +106,7 @@ type ZodIssueCustom struct {
 	Params map[string]any `json:"params,omitempty"`
 }
 
-// =============================================================================
-// STRING FORMAT ISSUES
-// =============================================================================
-
-// ZodIssueStringCommonFormats represents common string format validation errors
+// ZodIssueStringCommonFormats represents common string format validation errors.
 type ZodIssueStringCommonFormats struct {
 	ZodIssueInvalidStringFormat
 }

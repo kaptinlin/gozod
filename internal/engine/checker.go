@@ -12,12 +12,12 @@ func RunChecks(checks []core.ZodCheck, payload *core.ParsePayload, ctx ...*core.
 		return payload
 	}
 
-	var parseCtx *core.ParseContext
+	var pc *core.ParseContext
 	if len(ctx) > 0 {
-		parseCtx = ctx[0]
+		pc = ctx[0]
 	}
 
-	return executeChecks(payload.GetValue(), checks, payload, parseCtx)
+	return executeChecks(payload.GetValue(), checks, payload, pc)
 }
 
 // RunChecksOnValue executes all validation checks on a specific value.
@@ -26,87 +26,84 @@ func RunChecksOnValue(value any, checks []core.ZodCheck, payload *core.ParsePayl
 		return payload
 	}
 
-	var parseCtx *core.ParseContext
+	var pc *core.ParseContext
 	if len(ctx) > 0 {
-		parseCtx = ctx[0]
+		pc = ctx[0]
 	}
 
-	return executeChecks(value, checks, payload, parseCtx)
+	return executeChecks(value, checks, payload, pc)
 }
 
 // executeChecks runs all checks sequentially, collecting issues and applying overwrites.
 func executeChecks(value any, checks []core.ZodCheck, payload *core.ParsePayload, _ *core.ParseContext) *core.ParsePayload {
-	checksLen := len(checks)
-	if checksLen == 0 {
+	n := len(checks)
+	if n == 0 {
 		return payload
 	}
 
-	// Pre-allocate capacity for issues if needed
-	currentIssues := payload.GetIssues()
-	if cap(currentIssues) < len(currentIssues)+checksLen {
-		payload.SetIssues(slices.Grow(currentIssues, checksLen))
+	cur := payload.GetIssues()
+	if cap(cur) < len(cur)+n {
+		payload.SetIssues(slices.Grow(cur, n))
 	}
 
-	payloadPath := payload.Path()
-	currentValue := value
+	path := payload.Path()
+	val := value
 
-	for i := range checksLen {
-		check := checks[i]
-		if check == nil {
+	for i := range n {
+		c := checks[i]
+		if c == nil {
 			continue
 		}
 
-		checkInternals := check.GetZod()
-		if checkInternals == nil || checkInternals.Check == nil {
+		ci := c.GetZod()
+		if ci == nil || ci.Check == nil {
 			continue
 		}
 
-		// Evaluate `when` predicate: skip this check if it returns false.
-		if checkInternals.When != nil {
-			whenPayload := core.NewParsePayloadWithPath(currentValue, payload.Path())
-			if !checkInternals.When(whenPayload) {
+		// Skip check if "when" predicate returns false.
+		if ci.When != nil {
+			wp := core.NewParsePayloadWithPath(val, payload.Path())
+			if !ci.When(wp) {
 				continue
 			}
 		}
 
-		checkPayload := core.NewParsePayloadWithPath(currentValue, payloadPath)
-		checkInternals.Check(checkPayload)
-		currentValue = checkPayload.GetValue()
+		cp := core.NewParsePayloadWithPath(val, path)
+		ci.Check(cp)
+		val = cp.GetValue()
 
-		checkIssues := checkPayload.GetIssues()
-		if len(checkIssues) == 0 {
+		iss := cp.GetIssues()
+		if len(iss) == 0 {
 			continue
 		}
 
-		// Apply custom error mapping if configured
-		if checkInternals.Def != nil && checkInternals.Def.Error != nil {
-			errorFn := *checkInternals.Def.Error
-			for j := range len(checkIssues) {
-				checkIssues[j].Message = errorFn(checkIssues[j])
-				checkIssues[j].Inst = checkInternals
+		if ci.Def != nil && ci.Def.Error != nil {
+			errFn := *ci.Def.Error
+			for j := range len(iss) {
+				iss[j].Message = errFn(iss[j])
+				iss[j].Inst = ci
 			}
 		}
 
-		payload.AddIssues(checkIssues...)
+		payload.AddIssues(iss...)
 
-		if checkInternals.Def.Abort {
+		if ci.Def.Abort {
 			break
 		}
 	}
 
-	payload.SetValue(currentValue)
+	payload.SetValue(val)
 	return payload
 }
 
-// CheckAborted reports whether any issue from startIndex onwards signals an abort.
-func CheckAborted(x core.ParsePayload, startIndex int) bool {
-	issues := x.GetIssues()
-	if len(issues) == 0 || startIndex >= len(issues) {
+// CheckAborted reports whether any issue from start onwards signals an abort.
+func CheckAborted(x core.ParsePayload, start int) bool {
+	iss := x.GetIssues()
+	if len(iss) == 0 || start >= len(iss) {
 		return false
 	}
-
-	for i := startIndex; i < len(issues); i++ {
-		if !issues[i].Continue {
+	for i := start; i < len(iss); i++ {
+		if !iss[i].Continue {
 			return true
 		}
 	}

@@ -31,7 +31,6 @@ func NewRawIssueFromMessage(message string, input any, inst any) core.ZodRawIssu
 	}
 }
 
-// WithOrigin sets the origin property.
 func WithOrigin(origin string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -41,14 +40,12 @@ func WithOrigin(origin string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithMessage sets the message field.
 func WithMessage(message string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Message = message
 	}
 }
 
-// WithMinimum sets the minimum property.
 func WithMinimum(minimum any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -58,7 +55,6 @@ func WithMinimum(minimum any) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithMaximum sets the maximum property.
 func WithMaximum(maximum any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -68,7 +64,6 @@ func WithMaximum(maximum any) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithExpected sets the expected property.
 func WithExpected(expected string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -78,7 +73,6 @@ func WithExpected(expected string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithReceived sets the received property.
 func WithReceived(received string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -88,14 +82,12 @@ func WithReceived(received string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithPath sets the path field.
 func WithPath(path []any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Path = path
 	}
 }
 
-// WithInclusive sets the inclusive property.
 func WithInclusive(inclusive bool) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -105,7 +97,6 @@ func WithInclusive(inclusive bool) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithFormat sets the format property.
 func WithFormat(format string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -115,14 +106,12 @@ func WithFormat(format string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithContinue sets the continue field.
 func WithContinue(cont bool) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Continue = cont
 	}
 }
 
-// WithPattern sets the pattern property.
 func WithPattern(pattern string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -132,7 +121,6 @@ func WithPattern(pattern string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithPrefix sets the prefix property.
 func WithPrefix(prefix string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -142,7 +130,6 @@ func WithPrefix(prefix string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithSuffix sets the suffix property.
 func WithSuffix(suffix string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -152,7 +139,6 @@ func WithSuffix(suffix string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithIncludes sets the includes property.
 func WithIncludes(includes string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -162,7 +148,6 @@ func WithIncludes(includes string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithDivisor sets the divisor property.
 func WithDivisor(divisor any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -172,7 +157,6 @@ func WithDivisor(divisor any) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithKeys sets the keys property.
 func WithKeys(keys []string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -182,7 +166,6 @@ func WithKeys(keys []string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithValues sets the values property.
 func WithValues(values []any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -192,7 +175,6 @@ func WithValues(values []any) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithAlgorithm sets the algorithm property.
 func WithAlgorithm(algorithm string) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -202,7 +184,6 @@ func WithAlgorithm(algorithm string) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithParams sets the params property.
 func WithParams(params map[string]any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		if issue.Properties == nil {
@@ -212,7 +193,6 @@ func WithParams(params map[string]any) func(*core.ZodRawIssue) {
 	}
 }
 
-// WithInst sets the inst field.
 func WithInst(inst any) func(*core.ZodRawIssue) {
 	return func(issue *core.ZodRawIssue) {
 		issue.Inst = inst

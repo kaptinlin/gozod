@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//////////////////////////////////////////
-//////////   Issue Constants Tests     ///
-//////////////////////////////////////////
-
 func TestIssueConstants(t *testing.T) {
 	t.Run("all issue codes are defined correctly", func(t *testing.T) {
 		expectedCodes := map[IssueCode]string{
@@ -46,10 +42,6 @@ func TestIssueConstants(t *testing.T) {
 		assert.Equal(t, TooBig, finalizedIssue.Code)
 	})
 }
-
-//////////////////////////////////////////
-//////////   ZodIssue Interface Tests  ///
-//////////////////////////////////////////
 
 func TestZodIssueInterface(t *testing.T) {
 	t.Run("ZodIssue implements error interface", func(t *testing.T) {
@@ -108,10 +100,6 @@ func TestZodIssueInterface(t *testing.T) {
 		})
 	})
 }
-
-//////////////////////////////////////////
-//////////   Type Definition Tests     ///
-//////////////////////////////////////////
 
 func TestTypeDefinitions(t *testing.T) {
 	t.Run("ParseParams type definition", func(t *testing.T) {
@@ -204,10 +192,6 @@ func TestTypeDefinitions(t *testing.T) {
 		assert.Equal(t, map[string]any{"custom": "data"}, issue.Params)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Issue Subtype Tests       ///
-//////////////////////////////////////////
 
 func TestIssueSubtypes(t *testing.T) {
 	t.Run("ZodIssueInvalidType structure", func(t *testing.T) {

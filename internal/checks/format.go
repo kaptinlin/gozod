@@ -20,9 +20,9 @@ func newFormatCheck(
 	pattern *regexp.Regexp,
 	params ...any,
 ) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: checkID}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -50,9 +50,9 @@ func Email(params ...any) core.ZodCheck {
 
 // EmailWithPattern creates an email validation check with a custom regex pattern.
 func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "email"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -76,12 +76,14 @@ func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	}
 }
 
-// Html5Email creates an HTML5 email validation check.
-func Html5Email(params ...any) core.ZodCheck { return EmailWithPattern(regex.Html5Email, params...) }
+// HTML5Email creates an HTML5 email validation check.
+func HTML5Email(params ...any) core.ZodCheck {
+	return EmailWithPattern(regex.HTML5Email, params...)
+}
 
-// Rfc5322Email creates an RFC5322 email validation check.
-func Rfc5322Email(params ...any) core.ZodCheck {
-	return EmailWithPattern(regex.Rfc5322Email, params...)
+// RFC5322Email creates an RFC 5322 email validation check.
+func RFC5322Email(params ...any) core.ZodCheck {
+	return EmailWithPattern(regex.RFC5322Email, params...)
 }
 
 // UnicodeEmail creates a Unicode email validation check.
@@ -101,9 +103,9 @@ func URL(params ...any) core.ZodCheck {
 
 // URLWithOptions creates a URL validation check with optional constraints.
 func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "url"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -155,9 +157,9 @@ func MACWithDelimiter(delimiter string, params ...any) core.ZodCheck {
 
 // MACWithOptions creates a MAC address validation check with full configuration.
 func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "mac"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	delim := options.Delimiter
 	if delim == "" {
@@ -193,9 +195,9 @@ func CIDRv6(params ...any) core.ZodCheck {
 
 // Base64 creates a Base64 encoding validation check.
 func Base64(params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "base64"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -217,9 +219,9 @@ func Base64(params ...any) core.ZodCheck {
 
 // Base64URL creates a Base64URL encoding validation check.
 func Base64URL(params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "base64url"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -251,9 +253,9 @@ func JWTWithAlgorithm(algorithm string, params ...any) core.ZodCheck {
 
 // JWTWithOptions creates a JWT token validation check with full configuration.
 func JWTWithOptions(options validate.JWTOptions, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "jwt"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -278,9 +280,9 @@ func E164(params ...any) core.ZodCheck {
 
 // ISODateTimeWithOptions creates an ISO 8601 datetime validation check with options.
 func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_datetime"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -312,9 +314,9 @@ func ISODate(params ...any) core.ZodCheck {
 // ISODateMin creates a minimum date validation check.
 // Validates that the ISO date is on or after the specified minimum date.
 func ISODateMin(minDate string, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_date"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -334,9 +336,9 @@ func ISODateMin(minDate string, params ...any) core.ZodCheck {
 // ISODateMax creates a maximum date validation check.
 // Validates that the ISO date is on or before the specified maximum date.
 func ISODateMax(maxDate string, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_date"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -356,9 +358,9 @@ func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 // ISOTimeWithOptions creates an ISO 8601 time validation check with configuration.
 // Uses self-reference to attach Inst on the created issue.
 func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "iso_time"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	var check *core.ZodCheckInternals
 	check = &core.ZodCheckInternals{
@@ -423,9 +425,9 @@ func NanoID(params ...any) core.ZodCheck {
 
 // JSON creates a JSON format validation check.
 func JSON(params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "json"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,

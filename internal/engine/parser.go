@@ -17,60 +17,51 @@ var ErrUnableToConvert = errors.New("unable to convert value to expected type")
 func tryDirectTypeMatch[T any, R any](value any) (R, bool) {
 	var zero R
 
-	// Direct type matching (fastest path)
-	if result, ok := value.(R); ok {
-		return result, true
+	if r, ok := value.(R); ok {
+		return r, true
 	}
 
-	// Optimized T → *T and *T → T conversions with reduced any() calls
-	// Cache the zero type check to avoid repeated any() conversions
-	zeroAsAny := any(zero)
-	switch zeroAsAny.(type) {
+	// T → *T and *T → T conversions.
+	switch any(zero).(type) {
 	case *T:
-		// R is *T, try to convert T to *T
-		if val, ok := value.(T); ok {
-			ptr := &val
-			if result, ok := any(ptr).(R); ok {
-				return result, true
+		if v, ok := value.(T); ok {
+			p := &v
+			if r, ok := any(p).(R); ok {
+				return r, true
 			}
 		}
 	case T:
-		// R is T, try to convert *T to T
-		if ptr, ok := value.(*T); ok && ptr != nil {
-			if result, ok := any(*ptr).(R); ok {
-				return result, true
+		if p, ok := value.(*T); ok && p != nil {
+			if r, ok := any(*p).(R); ok {
+				return r, true
 			}
 		}
 	}
 
-	// Fast path for common pointer type conversions without repeated any() calls
-	switch zeroAsAny.(type) {
+	// Fast path for common pointer type conversions.
+	switch any(zero).(type) {
 	case *string:
-		if str, ok := value.(string); ok {
-			strPtr := &str
-			if result, ok := any(strPtr).(R); ok {
-				return result, true
+		if v, ok := value.(string); ok {
+			if r, ok := any(&v).(R); ok {
+				return r, true
 			}
 		}
 	case *int64:
-		if i64, ok := value.(int64); ok {
-			i64Ptr := &i64
-			if result, ok := any(i64Ptr).(R); ok {
-				return result, true
+		if v, ok := value.(int64); ok {
+			if r, ok := any(&v).(R); ok {
+				return r, true
 			}
 		}
 	case *float64:
-		if f64, ok := value.(float64); ok {
-			f64Ptr := &f64
-			if result, ok := any(f64Ptr).(R); ok {
-				return result, true
+		if v, ok := value.(float64); ok {
+			if r, ok := any(&v).(R); ok {
+				return r, true
 			}
 		}
 	case *bool:
-		if b, ok := value.(bool); ok {
-			bPtr := &b
-			if result, ok := any(bPtr).(R); ok {
-				return result, true
+		if v, ok := value.(bool); ok {
+			if r, ok := any(&v).(R); ok {
+				return r, true
 			}
 		}
 	}
@@ -92,8 +83,8 @@ func parseTypedValue[T any, R any](
 		return zero, issues.CreateInvalidTypeError(expectedType, input, ctx)
 	}
 
-	if result, ok := tryDirectTypeMatch[T, R](input); ok {
-		return validateAndReturn(result, internals, expectedType, ctx)
+	if r, ok := tryDirectTypeMatch[T, R](input); ok {
+		return validateAndReturn(r, internals, expectedType, ctx)
 	}
 
 	converted, err := convertToType[T](input, expectedType, ctx)
@@ -101,12 +92,12 @@ func parseTypedValue[T any, R any](
 		return zero, err
 	}
 
-	result, ok := converted.(R)
+	r, ok := converted.(R)
 	if !ok {
 		return zero, issues.CreateInvalidTypeError(expectedType, input, ctx)
 	}
 
-	return validateAndReturn(result, internals, expectedType, ctx)
+	return validateAndReturn(r, internals, expectedType, ctx)
 }
 
 // validateAndReturn applies validation checks and transformation to a value.
@@ -117,21 +108,20 @@ func validateAndReturn[R any](
 	ctx *core.ParseContext,
 ) (R, error) {
 	if len(internals.Checks) > 0 {
-		validated, err := ApplyChecks(value, internals.Checks, ctx)
+		v, err := ApplyChecks(value, internals.Checks, ctx)
 		if err != nil {
 			return value, err
 		}
-		value = validated
+		value = v
 	}
 
 	if internals.Transform != nil {
-		refCtx := &core.RefinementContext{ParseContext: ctx}
-		transformed, err := internals.Transform(any(value), refCtx)
+		transformed, err := internals.Transform(any(value), &core.RefinementContext{ParseContext: ctx})
 		if err != nil {
 			return value, err
 		}
-		if finalResult, ok := transformed.(R); ok {
-			return finalResult, nil
+		if r, ok := transformed.(R); ok {
+			return r, nil
 		}
 		return value, issues.CreateInvalidTypeError(expectedType, transformed, ctx)
 	}
@@ -212,20 +202,18 @@ func convertToType[T any](input any, expectedType core.ZodTypeCode, ctx *core.Pa
 	return nil, issues.CreateInvalidTypeError(expectedType, input, ctx)
 }
 
-// isNilInput checks whether input is nil, using reflection only for nillable kinds.
+// isNilInput reports whether input is nil, using reflection only for nillable kinds.
 func isNilInput[R any](input R) bool {
 	if any(input) == nil {
 		return true
 	}
-
-	v := reflect.ValueOf(input)
-	if !v.IsValid() {
+	rv := reflect.ValueOf(input)
+	if !rv.IsValid() {
 		return true
 	}
-
-	switch v.Kind() { //nolint:exhaustive // only nillable kinds need explicit handling
+	switch rv.Kind() { //nolint:exhaustive // only nillable kinds need explicit handling
 	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
-		return v.IsNil()
+		return rv.IsNil()
 	default:
 		return false
 	}
@@ -241,56 +229,45 @@ func ParsePrimitive[T any, R any](
 	converter func(any, *core.ParseContext, core.ZodTypeCode) (R, error),
 	ctx ...*core.ParseContext,
 ) (R, error) {
-	parseCtx := getOrCreateContext(ctx...)
+	pc := getOrCreateContext(ctx...)
 
-	if result, handled, err := processModifiers[T](input, internals, expectedType, func(value any) (any, error) {
-		return parsePrimitiveValue(value, internals, expectedType, validator, parseCtx)
-	}, parseCtx); handled {
+	if r, handled, err := processModifiers[T](input, internals, expectedType, func(value any) (any, error) {
+		return parsePrimitiveValue(value, internals, expectedType, validator, pc)
+	}, pc); handled {
 		if err != nil {
 			var zero R
 			return zero, err
 		}
-		// Check if this is a Default/DefaultFunc short-circuit case
-		// These should skip Transform completely
-		isDefaultShortCircuit := (internals.DefaultValue != nil && isNilInput(input)) ||
-			(internals.DefaultFunc != nil && isNilInput(input))
-
-		if isDefaultShortCircuit {
-			// Default/DefaultFunc values skip Transform - direct conversion only
-			return converter(result, parseCtx, expectedType)
+		// Default/DefaultFunc short-circuit: skip Transform.
+		if isNilInput(input) && (internals.DefaultValue != nil || internals.DefaultFunc != nil) {
+			return converter(r, pc, expectedType)
 		}
-
-		// For all other handled cases (Optional/Nilable nil, Unknown type, etc.)
-		// apply Transform if present
-		transformed, transformErr := applyTransformIfPresent(result, internals, parseCtx)
-		if transformErr != nil {
+		// Other handled cases: apply Transform if present.
+		transformed, err := applyTransformIfPresent(r, internals, pc)
+		if err != nil {
 			var zero R
-			return zero, transformErr
+			return zero, err
 		}
-		return converter(transformed, parseCtx, expectedType)
-	} else if result != nil {
-		// Prefault case: use the returned value as new input and continue parsing
-		input = result
+		return converter(transformed, pc, expectedType)
+	} else if r != nil {
+		// Prefault: use returned value as new input.
+		input = r
 	}
 
-	// Regular parsing path (including prefault values)
-	result, err := parsePrimitiveValue[T](input, internals, expectedType, validator, parseCtx)
-	if err == nil {
-		transformed, transformErr := applyTransformIfPresent(result, internals, parseCtx)
-		if transformErr != nil {
-			var zero R
-			return zero, transformErr
-		}
-		return converter(transformed, parseCtx, expectedType)
+	r, err := parsePrimitiveValue[T](input, internals, expectedType, validator, pc)
+	if err != nil {
+		var zero R
+		return zero, err
 	}
-
-	// Return parsing error
-	var zero R
-	return zero, err
+	transformed, err := applyTransformIfPresent(r, internals, pc)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return converter(transformed, pc, expectedType)
 }
 
 // ParsePrimitiveStrict provides type-safe parsing for primitive types with compile-time guarantees.
-// Implements fast paths for common validation scenarios.
 func ParsePrimitiveStrict[T any, R any](
 	input R,
 	internals *core.ZodTypeInternals,
@@ -299,9 +276,9 @@ func ParsePrimitiveStrict[T any, R any](
 	ctx ...*core.ParseContext,
 ) (R, error) {
 	var zero R
-	parseCtx := getOrCreateContext(ctx...)
+	pc := getOrCreateContext(ctx...)
 
-	// Fast path: no modifiers needed, return input directly
+	// Fast path: no modifiers, return input directly.
 	if !isNilInput(input) && len(internals.Checks) == 0 &&
 		internals.Transform == nil && internals.DefaultValue == nil &&
 		internals.PrefaultValue == nil && !internals.Optional &&
@@ -310,142 +287,107 @@ func ParsePrimitiveStrict[T any, R any](
 		return input, nil
 	}
 
-	// Optimized nil handling using processModifiersStrict
+	// Nil handling via modifiers.
 	if isNilInput(input) {
-		result, handled, err := processModifiersStrict[T](input, internals, expectedType, func(newInput any) (any, error) {
-			// For non-nil input from modifiers, use parsePrimitiveValue directly
-			return parsePrimitiveValue[T](newInput, internals, expectedType, validator, parseCtx)
-		}, parseCtx)
+		r, handled, err := processModifiersStrict[T](input, internals, expectedType, func(v any) (any, error) {
+			return parsePrimitiveValue[T](v, internals, expectedType, validator, pc)
+		}, pc)
 		if handled {
 			if err != nil {
 				return zero, err
 			}
-			// Use ConvertToConstraintType for proper type conversion from modifiers
-			convertedResult, err := ConvertToConstraintType[T, R](result, parseCtx, expectedType)
-			if err != nil {
-				return zero, err
-			}
-			return convertedResult, nil
+			return ConvertToConstraintType[T, R](r, pc, expectedType)
 		}
-		// If not handled but result is not nil, it means we have a prefault value
-		// Process the prefault value through the full validation pipeline
-		if result != nil {
-			// Use parsePrimitiveValue to process the prefault value with full validation
-			validatedResult, err := parsePrimitiveValue[T](result, internals, expectedType, validator, parseCtx)
+		// Not handled but non-nil result means prefault value.
+		if r != nil {
+			validated, err := parsePrimitiveValue[T](r, internals, expectedType, validator, pc)
 			if err != nil {
 				return zero, err
 			}
-			// Convert the validated result to R type
-			convertedResult, err := ConvertToConstraintType[T, R](validatedResult, parseCtx, expectedType)
-			if err != nil {
-				return zero, err
-			}
-			return convertedResult, nil
+			return ConvertToConstraintType[T, R](validated, pc, expectedType)
 		}
-		return zero, issues.CreateInvalidTypeError(expectedType, input, parseCtx)
+		return zero, issues.CreateInvalidTypeError(expectedType, input, pc)
 	}
 
-	// Fast path: direct validation without type conversion
+	// Direct validation path.
 	if len(internals.Checks) > 0 {
-		// Try to extract T value from input R
-		var tValue T
-		var hasValue bool
+		var tVal T
+		var ok bool
 
-		// Check if input R can be converted to T for validation
-		// Case 1: R is *T and we need to extract T value
-		inputType := reflect.TypeOf(input)
-		if inputType != nil && inputType.Kind() == reflect.Ptr {
-			// input is a pointer, try to dereference it
-			inputValue := reflect.ValueOf(input)
-			if !inputValue.IsNil() {
-				derefValue := inputValue.Elem().Interface()
-				if val, ok := derefValue.(T); ok {
-					tValue = val
-					hasValue = true
+		rt := reflect.TypeOf(input)
+		if rt != nil && rt.Kind() == reflect.Ptr {
+			rv := reflect.ValueOf(input)
+			if !rv.IsNil() {
+				if v, match := rv.Elem().Interface().(T); match {
+					tVal = v
+					ok = true
 				}
 			} else {
-				// Handle nil pointer case
-				// Handle nil pointer using processModifiers
-				result, handled, err := processModifiers[T](nil, internals, expectedType, func(newInput any) (any, error) {
-					return parsePrimitiveValue[T](newInput, internals, expectedType, validator, parseCtx)
-				}, parseCtx)
+				// Nil pointer: delegate to modifiers.
+				r, handled, err := processModifiers[T](nil, internals, expectedType, func(v any) (any, error) {
+					return parsePrimitiveValue[T](v, internals, expectedType, validator, pc)
+				}, pc)
 				if handled {
 					if err != nil {
 						return zero, err
 					}
-					// Use ConvertToConstraintType for proper type conversion from modifiers
-					convertedResult, err := ConvertToConstraintType[T, R](result, parseCtx, expectedType)
-					if err != nil {
-						return zero, err
-					}
-					return convertedResult, nil
+					return ConvertToConstraintType[T, R](r, pc, expectedType)
 				}
-				return zero, issues.CreateInvalidTypeError(expectedType, nil, parseCtx)
+				return zero, issues.CreateInvalidTypeError(expectedType, nil, pc)
 			}
-			// If pointer dereference failed, try direct cast as fallback
-			if !hasValue {
-				if val, ok := any(input).(T); ok {
-					tValue = val
-					hasValue = true
+			if !ok {
+				if v, match := any(input).(T); match {
+					tVal = v
+					ok = true
 				}
 			}
-		} else if val, ok := any(input).(T); ok {
-			// R is T and input is T
-			tValue = val
-			hasValue = true
+		} else if v, match := any(input).(T); match {
+			tVal = v
+			ok = true
 		} else {
-			// Type mismatch, use parsePrimitiveValue for conversion
-			result, err := parsePrimitiveValue[T](any(input), internals, expectedType, validator, parseCtx)
+			// Type mismatch: fall back to parsePrimitiveValue.
+			r, err := parsePrimitiveValue[T](any(input), internals, expectedType, validator, pc)
 			if err != nil {
 				return zero, err
 			}
-			// Convert result back to constraint type R
-			convertedResult, err := ConvertToConstraintType[T, R](result, parseCtx, expectedType)
-			if err != nil {
-				return zero, err
-			}
-			return convertedResult, nil
+			return ConvertToConstraintType[T, R](r, pc, expectedType)
 		}
 
-		if !hasValue {
-			return zero, issues.CreateInvalidTypeError(expectedType, input, parseCtx)
+		if !ok {
+			return zero, issues.CreateInvalidTypeError(expectedType, input, pc)
 		}
 
-		// Execute validation
-		validatedValue, err := validator(tValue, internals.Checks, parseCtx)
+		validated, err := validator(tVal, internals.Checks, pc)
 		if err != nil {
 			return zero, err
 		}
 
-		// Convert back to R type
+		// Convert validated T back to R.
 		var result R
-		var zeroR R
-		switch any(zeroR).(type) {
+		switch any(zero).(type) {
 		case *T:
-			ptr := &validatedValue
-			result = any(ptr).(R)
+			p := &validated
+			result = any(p).(R)
 		case T:
-			result = any(validatedValue).(R)
+			result = any(validated).(R)
 		}
 
-		// Apply transformation if present (validation already done above)
+		// Apply transformation if present.
 		if internals.Transform != nil {
-			refCtx := &core.RefinementContext{ParseContext: parseCtx}
-			transformed, err := internals.Transform(any(result), refCtx)
+			transformed, err := internals.Transform(any(result), &core.RefinementContext{ParseContext: pc})
 			if err != nil {
 				return result, err
 			}
-			if finalResult, ok := transformed.(R); ok {
-				return finalResult, nil
+			if r, ok := transformed.(R); ok {
+				return r, nil
 			}
-			// Type mismatch after transformation
-			return result, issues.CreateInvalidTypeError(expectedType, transformed, parseCtx)
+			return result, issues.CreateInvalidTypeError(expectedType, transformed, pc)
 		}
 		return result, nil
 	}
 
-	// No validation needed, just apply transformation if present
-	return validateAndReturn[R](input, internals, expectedType, parseCtx)
+	// No checks: just apply transformation if present.
+	return validateAndReturn[R](input, internals, expectedType, pc)
 }
 
 // ParseComplex provides unified parsing for complex types (struct, slice, map, etc.).
@@ -459,44 +401,31 @@ func ParseComplex[T any](
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	ctx ...*core.ParseContext,
 ) (any, error) {
-	parseCtx := getOrCreateContext(ctx...)
+	pc := getOrCreateContext(ctx...)
 
-	// Handle modifiers first
-	if result, handled, err := processModifiers[T](input, internals, expectedType, func(value any) (any, error) {
-		return parseComplexValue[T](value, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
-	}, parseCtx); handled {
+	if r, handled, err := processModifiers[T](input, internals, expectedType, func(v any) (any, error) {
+		return parseComplexValue[T](v, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
+	}, pc); handled {
 		if err != nil {
 			return nil, err
 		}
-		// Check if this is a Default/DefaultFunc short-circuit case
-		// These should skip Transform completely
-		isDefaultShortCircuit := (internals.DefaultValue != nil && isNilInput(input)) ||
-			(internals.DefaultFunc != nil && isNilInput(input))
-
-		if isDefaultShortCircuit {
-			// Default/DefaultFunc values skip Transform - return directly
-			return result, nil
+		// Default/DefaultFunc short-circuit: skip Transform.
+		if isNilInput(input) && (internals.DefaultValue != nil || internals.DefaultFunc != nil) {
+			return r, nil
 		}
-
-		// For all other handled cases (Optional/Nilable nil, Unknown type, etc.)
-		// apply Transform if present
-		return applyTransformIfPresent(result, internals, parseCtx)
-	} else if result != nil {
-		// Prefault case: use the returned value as new input and continue parsing
-		input = result
+		return applyTransformIfPresent(r, internals, pc)
+	} else if r != nil {
+		input = r
 	}
 
-	// Regular parsing path (with potentially replaced input from prefault)
-	result, err := parseComplexValue[T](input, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
-	if err == nil {
-		return applyTransformIfPresent(result, internals, parseCtx)
+	r, err := parseComplexValue[T](input, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, err
+	return applyTransformIfPresent(r, internals, pc)
 }
 
 // ParseComplexStrict provides type-safe parsing for complex types with compile-time guarantees.
-// Implements fast paths for common validation scenarios.
 func ParseComplexStrict[T any, R any](
 	input R,
 	internals *core.ZodTypeInternals,
@@ -507,11 +436,10 @@ func ParseComplexStrict[T any, R any](
 	ctx ...*core.ParseContext,
 ) (R, error) {
 	var zero R
-	parseCtx := getOrCreateContext(ctx...)
+	pc := getOrCreateContext(ctx...)
 
-	// Ultra-fast path: no validation, no transformation, no modifiers
-	// This is the most common case, return input directly with zero overhead
-	// Skip ultra-fast path for struct types as they need field validation
+	// Fast path: no modifiers, return input directly.
+	// Struct types always need field validation.
 	if !isNilInput(input) && len(internals.Checks) == 0 &&
 		internals.Transform == nil && internals.DefaultValue == nil &&
 		internals.PrefaultValue == nil && !internals.Optional &&
@@ -520,94 +448,81 @@ func ParseComplexStrict[T any, R any](
 		return input, nil
 	}
 
-	// Handle nil input with modifiers
+	// Nil handling.
 	if isNilInput(input) {
 		if internals.Optional || internals.Nilable {
-			return input, nil // Return nil as-is for optional/nilable
+			return input, nil
 		}
 
-		// Use processModifiersStrict for consistent handling
-		result, handled, err := processModifiersStrict[T](input, internals, expectedType, func(newInput any) (any, error) {
-			// For non-nil input from modifiers, use parseComplexValue directly
-			return parseComplexValue[T](newInput, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
-		}, parseCtx)
+		r, handled, err := processModifiersStrict[T](input, internals, expectedType, func(v any) (any, error) {
+			return parseComplexValue[T](v, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
+		}, pc)
 		if handled {
 			if err != nil {
 				return zero, err
 			}
-			if convertedResult, ok := result.(R); ok {
-				return convertedResult, nil
+			if cr, ok := r.(R); ok {
+				return cr, nil
 			}
-			return zero, issues.CreateInvalidTypeError(expectedType, result, parseCtx)
+			return zero, issues.CreateInvalidTypeError(expectedType, r, pc)
 		}
 
-		// Try prefault values (replace input and continue parsing)
+		// Prefault values: full parsing and validation.
 		if internals.PrefaultValue != nil {
-			// Prefault requires full parsing and validation
-			result, err := ParseComplex[T](internals.PrefaultValue, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
+			r, err := ParseComplex[T](internals.PrefaultValue, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
 			if err != nil {
 				return zero, err
 			}
-			if convertedResult, ok := result.(R); ok {
-				return convertedResult, nil
+			if cr, ok := r.(R); ok {
+				return cr, nil
 			}
 		}
 
 		if internals.PrefaultFunc != nil {
-			prefaultValue := internals.PrefaultFunc()
-			// Prefault requires full parsing and validation
-			result, err := ParseComplex[T](prefaultValue, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
+			r, err := ParseComplex[T](internals.PrefaultFunc(), internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
 			if err != nil {
 				return zero, err
 			}
-			if convertedResult, ok := result.(R); ok {
-				return convertedResult, nil
+			if cr, ok := r.(R); ok {
+				return cr, nil
 			}
 		}
 
-		return zero, issues.CreateNonOptionalError(parseCtx)
+		return zero, issues.CreateNonOptionalError(pc)
 	}
 
-	// Fast path for validation-only scenarios
-	// Skip fast path for struct types as they need field validation
+	// Validation-only fast path (skip for struct types).
 	if len(internals.Checks) > 0 && internals.Transform == nil &&
 		internals.DefaultValue == nil && internals.PrefaultValue == nil &&
 		internals.DefaultFunc == nil && expectedType != core.ZodTypeStruct {
-		// Extract value for validation
-		var valueToValidate T
+		var val T
 		var extracted bool
 
-		// Try pointer extraction first
-		if ptr, ok := ptrExtractor(input); ok && ptr != nil {
-			valueToValidate = *ptr
+		if p, ok := ptrExtractor(input); ok && p != nil {
+			val = *p
 			extracted = true
-		} else if value, ok := typeExtractor(input); ok {
-			valueToValidate = value
+		} else if v, ok := typeExtractor(input); ok {
+			val = v
 			extracted = true
 		}
 
 		if extracted {
-			_, err := validator(valueToValidate, internals.Checks, parseCtx)
-			if err != nil {
+			if _, err := validator(val, internals.Checks, pc); err != nil {
 				return zero, err
 			}
-			return input, nil // Return original input after successful validation
+			return input, nil
 		}
 	}
 
-	// Fallback to regular complex parsing for complex scenarios
-	result, err := ParseComplex[T](input, internals, expectedType, typeExtractor, ptrExtractor, validator, parseCtx)
+	// Fallback to regular complex parsing.
+	r, err := ParseComplex[T](input, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
 	if err != nil {
 		return zero, err
 	}
-
-	// Convert result back to constraint type R
-	if convertedResult, ok := result.(R); ok {
-		return convertedResult, nil
+	if cr, ok := r.(R); ok {
+		return cr, nil
 	}
-
-	// This should not happen in well-formed schemas, but provide safety
-	return zero, issues.CreateInvalidTypeError(expectedType, result, parseCtx)
+	return zero, issues.CreateInvalidTypeError(expectedType, r, pc)
 }
 
 // ConvertToConstraintType converts a parsed result to constraint type R (T, *T, or **T).
@@ -618,12 +533,10 @@ func ConvertToConstraintType[T any, R any](
 ) (R, error) {
 	var zero R
 
-	// Fast path: direct type match
-	if directResult, ok := result.(R); ok {
-		return directResult, nil
+	if r, ok := result.(R); ok {
+		return r, nil
 	}
 
-	// Handle nil result
 	if result == nil {
 		switch any(zero).(type) {
 		case **T:
@@ -636,65 +549,53 @@ func ConvertToConstraintType[T any, R any](
 		}
 	}
 
-	// Type conversion logic
 	switch any(zero).(type) {
 	case **T:
-		// R is double pointer type **T
-		if dblPtr, ok := result.(**T); ok {
-			return any(dblPtr).(R), nil
+		if pp, ok := result.(**T); ok {
+			return any(pp).(R), nil
 		}
-		if ptr, ok := result.(*T); ok {
-			dblPtr := &ptr
-			return any(dblPtr).(R), nil
+		if p, ok := result.(*T); ok {
+			return any(&p).(R), nil
 		}
-		if val, ok := result.(T); ok {
-			ptr := &val
-			dblPtr := &ptr
-			return any(dblPtr).(R), nil
+		if v, ok := result.(T); ok {
+			p := &v
+			return any(&p).(R), nil
 		}
-		// Try type conversion for T
-		if converted, err := convertToType[T](result, expectedType, ctx); err == nil {
-			if val, ok := converted.(T); ok {
-				ptr := &val
-				dblPtr := &ptr
-				return any(dblPtr).(R), nil
+		if c, err := convertToType[T](result, expectedType, ctx); err == nil {
+			if v, ok := c.(T); ok {
+				p := &v
+				return any(&p).(R), nil
 			}
 		}
 		return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
 	case *T:
-		// R is pointer type *T
-		if ptr, ok := result.(*T); ok {
-			return any(ptr).(R), nil
+		if p, ok := result.(*T); ok {
+			return any(p).(R), nil
 		}
-		if val, ok := result.(T); ok {
-			ptr := &val
-			return any(ptr).(R), nil
+		if v, ok := result.(T); ok {
+			return any(&v).(R), nil
 		}
-		// Try type conversion for T
-		if converted, err := convertToType[T](result, expectedType, ctx); err == nil {
-			if val, ok := converted.(T); ok {
-				ptr := &val
-				return any(ptr).(R), nil
+		if c, err := convertToType[T](result, expectedType, ctx); err == nil {
+			if v, ok := c.(T); ok {
+				return any(&v).(R), nil
 			}
 		}
 		return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
 	case T:
-		// R is value type T. The engine may return either T or *T (when pointer
-		// identity was preserved). Handle both transparently.
-		if val, ok := result.(T); ok {
-			return any(val).(R), nil
+		// R is value type T. The engine may return T or *T.
+		if v, ok := result.(T); ok {
+			return any(v).(R), nil
 		}
-		if ptr, ok := result.(*T); ok {
-			if ptr == nil {
+		if p, ok := result.(*T); ok {
+			if p == nil {
 				var t T
 				return any(t).(R), nil
 			}
-			return any(*ptr).(R), nil
+			return any(*p).(R), nil
 		}
-		// Try type conversion for T
-		if converted, err := convertToType[T](result, expectedType, ctx); err == nil {
-			if val, ok := converted.(T); ok {
-				return any(val).(R), nil
+		if c, err := convertToType[T](result, expectedType, ctx); err == nil {
+			if v, ok := c.(T); ok {
+				return any(v).(R), nil
 			}
 		}
 		return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
@@ -704,7 +605,6 @@ func ConvertToConstraintType[T any, R any](
 }
 
 // parsePrimitiveValue parses a primitive value with type checking and optional coercion.
-// Tries direct type match first, then pointer deref, then reflection, then coercion.
 func parsePrimitiveValue[T any](
 	input any,
 	internals *core.ZodTypeInternals,
@@ -712,47 +612,41 @@ func parsePrimitiveValue[T any](
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	ctx *core.ParseContext,
 ) (any, error) {
-	// Direct type match (most common case)
-	if val, ok := input.(T); ok {
-		return validateWithPrefault(val, internals.Checks, validator, ctx)
+	if v, ok := input.(T); ok {
+		return validateWithChecks(v, internals.Checks, validator, ctx)
 	}
 
-	// Pointer type with identity preservation
-	if ptr, ok := input.(*T); ok {
-		if ptr == nil {
+	if p, ok := input.(*T); ok {
+		if p == nil {
 			return handleNilPointer[T](internals, expectedType, ctx)
 		}
-		return validatePointer(*ptr, ptr, internals.Checks, validator, ctx)
+		return validatePointer(*p, p, internals.Checks, validator, ctx)
 	}
 
-	// Nil input - special case for ZodTypeNil
 	if input == nil {
 		if expectedType == core.ZodTypeNil {
-			var nilValue T
-			return validateWithPrefault(nilValue, internals.Checks, validator, ctx)
+			var zero T
+			return validateWithChecks(zero, internals.Checks, validator, ctx)
 		}
 		return handleNilPointer[T](internals, expectedType, ctx)
 	}
 
-	// Pointer dereferencing via reflection (slower path)
-	if deref, isNilPtr := dereferencePointer(input); isNilPtr {
+	// Pointer dereferencing via reflection (slower path).
+	if deref, nilPtr := dereferencePointer(input); nilPtr {
 		return handleNilPointer[T](internals, expectedType, ctx)
-	} else if val, ok := deref.(T); ok {
-		return validateWithPrefault(val, internals.Checks, validator, ctx)
+	} else if v, ok := deref.(T); ok {
+		return validateWithChecks(v, internals.Checks, validator, ctx)
 	}
 
-	// Coercion if enabled
 	if internals.Coerce {
-		if coerced, err := coerce.To[T](input); err == nil {
-			return validateWithPrefault(coerced, internals.Checks, validator, ctx)
+		if v, err := coerce.To[T](input); err == nil {
+			return validateWithChecks(v, internals.Checks, validator, ctx)
 		}
 	}
 
-	// All attempts failed
 	raw := issues.CreateInvalidTypeIssue(expectedType, input)
 	raw.Inst = internals
-	final := issues.FinalizeIssue(raw, ctx, nil)
-	return nil, issues.NewZodError([]core.ZodIssue{final})
+	return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(raw, ctx, nil)})
 }
 
 // parseComplexValue parses a complex type using type and pointer extractors.
@@ -765,26 +659,21 @@ func parseComplexValue[T any](
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	ctx *core.ParseContext,
 ) (any, error) {
-	// Handle nil input first
 	if input == nil {
 		return handleNilComplex[T](internals, expectedType, ctx)
 	}
 
-	// Try pointer extraction first (preserves original pointer identity)
-	if ptr, ok := ptrExtractor(input); ok {
-		if ptr == nil {
+	if p, ok := ptrExtractor(input); ok {
+		if p == nil {
 			return handleNilComplex[T](internals, expectedType, ctx)
 		}
-		// Validate dereferenced value but return original pointer
-		return validatePointer(*ptr, ptr, internals.Checks, validator, ctx)
+		return validatePointer(*p, p, internals.Checks, validator, ctx)
 	}
 
-	// Try direct type extraction
-	if value, ok := typeExtractor(input); ok {
-		return validateValue(value, internals.Checks, validator, ctx, expectedType)
+	if v, ok := typeExtractor(input); ok {
+		return validateValue(v, internals.Checks, validator, ctx, expectedType)
 	}
 
-	// All attempts failed
 	return nil, issues.CreateInvalidTypeError(expectedType, input, ctx)
 }
 
@@ -797,7 +686,7 @@ func getOrCreateContext(ctx ...*core.ParseContext) *core.ParseContext {
 }
 
 // dereferencePointer dereferences a pointer, returning the value and whether it was nil.
-func dereferencePointer(input any) (dereferenced any, isNilPtr bool) {
+func dereferencePointer(input any) (any, bool) {
 	if input == nil {
 		return nil, true
 	}
@@ -830,16 +719,14 @@ func dereferencePointer(input any) (dereferenced any, isNilPtr bool) {
 		return *v, false
 	}
 
-	// Fallback to reflection for other pointer types
+	// Reflection fallback for other pointer types.
 	rv := reflect.ValueOf(input)
 	if rv.Kind() != reflect.Ptr {
 		return input, false
 	}
-
 	if rv.IsNil() {
 		return nil, true
 	}
-
 	return rv.Elem().Interface(), false
 }
 
@@ -854,101 +741,96 @@ func validateValue[T any](
 	if expectedType == core.ZodTypeLazy {
 		return value, nil
 	}
-
 	if validator != nil && len(checks) > 0 {
-		validatedValue, err := validator(value, checks, ctx)
+		v, err := validator(value, checks, ctx)
 		if err != nil {
 			return nil, err
 		}
-		return validatedValue, nil
+		return v, nil
 	}
 	return value, nil
 }
 
-// validateWithPrefault validates a value and returns the result or error.
-func validateWithPrefault[T any](
+// validateWithChecks validates a value and returns the result or error.
+func validateWithChecks[T any](
 	value T,
 	checks []core.ZodCheck,
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	ctx *core.ParseContext,
 ) (any, error) {
-	validatedValue, err := validator(value, checks, ctx)
+	v, err := validator(value, checks, ctx)
 	if err != nil {
 		return nil, err
 	}
-	return validatedValue, nil
+	return v, nil
 }
 
-// hasOverwriteCheck reports whether any check in the list is an overwrite check.
+// hasOverwriteCheck reports whether any check is an overwrite check.
 func hasOverwriteCheck(checks []core.ZodCheck) bool {
-	for _, check := range checks {
-		if checkInternals := check.GetZod(); checkInternals != nil && checkInternals.Def != nil {
-			if checkInternals.Def.Check == "overwrite" {
-				return true
-			}
+	for _, c := range checks {
+		if ci := c.GetZod(); ci != nil && ci.Def != nil && ci.Def.Check == "overwrite" {
+			return true
 		}
 	}
 	return false
 }
 
-// validatePointerWithOverwrite applies overwrite checks to a pointer, returning the new pointer if changed.
+// validatePointerWithOverwrite applies overwrite checks to a pointer.
 func validatePointerWithOverwrite[T any](
-	originalPtr *T,
+	ptr *T,
 	checks []core.ZodCheck,
 	ctx *core.ParseContext,
 ) (*T, bool) {
-	if validatedPtr, err := ApplyChecks[*T](originalPtr, checks, ctx); err == nil {
-		if validatedPtr != originalPtr {
-			return validatedPtr, true
-		}
+	if vp, err := ApplyChecks(ptr, checks, ctx); err == nil && vp != ptr {
+		return vp, true
 	}
-	return originalPtr, false
+	return ptr, false
 }
 
 // validatePointer validates a value through its pointer, handling overwrite transformations.
 func validatePointer[T any](
 	value T,
-	originalPtr *T,
+	ptr *T,
 	checks []core.ZodCheck,
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	ctx *core.ParseContext,
 ) (any, error) {
 	if validator == nil {
-		return originalPtr, nil
+		return ptr, nil
 	}
 
 	if hasOverwriteCheck(checks) {
-		if newPtr, transformed := validatePointerWithOverwrite(originalPtr, checks, ctx); transformed {
-			return newPtr, nil
+		if np, changed := validatePointerWithOverwrite(ptr, checks, ctx); changed {
+			return np, nil
 		}
 	}
 
-	validatedValue, err := validator(value, checks, ctx)
+	v, err := validator(value, checks, ctx)
 	if err != nil {
 		return nil, err
 	}
-	*originalPtr = validatedValue
-	return originalPtr, nil
+	*ptr = v
+	return ptr, nil
 }
 
 // handleNilPointer handles nil pointer cases for primitive types.
 func handleNilPointer[T any](internals *core.ZodTypeInternals, expectedType core.ZodTypeCode, ctx *core.ParseContext) (any, error) {
-	result, handled, err := processModifiers[T](nil, internals, expectedType, func(any) (any, error) {
+	r, handled, err := processModifiers[T](nil, internals, expectedType, func(any) (any, error) {
 		return parseTypedValue[T, *T](nil, internals, expectedType, ctx)
 	}, ctx)
 	if handled {
-		return result, err
+		return r, err
 	}
 	return nil, issues.CreateInvalidTypeError(expectedType, nil, ctx)
 }
 
 // handleNilComplex handles nil cases for complex types.
 func handleNilComplex[T any](internals *core.ZodTypeInternals, expectedType core.ZodTypeCode, ctx *core.ParseContext) (any, error) {
-	result, handled, err := processModifiers[T](nil, internals, expectedType, func(any) (any, error) {
+	r, handled, err := processModifiers[T](nil, internals, expectedType, func(any) (any, error) {
 		return parseTypedValue[T, any](nil, internals, expectedType, ctx)
 	}, ctx)
 	if handled {
-		return result, err
+		return r, err
 	}
 	return nil, issues.CreateInvalidTypeError(expectedType, nil, ctx)
 }
@@ -957,35 +839,32 @@ func handleNilComplex[T any](internals *core.ZodTypeInternals, expectedType core
 func convertResultToType[T any](result any) (T, error) {
 	var zero T
 
-	if castVal, ok := result.(T); ok {
-		return castVal, nil
+	if v, ok := result.(T); ok {
+		return v, nil
 	}
 
-	// Handle pointer/value mismatches using reflection
-	zeroTyp := reflect.TypeOf(zero)
-	if zeroTyp != nil {
-		valRV := reflect.ValueOf(result)
+	// Handle pointer/value mismatches using reflection.
+	zt := reflect.TypeOf(zero)
+	if zt != nil {
+		rv := reflect.ValueOf(result)
 
-		// Case 1: T is a pointer type, but we got a value – wrap it
-		if zeroTyp.Kind() == reflect.Ptr {
-			elemTyp := zeroTyp.Elem()
-			if valRV.IsValid() && valRV.Type() == elemTyp {
-				ptr := reflect.New(elemTyp)
-				ptr.Elem().Set(valRV)
-				if converted, ok := ptr.Interface().(T); ok {
-					return converted, nil
+		// T is pointer, got value: wrap it.
+		if zt.Kind() == reflect.Ptr {
+			et := zt.Elem()
+			if rv.IsValid() && rv.Type() == et {
+				p := reflect.New(et)
+				p.Elem().Set(rv)
+				if v, ok := p.Interface().(T); ok {
+					return v, nil
 				}
 			}
 		}
 
-		// Case 2: T is a value type, but we got *T – dereference it
-		if valRV.IsValid() && valRV.Kind() == reflect.Ptr {
-			elemTyp := valRV.Type().Elem()
-			if elemTyp == zeroTyp {
-				if deref := valRV.Elem(); deref.IsValid() {
-					if converted, ok := deref.Interface().(T); ok {
-						return converted, nil
-					}
+		// T is value, got pointer: dereference it.
+		if rv.IsValid() && rv.Kind() == reflect.Ptr && rv.Type().Elem() == zt {
+			if d := rv.Elem(); d.IsValid() {
+				if v, ok := d.Interface().(T); ok {
+					return v, nil
 				}
 			}
 		}
@@ -994,23 +873,23 @@ func convertResultToType[T any](result any) (T, error) {
 	return zero, fmt.Errorf("%w: value of type %T", ErrUnableToConvert, result)
 }
 
-// ApplyChecks validates a value against checks and applies transformations (e.g., overwrite).
+// ApplyChecks validates a value against checks and applies transformations.
 func ApplyChecks[T any](value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 	if len(checks) == 0 {
 		return value, nil
 	}
 
 	payload := core.NewParsePayload(value)
-	result := RunChecksOnValue(value, checks, payload, ctx)
+	r := RunChecksOnValue(value, checks, payload, ctx)
 
-	if result.HasIssues() {
-		return value, issues.NewZodError(issues.ConvertRawIssuesToIssues(result.GetIssues(), ctx))
+	if r.HasIssues() {
+		return value, issues.NewZodError(issues.ConvertRawIssuesToIssues(r.GetIssues(), ctx))
 	}
 
-	if result.GetValue() == nil {
+	if r.GetValue() == nil {
 		var zero T
 		return zero, nil
 	}
 
-	return convertResultToType[T](result.GetValue())
+	return convertResultToType[T](r.GetValue())
 }

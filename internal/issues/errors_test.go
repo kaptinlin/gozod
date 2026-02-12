@@ -10,10 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Complex Issue Type Tests  ///
-//////////////////////////////////////////
-
 func TestComplexIssueTypes(t *testing.T) {
 	t.Run("handles invalid_union issues", func(t *testing.T) {
 		// Create mock union errors - simulate failed union validation
@@ -208,10 +204,6 @@ func TestComplexIssueTypes(t *testing.T) {
 		assert.Contains(t, flattened.FieldErrors["field3"], "Custom validation failed")
 	})
 }
-
-//////////////////////////////////////////
-//////////   Error Integration Tests   ///
-//////////////////////////////////////////
 
 func TestErrorIntegration(t *testing.T) {
 	t.Run("complete error processing workflow", func(t *testing.T) {

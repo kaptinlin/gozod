@@ -10,9 +10,9 @@ import (
 
 // MinFileSize creates a minimum file size validation check.
 func MinFileSize(minimum int64, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_file_size"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -30,9 +30,9 @@ func MinFileSize(minimum int64, params ...any) core.ZodCheck {
 
 // MaxFileSize creates a maximum file size validation check.
 func MaxFileSize(maximum int64, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_file_size"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -50,9 +50,9 @@ func MaxFileSize(maximum int64, params ...any) core.ZodCheck {
 
 // FileSize creates an exact file size validation check.
 func FileSize(expected int64, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "file_size_equals"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -78,9 +78,9 @@ func FileSize(expected int64, params ...any) core.ZodCheck {
 
 // Mime creates a MIME type validation check for file schemas.
 func Mime(mimeTypes []string, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "mime_type"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	// Convert list to a set for efficient lookup
 	allowed := make(map[string]struct{}, len(mimeTypes))

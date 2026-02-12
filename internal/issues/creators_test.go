@@ -10,10 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Message-based Creation Tests ///
-//////////////////////////////////////////
-
 func TestNewRawIssueFromMessage(t *testing.T) {
 	message := "Custom error message"
 	input := "test_input"
@@ -29,10 +25,6 @@ func TestNewRawIssueFromMessage(t *testing.T) {
 	// Properties are initialized lazily, so initially nil
 	assert.Nil(t, issue.Properties)
 }
-
-//////////////////////////////////////////
-//////////   Error Creation Helper Tests  ///
-//////////////////////////////////////////
 
 func TestErrorCreationHelpers(t *testing.T) {
 	t.Run("CreateInvalidTypeError", func(t *testing.T) {
@@ -138,10 +130,6 @@ func TestErrorCreationHelpers(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Helper Functions with Options Tests ///
-//////////////////////////////////////////
-
 func TestCreationHelpersWithOptions(t *testing.T) {
 	t.Run("helper functions accept additional options", func(t *testing.T) {
 		path := []any{"user", "email"}
@@ -161,10 +149,6 @@ func TestCreationHelpersWithOptions(t *testing.T) {
 	// in favor of high-level error creation functions
 	t.Skip("Low-level issue creation functions have been removed")
 }
-
-//////////////////////////////////////////
-//////////   Complex Creation Scenarios Tests ///
-//////////////////////////////////////////
 
 func TestComplexCreationScenarios(t *testing.T) {
 	t.Run("create issue with all possible properties", func(t *testing.T) {
@@ -227,29 +211,17 @@ func TestComplexCreationScenarios(t *testing.T) {
 	t.Skip("Low-level issue creation functions have been removed")
 }
 
-//////////////////////////////////////////
-//////////   Edge Cases Tests          ///
-//////////////////////////////////////////
-
 func TestCreationEdgeCases(t *testing.T) {
 	// Note: Low-level issue creation functions have been removed
 	// in favor of high-level error creation functions
 	t.Skip("Low-level issue creation functions have been removed")
 }
 
-//////////////////////////////////////////
-//////////   Performance Tests         ///
-//////////////////////////////////////////
-
 func TestCreationPerformance(t *testing.T) {
 	// Note: Low-level issue creation functions have been removed
 	// in favor of high-level error creation functions
 	t.Skip("Low-level issue creation functions have been removed")
 }
-
-//////////////////////////////////////////
-//////////   High-Level Error API Tests ///
-//////////////////////////////////////////
 
 func TestHighLevelErrorAPI(t *testing.T) {
 	ctx := &core.ParseContext{}
@@ -361,10 +333,6 @@ func TestHighLevelErrorAPI(t *testing.T) {
 		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
 	})
 }
-
-//////////////////////////////////////////
-//////////   API Comparison Tests      ///
-//////////////////////////////////////////
 
 func TestAPIComparison(t *testing.T) {
 	ctx := &core.ParseContext{}

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -144,37 +145,26 @@ func CompareValues(a, b any) int {
 	switch va := derefA.(type) {
 	case int:
 		if vb, ok := derefB.(int); ok {
-			return cmpOrdered(va, vb)
+			return cmp.Compare(va, vb)
 		}
 	case int64:
 		if vb, ok := derefB.(int64); ok {
-			return cmpOrdered(va, vb)
+			return cmp.Compare(va, vb)
 		}
 	case float64:
 		if vb, ok := derefB.(float64); ok {
-			return cmpOrdered(va, vb)
+			return cmp.Compare(va, vb)
 		}
 	case float32:
 		if vb, ok := derefB.(float32); ok {
-			return cmpOrdered(va, vb)
+			return cmp.Compare(va, vb)
 		}
 	case string:
 		if vb, ok := derefB.(string); ok {
-			return cmpOrdered(va, vb)
+			return cmp.Compare(va, vb)
 		}
 	}
 
-	return 0
-}
-
-// cmpOrdered returns -1, 0, or 1 for ordered types.
-func cmpOrdered[T ~int | ~int64 | ~float64 | ~float32 | ~string](a, b T) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
 	return 0
 }
 
@@ -240,8 +230,8 @@ func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {
 		return
 	}
 	if params.Error != nil {
-		if err, ok := ToErrorMap(params.Error); ok {
-			def.Error = err
+		if errMap, ok := ToErrorMap(params.Error); ok {
+			def.Error = errMap
 		}
 	}
 }
@@ -253,34 +243,33 @@ func ToDotPath(path []any) string {
 		return ""
 	}
 
-	var result strings.Builder
-	// Estimate capacity: average ~8 chars per segment
-	result.Grow(len(path) * 8)
+	var b strings.Builder
+	b.Grow(len(path) * 8) // ~8 chars per segment
 
 	for i, segment := range path {
 		switch v := segment.(type) {
 		case int:
-			result.WriteByte('[')
-			result.WriteString(strconv.Itoa(v))
-			result.WriteByte(']')
+			b.WriteByte('[')
+			b.WriteString(strconv.Itoa(v))
+			b.WriteByte(']')
 		case string:
 			switch {
 			case i == 0:
-				result.WriteString(v)
+				b.WriteString(v)
 			case needsBracketNotation(v):
-				result.WriteString(`["`)
-				result.WriteString(v)
-				result.WriteString(`"]`)
+				b.WriteString(`["`)
+				b.WriteString(v)
+				b.WriteString(`"]`)
 			default:
-				result.WriteByte('.')
-				result.WriteString(v)
+				b.WriteByte('.')
+				b.WriteString(v)
 			}
 		default:
-			fmt.Fprintf(&result, "[%v]", v)
+			fmt.Fprintf(&b, "[%v]", v)
 		}
 	}
 
-	return result.String()
+	return b.String()
 }
 
 // needsBracketNotation checks if a string key needs bracket notation.
@@ -319,19 +308,23 @@ func formatBracketPath(path []any) string {
 		return ""
 	}
 
-	var result strings.Builder
-	result.Grow(len(path) * 8)
+	var b strings.Builder
+	b.Grow(len(path) * 8)
 
 	for _, segment := range path {
 		switch v := segment.(type) {
 		case int:
-			fmt.Fprintf(&result, "[%d]", v)
+			b.WriteByte('[')
+			b.WriteString(strconv.Itoa(v))
+			b.WriteByte(']')
 		case string:
-			fmt.Fprintf(&result, `["%s"]`, v)
+			b.WriteString(`["`)
+			b.WriteString(v)
+			b.WriteString(`"]`)
 		default:
-			fmt.Fprintf(&result, "[%v]", v)
+			fmt.Fprintf(&b, "[%v]", v)
 		}
 	}
 
-	return result.String()
+	return b.String()
 }

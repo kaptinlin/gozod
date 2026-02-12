@@ -5,37 +5,38 @@ import (
 	"unicode"
 )
 
-// Slugify converts a string to a URL-friendly slug.
+// Slugify converts a string to a URL-friendly slug matching Zod v4's
+// slugify behavior:
 //
-// The transformation matches Zod v4's slugify behavior:
 //  1. Lowercase the input
 //  2. Trim whitespace
 //  3. Remove non-word, non-space, non-hyphen characters
-//  4. Collapse consecutive spaces, underscores, and hyphens into a single hyphen
+//  4. Collapse consecutive whitespace, underscores, and hyphens
+//     into a single hyphen
 //  5. Trim leading and trailing hyphens
-func Slugify(input string) string {
-	if input == "" {
+func Slugify(s string) string {
+	if s == "" {
 		return ""
 	}
 
-	lowered := strings.ToLower(strings.TrimSpace(input))
-	if lowered == "" {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
 		return ""
 	}
 
 	var b strings.Builder
-	b.Grow(len(lowered))
+	b.Grow(len(s))
 
-	prevHyphen := false
-	for _, r := range lowered {
+	prev := false // whether the last written byte was a hyphen
+	for _, r := range s {
 		switch {
-		case isWordChar(r):
-			prevHyphen = false
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			prev = false
 			b.WriteRune(r)
-		case r == ' ' || r == '_' || r == '-' || r == '\t' || r == '\n' || r == '\r':
-			if !prevHyphen && b.Len() > 0 {
+		case isSeparator(r):
+			if !prev && b.Len() > 0 {
 				b.WriteByte('-')
-				prevHyphen = true
+				prev = true
 			}
 		}
 	}
@@ -43,8 +44,8 @@ func Slugify(input string) string {
 	return strings.TrimRight(b.String(), "-")
 }
 
-// isWordChar reports whether r matches \w (letters, digits, underscore)
-// excluding underscore, since underscores are treated as separators.
-func isWordChar(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r)
+// isSeparator reports whether r is a whitespace or delimiter character
+// that should be collapsed into a single hyphen.
+func isSeparator(r rune) bool {
+	return r == ' ' || r == '_' || r == '-' || r == '\t' || r == '\n' || r == '\r'
 }

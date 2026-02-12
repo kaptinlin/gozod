@@ -13,19 +13,8 @@ import (
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-// =============================================================================
-// MESSAGE FORMATTING SYSTEM
-// =============================================================================
-
-// MessageFormatter provides a unified interface for formatting validation error messages
-// Compatible with TypeScript Zod v4 error formatting patterns
-//
-// Note: Error structure formatting (tree, flat, pretty) is handled by standalone functions
-// in the errors.go file, following TypeScript Zod v4's functional approach:
-// - TreeifyError() / TreeifyErrorWithMapper()
-// - FlattenError() / FlattenErrorWithMapper()
-// - PrettifyError() / PrettifyErrorWithFormatter()
-// - FormatError() / FormatErrorWithMapper()
+// MessageFormatter formats validation error messages.
+// Structure formatting (tree, flat, pretty) is in errors.go.
 type MessageFormatter interface {
 	FormatMessage(raw core.ZodRawIssue) string
 }
@@ -35,11 +24,7 @@ type DefaultMessageFormatter struct{}
 
 var defaultFormatter = &DefaultMessageFormatter{}
 
-// =============================================================================
-// SHARED FORMATTER UTILITIES
-// =============================================================================
-
-// SizingInfo represents sizing terminology for different types
+// SizingInfo represents sizing terminology for different types.
 type SizingInfo struct {
 	Unit string // The unit name (e.g., "characters", "items")
 	Verb string // The verb to use (e.g., "to have")
@@ -64,8 +49,7 @@ func Sizing(origin string) *SizingInfo {
 	return nil
 }
 
-// StringifyPrimitive converts a primitive value to its string representation with quotes
-// Enhanced with better type handling using modern Go practices
+// StringifyPrimitive converts a primitive value to its string representation.
 func StringifyPrimitive(value any) string {
 	switch v := value.(type) {
 	case string:
@@ -105,8 +89,7 @@ func StringifyPrimitive(value any) string {
 	}
 }
 
-// JoinValuesWithSeparator formats an array of values with a custom separator using slicex
-// Enhanced with slicex for better slice handling and type safety
+// JoinValuesWithSeparator formats values with a custom separator.
 func JoinValuesWithSeparator(values []any, separator string) string {
 	if len(values) == 0 {
 		return ""
@@ -131,9 +114,7 @@ func JoinValuesWithSeparator(values []any, separator string) string {
 	return builder.String()
 }
 
-// ParsedTypeToString converts input to parsed type string
-// Enhanced with better float handling for NaN and Infinity
-// Matches TypeScript Zod v4 reference implementation behavior
+// ParsedTypeToString converts input to its parsed type string.
 func ParsedTypeToString(input any) string {
 	parsedType := reflectx.ParsedType(input)
 
@@ -234,12 +215,11 @@ func ComparisonOperator(isInclusive bool, isGreaterThan bool) string {
 			return ">="
 		}
 		return ">"
-	} else {
-		if isInclusive {
-			return "<="
-		}
-		return "<"
 	}
+	if isInclusive {
+		return "<="
+	}
+	return "<"
 }
 
 // FriendlyComparisonText returns user-friendly comparison text.
@@ -249,19 +229,14 @@ func FriendlyComparisonText(isInclusive bool, isTooSmall bool) string {
 			return "at least "
 		}
 		return "more than "
-	} else {
-		if isInclusive {
-			return "at most "
-		}
-		return "less than "
 	}
+	if isInclusive {
+		return "at most "
+	}
+	return "less than "
 }
 
-// =============================================================================
-// FORMAT NAME MAPPINGS - Enhanced with mapx
-// =============================================================================
-
-// FormatNouns maps format names to human-readable descriptions
+// FormatNouns maps format names to human-readable descriptions.
 var FormatNouns = map[string]string{
 	"regex":            "input",
 	"email":            "email address",
@@ -319,11 +294,7 @@ func FormatNoun(format string) string {
 	return format
 }
 
-// =============================================================================
-// MAIN FORMATTING LOGIC - Enhanced with all utility packages
-// =============================================================================
-
-// FormatMessage generates error messages using enhanced utilities
+// FormatMessage generates error messages for each issue code.
 func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 	code := raw.Code
 
@@ -480,8 +451,7 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 	}
 }
 
-// formatSizeConstraint formats size constraint messages using enhanced utilities
-// Provides user-friendly messages that match TypeScript Zod v4 format
+// formatSizeConstraint formats size constraint messages.
 func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isTooSmall bool) string {
 	origin := mapx.StringOr(raw.Properties, "origin", "value")
 
@@ -553,7 +523,7 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 	}
 }
 
-// formatStringValidation handles string format validation messages using enhanced utilities
+// formatStringValidation handles string format validation messages.
 func (f *DefaultMessageFormatter) formatStringValidation(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":

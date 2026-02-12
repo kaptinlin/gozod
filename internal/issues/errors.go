@@ -25,22 +25,21 @@ type ZodError struct {
 	Stack string `json:"stack,omitempty"` // Stack trace for debugging
 	Name  string `json:"name"`            // Error name identifier
 
-	// Internal formatter for customizing error messages
 	formatter MessageFormatter `json:"-"`
 }
 
 // NewZodError creates a new validation error with the given issues.
 func NewZodError(issues []ZodIssue) *ZodError {
-	issueCopy := slices.Clone(issues)
+	copied := slices.Clone(issues)
 
 	err := &ZodError{
-		Type:      any(nil),
-		Issues:    issueCopy,
+		Type:      nil,
+		Issues:    copied,
 		Name:      "ZodError",
 		formatter: defaultFormatter,
 	}
-	err.Zod.Output = any(nil)
-	err.Zod.Def = issueCopy
+	err.Zod.Output = nil
+	err.Zod.Def = copied
 	return err
 }
 

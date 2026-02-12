@@ -8,10 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Raw Issue Creation Tests  ///
-//////////////////////////////////////////
-
 func TestNewRawIssue(t *testing.T) {
 	t.Run("creates raw issue with basic properties", func(t *testing.T) {
 		issue := NewRawIssue("invalid_type", "test_input",
@@ -89,10 +85,6 @@ func TestNewRawIssue(t *testing.T) {
 		assert.Equal(t, "string", issue.Properties["expected"])
 	})
 }
-
-//////////////////////////////////////////
-//////////   Option Functions Tests    ///
-//////////////////////////////////////////
 
 func TestOptionFunctions(t *testing.T) {
 	t.Run("WithOrigin sets origin property", func(t *testing.T) {
@@ -201,10 +193,6 @@ func TestOptionFunctions(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Property Initialization Tests ///
-//////////////////////////////////////////
-
 func TestPropertyInitialization(t *testing.T) {
 	t.Run("properties map is initialized when needed", func(t *testing.T) {
 		// Start with empty issue
@@ -240,10 +228,6 @@ func TestPropertyInitialization(t *testing.T) {
 		assert.Empty(t, issue.Path)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Edge Cases Tests          ///
-//////////////////////////////////////////
 
 func TestRawIssueEdgeCases(t *testing.T) {
 	t.Run("handles nil input gracefully", func(t *testing.T) {

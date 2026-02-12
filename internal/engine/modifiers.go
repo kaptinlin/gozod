@@ -17,53 +17,52 @@ func processModifiers[T any](
 	expectedType core.ZodTypeCode,
 	_ func(any) (any, error),
 	ctx *core.ParseContext,
-) (result any, handled bool, err error) {
+) (any, bool, error) {
 	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
-// processModifiersStrict is the strict variant where default values
-// skip parseCore.
+// processModifiersStrict is the strict variant where default values skip parseCore.
 func processModifiersStrict[T any](
 	input any,
 	internals *core.ZodTypeInternals,
 	expectedType core.ZodTypeCode,
 	_ func(any) (any, error),
 	ctx *core.ParseContext,
-) (result any, handled bool, err error) {
+) (any, bool, error) {
 	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
 // processModifiersCore contains the shared modifier logic.
-// Priority order: Default > Prefault > NonOptional > Optional/Nilable > Pointer > Unknown.
+// Priority: Default > Prefault > NonOptional > Optional/Nilable > Pointer > Unknown.
 func processModifiersCore[T any](
 	input any,
 	internals *core.ZodTypeInternals,
 	expectedType core.ZodTypeCode,
 	ctx *core.ParseContext,
-) (result any, handled bool, err error) {
+) (any, bool, error) {
 	if !isNilInput(input) {
 		return nil, false, nil
 	}
 
-	// 1. Default/DefaultFunc — short-circuit, highest priority
+	// Default/DefaultFunc — short-circuit, highest priority.
 	if internals.DefaultValue != nil {
-		clonedValue := cloneDefaultValue(internals.DefaultValue)
+		v := cloneDefaultValue(internals.DefaultValue)
 		if hasOverwriteCheck(internals.Checks) {
-			result, err := ApplyChecks(clonedValue, internals.Checks, ctx)
-			return result, true, err
+			r, err := ApplyChecks(v, internals.Checks, ctx)
+			return r, true, err
 		}
-		return clonedValue, true, nil
+		return v, true, nil
 	}
 	if internals.DefaultFunc != nil {
-		defaultValue := internals.DefaultFunc()
+		v := internals.DefaultFunc()
 		if hasOverwriteCheck(internals.Checks) {
-			result, err := ApplyChecks(defaultValue, internals.Checks, ctx)
-			return result, true, err
+			r, err := ApplyChecks(v, internals.Checks, ctx)
+			return r, true, err
 		}
-		return defaultValue, true, nil
+		return v, true, nil
 	}
 
-	// 2. Prefault/PrefaultFunc — preprocessing, continues normal parsing
+	// Prefault/PrefaultFunc — preprocessing, continues normal parsing.
 	if internals.PrefaultValue != nil {
 		return internals.PrefaultValue, false, nil
 	}
@@ -71,33 +70,32 @@ func processModifiersCore[T any](
 		return internals.PrefaultFunc(), false, nil
 	}
 
-	// 3. NonOptional — higher priority than Optional/Nilable
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	isPointerType := tType.Kind() == reflect.Ptr
+	// NonOptional — higher priority than Optional/Nilable.
+	isPtr := reflect.TypeFor[T]().Kind() == reflect.Ptr
 
-	if internals.NonOptional && !isPointerType {
+	if internals.NonOptional && !isPtr {
 		return nil, true, issues.CreateNonOptionalError(ctx)
 	}
 
-	// 4. Optional/Nilable — allows nil values
+	// Optional/Nilable — allows nil values.
 	if internals.Optional || internals.Nilable {
-		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
-			result, err := ApplyChecks[any](nil, nilChecks, ctx)
-			return result, true, err
+		if nc := filterNilChecks(internals.Checks); len(nc) > 0 {
+			r, err := ApplyChecks[any](nil, nc, ctx)
+			return r, true, err
 		}
 		return nil, true, nil
 	}
 
-	// 5. Pointer types naturally allow nil
-	if isPointerType {
-		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
-			result, err := ApplyChecks[any](nil, nilChecks, ctx)
-			return result, true, err
+	// Pointer types naturally allow nil.
+	if isPtr {
+		if nc := filterNilChecks(internals.Checks); len(nc) > 0 {
+			r, err := ApplyChecks[any](nil, nc, ctx)
+			return r, true, err
 		}
 		return nil, true, nil
 	}
 
-	// 6. Unknown type allows nil
+	// Unknown type allows nil.
 	if expectedType == core.ZodTypeUnknown {
 		return nil, true, nil
 	}
@@ -105,33 +103,32 @@ func processModifiersCore[T any](
 	return nil, true, issues.CreateInvalidTypeError(expectedType, input, ctx)
 }
 
-// applyTransformIfPresent applies the transform function if configured.
+// applyTransformIfPresent applies the transform function if set.
 func applyTransformIfPresent(result any, internals *core.ZodTypeInternals, ctx *core.ParseContext) (any, error) {
 	if internals.Transform == nil {
 		return result, nil
 	}
-	refCtx := &core.RefinementContext{ParseContext: ctx}
-	return internals.Transform(result, refCtx)
+	return internals.Transform(result, &core.RefinementContext{ParseContext: ctx})
 }
 
-// filterNilApplicableChecks returns only checks applicable to nil values
+// filterNilChecks returns only checks applicable to nil values
 // (overwrite, refine, and custom checks).
-func filterNilApplicableChecks(checks []core.ZodCheck) []core.ZodCheck {
-	var result []core.ZodCheck
-	for _, check := range checks {
-		if check == nil {
+func filterNilChecks(checks []core.ZodCheck) []core.ZodCheck {
+	var out []core.ZodCheck
+	for _, c := range checks {
+		if c == nil {
 			continue
 		}
-		ci := check.GetZod()
+		ci := c.GetZod()
 		if ci == nil || ci.Def == nil {
 			continue
 		}
 		switch ci.Def.Check {
 		case "overwrite", "refine", "custom":
-			result = append(result, check)
+			out = append(out, c)
 		}
 	}
-	return result
+	return out
 }
 
 // cloneDefaultValue creates a shallow copy of map/slice default values.
@@ -142,9 +139,9 @@ func cloneDefaultValue(v any) any {
 
 	if reflectx.IsSlice(v) {
 		rv := reflect.ValueOf(v)
-		newSlice := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
-		reflect.Copy(newSlice, rv)
-		return newSlice.Interface()
+		s := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
+		reflect.Copy(s, rv)
+		return s.Interface()
 	}
 
 	if reflectx.IsMap(v) {
@@ -153,12 +150,12 @@ func cloneDefaultValue(v any) any {
 		}
 		rv := reflect.ValueOf(v)
 		if rv.Kind() == reflect.Map {
-			newMap := reflect.MakeMap(rv.Type())
+			m := reflect.MakeMap(rv.Type())
 			iter := rv.MapRange()
 			for iter.Next() {
-				newMap.SetMapIndex(iter.Key(), iter.Value())
+				m.SetMapIndex(iter.Key(), iter.Value())
 			}
-			return newMap.Interface()
+			return m.Interface()
 		}
 	}
 

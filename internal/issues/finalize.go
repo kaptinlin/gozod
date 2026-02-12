@@ -156,7 +156,7 @@ func LocaleError(config *core.ZodConfig) core.ZodErrorMap {
 	return config.LocaleError
 }
 
-// MapPropertiesToIssue maps properties to ZodIssue fields using mapx.
+// MapPropertiesToIssue maps raw issue properties to ZodIssue fields.
 func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 	if len(properties) == 0 {
 		return
@@ -195,12 +195,12 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 	}
 }
 
-// CopyRawIssueProperties creates a copy of raw issue properties.
+// CopyRawIssueProperties copies raw issue properties.
 func CopyRawIssueProperties(rawIssue core.ZodRawIssue) map[string]any {
 	return mapx.Copy(rawIssue.Properties)
 }
 
-// MergeRawIssueProperties merges new properties into raw issue.
+// MergeRawIssueProperties merges properties into a raw issue.
 func MergeRawIssueProperties(rawIssue *core.ZodRawIssue, newProperties map[string]any) {
 	if rawIssue.Properties == nil {
 		rawIssue.Properties = make(map[string]any)
@@ -208,7 +208,7 @@ func MergeRawIssueProperties(rawIssue *core.ZodRawIssue, newProperties map[strin
 	rawIssue.Properties = mapx.Merge(rawIssue.Properties, newProperties)
 }
 
-// ConvertRawIssuesToIssues converts raw issues to finalized issues.
+// ConvertRawIssuesToIssues finalizes a batch of raw issues.
 func ConvertRawIssuesToIssues(rawIssues []core.ZodRawIssue, ctx *core.ParseContext) []core.ZodIssue {
 	if len(rawIssues) == 0 {
 		return nil

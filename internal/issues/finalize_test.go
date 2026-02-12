@@ -8,10 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Issue Finalization Tests  ///
-//////////////////////////////////////////
-
 func TestFinalizeIssue(t *testing.T) {
 	t.Run("finalizes issue with basic properties", func(t *testing.T) {
 		rawIssue := NewRawIssue(core.InvalidType, "test_input",
@@ -121,10 +117,6 @@ func TestFinalizeIssue(t *testing.T) {
 		assert.Empty(t, issue.Path)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Property Mapping Tests    ///
-//////////////////////////////////////////
 
 func TestMapPropertiesToIssue(t *testing.T) {
 	t.Run("maps all standard properties correctly", func(t *testing.T) {
@@ -263,10 +255,6 @@ func TestMapPropertiesToIssue(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Error Resolution Chain Tests ///
-//////////////////////////////////////////
-
 func TestErrorResolutionChain(t *testing.T) {
 	t.Run("uses context error when available", func(t *testing.T) {
 		rawIssue := NewRawIssue(core.InvalidType, nil,
@@ -393,10 +381,6 @@ func TestErrorResolutionChain(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Convenience Function Tests ///
-//////////////////////////////////////////
-
 func TestConvenienceFunctions(t *testing.T) {
 	t.Run("CopyRawIssueProperties creates independent copy", func(t *testing.T) {
 		original := map[string]any{
@@ -488,10 +472,6 @@ func TestConvenienceFunctions(t *testing.T) {
 		assert.Equal(t, original, rawIssue.Properties)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Integration Tests         ///
-//////////////////////////////////////////
 
 func TestFinalizationIntegration(t *testing.T) {
 	t.Run("complete finalization workflow", func(t *testing.T) {
@@ -588,10 +568,6 @@ func TestFinalizationIntegration(t *testing.T) {
 		assert.Equal(t, map[string]any{"param": "value"}, issue.Params)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Edge Cases Tests          ///
-//////////////////////////////////////////
 
 func TestFinalizationEdgeCases(t *testing.T) {
 	t.Run("handles very long paths", func(t *testing.T) {

@@ -8,94 +8,90 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Raw Issue Accessor Tests  ///
-//////////////////////////////////////////
-
 func TestZodRawIssueAccessors(t *testing.T) {
-	t.Run("RawIssueExpected", func(t *testing.T) {
+	t.Run("Expected", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidType, "test", WithExpected("string"))
-		expected := RawIssueExpected(issue)
+		expected := Expected(issue)
 		assert.Equal(t, "string", expected)
 	})
 
-	t.Run("RawIssueReceived", func(t *testing.T) {
+	t.Run("Received", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidType, "test", WithReceived("number"))
-		received := RawIssueReceived(issue)
+		received := Received(issue)
 		assert.Equal(t, "number", received)
 	})
 
-	t.Run("RawIssueOrigin", func(t *testing.T) {
+	t.Run("Origin", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithOrigin("string"))
-		origin := RawIssueOrigin(issue)
+		origin := Origin(issue)
 		assert.Equal(t, "string", origin)
 	})
 
-	t.Run("RawIssueFormat", func(t *testing.T) {
+	t.Run("Format", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithFormat("email"))
-		format := RawIssueFormat(issue)
+		format := Format(issue)
 		assert.Equal(t, "email", format)
 	})
 
-	t.Run("RawIssuePattern", func(t *testing.T) {
+	t.Run("Pattern", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithPattern("^.*$"))
-		pattern := RawIssuePattern(issue)
+		pattern := Pattern(issue)
 		assert.Equal(t, "^.*$", pattern)
 	})
 
-	t.Run("RawIssuePrefix", func(t *testing.T) {
+	t.Run("Prefix", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithPrefix("start_"))
-		prefix := RawIssuePrefix(issue)
+		prefix := Prefix(issue)
 		assert.Equal(t, "start_", prefix)
 	})
 
-	t.Run("RawIssueSuffix", func(t *testing.T) {
+	t.Run("Suffix", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithSuffix("_end"))
-		suffix := RawIssueSuffix(issue)
+		suffix := Suffix(issue)
 		assert.Equal(t, "_end", suffix)
 	})
 
-	t.Run("RawIssueIncludes", func(t *testing.T) {
+	t.Run("Includes", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithIncludes("substring"))
-		includes := RawIssueIncludes(issue)
+		includes := Includes(issue)
 		assert.Equal(t, "substring", includes)
 	})
 
-	t.Run("RawIssueMinimum", func(t *testing.T) {
+	t.Run("Minimum", func(t *testing.T) {
 		issue := NewRawIssue(core.TooSmall, "test", WithMinimum(5))
-		minimum := RawIssueMinimum(issue)
+		minimum := Minimum(issue)
 		assert.Equal(t, 5, minimum)
 	})
 
-	t.Run("RawIssueMaximum", func(t *testing.T) {
+	t.Run("Maximum", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithMaximum(100))
-		maximum := RawIssueMaximum(issue)
+		maximum := Maximum(issue)
 		assert.Equal(t, 100, maximum)
 	})
 
-	t.Run("RawIssueInclusive", func(t *testing.T) {
+	t.Run("Inclusive", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithInclusive(true))
-		inclusive := RawIssueInclusive(issue)
+		inclusive := Inclusive(issue)
 		assert.True(t, inclusive)
 	})
 
-	t.Run("RawIssueDivisor", func(t *testing.T) {
+	t.Run("Divisor", func(t *testing.T) {
 		issue := NewRawIssue(core.NotMultipleOf, "test", WithDivisor(3))
-		divisor := RawIssueDivisor(issue)
+		divisor := Divisor(issue)
 		assert.Equal(t, 3, divisor)
 	})
 
-	t.Run("RawIssueKeys", func(t *testing.T) {
+	t.Run("Keys", func(t *testing.T) {
 		keys := []string{"key1", "key2"}
 		issue := NewRawIssue(core.UnrecognizedKeys, "test", WithKeys(keys))
-		result := RawIssueKeys(issue)
+		result := Keys(issue)
 		assert.Equal(t, keys, result)
 	})
 
-	t.Run("RawIssueValues", func(t *testing.T) {
+	t.Run("Values", func(t *testing.T) {
 		values := []any{"val1", "val2", 123}
 		issue := NewRawIssue(core.InvalidValue, "test", WithValues(values))
-		result := RawIssueValues(issue)
+		result := Values(issue)
 		assert.Equal(t, values, result)
 	})
 
@@ -105,14 +101,14 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			Properties: make(map[string]any),
 		}
 
-		assert.Empty(t, RawIssueExpected(issue))
-		assert.Empty(t, RawIssueReceived(issue))
-		assert.Empty(t, RawIssueOrigin(issue))
-		assert.Nil(t, RawIssueMinimum(issue))
-		assert.Nil(t, RawIssueMaximum(issue))
-		assert.False(t, RawIssueInclusive(issue))
-		assert.Nil(t, RawIssueKeys(issue))
-		assert.Nil(t, RawIssueValues(issue))
+		assert.Empty(t, Expected(issue))
+		assert.Empty(t, Received(issue))
+		assert.Empty(t, Origin(issue))
+		assert.Nil(t, Minimum(issue))
+		assert.Nil(t, Maximum(issue))
+		assert.False(t, Inclusive(issue))
+		assert.Nil(t, Keys(issue))
+		assert.Nil(t, Values(issue))
 	})
 
 	t.Run("nil properties map", func(t *testing.T) {
@@ -121,10 +117,10 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			Properties: nil,
 		}
 
-		assert.Empty(t, RawIssueExpected(issue))
-		assert.Empty(t, RawIssueReceived(issue))
-		assert.Nil(t, RawIssueMinimum(issue))
-		assert.False(t, RawIssueInclusive(issue))
+		assert.Empty(t, Expected(issue))
+		assert.Empty(t, Received(issue))
+		assert.Nil(t, Minimum(issue))
+		assert.False(t, Inclusive(issue))
 	})
 
 	t.Run("wrong type values return defaults", func(t *testing.T) {
@@ -137,15 +133,11 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			},
 		}
 
-		assert.Empty(t, RawIssueExpected(issue))
-		assert.Equal(t, "string", RawIssueMinimum(issue))
-		assert.False(t, RawIssueInclusive(issue))
+		assert.Empty(t, Expected(issue))
+		assert.Equal(t, "string", Minimum(issue))
+		assert.False(t, Inclusive(issue))
 	})
 }
-
-//////////////////////////////////////////
-//////////   Issue Type-Specific Accessor Tests  ///
-//////////////////////////////////////////
 
 func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 	t.Run("IssueExpected for InvalidType", func(t *testing.T) {
@@ -264,10 +256,6 @@ func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Accessor Edge Cases Tests ///
-//////////////////////////////////////////
-
 func TestAccessorEdgeCases(t *testing.T) {
 	t.Run("handles zero values in accessors", func(t *testing.T) {
 		issue := ZodIssue{
@@ -328,10 +316,6 @@ func TestAccessorEdgeCases(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Accessor Performance Tests ///
-//////////////////////////////////////////
-
 func TestAccessorPerformance(t *testing.T) {
 	t.Run("accessor methods are efficient", func(t *testing.T) {
 		// Create an issue with many properties
@@ -389,10 +373,6 @@ func TestAccessorPerformance(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Accessor Integration Tests ///
-//////////////////////////////////////////
-
 func TestAccessorIntegration(t *testing.T) {
 	t.Run("raw issue to finalized issue accessor consistency", func(t *testing.T) {
 		// Create raw issue with properties
@@ -409,12 +389,12 @@ func TestAccessorIntegration(t *testing.T) {
 		finalizedIssue := FinalizeIssue(rawIssue, nil, nil)
 
 		// Check that properties are preserved correctly
-		assert.Equal(t, core.ZodTypeCode(RawIssueExpected(rawIssue)), finalizedIssue.Expected)
-		assert.Equal(t, core.ZodTypeCode(RawIssueReceived(rawIssue)), finalizedIssue.Received)
-		assert.Equal(t, RawIssueMinimum(rawIssue), finalizedIssue.Minimum)
-		assert.Equal(t, RawIssueMaximum(rawIssue), finalizedIssue.Maximum)
-		assert.Equal(t, RawIssueInclusive(rawIssue), finalizedIssue.Inclusive)
-		assert.Equal(t, RawIssueOrigin(rawIssue), finalizedIssue.Origin)
+		assert.Equal(t, core.ZodTypeCode(Expected(rawIssue)), finalizedIssue.Expected)
+		assert.Equal(t, core.ZodTypeCode(Received(rawIssue)), finalizedIssue.Received)
+		assert.Equal(t, Minimum(rawIssue), finalizedIssue.Minimum)
+		assert.Equal(t, Maximum(rawIssue), finalizedIssue.Maximum)
+		assert.Equal(t, Inclusive(rawIssue), finalizedIssue.Inclusive)
+		assert.Equal(t, Origin(rawIssue), finalizedIssue.Origin)
 
 		// Check type-specific accessors work on finalized issue
 		expected, ok := IssueExpected(finalizedIssue)
@@ -433,12 +413,12 @@ func TestAccessorIntegration(t *testing.T) {
 		formatIssue := NewRawIssue(core.InvalidFormat, "invalid@", WithFormat("email"))
 
 		// Verify accessors work correctly
-		assert.Equal(t, "string", RawIssueExpected(invalidTypeIssue))
+		assert.Equal(t, "string", Expected(invalidTypeIssue))
 
-		assert.Equal(t, "number", RawIssueOrigin(tooBigIssue))
-		assert.Equal(t, 100, RawIssueMaximum(tooBigIssue))
-		assert.True(t, RawIssueInclusive(tooBigIssue))
+		assert.Equal(t, "number", Origin(tooBigIssue))
+		assert.Equal(t, 100, Maximum(tooBigIssue))
+		assert.True(t, Inclusive(tooBigIssue))
 
-		assert.Equal(t, "email", RawIssueFormat(formatIssue))
+		assert.Equal(t, "email", Format(formatIssue))
 	})
 }

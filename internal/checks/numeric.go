@@ -9,12 +9,11 @@ import (
 
 // Lt creates a less-than validation check.
 func Lt(value any, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "less_than"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
-
 	internals.Check = func(payload *core.ParsePayload) {
 		if !validate.Lt(payload.GetValue(), value) {
 			origin := utils.NumericOrigin(payload.GetValue())
@@ -26,15 +25,14 @@ func Lt(value any, params ...any) core.ZodCheck {
 	internals.OnAttach = []func(any){
 		func(schema any) { mergeMaximumConstraint(schema, value, false) },
 	}
-
 	return internals
 }
 
 // Lte creates a less-than-or-equal validation check.
 func Lte(value any, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "less_than_or_equal"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -53,9 +51,9 @@ func Lte(value any, params ...any) core.ZodCheck {
 
 // Gt creates a greater-than validation check.
 func Gt(value any, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "greater_than"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -74,9 +72,9 @@ func Gt(value any, params ...any) core.ZodCheck {
 
 // Gte creates a greater-than-or-equal validation check.
 func Gte(value any, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "greater_than_or_equal"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -95,9 +93,9 @@ func Gte(value any, params ...any) core.ZodCheck {
 
 // MultipleOf creates a multiple-of validation check.
 func MultipleOf(divisor any, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "multiple_of"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {

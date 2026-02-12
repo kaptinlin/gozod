@@ -12,10 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Default Message Generation Tests ///
-//////////////////////////////////////////
-
 func TestGenerateDefaultMessage(t *testing.T) {
 	t.Run("generates appropriate default messages for different issue types", func(t *testing.T) {
 		testCases := []struct {
@@ -139,10 +135,6 @@ func TestGenerateDefaultMessage(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Type Detection Compatibility Tests ///
-//////////////////////////////////////////
-
 func TestParsedTypeToString(t *testing.T) {
 	t.Run("matches reference type detection behaviour", func(t *testing.T) {
 		// Create a big.Int for testing
@@ -209,10 +201,6 @@ func TestParsedTypeToString(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   String Formatting Compatibility Tests ///
-//////////////////////////////////////////
-
 func TestStringifyPrimitive(t *testing.T) {
 	t.Run("formats primitives like reference implementation", func(t *testing.T) {
 		testCases := []struct {
@@ -240,10 +228,6 @@ func TestStringifyPrimitive(t *testing.T) {
 		}
 	})
 }
-
-//////////////////////////////////////////
-//////////   Size Constraint Formatting Tests ///
-//////////////////////////////////////////
 
 func TestSizeConstraintFormatting(t *testing.T) {
 	t.Run("formats string length constraints", func(t *testing.T) {
@@ -295,10 +279,6 @@ func TestSizeConstraintFormatting(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   Format Noun Tests ///
-//////////////////////////////////////////
-
 func TestFormatNoun(t *testing.T) {
 	t.Run("returns standard format nouns", func(t *testing.T) {
 		testCases := []struct {
@@ -348,10 +328,6 @@ func TestFormatNoun(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   String Validation Formatting Tests ///
-//////////////////////////////////////////
-
 func TestStringValidationFormatting(t *testing.T) {
 	t.Run("formats starts_with validation", func(t *testing.T) {
 		formatter := &DefaultMessageFormatter{}
@@ -393,10 +369,6 @@ func TestStringValidationFormatting(t *testing.T) {
 		assert.Equal(t, "Invalid string: must match pattern [0-9]+", message)
 	})
 }
-
-//////////////////////////////////////////
-//////////   ZodError Creation Tests   ///
-//////////////////////////////////////////
 
 func TestNewZodError(t *testing.T) {
 	t.Run("creates error with basic properties", func(t *testing.T) {
@@ -475,10 +447,6 @@ func TestNewZodError(t *testing.T) {
 	})
 }
 
-//////////////////////////////////////////
-//////////   ZodError Interface Tests  ///
-//////////////////////////////////////////
-
 func TestZodErrorInterface(t *testing.T) {
 	t.Run("implements error interface correctly", func(t *testing.T) {
 		issues := []ZodIssue{
@@ -527,10 +495,6 @@ func TestZodErrorInterface(t *testing.T) {
 		assert.Contains(t, errorStr, "field2")
 	})
 }
-
-//////////////////////////////////////////
-//////////   IsZodError Function Tests ///
-//////////////////////////////////////////
 
 func TestIsZodError(t *testing.T) {
 	t.Run("identifies ZodError correctly", func(t *testing.T) {
@@ -593,10 +557,6 @@ func TestIsZodError(t *testing.T) {
 		assert.Equal(t, zodErr, target)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Comprehensive Compatibility Tests ///
-//////////////////////////////////////////
 
 func TestReferenceCompatibility(t *testing.T) {
 	t.Run("invalid_type messages match exactly", func(t *testing.T) {
@@ -693,10 +653,6 @@ func TestReferenceCompatibility(t *testing.T) {
 		assert.Equal(t, "Invalid input: expected number, received Infinity", message)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Edge Cases Tests          ///
-//////////////////////////////////////////
 
 func TestFormatterEdgeCases(t *testing.T) {
 	t.Run("handles nil issues gracefully", func(t *testing.T) {

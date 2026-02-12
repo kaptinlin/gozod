@@ -10,9 +10,9 @@ import (
 
 // MaxLength creates a maximum length validation check.
 func MaxLength(maximum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_length"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -30,9 +30,9 @@ func MaxLength(maximum int, params ...any) core.ZodCheck {
 
 // MinLength creates a minimum length validation check.
 func MinLength(minimum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_length"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -50,9 +50,9 @@ func MinLength(minimum int, params ...any) core.ZodCheck {
 
 // Length creates an exact length validation check.
 func Length(exact int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_equals"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -78,9 +78,9 @@ func Length(exact int, params ...any) core.ZodCheck {
 
 // MaxSize creates a maximum size validation check.
 func MaxSize(maximum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_size"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -101,9 +101,9 @@ func MaxSize(maximum int, params ...any) core.ZodCheck {
 
 // MinSize creates a minimum size validation check.
 func MinSize(minimum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_size"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -124,9 +124,9 @@ func MinSize(minimum int, params ...any) core.ZodCheck {
 
 // Size creates an exact size validation check.
 func Size(exact int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_equals"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -156,9 +156,9 @@ func Size(exact int, params ...any) core.ZodCheck {
 
 // LengthRange creates a length range validation check.
 func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_range"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -182,9 +182,9 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 
 // SizeRange creates a size range validation check.
 func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
-	checkParams := NormalizeCheckParams(params...)
+	cp := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_range"}
-	ApplyCheckParams(def, checkParams)
+	ApplyCheckParams(def, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -217,83 +217,69 @@ func NonEmpty(params ...any) core.ZodCheck { return MinLength(1, params...) }
 func Empty(params ...any) core.ZodCheck { return Length(0, params...) }
 
 // getActualLength returns the length of a value, or 0 if not measurable.
-func getActualLength(value any) int {
-	if l, ok := reflectx.Length(value); ok {
+func getActualLength(v any) int {
+	if l, ok := reflectx.Length(v); ok {
 		return l
 	}
 	return 0
 }
 
-// mergeMinimumLengthConstraint merges minLength constraint
+// mergeMinimumLengthConstraint merges minLength, choosing the stricter (larger) value.
 func mergeMinimumLengthConstraint(schema any, length int) {
 	mergeConstraint(schema, "minLength", length, func(old, new any) any {
-		// Choose stricter (larger) minimum
-		if oldInt, ok := old.(int); ok {
-			if newInt, ok := new.(int); ok && newInt > oldInt {
-				return newInt
+		if o, ok := old.(int); ok {
+			if n, ok := new.(int); ok && n > o {
+				return n
 			}
-			return oldInt
+			return o
 		}
 		return new
 	})
 }
 
-// mergeMaximumLengthConstraint merges maxLength constraint
+// mergeMaximumLengthConstraint merges maxLength, choosing the stricter (smaller) value.
 func mergeMaximumLengthConstraint(schema any, length int) {
 	mergeConstraint(schema, "maxLength", length, func(old, new any) any {
-		// Choose stricter (smaller) maximum
-		if oldInt, ok := old.(int); ok {
-			if newInt, ok := new.(int); ok && newInt < oldInt {
-				return newInt
+		if o, ok := old.(int); ok {
+			if n, ok := new.(int); ok && n < o {
+				return n
 			}
-			return oldInt
+			return o
 		}
 		return new
 	})
 }
 
-// setMinSizeProperty sets appropriate min size property based on type
+// setMinSizeProperty sets the appropriate min size property based on schema type.
 func setMinSizeProperty(schema any, size int) {
 	bag := ensureBag(schema)
 	if bag == nil {
 		return
 	}
-
-	// Determine property name based on schema type
-	if typeStr, exists := bag["type"]; exists {
-		switch typeStr {
-		case "array":
-			bag["minItems"] = size
-		case "object":
-			bag["minProperties"] = size
-		default:
-			bag["minLength"] = size
-		}
-	} else {
-		// Default to minItems for collections
-		bag["minItems"] = size
-	}
+	bag[sizePropertyKey(bag, "min")] = size
 }
 
-// setMaxSizeProperty sets appropriate max size property based on type
+// setMaxSizeProperty sets the appropriate max size property based on schema type.
 func setMaxSizeProperty(schema any, size int) {
 	bag := ensureBag(schema)
 	if bag == nil {
 		return
 	}
+	bag[sizePropertyKey(bag, "max")] = size
+}
 
-	// Determine property name based on schema type
-	if typeStr, exists := bag["type"]; exists {
-		switch typeStr {
+// sizePropertyKey returns the JSON Schema property name for a size bound.
+func sizePropertyKey(bag map[string]any, prefix string) string {
+	if t, ok := bag["type"]; ok {
+		switch t {
 		case "array":
-			bag["maxItems"] = size
+			return prefix + "Items"
 		case "object":
-			bag["maxProperties"] = size
+			return prefix + "Properties"
 		default:
-			bag["maxLength"] = size
+			return prefix + "Length"
 		}
-	} else {
-		// Default to maxItems for collections
-		bag["maxItems"] = size
 	}
+	// Default to Items for collections without explicit type.
+	return prefix + "Items"
 }

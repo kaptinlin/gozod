@@ -12,17 +12,17 @@ import (
 
 // CreateIssue creates a new ZodRawIssue with safely copied properties.
 func CreateIssue(code core.IssueCode, message string, properties map[string]any, input any) core.ZodRawIssue {
-	var safeProps map[string]any
+	var props map[string]any
 	if len(properties) == 0 {
-		safeProps = make(map[string]any)
+		props = make(map[string]any)
 	} else {
-		safeProps = mapx.Copy(properties)
+		props = mapx.Copy(properties)
 	}
 
 	return core.ZodRawIssue{
 		Code:       code,
 		Message:    message,
-		Properties: safeProps,
+		Properties: props,
 		Input:      input,
 		Path:       []any{},
 	}
@@ -121,17 +121,17 @@ func CreateNotMultipleOfIssue(divisor any, origin string, input any) core.ZodRaw
 
 // CreateUnrecognizedKeysIssue creates an unrecognized keys issue with deduplicated keys.
 func CreateUnrecognizedKeysIssue(keys []string, input any) core.ZodRawIssue {
-	processedKeys := keys
+	deduped := keys
 	if len(keys) > 1 && len(keys) <= 5 {
 		if uniqueKeys, err := slicex.Unique(keys); err == nil {
 			if uniqueSlice, ok := uniqueKeys.([]string); ok {
-				processedKeys = uniqueSlice
+				deduped = uniqueSlice
 			}
 		}
 	}
 
 	properties := map[string]any{
-		"keys": processedKeys,
+		"keys": deduped,
 	}
 
 	return CreateIssue(core.UnrecognizedKeys, "", properties, input)
@@ -175,12 +175,12 @@ func CreateInvalidElementIssue(index int, origin string, input any, elementError
 
 // CreateCustomIssue creates a custom issue.
 func CreateCustomIssue(message string, properties map[string]any, input any) core.ZodRawIssue {
-	safeProps := mapx.Copy(properties)
-	if safeProps == nil {
-		safeProps = make(map[string]any)
+	props := mapx.Copy(properties)
+	if props == nil {
+		props = make(map[string]any)
 	}
 
-	return CreateIssue(core.Custom, message, safeProps, input)
+	return CreateIssue(core.Custom, message, props, input)
 }
 
 // CreateMissingRequiredIssue creates a missing required field issue.
@@ -449,15 +449,15 @@ func CreateInvalidKeyError(key string, origin string, input any, ctx *core.Parse
 
 // CreateElementValidationIssue creates a raw issue for invalid element validation.
 func CreateElementValidationIssue(index int, origin string, element any, elementError error) core.ZodRawIssue {
-	var elementRawIssue core.ZodRawIssue
+	var raw core.ZodRawIssue
 	var zodErr *ZodError
 	if errors.As(elementError, &zodErr) && len(zodErr.Issues) > 0 {
-		elementRawIssue = ConvertZodIssueToRaw(zodErr.Issues[0])
+		raw = ConvertZodIssueToRaw(zodErr.Issues[0])
 	} else {
-		elementRawIssue = CreateIssue(core.InvalidElement, elementError.Error(), nil, element)
+		raw = CreateIssue(core.InvalidElement, elementError.Error(), nil, element)
 	}
 
-	return CreateInvalidElementIssue(index, origin, element, elementRawIssue)
+	return CreateInvalidElementIssue(index, origin, element, raw)
 }
 
 // CreateArrayValidationIssues creates a ZodError from multiple array validation issues.
@@ -476,15 +476,15 @@ func CreateArrayValidationIssues(issues []core.ZodRawIssue) error {
 
 // CreateInvalidElementError creates an invalid element error with proper context.
 func CreateInvalidElementError(index int, origin string, input any, elementError error, ctx *core.ParseContext) error {
-	var elementRawIssue core.ZodRawIssue
+	var raw core.ZodRawIssue
 	var zodErr *ZodError
 	if errors.As(elementError, &zodErr) && len(zodErr.Issues) > 0 {
-		elementRawIssue = ConvertZodIssueToRaw(zodErr.Issues[0])
+		raw = ConvertZodIssueToRaw(zodErr.Issues[0])
 	} else {
-		elementRawIssue = CreateCustomIssue(elementError.Error(), nil, input)
+		raw = CreateCustomIssue(elementError.Error(), nil, input)
 	}
-	raw := CreateInvalidElementIssue(index, origin, input, elementRawIssue)
-	final := FinalizeIssue(raw, ctx, nil)
+	issue := CreateInvalidElementIssue(index, origin, input, raw)
+	final := FinalizeIssue(issue, ctx, nil)
 	return NewZodError([]core.ZodIssue{final})
 }
 
@@ -497,16 +497,16 @@ func CreateNotMultipleOfError(divisor any, origin string, input any, ctx *core.P
 
 // CreateInvalidUnionError creates an invalid union error with proper context.
 func CreateInvalidUnionError(unionErrors []error, input any, ctx *core.ParseContext) error {
-	unionRawIssues := make([]core.ZodRawIssue, len(unionErrors))
+	raws := make([]core.ZodRawIssue, len(unionErrors))
 	for i, err := range unionErrors {
 		var zodErr *ZodError
 		if errors.As(err, &zodErr) && len(zodErr.Issues) > 0 {
-			unionRawIssues[i] = ConvertZodIssueToRaw(zodErr.Issues[0])
+			raws[i] = ConvertZodIssueToRaw(zodErr.Issues[0])
 		} else {
-			unionRawIssues[i] = CreateCustomIssue(err.Error(), nil, input)
+			raws[i] = CreateCustomIssue(err.Error(), nil, input)
 		}
 	}
-	raw := CreateInvalidUnionIssue(unionRawIssues, input)
+	raw := CreateInvalidUnionIssue(raws, input)
 	final := FinalizeIssue(raw, ctx, nil)
 	return NewZodError([]core.ZodIssue{final})
 }

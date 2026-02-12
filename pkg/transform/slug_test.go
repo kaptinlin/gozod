@@ -1,6 +1,9 @@
 package transform
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestSlugify(t *testing.T) {
 	tests := []struct {
@@ -69,4 +72,14 @@ func BenchmarkSlugifyComplex(b *testing.B) {
 	for b.Loop() {
 		_ = Slugify(s)
 	}
+}
+
+func ExampleSlugify() {
+	fmt.Println(Slugify("Hello World"))
+	fmt.Println(Slugify("  Multiple   Spaces  "))
+	fmt.Println(Slugify("Under_Score_And-Hyphens"))
+	// Output:
+	// hello-world
+	// multiple-spaces
+	// under-score-and-hyphens
 }

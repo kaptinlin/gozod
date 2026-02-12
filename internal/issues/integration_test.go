@@ -9,10 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//////////////////////////////////////////
-//////////   Integration Tests          ///
-//////////////////////////////////////////
-
 func TestIssueLifecycleIntegration(t *testing.T) {
 	t.Run("full issue lifecycle from creation to finalization", func(t *testing.T) {
 		// Create raw issue
@@ -97,10 +93,6 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 		}
 	})
 }
-
-//////////////////////////////////////////
-//////////   Error Processing Integration Tests ///
-//////////////////////////////////////////
 
 func TestErrorProcessingIntegration(t *testing.T) {
 	t.Run("complete error processing workflow", func(t *testing.T) {
@@ -268,10 +260,6 @@ func TestErrorProcessingIntegration(t *testing.T) {
 
 // TestComplexIssueTypes moved to errors_test.go to avoid duplication
 
-//////////////////////////////////////////
-//////////   Performance Integration Tests ///
-//////////////////////////////////////////
-
 func TestPerformanceIntegration(t *testing.T) {
 	t.Run("raw issue creation is efficient", func(t *testing.T) {
 		// This test ensures issue creation doesn't have performance regressions
@@ -400,10 +388,6 @@ func TestPerformanceIntegration(t *testing.T) {
 		assert.Equal(t, devIssue.Received, prodIssue.Received)
 	})
 }
-
-//////////////////////////////////////////
-//////////   Edge Cases Integration Tests ///
-//////////////////////////////////////////
 
 func TestEdgeCasesIntegration(t *testing.T) {
 	t.Run("handles missing properties gracefully", func(t *testing.T) {
@@ -540,10 +524,6 @@ func TestEdgeCasesIntegration(t *testing.T) {
 		assert.Nil(t, issue.Params)      // Wrong type, should remain nil
 	})
 }
-
-//////////////////////////////////////////
-//////////   Real World Scenarios Tests ///
-//////////////////////////////////////////
 
 func TestRealWorldScenarios(t *testing.T) {
 	t.Run("complex nested validation scenario", func(t *testing.T) {
