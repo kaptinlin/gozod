@@ -15,15 +15,16 @@ import (
 func TestFile_BasicFunctionality(t *testing.T) {
 	t.Run("File factory", func(t *testing.T) {
 		schema := File()
-		_ = schema
-
 		require.NotNil(t, schema)
 	})
 
 	t.Run("FilePtr factory", func(t *testing.T) {
 		schema := FilePtr()
-		_ = schema
+		require.NotNil(t, schema)
+	})
 
+	t.Run("FileTyped factory", func(t *testing.T) {
+		schema := FileTyped[any, any]()
 		require.NotNil(t, schema)
 	})
 
@@ -31,38 +32,40 @@ func TestFile_BasicFunctionality(t *testing.T) {
 		schema := File(core.SchemaParams{
 			Error: "Custom error",
 		})
-
 		require.NotNil(t, schema)
 	})
 }
 
 func TestFile_Modifiers(t *testing.T) {
-	t.Run("Optional behavior", func(t *testing.T) {
-		schema := File()
-		optionalSchema := schema.Optional()
-
-		// Type check: ensure it returns *ZodFile[any, *any]
-		_ = optionalSchema
-
-		require.NotNil(t, optionalSchema)
+	t.Run("Optional accepts nil", func(t *testing.T) {
+		schema := File().Optional()
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("Nilable behavior", func(t *testing.T) {
-		schema := File()
-		nilableSchema := schema.Nilable()
+	t.Run("Nilable accepts nil", func(t *testing.T) {
+		schema := File().Nilable()
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
 
-		_ = nilableSchema
+	t.Run("Nullish accepts nil", func(t *testing.T) {
+		schema := File().Nullish()
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
 
-		require.NotNil(t, nilableSchema)
+	t.Run("ExactOptional", func(t *testing.T) {
+		schema := File().ExactOptional()
+		require.NotNil(t, schema)
 	})
 
 	t.Run("Default preserves file type", func(t *testing.T) {
-		schema := File()
-		defaultSchema := schema.Default("default_value")
-
-		_ = defaultSchema
-
-		require.NotNil(t, defaultSchema)
+		schema := File().Default("default_value")
+		require.NotNil(t, schema)
 	})
 }
 
@@ -135,8 +138,79 @@ func TestFile_TypeSafety(t *testing.T) {
 	})
 }
 
-// Note: Full file testing with actual os.File or multipart.FileHeader would require
-// more complex setup. This basic test ensures the dual generic parameter architecture works.
+func TestFile_Composition(t *testing.T) {
+	t.Run("And creates intersection", func(t *testing.T) {
+		schema := File()
+		intersection := schema.And(String())
+		require.NotNil(t, intersection)
+	})
+
+	t.Run("Or creates union", func(t *testing.T) {
+		schema := File()
+		union := schema.Or(String())
+		require.NotNil(t, union)
+	})
+}
+
+func TestFile_Describe(t *testing.T) {
+	t.Run("sets description", func(t *testing.T) {
+		schema := File().Describe("upload file")
+		require.NotNil(t, schema)
+
+		meta, ok := core.GlobalRegistry.Get(schema)
+		require.True(t, ok)
+		assert.Equal(t, "upload file", meta.Description)
+	})
+}
+
+func TestFile_Meta(t *testing.T) {
+	t.Run("stores metadata", func(t *testing.T) {
+		schema := File().Meta(core.GlobalMeta{
+			Description: "file upload",
+		})
+		require.NotNil(t, schema)
+
+		meta, ok := core.GlobalRegistry.Get(schema)
+		require.True(t, ok)
+		assert.Equal(t, "file upload", meta.Description)
+	})
+}
+
+func TestFile_StrictParse(t *testing.T) {
+	t.Run("accepts valid os.File", func(t *testing.T) {
+		tempFile, err := os.CreateTemp("", "strict_*.txt")
+		require.NoError(t, err)
+		defer func() {
+			_ = tempFile.Close()
+			_ = os.Remove(tempFile.Name())
+		}()
+
+		schema := File()
+		result, err := schema.StrictParse(tempFile)
+		require.NoError(t, err)
+		assert.Equal(t, tempFile, result)
+	})
+
+	t.Run("accepts multipart file header", func(t *testing.T) {
+		header := &multipart.FileHeader{
+			Filename: "test.txt",
+			Header:   make(map[string][]string),
+			Size:     1024,
+		}
+
+		schema := File()
+		result, err := schema.StrictParse(header)
+		require.NoError(t, err)
+		assert.Equal(t, header, result)
+	})
+
+	t.Run("MustParse panics on nil non-optional", func(t *testing.T) {
+		schema := File()
+		assert.Panics(t, func() {
+			schema.MustParse(nil)
+		})
+	})
+}
 
 // =============================================================================
 // Default and prefault tests

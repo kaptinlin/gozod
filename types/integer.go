@@ -7,7 +7,6 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
-	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
@@ -66,6 +65,19 @@ func (z *ZodIntegerTyped[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
+// typeCode returns the ZodTypeCode for the base type T.
+func (*ZodIntegerTyped[T, R]) typeCode() core.ZodTypeCode {
+	return integerTypeCode[T]()
+}
+
+// withCheck clones internals, adds a check, and returns a new instance.
+// This eliminates the repeated clone-addCheck-withInternals pattern.
+func (z *ZodIntegerTyped[T, R]) withCheck(check core.ZodCheck) *ZodIntegerTyped[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
 // Coerce implements Coercible interface for integer type conversion
 func (z *ZodIntegerTyped[T, R]) Coerce(input any) (any, bool) {
 	var zero T
@@ -107,231 +119,14 @@ func (z *ZodIntegerTyped[T, R]) Coerce(input any) (any, bool) {
 	}
 }
 
-// Parse returns a value that matches the constraint type R with full type safety.
+// Parse validates input and returns a value matching the constraint type R.
 func (z *ZodIntegerTyped[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var zero T
-
-	// Determine the type code based on T
-	var typeCode core.ZodTypeCode
-	switch any(zero).(type) {
-	case int, *int:
-		typeCode = core.ZodTypeInt
-	case int8, *int8:
-		typeCode = core.ZodTypeInt8
-	case int16, *int16:
-		typeCode = core.ZodTypeInt16
-	case int32, *int32:
-		typeCode = core.ZodTypeInt32
-	case int64, *int64:
-		typeCode = core.ZodTypeInt64
-	case uint, *uint:
-		typeCode = core.ZodTypeUint
-	case uint8, *uint8:
-		typeCode = core.ZodTypeUint8
-	case uint16, *uint16:
-		typeCode = core.ZodTypeUint16
-	case uint32, *uint32:
-		typeCode = core.ZodTypeUint32
-	case uint64, *uint64:
-		typeCode = core.ZodTypeUint64
-	default:
-		// Fallback to int64
-		typeCode = core.ZodTypeInt64
-	}
-
-	// Determine if we have a pointer constraint type R to enable pointer identity preservation
-	var zeroR R
-	isPointerConstraint := false
-	switch any(zeroR).(type) {
-	case *int, *int8, *int16, *int32, *int64, *uint, *uint8, *uint16, *uint32, *uint64:
-		isPointerConstraint = true
-	}
-
-	// Prepare internals for parsing - use local variable to avoid race conditions
-	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation
-	internalsForParsing := &z.internals.ZodTypeInternals
-	if isPointerConstraint &&
-		!z.internals.Optional &&
-		!z.internals.Nilable &&
-		z.internals.PrefaultValue == nil &&
-		z.internals.PrefaultFunc == nil {
-		// Create a local copy of internals with Optional flag temporarily enabled
-		modifiedInternals := z.internals.ZodTypeInternals
-		modifiedInternals.SetOptional(true)
-		internalsForParsing = &modifiedInternals
-	}
-
-	// Use ParsePrimitive with custom validator and converter functions
 	return engine.ParsePrimitive[T, R](
 		input,
-		internalsForParsing,
-		typeCode,
-		// Validator function - validates the base type T
-		func(value T, checks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-			// Apply all integer-specific checks
-			return engine.ApplyChecks[T](value, checks, ctx)
-		},
-		// Converter function - converts validated T to constraint type R
-		func(result any, ctx *core.ParseContext, expectedType core.ZodTypeCode) (R, error) {
-			var zeroR R
-
-			// Handle nil input for optional/nilable schemas
-			if result == nil {
-				// Use z.internals (original) for nil checking, not the modified version
-				if z.internals.Optional || z.internals.Nilable {
-					return zeroR, nil
-				}
-				return zeroR, issues.CreateNonOptionalError(ctx)
-			}
-
-			// First, try to convert result directly to constraint type R (preserves pointer identity)
-			if directValue, ok := result.(R); ok {
-				return directValue, nil
-			}
-
-			// Special handling for pointer constraint types to preserve pointer identity
-			var zeroPtr R
-			switch any(zeroPtr).(type) {
-			case *int:
-				if ptr, ok := result.(*int); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *int8:
-				if ptr, ok := result.(*int8); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *int16:
-				if ptr, ok := result.(*int16); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *int32:
-				if ptr, ok := result.(*int32); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *int64:
-				if ptr, ok := result.(*int64); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *uint:
-				if ptr, ok := result.(*uint); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *uint8:
-				if ptr, ok := result.(*uint8); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *uint16:
-				if ptr, ok := result.(*uint16); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *uint32:
-				if ptr, ok := result.(*uint32); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			case *uint64:
-				if ptr, ok := result.(*uint64); ok {
-					if convertedPtr, ok2 := any(ptr).(R); ok2 {
-						return convertedPtr, nil
-					}
-				}
-			}
-
-			// Fallback: try to convert to base type T and then to constraint type R
-			if value, ok := convertToIntegerType[T](result); ok {
-				// Convert base type T to constraint type R (this will create new pointers for pointer types)
-				return convertToIntegerConstraintType[T, R](value), nil
-			}
-
-			// Handle pointer dereferencing if needed (for cases where input pointer doesn't match expected type)
-			switch v := result.(type) {
-			case *int:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *int8:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *int16:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *int32:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *int64:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *uint:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *uint8:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *uint16:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *uint32:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			case *uint64:
-				if v != nil {
-					if intVal, ok := convertToIntegerType[T](*v); ok {
-						return convertToIntegerConstraintType[T, R](intVal), nil
-					}
-				}
-			}
-
-			// ctx is already a single *core.ParseContext parameter, not a variadic parameter
-			return zeroR, issues.CreateTypeConversionError(
-				reflect.TypeOf(result).String(),
-				reflect.TypeOf(*new(T)).String(),
-				input,
-				ctx,
-			)
-		},
+		&z.internals.ZodTypeInternals,
+		z.typeCode(),
+		engine.ApplyChecks[T],
+		engine.ConvertToConstraintType[T, R],
 		ctx...,
 	)
 }
@@ -346,47 +141,11 @@ func (z *ZodIntegerTyped[T, R]) MustParse(input any, ctx ...*core.ParseContext) 
 }
 
 // StrictParse provides compile-time type safety by requiring exact type matching.
-// This eliminates runtime type checking overhead for maximum performance.
 // The input must exactly match the schema's constraint type R.
-//
-// Example usage:
-//
-//	schema := gozod.Int()
-//	result, err := schema.StrictParse(42)          // ✅ int → int
-//	result, err := schema.StrictParse(&num)        // ❌ compile error
-//	result, err := schema.StrictParse("42")        // ❌ compile error
 func (z *ZodIntegerTyped[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, error) {
-	var zero T
+	expectedType := z.typeCode()
 
-	// Determine the type code based on T
-	var expectedType core.ZodTypeCode
-	switch any(zero).(type) {
-	case int, *int:
-		expectedType = core.ZodTypeInt
-	case int8, *int8:
-		expectedType = core.ZodTypeInt8
-	case int16, *int16:
-		expectedType = core.ZodTypeInt16
-	case int32, *int32:
-		expectedType = core.ZodTypeInt32
-	case int64, *int64:
-		expectedType = core.ZodTypeInt64
-	case uint, *uint:
-		expectedType = core.ZodTypeUint
-	case uint8, *uint8:
-		expectedType = core.ZodTypeUint8
-	case uint16, *uint16:
-		expectedType = core.ZodTypeUint16
-	case uint32, *uint32:
-		expectedType = core.ZodTypeUint32
-	case uint64, *uint64:
-		expectedType = core.ZodTypeUint64
-	default:
-		// Fallback to int64
-		expectedType = core.ZodTypeInt64
-	}
-
-	// Use the internally recorded type code if available
+	// Use the internally recorded type code if available.
 	if z.internals.Type != "" {
 		expectedType = z.internals.Type
 	}
@@ -483,14 +242,14 @@ func (z *ZodIntegerTyped[T, R]) NonOptional() *ZodIntegerTyped[T, T] {
 	}
 }
 
-// Default keeps the current generic type T.
+// Default sets a default value, keeping the current constraint type R.
 func (z *ZodIntegerTyped[T, R]) Default(v int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultValue(v)
+	in.SetDefaultValue(convertIntDefaultValue[T](v))
 	return z.withInternals(in)
 }
 
-// DefaultFunc keeps the current generic type T.
+// DefaultFunc sets a lazy default value, keeping the current constraint type R.
 func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -499,64 +258,10 @@ func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T,
 	return z.withInternals(in)
 }
 
-// Prefault keeps the current generic type T.
+// Prefault sets a prefault value, keeping the current constraint type R.
 func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
-	// Convert the prefault value to the appropriate constraint type
-	var zero T
-	switch any(zero).(type) {
-	case *int:
-		val := int(v)
-		in.SetPrefaultValue(val)
-	case *int8:
-		val := int8(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *int16:
-		val := int16(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *int32:
-		val := int32(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *int64:
-		in.SetPrefaultValue(v)
-	case *uint:
-		val := uint(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *uint8:
-		val := uint8(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *uint16:
-		val := uint16(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *uint32:
-		val := uint32(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case *uint64:
-		val := uint64(v) // #nosec G115
-		in.SetPrefaultValue(val)
-	case int:
-		in.SetPrefaultValue(int(v))
-	case int8:
-		in.SetPrefaultValue(int8(v)) // #nosec G115
-	case int16:
-		in.SetPrefaultValue(int16(v)) // #nosec G115
-	case int32:
-		in.SetPrefaultValue(int32(v)) // #nosec G115
-	case int64:
-		in.SetPrefaultValue(v)
-	case uint:
-		in.SetPrefaultValue(uint(v)) // #nosec G115
-	case uint8:
-		in.SetPrefaultValue(uint8(v)) // #nosec G115
-	case uint16:
-		in.SetPrefaultValue(uint16(v)) // #nosec G115
-	case uint32:
-		in.SetPrefaultValue(uint32(v)) // #nosec G115
-	case uint64:
-		in.SetPrefaultValue(uint64(v)) // #nosec G115
-	default:
-		in.SetPrefaultValue(v)
-	}
+	in.SetPrefaultValue(convertIntDefaultValue[T](v))
 	return z.withInternals(in)
 }
 
@@ -596,52 +301,34 @@ func (z *ZodIntegerTyped[T, R]) Describe(description string) *ZodIntegerTyped[T,
 // VALIDATION METHODS (ONLY ZODS SUPPORTED METHODS)
 // =============================================================================
 
-// Min adds minimum value validation (alias for Gte)
+// Min adds minimum value validation (alias for Gte).
 func (z *ZodIntegerTyped[T, R]) Min(minimum int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Gte(minimum, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Gte(minimum, params...))
 }
 
-// Max adds maximum value validation (alias for Lte)
+// Max adds maximum value validation (alias for Lte).
 func (z *ZodIntegerTyped[T, R]) Max(maximum int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Lte(maximum, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Lte(maximum, params...))
 }
 
-// Gt adds greater than validation (exclusive)
+// Gt adds greater-than validation (exclusive).
 func (z *ZodIntegerTyped[T, R]) Gt(value int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Gt(value, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Gt(value, params...))
 }
 
-// Gte adds greater than or equal validation (inclusive)
+// Gte adds greater-than-or-equal validation (inclusive).
 func (z *ZodIntegerTyped[T, R]) Gte(value int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Gte(value, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Gte(value, params...))
 }
 
-// Lt adds less than validation (exclusive)
+// Lt adds less-than validation (exclusive).
 func (z *ZodIntegerTyped[T, R]) Lt(value int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Lt(value, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Lt(value, params...))
 }
 
-// Lte adds less than or equal validation (inclusive)
+// Lte adds less-than-or-equal validation (inclusive).
 func (z *ZodIntegerTyped[T, R]) Lte(value int64, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.Lte(value, params...)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.Lte(value, params...))
 }
 
 // Positive adds positive number validation (> 0)
@@ -1088,38 +775,9 @@ func newZodIntegerFromDef[T IntegerConstraint, R any](def *ZodIntegerDef) *ZodIn
 // =============================================================================
 
 // IntegerTyped creates a generic integer schema with automatic type inference.
-// It automatically determines the appropriate type code based on the generic type parameter.
 // Usage: IntegerTyped[int](), IntegerTyped[uint32](), IntegerTyped[int64](), etc.
 func IntegerTyped[T IntegerConstraint](params ...any) *ZodIntegerTyped[T, T] {
-	// Determine type code based on T
-	var typeCode core.ZodTypeCode
-	var zero T
-	switch any(zero).(type) {
-	case int, *int:
-		typeCode = core.ZodTypeInt
-	case int8, *int8:
-		typeCode = core.ZodTypeInt8
-	case int16, *int16:
-		typeCode = core.ZodTypeInt16
-	case int32, *int32:
-		typeCode = core.ZodTypeInt32
-	case int64, *int64:
-		typeCode = core.ZodTypeInt64
-	case uint, *uint:
-		typeCode = core.ZodTypeUint
-	case uint8, *uint8:
-		typeCode = core.ZodTypeUint8
-	case uint16, *uint16:
-		typeCode = core.ZodTypeUint16
-	case uint32, *uint32:
-		typeCode = core.ZodTypeUint32
-	case uint64, *uint64:
-		typeCode = core.ZodTypeUint64
-	default:
-		typeCode = core.ZodTypeInt64 // fallback
-	}
-
-	return newIntegerTyped[T, T](typeCode, params...)
+	return newIntegerTyped[T, T](integerTypeCode[T](), params...)
 }
 
 // Int creates a standard int schema
@@ -1428,65 +1086,62 @@ func Integer(params ...any) *ZodInteger[int64, int64] {
 // TYPE CONVERSION HELPERS
 // =============================================================================
 
-// convertToIntegerConstraintType converts a base type T to constraint type R
-func convertToIntegerConstraintType[T IntegerConstraint, R any](value T) R {
-	var zero R
+// integerTypeCode returns the ZodTypeCode for the given integer type T.
+func integerTypeCode[T IntegerConstraint]() core.ZodTypeCode {
+	var zero T
 	switch any(zero).(type) {
-	case *int:
-		if intVal, ok := any(value).(int); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *int8:
-		if intVal, ok := any(value).(int8); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *int16:
-		if intVal, ok := any(value).(int16); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *int32:
-		if intVal, ok := any(value).(int32); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *int64:
-		if intVal, ok := any(value).(int64); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *uint:
-		if intVal, ok := any(value).(uint); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *uint8:
-		if intVal, ok := any(value).(uint8); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *uint16:
-		if intVal, ok := any(value).(uint16); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *uint32:
-		if intVal, ok := any(value).(uint32); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
-	case *uint64:
-		if intVal, ok := any(value).(uint64); ok {
-			intCopy := intVal
-			return any(&intCopy).(R)
-		}
+	case int, *int:
+		return core.ZodTypeInt
+	case int8, *int8:
+		return core.ZodTypeInt8
+	case int16, *int16:
+		return core.ZodTypeInt16
+	case int32, *int32:
+		return core.ZodTypeInt32
+	case int64, *int64:
+		return core.ZodTypeInt64
+	case uint, *uint:
+		return core.ZodTypeUint
+	case uint8, *uint8:
+		return core.ZodTypeUint8
+	case uint16, *uint16:
+		return core.ZodTypeUint16
+	case uint32, *uint32:
+		return core.ZodTypeUint32
+	case uint64, *uint64:
+		return core.ZodTypeUint64
 	default:
-		// For value types, return T directly as R
-		return any(value).(R)
+		return core.ZodTypeInt64
 	}
-	return zero
+}
+
+// convertIntDefaultValue converts an int64 to the appropriate type for Default/Prefault.
+func convertIntDefaultValue[T IntegerConstraint](v int64) any {
+	var zero T
+	switch any(zero).(type) {
+	case int, *int:
+		return int(v)
+	case int8, *int8:
+		return int8(v) // #nosec G115
+	case int16, *int16:
+		return int16(v) // #nosec G115
+	case int32, *int32:
+		return int32(v) // #nosec G115
+	case int64, *int64:
+		return v
+	case uint, *uint:
+		return uint(v) // #nosec G115
+	case uint8, *uint8:
+		return uint8(v) // #nosec G115
+	case uint16, *uint16:
+		return uint16(v) // #nosec G115
+	case uint32, *uint32:
+		return uint32(v) // #nosec G115
+	case uint64, *uint64:
+		return uint64(v) // #nosec G115
+	default:
+		return v
+	}
 }
 
 // Check adds a custom validation function for integer schemas that can push multiple issues.
