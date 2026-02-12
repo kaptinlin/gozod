@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -25,6 +26,17 @@ var (
 	ErrFieldNotFoundOrNotSettable = errors.New("field not found or not settable")
 	ErrCannotAssignToField        = errors.New("cannot assign value to field of type")
 )
+
+// anyType is the reflect.Type for interface{}/any, cached to avoid repeated allocation.
+var anyType = reflect.TypeFor[any]()
+
+// jsonTagName extracts the field name from a JSON struct tag, ignoring options like omitempty.
+func jsonTagName(tag string) string {
+	if name, _, ok := strings.Cut(tag, ","); ok {
+		return name
+	}
+	return tag
+}
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -88,14 +100,15 @@ func (z *ZodStruct[T, R]) GetCatchall() core.ZodSchema {
 
 // Parse validates input using struct-specific parsing logic with engine.ParseComplex
 func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
+	var zero R
+
 	parseCtx := core.NewParseContext()
 	if len(ctx) > 0 && ctx[0] != nil {
 		parseCtx = ctx[0]
 	}
 
 	// Check if constraint type R is a pointer type
-	var zeroR R
-	isPointerConstraint := reflect.TypeOf(zeroR).Kind() == reflect.Ptr
+	isPointerConstraint := reflect.TypeOf(zero).Kind() == reflect.Ptr
 
 	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParseComplex
 	// But only if no other modifiers (Optional, Nilable, Prefault) are set
@@ -105,7 +118,6 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		!originalInternals.Nilable &&
 		originalInternals.PrefaultValue == nil &&
 		originalInternals.PrefaultFunc == nil {
-		// Create a copy of internals with Optional flag temporarily enabled
 		modifiedInternals := *originalInternals
 		modifiedInternals.Optional = true
 		originalInternals = &modifiedInternals
@@ -121,10 +133,8 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		parseCtx,
 	)
 	if err != nil {
-		var zero R
 		// Check if this is a generic struct type error that we can improve
 		if errStr := err.Error(); strings.Contains(errStr, "Invalid input: expected struct, received") {
-			// Generate more specific error with actual type information
 			return zero, z.createStructTypeError(input, parseCtx)
 		}
 		return zero, err
@@ -138,7 +148,6 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 	// Handle pointer to T
 	if structPtr, ok := result.(*T); ok {
 		if structPtr == nil {
-			var zero R
 			return zero, nil
 		}
 		return convertToStructConstraintType[T, R](*structPtr), nil
@@ -146,12 +155,9 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 
 	// Handle nil result for optional/nilable schemas
 	if result == nil {
-		var zero R
 		return zero, nil
 	}
 
-	// This should not happen in well-formed schemas
-	var zero R
 	return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", result), "struct", input, parseCtx)
 }
 
@@ -381,16 +387,8 @@ func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct
 func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) *ZodStruct[T, R] {
 	// Create new shape combining existing + extension fields
 	newShape := make(core.StructSchema)
-
-	// Copy existing shape
-	for k, v := range z.internals.Shape {
-		newShape[k] = v
-	}
-
-	// Add augmentation fields
-	for k, schema := range augmentation {
-		newShape[k] = schema
-	}
+	maps.Copy(newShape, z.internals.Shape)
+	maps.Copy(newShape, augmentation)
 
 	// Create new definition with extended shape
 	schemaParams := utils.NormalizeParams(params...)
@@ -854,11 +852,6 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 		return fieldValue, nil
 	}
 
-	// Ensure we have a valid context
-	if ctx == nil {
-		ctx = core.NewParseContext()
-	}
-
 	// Use reflection to call Parse method - this handles all schema types
 	schemaVal := reflect.ValueOf(fieldSchema)
 	parseMethod := schemaVal.MethodByName("Parse")
@@ -907,7 +900,7 @@ func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structTyp
 		jsonTag := field.Tag.Get("json")
 		if jsonTag != "" {
 			// Parse json tag (handle omitempty, etc.)
-			jsonName := strings.Split(jsonTag, ",")[0]
+			jsonName := jsonTagName(jsonTag)
 			if jsonName == fieldName {
 				fieldVal := structVal.Field(i)
 				if fieldVal.CanSet() {
@@ -999,7 +992,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 }
 
 // convertMapTypes converts between different map types (e.g., map[any]any to map[string]string)
-func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue interface{}, targetType reflect.Type) interface{} {
+func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Map {
 		return nil
@@ -1035,7 +1028,7 @@ func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue interface{}, targ
 }
 
 // convertValue attempts to convert a value to the target type
-func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType reflect.Type) interface{} {
+func (z *ZodStruct[Input, Output]) convertValue(value any, targetType reflect.Type) any {
 	if value == nil {
 		return reflect.Zero(targetType).Interface()
 	}
@@ -1049,13 +1042,14 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 	}
 
 	// Handle conversions between compatible types
+	//nolint:exhaustive // Only handling specific conversion cases
 	switch targetType.Kind() {
 	case reflect.String:
 		if valueType.Kind() == reflect.String {
 			return value.(string)
 		}
 		// Convert interface{} to string if it contains a string
-		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+		if valueType == anyType {
 			if str, ok := value.(string); ok {
 				return str
 			}
@@ -1067,12 +1061,9 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 			return int(valueVal.Int())
 		case reflect.Float32, reflect.Float64:
 			return int(valueVal.Float())
-		default:
-			// For other types, no conversion available
-			break
 		}
 		// Convert interface{} to int if it contains a number
-		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+		if valueType == anyType {
 			if intVal, ok := value.(int); ok {
 				return intVal
 			}
@@ -1087,12 +1078,9 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 			return valueVal.Float()
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return float64(valueVal.Int())
-		default:
-			// For other types, no conversion available
-			break
 		}
 		// Convert interface{} to float64 if it contains a number
-		if valueType == reflect.TypeOf((*interface{})(nil)).Elem() {
+		if valueType == anyType {
 			if floatVal, ok := value.(float64); ok {
 				return floatVal
 			}
@@ -1102,7 +1090,7 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 		}
 	case reflect.Interface:
 		// interface{} can accept any value
-		if targetType == reflect.TypeOf((*interface{})(nil)).Elem() {
+		if targetType == anyType {
 			return value
 		}
 	case reflect.Slice:
@@ -1116,17 +1104,13 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 			return z.convertMapToStruct(value, targetType)
 		}
 		// Handle interface{} containing map that should become struct
-		if valueVal.Type() == reflect.TypeOf((*interface{})(nil)).Elem() {
-			if actualMap, ok := value.(map[string]interface{}); ok {
+		if valueVal.Type() == anyType {
+			if actualMap, ok := value.(map[string]any); ok {
 				return z.convertMapToStruct(actualMap, targetType)
 			}
 		}
-	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
-		reflect.Func, reflect.Map, reflect.Pointer, reflect.UnsafePointer:
-		// For other types, no specific conversion logic
-		break
+	default:
+		// No specific conversion logic for other types
 	}
 
 	// Attempt direct conversion if possible
@@ -1137,8 +1121,8 @@ func (z *ZodStruct[Input, Output]) convertValue(value interface{}, targetType re
 	return nil
 }
 
-// convertSliceTypes converts between different slice types (e.g., []interface{} to []SpecificType)
-func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue interface{}, targetType reflect.Type) interface{} {
+// convertSliceTypes converts between different slice types (e.g., []any to []SpecificType)
+func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Slice || targetType.Kind() != reflect.Slice {
 		return nil
@@ -1160,7 +1144,7 @@ func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue interface{}, ta
 }
 
 // convertMapToStruct converts a map to a struct using field matching
-func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue interface{}, targetType reflect.Type) interface{} {
+func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Struct {
 		return nil
@@ -1179,13 +1163,13 @@ func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue interface{}, t
 		// Get field name, check json tag first, then field name
 		fieldName := field.Name
 		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
-			if tagName := strings.Split(jsonTag, ",")[0]; tagName != "" && tagName != "-" {
+			if tagName := jsonTagName(jsonTag); tagName != "" && tagName != "-" {
 				fieldName = tagName
 			}
 		}
 
 		// Look for value in map by exact field name match
-		var mapValue interface{}
+		var mapValue any
 		var found bool
 
 		for _, key := range sourceVal.MapKeys() {
@@ -1231,11 +1215,7 @@ func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType refl
 
 		// Check json tag
 		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			tagName := tag
-			if commaIdx := strings.Index(tag, ","); commaIdx > 0 {
-				tagName = tag[:commaIdx]
-			}
-			if tagName == fieldName {
+			if jsonTagName(tag) == fieldName {
 				return val.Field(i), true
 			}
 		}

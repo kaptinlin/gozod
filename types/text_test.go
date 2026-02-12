@@ -9,153 +9,125 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// =============================================================================
+// Emoji
+// =============================================================================
+
 func TestEmoji(t *testing.T) {
 	t.Run("valid single emojis", func(t *testing.T) {
 		schema := Emoji()
-		validEmojis := []string{
-			"👋",
-			"🍺",
-			"💚",
-			"🐛",
-			"🇹🇷",
-			"😀",
-			"🎉",
-			"❤️",
-			"☘",
-			"〽️",
-		}
-
-		for _, emoji := range validEmojis {
+		for _, emoji := range []string{
+			"👋", "🍺", "💚", "🐛", "🇹🇷",
+			"😀", "🎉", "❤️", "☘", "〽️",
+		} {
 			_, err := schema.Parse(emoji)
-			assert.NoError(t, err, "should be valid for emoji %s", emoji)
+			assert.NoError(t, err, "should accept %s", emoji)
 		}
 	})
 
 	t.Run("valid multiple emojis", func(t *testing.T) {
 		schema := Emoji()
-		validMultiEmojis := []string{
-			"😀😁",      // two basic emojis
-			"👋👋👋👋",    // four same emojis
-			"🍺👩‍🚀🫡",   // complex emojis with ZWJ
-			"💚💙💜💛❤️",  // multiple heart emojis
-			"🇹🇷🤽🏿‍♂️", // flag + complex emoji
-			"🐛🗝🐏🍡🎦🚢🏨💫🎌☘🗡😹🔒🎬➡️🍹🗂🚨⚜🕑〽️🚦🌊🍴💍🍌💰😳🌺🍃", // many emojis
-		}
-
-		for _, emoji := range validMultiEmojis {
+		for _, emoji := range []string{
+			"😀😁",
+			"👋👋👋👋",
+			"🍺👩‍🚀🫡",
+			"💚💙💜💛❤️",
+			"🇹🇷🤽🏿‍♂️",
+			"🐛🗝🐏🍡🎦🚢🏨💫🎌☘🗡😹🔒🎬➡️🍹🗂🚨⚜🕑〽️🚦🌊🍴💍🍌💰😳🌺🍃",
+		} {
 			_, err := schema.Parse(emoji)
-			assert.NoError(t, err, "should be valid for multi-emoji %s", emoji)
+			assert.NoError(t, err, "should accept %s", emoji)
 		}
 	})
 
 	t.Run("invalid emojis", func(t *testing.T) {
 		schema := Emoji()
-		invalidEmojis := []string{
-			":-)",
-			"😀 is an emoji",
-			"😀stuff",
-			"stuff😀",
-			"not an emoji",
-			"abc",
-			"123",
-			"hello 🌍 world", // text with emoji
-		}
-
-		for _, emoji := range invalidEmojis {
-			_, err := schema.Parse(emoji)
-			assert.Error(t, err, "should be invalid for emoji %s", emoji)
+		for _, input := range []string{
+			":-)", "😀 is an emoji", "😀stuff", "stuff😀",
+			"not an emoji", "abc", "123", "hello 🌍 world",
+		} {
+			_, err := schema.Parse(input)
+			assert.Error(t, err, "should reject %s", input)
 		}
 	})
 
-	t.Run("valid emojis pointer", func(t *testing.T) {
+	t.Run("pointer", func(t *testing.T) {
 		schema := EmojiPtr()
-		validEmoji := "👋"
-
-		_, err := schema.Parse(&validEmoji)
+		valid := "👋"
+		_, err := schema.Parse(&valid)
 		assert.NoError(t, err)
 
-		// Test multiple emojis with pointer
-		multiEmoji := "😀😁🎉"
-		_, err = schema.Parse(&multiEmoji)
+		multi := "😀😁🎉"
+		_, err = schema.Parse(&multi)
 		assert.NoError(t, err)
-	})
 
-	t.Run("invalid emojis pointer", func(t *testing.T) {
-		schema := EmojiPtr()
-		invalidEmoji := ":-)"
-
-		_, err := schema.Parse(&invalidEmoji)
+		invalid := ":-)"
+		_, err = schema.Parse(&invalid)
 		assert.Error(t, err)
+	})
+
+	t.Run("Optional", func(t *testing.T) {
+		schema := Emoji().Optional()
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+
+		valid := "😀"
+		result, err = schema.Parse(valid)
+		assert.NoError(t, err)
+		assert.Equal(t, &valid, result)
+	})
+
+	t.Run("Nilable", func(t *testing.T) {
+		schema := Emoji().Nilable()
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Nullish", func(t *testing.T) {
+		schema := Emoji().Nullish()
+		result, err := schema.Parse(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
 	})
 }
 
 // =============================================================================
-// JWT TESTS
+// JWT
 // =============================================================================
+
+// validJWTHS256 is a well-known HS256 test token used across JWT tests.
+const validJWTHS256 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+	"eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ." +
+	"SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
 
 func TestJWT(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    any
-		expected bool
+		name  string
+		input any
+		valid bool
 	}{
-		{
-			name:     "valid JWT token",
-			input:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected: true,
-		},
-		{
-			name:     "invalid JWT - missing signature part",
-			input:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",
-			expected: false,
-		},
-		{
-			name:     "invalid JWT - malformed token",
-			input:    "invalid.jwt.token",
-			expected: false,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: false,
-		},
-		{
-			name:     "non-string input",
-			input:    123,
-			expected: false,
-		},
-		{
-			name:     "single dot",
-			input:    ".",
-			expected: false,
-		},
-		{
-			name:     "two dots only",
-			input:    "..",
-			expected: false,
-		},
-		{
-			name:     "invalid base64 in header",
-			input:    "invalid_base64.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected: false,
-		},
+		{"valid JWT token", validJWTHS256, true},
+		{"missing signature part", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ", false},
+		{"malformed token", "invalid.jwt.token", false},
+		{"empty string", "", false},
+		{"non-string input", 123, false},
+		{"single dot", ".", false},
+		{"two dots only", "..", false},
+		{"invalid base64 in header", "invalid_base64.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := JWT()
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
-				if err != nil {
-					t.Errorf("JWT().Parse(%v) returned error: %v", tt.input, err)
-				} else if str, ok := tt.input.(string); ok && result != str {
-					t.Errorf("JWT().Parse(%v) = %v, want %v", tt.input, result, str)
+			result, err := JWT().Parse(tt.input)
+			if tt.valid {
+				require.NoError(t, err)
+				if str, ok := tt.input.(string); ok {
+					assert.Equal(t, str, result)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("JWT().Parse(%v) expected error but got none", tt.input)
-				}
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -163,47 +135,27 @@ func TestJWT(t *testing.T) {
 
 func TestJWTPtr(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    any
-		expected bool
+		name  string
+		input any
+		valid bool
 	}{
-		{
-			name:     "valid JWT token pointer",
-			input:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected: true,
-		},
-		{
-			name:     "nil input",
-			input:    nil,
-			expected: false,
-		},
-		{
-			name:     "invalid JWT token pointer",
-			input:    "invalid.jwt.token",
-			expected: false,
-		},
-		{
-			name:     "empty string pointer",
-			input:    "",
-			expected: false,
-		},
+		{"valid JWT pointer", validJWTHS256, true},
+		{"nil input", nil, false},
+		{"invalid JWT pointer", "invalid.jwt.token", false},
+		{"empty string pointer", "", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := JWTPtr()
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
-				if err != nil {
-					t.Errorf("JWTPtr().Parse(%v) returned error: %v", tt.input, err)
-				} else if str, ok := tt.input.(string); ok && result != nil && *result != str {
-					t.Errorf("JWTPtr().Parse(%v) = %v, want %v", tt.input, *result, str)
+			result, err := JWTPtr().Parse(tt.input)
+			if tt.valid {
+				require.NoError(t, err)
+				if str, ok := tt.input.(string); ok {
+					require.NotNil(t, result)
+					assert.Equal(t, str, *result)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("JWTPtr().Parse(%v) expected error but got none", tt.input)
-				}
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -214,55 +166,22 @@ func TestJWTWithAlgorithm(t *testing.T) {
 		name      string
 		algorithm string
 		input     any
-		expected  bool
+		valid     bool
 	}{
-		{
-			name:      "valid JWT with matching HS256 algorithm",
-			algorithm: "HS256",
-			input:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected:  true,
-		},
-		{
-			name:      "valid JWT structure but algorithm mismatch (RS256 expected but HS256 in token)",
-			algorithm: "RS256",
-			input:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected:  false,
-		},
-		{
-			name:      "invalid JWT token structure",
-			algorithm: "HS256",
-			input:     "invalid.jwt.token",
-			expected:  false,
-		},
-		{
-			name:      "empty string with algorithm constraint",
-			algorithm: "HS256",
-			input:     "",
-			expected:  false,
-		},
-		{
-			name:      "non-string input with algorithm constraint",
-			algorithm: "HS256",
-			input:     123,
-			expected:  false,
-		},
+		{"matching HS256", "HS256", validJWTHS256, true},
+		{"mismatch RS256", "RS256", validJWTHS256, false},
+		{"invalid structure", "HS256", "invalid.jwt.token", false},
+		{"empty string", "HS256", "", false},
+		{"non-string input", "HS256", 123, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := JWT(JWTOptions{Algorithm: tt.algorithm})
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
-				if err != nil {
-					t.Errorf("JWT(...).Parse(%v) returned error: %v", tt.input, err)
-				} else if str, ok := tt.input.(string); ok && result != str {
-					t.Errorf("JWT(...).Parse(%v) = %v, want %v", tt.input, result, str)
-				}
+			_, err := JWT(JWTOptions{Algorithm: tt.algorithm}).Parse(tt.input)
+			if tt.valid {
+				assert.NoError(t, err)
 			} else {
-				if err == nil {
-					t.Errorf("JWT(...).Parse(%v) expected error but got none", tt.input)
-				}
+				assert.Error(t, err)
 			}
 		})
 	}
@@ -273,258 +192,134 @@ func TestJWTPtrWithAlgorithm(t *testing.T) {
 		name      string
 		algorithm string
 		input     any
-		expected  bool
+		valid     bool
 	}{
-		{
-			name:      "valid JWT token pointer with matching algorithm",
-			algorithm: "HS256",
-			input:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected:  true,
-		},
-		{
-			name:      "algorithm mismatch with pointer type",
-			algorithm: "RS256",
-			input:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-			expected:  false,
-		},
-		{
-			name:      "nil input with algorithm constraint",
-			algorithm: "HS256",
-			input:     nil,
-			expected:  false,
-		},
+		{"matching algorithm", "HS256", validJWTHS256, true},
+		{"algorithm mismatch", "RS256", validJWTHS256, false},
+		{"nil input", "HS256", nil, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := JWTPtr(JWTOptions{Algorithm: tt.algorithm})
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
-				if err != nil {
-					t.Errorf("JWTPtr(...).Parse(%v) returned error: %v", tt.input, err)
-				} else if str, ok := tt.input.(string); ok && result != nil && *result != str {
-					t.Errorf("JWTPtr(...).Parse(%v) = %v, want %v", tt.input, *result, str)
+			result, err := JWTPtr(JWTOptions{Algorithm: tt.algorithm}).Parse(tt.input)
+			if tt.valid {
+				require.NoError(t, err)
+				if str, ok := tt.input.(string); ok {
+					require.NotNil(t, result)
+					assert.Equal(t, str, *result)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("JWTPtr(...).Parse(%v) expected error but got none", tt.input)
-				}
+				assert.Error(t, err)
 			}
 		})
 	}
 }
 
 func TestJWTChaining(t *testing.T) {
-	// Test that JWT type supports method chaining with string validation methods
 	schema := JWT().Min(10).Max(1000)
 
-	validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+	result, err := schema.Parse(validJWTHS256)
+	require.NoError(t, err)
+	assert.Equal(t, validJWTHS256, result)
 
-	result, err := schema.Parse(validJWT)
-	if err != nil {
-		t.Errorf("JWT().Min(10).Max(1000).Parse(%v) returned error: %v", validJWT, err)
-	}
-
-	if result != validJWT {
-		t.Errorf("JWT().Min(10).Max(1000).Parse(%v) = %v, want %v", validJWT, result, validJWT)
-	}
-
-	// Test that length validation works with JWT
-	shortJWT := "short"
-	_, err = schema.Parse(shortJWT)
-	if err == nil {
-		t.Error("Expected error for JWT that's too short")
-	}
+	_, err = schema.Parse("short")
+	assert.Error(t, err)
 }
 
 func TestJWTWithCustomError(t *testing.T) {
 	customError := "Invalid JWT token provided"
-	schema := JWT(customError)
+	_, err := JWT(customError).Parse("invalid.jwt.token")
+	require.Error(t, err)
 
-	_, err := schema.Parse("invalid.jwt.token")
-	if err == nil {
-		t.Error("Expected error for invalid JWT")
-		return
-	}
-
-	var zodErr2 *issues.ZodError
-	if issues.IsZodError(err, &zodErr2) {
-		if len(zodErr2.Issues) > 0 {
-			assert.Contains(t, zodErr2.Issues[0].Message, customError)
-		}
+	var zodErr *issues.ZodError
+	if issues.IsZodError(err, &zodErr) && len(zodErr.Issues) > 0 {
+		assert.Contains(t, zodErr.Issues[0].Message, customError)
 	}
 }
 
 func TestJWTWithStringMethods(t *testing.T) {
-	t.Run("JWT with StartsWith validation", func(t *testing.T) {
-		// Create a JWT schema that requires token to start with "eyJ"
-		schema := JWT().StartsWith("eyJ")
-
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-
-		result, err := schema.Parse(validJWT)
-		if err != nil {
-			t.Errorf("JWT().StartsWith('eyJ').Parse(%v) returned error: %v", validJWT, err)
-		}
-
-		if result != validJWT {
-			t.Errorf("JWT().StartsWith('eyJ').Parse(%v) = %v, want %v", validJWT, result, validJWT)
-		}
+	t.Run("StartsWith", func(t *testing.T) {
+		result, err := JWT().StartsWith("eyJ").Parse(validJWTHS256)
+		require.NoError(t, err)
+		assert.Equal(t, validJWTHS256, result)
 	})
 
-	t.Run("JWT with Includes validation", func(t *testing.T) {
-		// Create a JWT schema that requires token to include "eyJ"
-		schema := JWT().Includes("eyJ")
-
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-
-		result, err := schema.Parse(validJWT)
-		if err != nil {
-			t.Errorf("JWT().Includes('eyJ').Parse(%v) returned error: %v", validJWT, err)
-		}
-
-		if result != validJWT {
-			t.Errorf("JWT().Includes('eyJ').Parse(%v) = %v, want %v", validJWT, result, validJWT)
-		}
+	t.Run("Includes", func(t *testing.T) {
+		result, err := JWT().Includes("eyJ").Parse(validJWTHS256)
+		require.NoError(t, err)
+		assert.Equal(t, validJWTHS256, result)
 	})
 }
 
 func TestJWTModifiers(t *testing.T) {
-	t.Run("JWT Optional", func(t *testing.T) {
+	t.Run("Optional", func(t *testing.T) {
 		schema := JWT().Optional()
-
-		// Test with valid JWT
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-		result, err := schema.Parse(validJWT)
-		if err != nil {
-			t.Errorf("JWT().Optional().Parse(%v) returned error: %v", validJWT, err)
-		}
-		if result == nil || *result != validJWT {
-			t.Errorf("JWT().Optional().Parse(%v) = %v, want %v", validJWT, result, validJWT)
-		}
+		result, err := schema.Parse(validJWTHS256)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, validJWTHS256, *result)
 	})
 
-	t.Run("JWT Nilable", func(t *testing.T) {
-		schema := JWT().Nilable()
-
-		// Test with nil input
-		result, err := schema.Parse(nil)
-		if err != nil {
-			t.Errorf("JWT().Nilable().Parse(nil) returned error: %v", err)
-		}
-		if result != nil {
-			t.Errorf("JWT().Nilable().Parse(nil) = %v, want nil", result)
-		}
+	t.Run("Nilable", func(t *testing.T) {
+		result, err := JWT().Nilable().Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
-	t.Run("JWT with Default", func(t *testing.T) {
-		defaultJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-		schema := JWT().Default(defaultJWT)
+	t.Run("Default", func(t *testing.T) {
+		result, err := JWT().Default(validJWTHS256).Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, validJWTHS256, result)
+	})
 
-		// Test with undefined input (should use default)
-		result, err := schema.Parse(nil)
-		if err != nil {
-			t.Errorf("JWT().Default().Parse(nil) returned error: %v", err)
-		}
-		if result != defaultJWT {
-			t.Errorf("JWT().Default().Parse(nil) = %v, want %v", result, defaultJWT)
-		}
+	t.Run("Nullish", func(t *testing.T) {
+		result, err := JWT().Nullish().Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 }
 
 func TestJWTWithOptions(t *testing.T) {
-	t.Run("JWT with algorithm options", func(t *testing.T) {
-		schema := JWT(JWTOptions{Algorithm: "HS256"})
-
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-
-		result, err := schema.Parse(validJWT)
-		if err != nil {
-			t.Errorf("JWT(JWTOptions{Algorithm: HS256}).Parse(%v) returned error: %v", validJWT, err)
-		}
-		if result != validJWT {
-			t.Errorf("JWT(JWTOptions{Algorithm: HS256}).Parse(%v) = %v, want %v", validJWT, result, validJWT)
-		}
+	t.Run("algorithm options", func(t *testing.T) {
+		result, err := JWT(JWTOptions{Algorithm: "HS256"}).Parse(validJWTHS256)
+		require.NoError(t, err)
+		assert.Equal(t, validJWTHS256, result)
 	})
 
-	t.Run("JWT with options and custom error", func(t *testing.T) {
-		customError := "Invalid HS256 JWT token"
-		schema := JWT(JWTOptions{Algorithm: "HS256"}, customError)
-
-		_, err := schema.Parse("invalid.jwt.token")
-		if err == nil {
-			t.Error("Expected error for invalid JWT")
-		}
+	t.Run("options with custom error", func(t *testing.T) {
+		_, err := JWT(JWTOptions{Algorithm: "HS256"}, "Invalid HS256 JWT token").Parse("invalid.jwt.token")
+		assert.Error(t, err)
 	})
 
-	t.Run("JWT with options and schema params", func(t *testing.T) {
-		schemaParams := core.SchemaParams{Description: "RSA JWT Token"}
-		schema := JWT(JWTOptions{Algorithm: "RS256"}, schemaParams)
-
-		// This should fail because token uses HS256 but we expect RS256
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-
-		_, err := schema.Parse(validJWT)
-		if err == nil {
-			t.Error("Expected error for algorithm mismatch")
-		}
+	t.Run("options with schema params", func(t *testing.T) {
+		_, err := JWT(JWTOptions{Algorithm: "RS256"}, core.SchemaParams{Description: "RSA JWT Token"}).Parse(validJWTHS256)
+		assert.Error(t, err, "should fail for algorithm mismatch")
 	})
 }
 
 // =============================================================================
-// Base64 TESTS
+// Base64
 // =============================================================================
 
 func TestBase64(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    any
-		expected bool
+		name  string
+		input any
+		valid bool
 	}{
-		{
-			name:     "valid base64 string",
-			input:    "SGVsbG8gV29ybGQ=", // "Hello World"
-			expected: true,
-		},
-		{
-			name:     "valid base64 with padding",
-			input:    "Zm9vYg==", // "foob"
-			expected: true,
-		},
-		{
-			name:     "valid base64 without padding",
-			input:    "Zm9vYmFy", // "foobar"
-			expected: true,
-		},
-		{
-			name:     "invalid base64 characters",
-			input:    "SGVsbG8gV29ybGQ$=",
-			expected: false,
-		},
-		{
-			name:     "invalid base64 padding",
-			input:    "SGVsbG8gV29ybGQ===",
-			expected: false,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: true, // Empty string is valid base64
-		},
-		{
-			name:     "non-string input",
-			input:    12345,
-			expected: false,
-		},
+		{"valid base64", "SGVsbG8gV29ybGQ=", true},
+		{"valid with padding", "Zm9vYg==", true},
+		{"valid without padding", "Zm9vYmFy", true},
+		{"invalid characters", "SGVsbG8gV29ybGQ$=", false},
+		{"invalid padding", "SGVsbG8gV29ybGQ===", false},
+		{"empty string", "", true},
+		{"non-string input", 12345, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := Base64()
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
+			result, err := Base64().Parse(tt.input)
+			if tt.valid {
 				assert.NoError(t, err)
 				if str, ok := tt.input.(string); ok {
 					assert.Equal(t, str, result)
@@ -537,50 +332,42 @@ func TestBase64(t *testing.T) {
 }
 
 func TestBase64Ptr(t *testing.T) {
-	t.Run("valid base64 pointer", func(t *testing.T) {
-		schema := Base64Ptr()
+	t.Run("valid", func(t *testing.T) {
 		valid := "SGVsbG8gV29ybGQ="
-		result, err := schema.Parse(&valid)
+		result, err := Base64Ptr().Parse(&valid)
 		assert.NoError(t, err)
 		assert.Equal(t, &valid, result)
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		schema := Base64Ptr()
-		_, err := schema.Parse(nil)
-		assert.Error(t, err) // By default, ptr is not nilable
+		_, err := Base64Ptr().Parse(nil)
+		assert.Error(t, err)
 	})
 
-	t.Run("invalid base64 pointer", func(t *testing.T) {
-		schema := Base64Ptr()
+	t.Run("invalid", func(t *testing.T) {
 		invalid := "invalid!"
-		_, err := schema.Parse(&invalid)
+		_, err := Base64Ptr().Parse(&invalid)
 		assert.Error(t, err)
 	})
 }
 
 func TestBase64Chaining(t *testing.T) {
-	schema := Base64().Min(10) // "SGVsbG8gV29ybGQ=" is 16 chars long
-	valid := "SGVsbG8gV29ybGQ="
-	_, err := schema.Parse(valid)
+	schema := Base64().Min(10)
+	_, err := schema.Parse("SGVsbG8gV29ybGQ=")
 	assert.NoError(t, err)
 
-	shortValid := "Zm9v" // "foo" is 4 chars long
-	_, err = schema.Parse(shortValid)
+	_, err = schema.Parse("Zm9v")
 	assert.Error(t, err)
 }
 
 func TestBase64WithCustomError(t *testing.T) {
 	customError := "Invalid Base64 data"
-	schema := Base64(customError)
-	_, err := schema.Parse("invalid!")
-	assert.Error(t, err)
+	_, err := Base64(customError).Parse("invalid!")
+	require.Error(t, err)
 
-	var zodErr3 *issues.ZodError
-	if issues.IsZodError(err, &zodErr3) {
-		if len(zodErr3.Issues) > 0 {
-			assert.Contains(t, zodErr3.Issues[0].Message, customError)
-		}
+	var zodErr *issues.ZodError
+	if issues.IsZodError(err, &zodErr) && len(zodErr.Issues) > 0 {
+		assert.Contains(t, zodErr.Issues[0].Message, customError)
 	}
 }
 
@@ -598,74 +385,48 @@ func TestBase64Modifiers(t *testing.T) {
 	})
 
 	t.Run("Nilable", func(t *testing.T) {
-		schema := Base64().Nilable()
-		result, err := schema.Parse(nil)
+		result, err := Base64().Nilable().Parse(nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("Default", func(t *testing.T) {
 		defaultVal := "SGVsbG8gV29ybGQ="
-		schema := Base64().Default(defaultVal)
-		result, err := schema.Parse(nil)
+		result, err := Base64().Default(defaultVal).Parse(nil)
 		assert.NoError(t, err)
 		assert.Equal(t, defaultVal, result)
+	})
+
+	t.Run("Nullish", func(t *testing.T) {
+		result, err := Base64().Nullish().Parse(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
 	})
 }
 
 // =============================================================================
-// Base64URL TESTS
+// Base64URL
 // =============================================================================
 
 func TestBase64URL(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    any
-		expected bool
+		name  string
+		input any
+		valid bool
 	}{
-		{
-			name:     "valid base64url string",
-			input:    "SGVsbG8gV29ybGQ", // "Hello World" in base64url
-			expected: true,
-		},
-		{
-			name:     "base64 with + char is invalid in base64url",
-			input:    "Zm9v+g==", // contains '+'
-			expected: false,
-		},
-		{
-			name:     "base64 with / char is invalid in base64url",
-			input:    "Zm9v/g==", // contains '/'
-			expected: false,
-		},
-		{
-			name:     "valid base64url (no padding)",
-			input:    "Zm9vYmFy", // "foobar"
-			expected: true,
-		},
-		{
-			name:     "valid base64url (with padding)",
-			input:    "Zm9vYg==", // "foob"
-			expected: true,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: true, // Empty string is valid base64url
-		},
-		{
-			name:     "non-string input",
-			input:    12345,
-			expected: false,
-		},
+		{"valid base64url", "SGVsbG8gV29ybGQ", true},
+		{"+ char invalid", "Zm9v+g==", false},
+		{"/ char invalid", "Zm9v/g==", false},
+		{"valid no padding", "Zm9vYmFy", true},
+		{"valid with padding", "Zm9vYg==", true},
+		{"empty string", "", true},
+		{"non-string input", 12345, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := Base64URL()
-			result, err := schema.Parse(tt.input)
-
-			if tt.expected {
+			result, err := Base64URL().Parse(tt.input)
+			if tt.valid {
 				assert.NoError(t, err)
 				if str, ok := tt.input.(string); ok {
 					assert.Equal(t, str, result)
@@ -678,50 +439,42 @@ func TestBase64URL(t *testing.T) {
 }
 
 func TestBase64URLPtr(t *testing.T) {
-	t.Run("valid base64url pointer", func(t *testing.T) {
-		schema := Base64URLPtr()
+	t.Run("valid", func(t *testing.T) {
 		valid := "SGVsbG8gV29ybGQ"
-		result, err := schema.Parse(&valid)
+		result, err := Base64URLPtr().Parse(&valid)
 		assert.NoError(t, err)
 		assert.Equal(t, &valid, result)
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		schema := Base64URLPtr()
-		_, err := schema.Parse(nil)
+		_, err := Base64URLPtr().Parse(nil)
 		assert.Error(t, err)
 	})
 
-	t.Run("invalid base64url pointer", func(t *testing.T) {
-		schema := Base64URLPtr()
+	t.Run("invalid", func(t *testing.T) {
 		invalid := "not-valid-url-safe-base64+"
-		_, err := schema.Parse(&invalid)
+		_, err := Base64URLPtr().Parse(&invalid)
 		assert.Error(t, err)
 	})
 }
 
 func TestBase64URLChaining(t *testing.T) {
-	schema := Base64URL().Min(10) // "SGVsbG8gV29ybGQ" is 15 chars
-	valid := "SGVsbG8gV29ybGQ"
-	_, err := schema.Parse(valid)
+	schema := Base64URL().Min(10)
+	_, err := schema.Parse("SGVsbG8gV29ybGQ")
 	assert.NoError(t, err)
 
-	shortValid := "Zm9v" // "foo" is 4 chars long
-	_, err = schema.Parse(shortValid)
+	_, err = schema.Parse("Zm9v")
 	assert.Error(t, err)
 }
 
 func TestBase64URLWithCustomError(t *testing.T) {
 	customError := "Invalid Base64URL data"
-	schema := Base64URL(customError)
-	_, err := schema.Parse("invalid+base64url")
-	assert.Error(t, err)
+	_, err := Base64URL(customError).Parse("invalid+base64url")
+	require.Error(t, err)
 
-	var zodErr4 *issues.ZodError
-	if issues.IsZodError(err, &zodErr4) {
-		if len(zodErr4.Issues) > 0 {
-			assert.Contains(t, zodErr4.Issues[0].Message, customError)
-		}
+	var zodErr *issues.ZodError
+	if issues.IsZodError(err, &zodErr) && len(zodErr.Issues) > 0 {
+		assert.Contains(t, zodErr.Issues[0].Message, customError)
 	}
 }
 
@@ -739,61 +492,50 @@ func TestBase64URLModifiers(t *testing.T) {
 	})
 
 	t.Run("Nilable", func(t *testing.T) {
-		schema := Base64URL().Nilable()
-		result, err := schema.Parse(nil)
+		result, err := Base64URL().Nilable().Parse(nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("Default", func(t *testing.T) {
 		defaultVal := "SGVsbG8gV29ybGQ"
-		schema := Base64URL().Default(defaultVal)
-		result, err := schema.Parse(nil)
+		result, err := Base64URL().Default(defaultVal).Parse(nil)
 		assert.NoError(t, err)
 		assert.Equal(t, defaultVal, result)
+	})
+
+	t.Run("Nullish", func(t *testing.T) {
+		result, err := Base64URL().Nullish().Parse(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, result)
 	})
 }
 
 // =============================================================================
-// Default and prefault tests
+// Default and Prefault
 // =============================================================================
 
 func TestText_DefaultAndPrefault(t *testing.T) {
 	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
-		schema := Emoji().Default("😀").Prefault("😁")
-
-		result, err := schema.Parse(nil)
+		result, err := Emoji().Default("😀").Prefault("😁").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "😀", result)
 	})
 
 	t.Run("Default short-circuits validation", func(t *testing.T) {
-		// Default should bypass validation and return immediately
-		// Use an invalid emoji as default to test short-circuit
-		schema := Emoji().Default("not-an-emoji")
-
-		result, err := schema.Parse(nil)
+		result, err := Emoji().Default("not-an-emoji").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "not-an-emoji", result)
 	})
 
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		// Prefault value must pass text validation
-		validEmoji := "🎉"
-		schema := Emoji().Prefault(validEmoji)
-
-		result, err := schema.Parse(nil)
+		result, err := Emoji().Prefault("🎉").Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, validEmoji, result)
+		assert.Equal(t, "🎉", result)
 	})
 
 	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
-		// Non-nil input that fails validation should not trigger Prefault
-		schema := Emoji().Prefault("🚀")
-
-		// Invalid input should fail validation, not use Prefault
-		_, err := schema.Parse("not-an-emoji")
+		_, err := Emoji().Prefault("🚀").Parse("not-an-emoji")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Invalid string: must match pattern")
 	})
@@ -818,14 +560,8 @@ func TestText_DefaultAndPrefault(t *testing.T) {
 	})
 
 	t.Run("Prefault validation failure returns error", func(t *testing.T) {
-		// Test that invalid prefault value fails validation
-		schema := JWT()
-
-		// Test with valid prefault
-		validJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-		validSchema := schema.Prefault(validJWT)
-		result, err := validSchema.Parse(nil)
+		result, err := JWT().Prefault(validJWTHS256).Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, validJWT, result)
+		assert.Equal(t, validJWTHS256, result)
 	})
 }

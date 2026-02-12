@@ -7,17 +7,32 @@ import (
 )
 
 // =============================================================================
+// INTERNAL HELPERS (DRY)
+// =============================================================================
+
+// newTextSchema creates a text schema by adding a check to a base string schema.
+// This eliminates repeated clone-addCheck-wrap boilerplate across all text types.
+func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
+	in := base.GetInternals().Clone()
+	in.AddCheck(check)
+	return base.withInternals(in)
+}
+
+// =============================================================================
 // Emoji
 // =============================================================================
 
+// ZodEmoji validates strings containing only emoji characters.
 type ZodEmoji[T StringConstraint] struct{ *ZodString[T] }
 
-// StrictParse validates the input using strict parsing rules
+func newEmoji[T StringConstraint](s *ZodString[T]) *ZodEmoji[T] { return &ZodEmoji[T]{s} }
+
+// StrictParse validates the input with compile-time type safety.
 func (z *ZodEmoji[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse validates the input with compile-time type safety and panics on error.
 func (z *ZodEmoji[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -26,35 +41,47 @@ func (z *ZodEmoji[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// Optional returns a new schema that accepts nil values.
+func (z *ZodEmoji[T]) Optional() *ZodEmoji[*string] { return newEmoji(z.ZodString.Optional()) }
+
+// Nilable returns a new schema that accepts nil values.
+func (z *ZodEmoji[T]) Nilable() *ZodEmoji[*string] { return newEmoji(z.ZodString.Nilable()) }
+
+// Nullish returns a new schema combining optional and nilable.
+func (z *ZodEmoji[T]) Nullish() *ZodEmoji[*string] { return newEmoji(z.ZodString.Nullish()) }
+
+// Emoji creates an emoji validation schema.
 func Emoji(params ...any) *ZodEmoji[string] {
-	base := StringTyped[string](params...).Regex(regex.Emoji)
-	return &ZodEmoji[string]{base}
+	return newEmoji(StringTyped[string](params...).Regex(regex.Emoji))
 }
 
+// EmojiPtr creates a pointer emoji validation schema.
 func EmojiPtr(params ...any) *ZodEmoji[*string] {
-	base := StringPtr(params...).Regex(regex.Emoji)
-	return &ZodEmoji[*string]{base}
+	return newEmoji(StringPtr(params...).Regex(regex.Emoji))
 }
 
 // =============================================================================
 // JWT
 // =============================================================================
 
-// JWTOptions defines options for JWT validation
+// JWTOptions configures JWT validation behavior.
 type JWTOptions struct {
-	// Algorithm specifies the expected signing algorithm
-	// If empty, any algorithm is accepted (basic structure validation only)
+	// Algorithm specifies the expected signing algorithm.
+	// If empty, any algorithm is accepted (basic structure validation only).
 	Algorithm string
 }
 
+// ZodJWT validates strings in JWT (JSON Web Token) format.
 type ZodJWT[T StringConstraint] struct{ *ZodString[T] }
 
-// StrictParse validates the input using strict parsing rules
+func newJWT[T StringConstraint](s *ZodString[T]) *ZodJWT[T] { return &ZodJWT[T]{s} }
+
+// StrictParse validates the input with compile-time type safety.
 func (z *ZodJWT[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse validates the input with compile-time type safety and panics on error.
 func (z *ZodJWT[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -63,42 +90,35 @@ func (z *ZodJWT[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// JWT creates a JWT token validation schema
-// Supports various parameter combinations:
+// Optional returns a new schema that accepts nil values.
+func (z *ZodJWT[T]) Optional() *ZodJWT[*string] { return newJWT(z.ZodString.Optional()) }
+
+// Nilable returns a new schema that accepts nil values.
+func (z *ZodJWT[T]) Nilable() *ZodJWT[*string] { return newJWT(z.ZodString.Nilable()) }
+
+// Nullish returns a new schema combining optional and nilable.
+func (z *ZodJWT[T]) Nullish() *ZodJWT[*string] { return newJWT(z.ZodString.Nullish()) }
+
+// JWT creates a JWT token validation schema.
 //
-//	JWT() - basic JWT structure validation
-//	JWT("error message") - basic validation with custom error message
-//	JWT(JWTOptions{Algorithm: "HS256"}) - with algorithm constraint
-//	JWT(options, "error message") - options with error message
-//	JWT(options, core.SchemaParams{Description: "JWT"}) - options with schema params
+//	JWT()                                                    - basic structure validation
+//	JWT("error message")                                     - with custom error message
+//	JWT(JWTOptions{Algorithm: "HS256"})                      - with algorithm constraint
+//	JWT(JWTOptions{Algorithm: "HS256"}, "error message")     - options with error message
 func JWT(params ...any) *ZodJWT[string] {
 	return JWTTyped[string](params...)
 }
 
-// JWTPtr creates a JWT token validation schema for pointer type
+// JWTPtr creates a pointer JWT token validation schema.
 func JWTPtr(params ...any) *ZodJWT[*string] {
 	return JWTTyped[*string](params...)
 }
 
-// JWTTyped creates a JWT token validation schema with specific type
+// JWTTyped creates a JWT token validation schema for a specific type.
 func JWTTyped[T StringConstraint](params ...any) *ZodJWT[T] {
-	// Extract JWTOptions (if any) and keep the remaining parameters as-is.
-	var options *JWTOptions
-	var forwarded []any
-
-	for _, p := range params {
-		if opt, ok := p.(JWTOptions); ok {
-			options = &opt
-			// do NOT include in forwarded slice
-		} else {
-			forwarded = append(forwarded, p)
-		}
-	}
-
-	// Build base string schema – StringTyped already handles SchemaParams / error messages.
+	options, forwarded := extractJWTOptions(params)
 	base := StringTyped[T](forwarded...)
 
-	// Select appropriate JWT check.
 	var jwtCheck core.ZodCheck
 	if options != nil && options.Algorithm != "" {
 		jwtCheck = checks.JWTWithAlgorithm(options.Algorithm, forwarded...)
@@ -106,25 +126,40 @@ func JWTTyped[T StringConstraint](params ...any) *ZodJWT[T] {
 		jwtCheck = checks.JWT(forwarded...)
 	}
 
-	newInternals := base.internals.Clone()
-	newInternals.AddCheck(jwtCheck)
+	return newJWT(newTextSchema(base, jwtCheck))
+}
 
-	return &ZodJWT[T]{base.withInternals(newInternals)}
+// extractJWTOptions separates JWTOptions from other parameters.
+func extractJWTOptions(params []any) (*JWTOptions, []any) {
+	var options *JWTOptions
+	forwarded := make([]any, 0, len(params))
+
+	for _, p := range params {
+		if opt, ok := p.(JWTOptions); ok {
+			options = &opt
+		} else {
+			forwarded = append(forwarded, p)
+		}
+	}
+
+	return options, forwarded
 }
 
 // =============================================================================
 // Base64
 // =============================================================================
 
-// ZodBase64 defines a schema for Base64 encoded strings.
+// ZodBase64 validates Base64 encoded strings.
 type ZodBase64[T StringConstraint] struct{ *ZodString[T] }
 
-// StrictParse validates the input using strict parsing rules
+func newBase64[T StringConstraint](s *ZodString[T]) *ZodBase64[T] { return &ZodBase64[T]{s} }
+
+// StrictParse validates the input with compile-time type safety.
 func (z *ZodBase64[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse validates the input with compile-time type safety and panics on error.
 func (z *ZodBase64[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -133,49 +168,42 @@ func (z *ZodBase64[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
+// Optional returns a new schema that accepts nil values.
+func (z *ZodBase64[T]) Optional() *ZodBase64[*string] { return newBase64(z.ZodString.Optional()) }
+
+// Nilable returns a new schema that accepts nil values.
+func (z *ZodBase64[T]) Nilable() *ZodBase64[*string] { return newBase64(z.ZodString.Nilable()) }
+
+// Nullish returns a new schema combining optional and nilable.
+func (z *ZodBase64[T]) Nullish() *ZodBase64[*string] { return newBase64(z.ZodString.Nullish()) }
+
 // Base64 creates a Base64 encoded string validation schema.
-// Supports custom error messages and schema parameters.
-//
-//	Base64()
-//	Base64("custom error message")
-//	Base64(core.SchemaParams{Description: "Base64 string"})
 func Base64(params ...any) *ZodBase64[string] {
-	return Base64Typed[string](params...)
+	return newBase64(newTextSchema(StringTyped[string](params...), checks.Base64(params...)))
 }
 
-// Base64Ptr creates a Base64 encoded string validation schema for a pointer type.
+// Base64Ptr creates a pointer Base64 encoded string validation schema.
 func Base64Ptr(params ...any) *ZodBase64[*string] {
-	return Base64Typed[*string](params...)
-}
-
-// Base64Typed creates a Base64 encoded string validation schema for a specific type.
-func Base64Typed[T StringConstraint](params ...any) *ZodBase64[T] {
-	// Leverage StringTyped and Base64 check directly – utils.NormalizeParams is
-	// already used inside StringTyped to handle SchemaParams / error strings.
-	base := StringTyped[T](params...)
-
-	// Attach Base64 format check (it will process params for custom error).
-	base64Check := checks.Base64(params...)
-
-	newInternals := base.internals.Clone()
-	newInternals.AddCheck(base64Check)
-
-	return &ZodBase64[T]{base.withInternals(newInternals)}
+	return newBase64(newTextSchema(StringPtr(params...), checks.Base64(params...)))
 }
 
 // =============================================================================
 // Base64URL
 // =============================================================================
 
-// ZodBase64URL defines a schema for Base64URL encoded strings.
+// ZodBase64URL validates Base64URL encoded strings.
 type ZodBase64URL[T StringConstraint] struct{ *ZodString[T] }
 
-// StrictParse validates the input using strict parsing rules
+func newBase64URL[T StringConstraint](s *ZodString[T]) *ZodBase64URL[T] {
+	return &ZodBase64URL[T]{s}
+}
+
+// StrictParse validates the input with compile-time type safety.
 func (z *ZodBase64URL[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse validates the input with compile-time type safety and panics on error.
 func (z *ZodBase64URL[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -184,47 +212,46 @@ func (z *ZodBase64URL[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T 
 	return result
 }
 
+// Optional returns a new schema that accepts nil values.
+func (z *ZodBase64URL[T]) Optional() *ZodBase64URL[*string] {
+	return newBase64URL(z.ZodString.Optional())
+}
+
+// Nilable returns a new schema that accepts nil values.
+func (z *ZodBase64URL[T]) Nilable() *ZodBase64URL[*string] {
+	return newBase64URL(z.ZodString.Nilable())
+}
+
+// Nullish returns a new schema combining optional and nilable.
+func (z *ZodBase64URL[T]) Nullish() *ZodBase64URL[*string] {
+	return newBase64URL(z.ZodString.Nullish())
+}
+
 // Base64URL creates a Base64URL encoded string validation schema.
-// Supports custom error messages and schema parameters.
-//
-//	Base64URL()
-//	Base64URL("custom error message")
-//	Base64URL(core.SchemaParams{Description: "Base64URL string"})
 func Base64URL(params ...any) *ZodBase64URL[string] {
-	return Base64URLTyped[string](params...)
+	return newBase64URL(newTextSchema(StringTyped[string](params...), checks.Base64URL(params...)))
 }
 
-// Base64URLPtr creates a Base64URL encoded string validation schema for a pointer type.
+// Base64URLPtr creates a pointer Base64URL encoded string validation schema.
 func Base64URLPtr(params ...any) *ZodBase64URL[*string] {
-	return Base64URLTyped[*string](params...)
-}
-
-// Base64URLTyped creates a Base64URL encoded string validation schema for a specific type.
-func Base64URLTyped[T StringConstraint](params ...any) *ZodBase64URL[T] {
-	base := StringTyped[T](params...)
-
-	// Attach Base64URL format check (handles custom error via params).
-	base64URLCheck := checks.Base64URL(params...)
-
-	newInternals := base.internals.Clone()
-	newInternals.AddCheck(base64URLCheck)
-
-	return &ZodBase64URL[T]{base.withInternals(newInternals)}
+	return newBase64URL(newTextSchema(StringPtr(params...), checks.Base64URL(params...)))
 }
 
 // =============================================================================
 // Hex
 // =============================================================================
 
-// ZodHex represents a hexadecimal string validation schema
+// ZodHex validates hexadecimal strings.
 type ZodHex[T StringConstraint] struct{ *ZodString[T] }
 
-// StrictParse validates the input using strict parsing rules
+func newHex[T StringConstraint](s *ZodString[T]) *ZodHex[T] { return &ZodHex[T]{s} }
+
+// StrictParse validates the input with compile-time type safety.
 func (z *ZodHex[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse validates the input with compile-time type safety and panics on error.
 func (z *ZodHex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -233,34 +260,22 @@ func (z *ZodHex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// Hex creates a hexadecimal string validation schema
-// TypeScript Zod v4 equivalent: z.hex()
-//
-// Examples:
-//
-//	schema := Hex()
-//	schema.Parse("")           // valid (empty string is valid hex)
-//	schema.Parse("123abc")     // valid
-//	schema.Parse("DEADBEEF")   // valid
-//	schema.Parse("xyz")        // invalid
+// Optional returns a new schema that accepts nil values.
+func (z *ZodHex[T]) Optional() *ZodHex[*string] { return newHex(z.ZodString.Optional()) }
+
+// Nilable returns a new schema that accepts nil values.
+func (z *ZodHex[T]) Nilable() *ZodHex[*string] { return newHex(z.ZodString.Nilable()) }
+
+// Nullish returns a new schema combining optional and nilable.
+func (z *ZodHex[T]) Nullish() *ZodHex[*string] { return newHex(z.ZodString.Nullish()) }
+
+// Hex creates a hexadecimal string validation schema.
+// Zod v4 equivalent: z.hex()
 func Hex(params ...any) *ZodHex[string] {
-	return HexTyped[string](params...)
+	return newHex(newTextSchema(StringTyped[string](params...), checks.Hex(params...)))
 }
 
-// HexPtr creates a hexadecimal string validation schema for pointer types
+// HexPtr creates a pointer hexadecimal string validation schema.
 func HexPtr(params ...any) *ZodHex[*string] {
-	return HexTyped[*string](params...)
-}
-
-// HexTyped creates a hexadecimal string validation schema for a specific type
-func HexTyped[T StringConstraint](params ...any) *ZodHex[T] {
-	base := StringTyped[T](params...)
-
-	// Attach Hex format check
-	hexCheck := checks.Hex(params...)
-
-	newInternals := base.internals.Clone()
-	newInternals.AddCheck(hexCheck)
-
-	return &ZodHex[T]{base.withInternals(newInternals)}
+	return newHex(newTextSchema(StringPtr(params...), checks.Hex(params...)))
 }
