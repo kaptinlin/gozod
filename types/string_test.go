@@ -2039,3 +2039,37 @@ func TestString_RefineParameters(t *testing.T) {
 		assert.Equal(t, "Too short!", zErr.Issues[0].Message)
 	})
 }
+
+// =============================================================================
+// Boundary value edge case tests (Zod v4: 8fbf701e)
+// =============================================================================
+
+func TestStringBoundaryValues(t *testing.T) {
+	t.Run("Length(0) accepts empty string", func(t *testing.T) {
+		result, err := String().Length(0).Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("Min(0) accepts empty string", func(t *testing.T) {
+		result, err := String().Min(0).Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("Max(0) accepts empty string", func(t *testing.T) {
+		result, err := String().Max(0).Parse("")
+		require.NoError(t, err)
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("Max(0) rejects non-empty string", func(t *testing.T) {
+		_, err := String().Max(0).Parse("a")
+		require.Error(t, err)
+	})
+
+	t.Run("Length(0) rejects non-empty string", func(t *testing.T) {
+		_, err := String().Length(0).Parse("a")
+		require.Error(t, err)
+	})
+}

@@ -2274,3 +2274,67 @@ func TestFloat_MustStrictParse(t *testing.T) {
 		assert.True(t, math.IsNaN(nanResult))
 	})
 }
+
+// =============================================================================
+// Boundary value edge case tests (Zod v4: 8fbf701e)
+// =============================================================================
+
+func TestFloatNegativeZero(t *testing.T) {
+	negZero := math.Copysign(0, -1) // -0.0
+
+	t.Run("-0 is NOT positive", func(t *testing.T) {
+		_, err := Float64().Positive().Parse(negZero)
+		assert.Error(t, err)
+	})
+
+	t.Run("-0 IS non-negative (IEEE 754: -0 == 0)", func(t *testing.T) {
+		_, err := Float64().NonNegative().Parse(negZero)
+		assert.NoError(t, err)
+	})
+
+	t.Run("-0 is NOT strictly negative", func(t *testing.T) {
+		_, err := Float64().Negative().Parse(negZero)
+		assert.Error(t, err)
+	})
+
+	t.Run("-0 IS non-positive (IEEE 754: -0 == 0)", func(t *testing.T) {
+		_, err := Float64().NonPositive().Parse(negZero)
+		assert.NoError(t, err)
+	})
+}
+
+// =============================================================================
+// MultipleOf with very small float steps (Zod v4: 3a818de1)
+// =============================================================================
+
+func TestFloatMultipleOfSmallSteps(t *testing.T) {
+	t.Run("MultipleOf 1e-10", func(t *testing.T) {
+		schema := Float64().MultipleOf(1e-10)
+
+		_, err := schema.Parse(5e-10) // 5 * 1e-10
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(1e-9) // 10 * 1e-10
+		assert.NoError(t, err)
+	})
+
+	t.Run("MultipleOf 0.1", func(t *testing.T) {
+		schema := Float64().MultipleOf(0.1)
+
+		_, err := schema.Parse(0.3) // 3 * 0.1
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(1.0) // 10 * 0.1
+		assert.NoError(t, err)
+	})
+
+	t.Run("MultipleOf 0.01", func(t *testing.T) {
+		schema := Float64().MultipleOf(0.01)
+
+		_, err := schema.Parse(0.99) // 99 * 0.01
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(1.23) // 123 * 0.01
+		assert.NoError(t, err)
+	})
+}

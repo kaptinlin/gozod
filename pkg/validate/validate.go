@@ -123,8 +123,16 @@ func MultipleOf(value, divisor any) bool {
 	if div == 0 {
 		return false
 	}
-	// Handle floating point precision.
-	return math.Abs(math.Mod(val, div)) < 1e-10
+	// Handle floating point precision with relative epsilon.
+	// Use a relative epsilon based on the divisor to correctly handle
+	// very small steps (e.g., 1e-10) where a fixed epsilon would
+	// conflict with the step itself (Zod v4: 3a818de1).
+	//
+	// Check both: remainder ≈ 0 OR remainder ≈ divisor.
+	// The latter handles cases like math.Mod(0.3, 0.1) ≈ 0.1.
+	epsilon := max(1e-10, math.Abs(div)*1e-6)
+	remainder := math.Abs(math.Mod(val, div))
+	return remainder < epsilon || math.Abs(remainder-math.Abs(div)) < epsilon
 }
 
 // MaxLength reports whether value's length is at most maximum.
