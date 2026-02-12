@@ -9,23 +9,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Basic functionality tests
-// =============================================================================
-
 func TestFunction_BasicFunctionality(t *testing.T) {
 	t.Run("valid function inputs", func(t *testing.T) {
 		schema := Function()
 
-		// Test simple function
-		simpleFunc := func(x int) int { return x * 2 }
-		result, err := schema.Parse(simpleFunc)
+		fn := func(x int) int { return x * 2 }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		// Test function with multiple parameters
-		multiParamFunc := func(a string, b int) string { return a }
-		result, err = schema.Parse(multiParamFunc)
+		multi := func(a string, b int) string { return a }
+		result, err = schema.Parse(multi)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
@@ -33,39 +27,31 @@ func TestFunction_BasicFunctionality(t *testing.T) {
 	t.Run("invalid type inputs", func(t *testing.T) {
 		schema := Function()
 
-		invalidInputs := []any{
+		inputs := []any{
 			"not a function", 123, 3.14, []int{1, 2, 3}, nil, map[string]int{},
 		}
-
-		for _, input := range invalidInputs {
+		for _, input := range inputs {
 			_, err := schema.Parse(input)
-			assert.Error(t, err, "Expected error for input: %v", input)
+			assert.Error(t, err, "expected error for input: %v", input)
 		}
 	})
 
-	t.Run("Parse and MustParse methods", func(t *testing.T) {
+	t.Run("Parse and MustParse", func(t *testing.T) {
 		schema := Function()
-		testFunc := func() string { return "test" }
+		fn := func() string { return "test" }
 
-		// Test Parse method
-		result, err := schema.Parse(testFunc)
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		// Test MustParse method
-		mustResult := schema.MustParse(testFunc)
-		assert.NotNil(t, mustResult)
+		got := schema.MustParse(fn)
+		assert.NotNil(t, got)
 
-		// Test panic on invalid input
-		assert.Panics(t, func() {
-			schema.MustParse("invalid")
-		})
+		assert.Panics(t, func() { schema.MustParse("invalid") })
 	})
 
 	t.Run("custom error message", func(t *testing.T) {
-		customError := "Expected a function value"
-		schema := Function(core.SchemaParams{Error: customError})
-
+		schema := Function(core.SchemaParams{Error: "Expected a function value"})
 		require.NotNil(t, schema)
 		assert.Equal(t, core.ZodTypeFunction, schema.internals.Def.Type)
 
@@ -74,169 +60,108 @@ func TestFunction_BasicFunctionality(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Type safety tests
-// =============================================================================
-
 func TestFunction_TypeSafety(t *testing.T) {
 	t.Run("Function returns any type", func(t *testing.T) {
 		schema := Function()
-		require.NotNil(t, schema)
 
-		testFunc := func(x int) int { return x + 1 }
-		result, err := schema.Parse(testFunc)
+		fn := func(x int) int { return x + 1 }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
-		assert.NotNil(t, result)
 
-		// Verify that the result is callable as a function
-		if fn, ok := result.(func(int) int); ok {
-			output := fn(5)
-			assert.Equal(t, 6, output)
+		if got, ok := result.(func(int) int); ok {
+			assert.Equal(t, 6, got(5))
 		} else {
-			t.Error("Result should be a function")
+			t.Errorf("got type %T, want func(int) int", result)
 		}
 	})
 
 	t.Run("FunctionPtr returns *any type", func(t *testing.T) {
 		schema := FunctionPtr()
-		require.NotNil(t, schema)
 
-		testFunc := func(x string) string { return x + "!" }
-		result, err := schema.Parse(testFunc)
+		fn := func(x string) string { return x + "!" }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("type inference with assignment", func(t *testing.T) {
-		// Type-inference friendly API
-		funcSchema := Function()   // any type
-		ptrSchema := FunctionPtr() // *any type
+		valSchema := Function()
+		ptrSchema := FunctionPtr()
+		fn := func() bool { return true }
 
-		testFunc := func() bool { return true }
+		result, err := valSchema.Parse(fn)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 
-		// Test any type
-		result1, err1 := funcSchema.Parse(testFunc)
-		require.NoError(t, err1)
-		assert.NotNil(t, result1)
-
-		// Test *any type
-		result2, err2 := ptrSchema.Parse(testFunc)
-		require.NoError(t, err2)
+		result2, err := ptrSchema.Parse(fn)
+		require.NoError(t, err)
 		assert.NotNil(t, result2)
 	})
 
 	t.Run("MustParse type safety", func(t *testing.T) {
 		schema := Function()
-		testFunc := func(x float64) float64 { return x * 2 }
+		fn := func(x float64) float64 { return x * 2 }
 
-		result := schema.MustParse(testFunc)
+		result := schema.MustParse(fn)
 		assert.NotNil(t, result)
 
-		// Verify callable
-		if fn, ok := result.(func(float64) float64); ok {
-			output := fn(3.5)
-			assert.Equal(t, 7.0, output)
+		if got, ok := result.(func(float64) float64); ok {
+			assert.Equal(t, 7.0, got(3.5))
 		} else {
-			t.Error("Result should be a function")
+			t.Errorf("got type %T, want func(float64) float64", result)
 		}
 	})
 }
 
-// =============================================================================
-// Modifier methods tests
-// =============================================================================
-
 func TestFunction_Modifiers(t *testing.T) {
 	t.Run("Optional allows nil", func(t *testing.T) {
-		schema := Function()
-		optionalSchema := schema.Optional()
+		schema := Function().Optional()
 
-		// Type check: ensure it returns *ZodFunction[*any]
-		_ = optionalSchema
-
-		// Test with function
-		testFunc := func() {}
-		result, err := optionalSchema.Parse(testFunc)
+		fn := func() {}
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		// Test with nil (should work with optional)
-		result, err = optionalSchema.Parse(nil)
+		result, err = schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("Nilable allows nil", func(t *testing.T) {
-		schema := Function()
-		nilableSchema := schema.Nilable()
+		schema := Function().Nilable()
 
-		_ = nilableSchema
-
-		// Test nil handling
-		result, err := nilableSchema.Parse(nil)
+		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("Default preserves current type", func(t *testing.T) {
-		defaultFunc := func() string { return "default" }
-
-		// any maintains any
-		schema := Function()
-		defaultSchema := schema.Default(defaultFunc)
-		_ = defaultSchema
-
-		// *any maintains *any
-		ptrSchema := FunctionPtr()
-		defaultPtrSchema := ptrSchema.Default(defaultFunc)
-		_ = defaultPtrSchema
+		dflt := func() string { return "default" }
+		_ = Function().Default(dflt)
+		_ = FunctionPtr().Default(dflt)
 	})
 
 	t.Run("Prefault preserves current type", func(t *testing.T) {
-		prefaultFunc := func() int { return 42 }
-
-		// any maintains any
-		schema := Function()
-		prefaultSchema := schema.Prefault(prefaultFunc)
-		var _ = prefaultSchema
-
-		// *any maintains *any
-		ptrSchema := FunctionPtr()
-		prefaultPtrSchema := ptrSchema.Prefault(prefaultFunc)
-		var _ = prefaultPtrSchema
+		pf := func() int { return 42 }
+		_ = Function().Prefault(pf)
+		_ = FunctionPtr().Prefault(pf)
 	})
 }
 
-// =============================================================================
-// Chaining tests
-// =============================================================================
-
 func TestFunction_Chaining(t *testing.T) {
 	t.Run("type evolution through chaining", func(t *testing.T) {
-		defaultFunc := func() {}
+		dflt := func() {}
+		schema := Function().Default(dflt).Optional()
 
-		// Chain with type evolution
-		schema := Function(). // *ZodFunction[any]
-					Default(defaultFunc). // *ZodFunction[any] (maintains type)
-					Optional()            // *ZodFunction[*any] (type conversion)
-
-		var _ = schema
-
-		// Test final behavior
-		testFunc := func(x int) int { return x * 2 }
-		result, err := schema.Parse(testFunc)
+		fn := func(x int) int { return x * 2 }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("complex chaining", func(t *testing.T) {
-		defaultFunc := func() string { return "test" }
-
-		schema := FunctionPtr(). // *ZodFunction[*any]
-						Nilable().           // *ZodFunction[*any] (maintains type)
-						Default(defaultFunc) // *ZodFunction[*any] (maintains type)
-
-		var _ = schema
+		dflt := func() string { return "test" }
+		schema := FunctionPtr().Nilable().Default(dflt)
 
 		result, err := schema.Parse(func() {})
 		require.NoError(t, err)
@@ -244,232 +169,196 @@ func TestFunction_Chaining(t *testing.T) {
 	})
 
 	t.Run("default and prefault chaining", func(t *testing.T) {
-		defaultFunc := func() int { return 1 }
-		prefaultFunc := func() int { return 2 }
+		dflt := func() int { return 1 }
+		pf := func() int { return 2 }
 
-		schema := Function().
-			Default(defaultFunc).
-			Prefault(prefaultFunc)
+		schema := Function().Default(dflt).Prefault(pf)
 
-		testFunc := func() int { return 3 }
-		result, err := schema.Parse(testFunc)
+		fn := func() int { return 3 }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 }
 
-// =============================================================================
-// Default and prefault tests
-// =============================================================================
-
 func TestFunction_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
 	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		defaultFunc := func() string { return "default" }
-		prefaultFunc := func() string { return "prefault" }
-		schema := Function().Default(defaultFunc).Prefault(prefaultFunc)
+		dflt := func() string { return "default" }
+		pf := func() string { return "prefault" }
+		schema := Function().Default(dflt).Prefault(pf)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		// Should be default function, not prefault
 		if fn, ok := result.(func() string); ok {
 			assert.Equal(t, "default", fn())
 		} else {
-			t.Errorf("Expected function type, got %T", result)
+			t.Errorf("got type %T, want func() string", result)
 		}
 	})
 
-	// Test 2: Default short-circuits validation
 	t.Run("Default short-circuits validation", func(t *testing.T) {
-		// Default value violates refinement but should still work
-		defaultFunc := "not-a-function" // Invalid type
 		schema := Function().Refine(func(f any) bool {
-			return false // Always fail refinement
-		}, "Should never pass").Default(defaultFunc)
+			return false
+		}, "Should never pass").Default("not-a-function")
+
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "not-a-function", result) // Default bypasses validation
+		assert.Equal(t, "not-a-function", result)
 	})
 
-	// Test 3: Prefault goes through full validation
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		// Prefault value passes validation
-		prefaultFunc := func() int { return 42 }
+		pf := func() int { return 42 }
 		schema := Function().Refine(func(f any) bool {
-			// Only allow functions that return int
 			if fn, ok := f.(func() int); ok {
 				return fn() > 0
 			}
 			return false
-		}, "Function must return positive int").Prefault(prefaultFunc)
+		}, "Function must return positive int").Prefault(pf)
+
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		if fn, ok := result.(func() int); ok {
 			assert.Equal(t, 42, fn())
 		} else {
-			t.Errorf("Expected function type, got %T", result)
+			t.Errorf("got type %T, want func() int", result)
 		}
 	})
 
-	// Test 4: Prefault only triggered by nil input
 	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
-		prefaultFunc := func() string { return "prefault" }
-		schema := Function().Prefault(prefaultFunc)
+		pf := func() string { return "prefault" }
+		schema := Function().Prefault(pf)
 
-		// Valid input should override prefault
-		testFunc := func() string { return "test" }
-		result, err := schema.Parse(testFunc)
+		fn := func() string { return "test" }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		if fn, ok := result.(func() string); ok {
-			assert.Equal(t, "test", fn()) // Should be input, not prefault
+		if got, ok := result.(func() string); ok {
+			assert.Equal(t, "test", got())
 		} else {
-			t.Errorf("Expected function type, got %T", result)
+			t.Errorf("got type %T, want func() string", result)
 		}
 
-		// Invalid input should NOT trigger prefault (should return error)
 		_, err = schema.Parse("not-a-function")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Invalid input: expected function")
 	})
 
-	// Test 5: DefaultFunc and PrefaultFunc behavior
 	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
-		defaultCalled := false
-		prefaultCalled := false
+		dfltCalled := false
+		pfCalled := false
 
-		defaultFuncProvider := func() any {
-			defaultCalled = true
+		dfltProvider := func() any {
+			dfltCalled = true
 			return func() string { return "default" }
 		}
-
-		prefaultFuncProvider := func() any {
-			prefaultCalled = true
+		pfProvider := func() any {
+			pfCalled = true
 			return func() string { return "prefault" }
 		}
 
-		// Test DefaultFunc priority over PrefaultFunc
-		schema1 := Function().DefaultFunc(defaultFuncProvider).PrefaultFunc(prefaultFuncProvider)
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
-		assert.True(t, defaultCalled)
-		assert.False(t, prefaultCalled) // Should not be called due to default priority
-		assert.NotNil(t, result1)
-		if fn, ok := result1.(func() string); ok {
+		schema := Function().DefaultFunc(dfltProvider).PrefaultFunc(pfProvider)
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.True(t, dfltCalled)
+		assert.False(t, pfCalled)
+		assert.NotNil(t, result)
+		if fn, ok := result.(func() string); ok {
 			assert.Equal(t, "default", fn())
 		} else {
-			t.Errorf("Expected function type, got %T", result1)
+			t.Errorf("got type %T, want func() string", result)
 		}
 
-		// Reset flags
-		defaultCalled = false
-		prefaultCalled = false
+		dfltCalled = false
+		pfCalled = false
 
-		// Test PrefaultFunc alone
-		schema2 := Function().PrefaultFunc(prefaultFuncProvider)
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
-		assert.True(t, prefaultCalled)
+		schema2 := Function().PrefaultFunc(pfProvider)
+		result2, err := schema2.Parse(nil)
+		require.NoError(t, err)
+		assert.True(t, pfCalled)
 		assert.NotNil(t, result2)
 		if fn, ok := result2.(func() string); ok {
 			assert.Equal(t, "prefault", fn())
 		} else {
-			t.Errorf("Expected function type, got %T", result2)
+			t.Errorf("got type %T, want func() string", result2)
 		}
 	})
 
-	// Test 6: Prefault validation failure
 	t.Run("Prefault validation failure", func(t *testing.T) {
-		// Prefault value violates refinement
-		invalidFunc := func() int { return -1 } // Negative value
+		bad := func() int { return -1 }
 		schema := Function().Refine(func(f any) bool {
 			if fn, ok := f.(func() int); ok {
-				return fn() > 0 // Only allow positive returns
+				return fn() > 0
 			}
 			return false
-		}, "Function must return positive int").Prefault(invalidFunc)
+		}, "Function must return positive int").Prefault(bad)
+
 		_, err := schema.Parse(nil)
-		require.Error(t, err) // Prefault should fail validation
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Function must return positive int")
 	})
 
-	// Test 7: FunctionPtr type with Default and Prefault
-	t.Run("FunctionPtr type with Default and Prefault", func(t *testing.T) {
-		defaultFunc := func() string { return "default" }
-		prefaultFunc := func() string { return "prefault" }
-		schema := FunctionPtr().Default(defaultFunc).Prefault(prefaultFunc)
+	t.Run("FunctionPtr with Default and Prefault", func(t *testing.T) {
+		dflt := func() string { return "default" }
+		pf := func() string { return "prefault" }
+		schema := FunctionPtr().Default(dflt).Prefault(pf)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		// Should be default function, not prefault
 		if fn, ok := (*result).(func() string); ok {
 			assert.Equal(t, "default", fn())
 		} else {
-			t.Errorf("Expected function type, got %T", *result)
+			t.Errorf("got type %T, want func() string", *result)
 		}
 	})
 }
 
-// =============================================================================
-// Refine tests
-// =============================================================================
-
 func TestFunction_Refine(t *testing.T) {
 	t.Run("refine validate", func(t *testing.T) {
-		// Only accept functions (always true for this type)
 		schema := Function().Refine(func(f any) bool {
 			return f != nil
 		})
 
-		testFunc := func() {}
-		result, err := schema.Parse(testFunc)
+		result, err := schema.Parse(func() {})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("refine with custom error message", func(t *testing.T) {
-		errorMessage := "Function must not be nil"
 		schema := Function().Refine(func(f any) bool {
 			return f != nil
-		}, core.SchemaParams{Error: errorMessage})
+		}, core.SchemaParams{Error: "Function must not be nil"})
 
-		testFunc := func() {}
-		result, err := schema.Parse(testFunc)
+		result, err := schema.Parse(func() {})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("always failing refine", func(t *testing.T) {
 		schema := Function().Refine(func(f any) bool {
-			return false // Always fail
+			return false
 		})
 
-		testFunc := func() {}
-		_, err := schema.Parse(testFunc)
+		_, err := schema.Parse(func() {})
 		assert.Error(t, err)
 	})
 }
 
 func TestFunction_RefineAny(t *testing.T) {
 	t.Run("refineAny function schema", func(t *testing.T) {
-		// Only accept non-nil functions
 		schema := Function().RefineAny(func(v any) bool {
 			return v != nil
 		})
 
-		// function passes
-		testFunc := func() {}
-		result, err := schema.Parse(testFunc)
+		result, err := schema.Parse(func() {})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("refineAny with complex validation", func(t *testing.T) {
 		schema := Function().RefineAny(func(v any) bool {
-			// Accept only functions with specific signature (example)
 			return v != nil
 		})
 
@@ -479,52 +368,38 @@ func TestFunction_RefineAny(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Type-specific methods tests
-// =============================================================================
-
 func TestFunction_TypeSpecificMethods(t *testing.T) {
 	t.Run("Input method sets input schema", func(t *testing.T) {
-		// Use nil for input schema in this simplified test
 		schema := Function().Input(nil)
-
 		require.NotNil(t, schema)
 		assert.Nil(t, schema.internals.Input)
 	})
 
 	t.Run("Output method sets output schema", func(t *testing.T) {
-		// Use nil for output schema in this simplified test
 		schema := Function().Output(nil)
-
 		require.NotNil(t, schema)
 		assert.Nil(t, schema.internals.Output)
 	})
 
 	t.Run("Input and Output chaining", func(t *testing.T) {
-		// Use nil for both schemas in this simplified test
-		schema := Function().
-			Input(nil).
-			Output(nil)
-
+		schema := Function().Input(nil).Output(nil)
 		require.NotNil(t, schema)
 		assert.Nil(t, schema.internals.Input)
 		assert.Nil(t, schema.internals.Output)
 	})
 
-	t.Run("Implement method wraps function with validation", func(t *testing.T) {
+	t.Run("Implement wraps function", func(t *testing.T) {
 		schema := Function()
-		originalFunc := func(x int) int { return x * 2 }
+		orig := func(x int) int { return x * 2 }
 
-		wrappedFunc, err := schema.Implement(originalFunc)
+		wrapped, err := schema.Implement(orig)
 		require.NoError(t, err)
-		assert.NotNil(t, wrappedFunc)
+		assert.NotNil(t, wrapped)
 
-		// Test that wrapped function works
-		if fn, ok := wrappedFunc.(func(int) int); ok {
-			result := fn(5)
-			assert.Equal(t, 10, result)
+		if fn, ok := wrapped.(func(int) int); ok {
+			assert.Equal(t, 10, fn(5))
 		} else {
-			t.Error("Implement should return a callable function")
+			t.Errorf("got type %T, want func(int) int", wrapped)
 		}
 	})
 
@@ -542,21 +417,14 @@ func TestFunction_TypeSpecificMethods(t *testing.T) {
 	})
 
 	t.Run("Implement with input/output validation", func(t *testing.T) {
-		// This is a simplified test - full validation would require
-		// working Slice and String implementations
 		schema := Function()
 
-		// Simple function that should work
-		simpleFunc := func(x string) int { return len(x) }
-		wrappedFunc, err := schema.Implement(simpleFunc)
+		fn := func(x string) int { return len(x) }
+		wrapped, err := schema.Implement(fn)
 		require.NoError(t, err)
-		assert.NotNil(t, wrappedFunc)
+		assert.NotNil(t, wrapped)
 	})
 }
-
-// =============================================================================
-// Error handling and edge case tests
-// =============================================================================
 
 func TestFunction_ErrorHandling(t *testing.T) {
 	t.Run("invalid type error", func(t *testing.T) {
@@ -573,8 +441,7 @@ func TestFunction_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("custom error message", func(t *testing.T) {
-		customError := "Expected a function value"
-		schema := Function(core.SchemaParams{Error: customError})
+		schema := Function(core.SchemaParams{Error: "Expected a function value"})
 
 		_, err := schema.Parse("not a function")
 		assert.Error(t, err)
@@ -592,24 +459,20 @@ func TestFunction_EdgeCases(t *testing.T) {
 	t.Run("nil handling with nilable", func(t *testing.T) {
 		schema := Function().Nilable()
 
-		// Test nil input
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 
-		// Test valid function
-		testFunc := func() {}
-		result, err = schema.Parse(testFunc)
+		fn := func() {}
+		result, err = schema.Parse(fn)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
 
 	t.Run("empty context", func(t *testing.T) {
 		schema := Function()
-		testFunc := func() {}
 
-		// Parse with empty context slice
-		result, err := schema.Parse(testFunc)
+		result, err := schema.Parse(func() {})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
@@ -617,7 +480,7 @@ func TestFunction_EdgeCases(t *testing.T) {
 	t.Run("function with various signatures", func(t *testing.T) {
 		schema := Function()
 
-		testCases := []any{
+		cases := []any{
 			func() {},
 			func(int) {},
 			func() int { return 0 },
@@ -625,69 +488,46 @@ func TestFunction_EdgeCases(t *testing.T) {
 			func(string, bool) (int, error) { return 0, nil },
 			func(...int) {},
 		}
-
-		for i, testFunc := range testCases {
-			result, err := schema.Parse(testFunc)
-			require.NoError(t, err, "Test case %d should pass", i)
-			assert.NotNil(t, result, "Test case %d should return non-nil", i)
+		for i, fn := range cases {
+			result, err := schema.Parse(fn)
+			require.NoError(t, err, "case %d should pass", i)
+			assert.NotNil(t, result, "case %d should return non-nil", i)
 		}
 	})
 
 	t.Run("function parameters validation", func(t *testing.T) {
-		// Test FunctionParams struct with nil schemas
-		schema := Function(FunctionParams{
-			Input:  nil,
-			Output: nil,
-		})
-
+		schema := Function(FunctionParams{Input: nil, Output: nil})
 		require.NotNil(t, schema)
 		assert.Nil(t, schema.internals.Input)
 		assert.Nil(t, schema.internals.Output)
 	})
 }
 
-// =============================================================================
-// OVERWRITE TESTS
-// =============================================================================
-
 func TestFunction_Overwrite(t *testing.T) {
 	t.Run("basic function transformation", func(t *testing.T) {
 		schema := Function().
 			Overwrite(func(fn any) any {
-				// Wrap the function with logging
 				if f, ok := fn.(func(int) int); ok {
-					return func(x int) int {
-						result := f(x)
-						// In real scenarios, you might log here
-						return result + 1 // Add 1 to demonstrate transformation
-					}
+					return func(x int) int { return f(x) + 1 }
 				}
 				return fn
 			})
 
-		// Test function
-		originalFunc := func(x int) int {
-			return x * 2
-		}
-
-		result, err := schema.Parse(originalFunc)
+		orig := func(x int) int { return x * 2 }
+		result, err := schema.Parse(orig)
 		require.NoError(t, err)
 
-		// The result should be a function that has been transformed
-		if transformedFunc, ok := result.(func(int) int); ok {
-			// Original function: 5 * 2 = 10
-			// Transformed function: (5 * 2) + 1 = 11
-			output := transformedFunc(5)
-			assert.Equal(t, 11, output)
+		if got, ok := result.(func(int) int); ok {
+			// (5 * 2) + 1 = 11
+			assert.Equal(t, 11, got(5))
 		} else {
-			t.Fatal("Expected transformed function")
+			t.Fatalf("got type %T, want func(int) int", result)
 		}
 	})
 
 	t.Run("function wrapper transformation", func(t *testing.T) {
 		schema := Function().
 			Overwrite(func(fn any) any {
-				// Wrap string functions with validation
 				if f, ok := fn.(func(string) string); ok {
 					return func(s string) string {
 						if s == "" {
@@ -699,65 +539,44 @@ func TestFunction_Overwrite(t *testing.T) {
 				return fn
 			})
 
-		originalFunc := strings.ToUpper
-
-		result, err := schema.Parse(originalFunc)
+		result, err := schema.Parse(strings.ToUpper)
 		require.NoError(t, err)
 
-		if transformedFunc, ok := result.(func(string) string); ok {
-			// Test with empty string
-			output1 := transformedFunc("")
-			assert.Equal(t, "default", output1)
-
-			// Test with normal string
-			output2 := transformedFunc("hello")
-			assert.Equal(t, "HELLO", output2)
+		if got, ok := result.(func(string) string); ok {
+			assert.Equal(t, "default", got(""))
+			assert.Equal(t, "HELLO", got("hello"))
 		} else {
-			t.Fatal("Expected transformed function")
+			t.Fatalf("got type %T, want func(string) string", result)
 		}
 	})
 
 	t.Run("function metadata transformation", func(t *testing.T) {
-		// Create a function with metadata (using closure)
-		createCounter := func(initial int) func() int {
-			count := initial
-			return func() int {
-				count++
-				return count
-			}
+		counter := func(initial int) func() int {
+			n := initial
+			return func() int { n++; return n }
 		}
 
 		schema := Function().
 			Overwrite(func(fn any) any {
-				// Transform counter functions to start from a different value
 				if f, ok := fn.(func() int); ok {
-					// Reset the counter by creating a new one
-					// This simulates transforming function behavior
-					newCount := 100 // Start from 100 instead
+					n := 100
 					return func() int {
-						oldResult := f() // Call original once to advance it
-						_ = oldResult    // Ignore original result
-						newCount++
-						return newCount
+						f() // advance original
+						n++
+						return n
 					}
 				}
 				return fn
 			})
 
-		originalCounter := createCounter(0)
-
-		result, err := schema.Parse(originalCounter)
+		result, err := schema.Parse(counter(0))
 		require.NoError(t, err)
 
-		if transformedCounter, ok := result.(func() int); ok {
-			// Should start from 101 (100 + 1)
-			output1 := transformedCounter()
-			assert.Equal(t, 101, output1)
-
-			output2 := transformedCounter()
-			assert.Equal(t, 102, output2)
+		if got, ok := result.(func() int); ok {
+			assert.Equal(t, 101, got())
+			assert.Equal(t, 102, got())
 		} else {
-			t.Fatal("Expected transformed counter function")
+			t.Fatalf("got type %T, want func() int", result)
 		}
 	})
 
@@ -765,118 +584,84 @@ func TestFunction_Overwrite(t *testing.T) {
 		schema := FunctionPtr().
 			Overwrite(func(fn *any) *any {
 				if fn == nil {
-					// Return a default function
-					defaultFunc := func() string { return "default" }
-					result := any(defaultFunc)
-					return &result
+					dflt := any(func() string { return "default" })
+					return &dflt
 				}
-
-				// Transform the function if it exists
 				if f, ok := (*fn).(func(string) string); ok {
-					transformedFunc := func(s string) string {
+					wrapped := any(func(s string) string {
 						return "transformed_" + f(s)
-					}
-					result := any(transformedFunc)
-					return &result
+					})
+					return &wrapped
 				}
 				return fn
 			})
 
-		originalFunc := func(s string) string {
-			return s + "_suffix"
-		}
-		originalAny := any(originalFunc)
-
-		result, err := schema.Parse(&originalAny)
+		orig := any(func(s string) string { return s + "_suffix" })
+		result, err := schema.Parse(&orig)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Handle the triple nested pointer structure: *any -> *any -> *any -> func(string) string
-		if anyPtr1, ok := (*result).(*any); ok {
-			if anyPtr2, ok := (*anyPtr1).(*any); ok {
-				if transformedFunc, ok := (*anyPtr2).(func(string) string); ok {
-					output := transformedFunc("test")
-					assert.Equal(t, "transformed_test_suffix", output)
+		// Handle nested pointer structure
+		if p1, ok := (*result).(*any); ok {
+			if p2, ok := (*p1).(*any); ok {
+				if got, ok := (*p2).(func(string) string); ok {
+					assert.Equal(t, "transformed_test_suffix", got("test"))
 				} else {
-					t.Fatalf("Expected transformed function, got: %T", *anyPtr2)
+					t.Fatalf("got type %T, want func(string) string", *p2)
 				}
 			} else {
-				t.Fatalf("Expected second *any, got: %T", *anyPtr1)
+				t.Fatalf("got type %T, want *any", *p1)
 			}
 		} else {
-			t.Fatalf("Expected first *any, got: %T", *result)
+			t.Fatalf("got type %T, want *any", *result)
 		}
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
-		schema := Function().
-			Overwrite(func(fn any) any {
-				return fn // Identity transformation
-			})
+		schema := Function().Overwrite(func(fn any) any { return fn })
 
-		testFunc := func(x int) int {
-			return x + 1
-		}
-
-		result, err := schema.Parse(testFunc)
+		fn := func(x int) int { return x + 1 }
+		result, err := schema.Parse(fn)
 		require.NoError(t, err)
 
-		// Should preserve the function type
-		if resultFunc, ok := result.(func(int) int); ok {
-			output := resultFunc(5)
-			assert.Equal(t, 6, output)
+		if got, ok := result.(func(int) int); ok {
+			assert.Equal(t, 6, got(5))
 		} else {
-			t.Fatal("Expected function to be preserved")
+			t.Fatalf("got type %T, want func(int) int", result)
 		}
 	})
 
 	t.Run("chaining with validations", func(t *testing.T) {
 		schema := Function().
 			Overwrite(func(fn any) any {
-				// Ensure function returns non-negative values
 				if f, ok := fn.(func(int) int); ok {
 					return func(x int) int {
-						result := f(x)
-						if result < 0 {
+						if r := f(x); r < 0 {
 							return 0
+						} else {
+							return r
 						}
-						return result
 					}
 				}
 				return fn
 			}).
-			Refine(func(fn any) bool {
-				// Validate that function is not nil
-				return fn != nil
-			}, "Function cannot be nil")
+			Refine(func(fn any) bool { return fn != nil }, "Function cannot be nil")
 
-		originalFunc := func(x int) int {
-			return x - 10 // This could return negative values
-		}
-
-		result, err := schema.Parse(originalFunc)
+		orig := func(x int) int { return x - 10 }
+		result, err := schema.Parse(orig)
 		require.NoError(t, err)
 
-		if transformedFunc, ok := result.(func(int) int); ok {
-			// Test with input that would normally return negative
-			output := transformedFunc(5) // 5 - 10 = -5, but should be clamped to 0
-			assert.Equal(t, 0, output)
-
-			// Test with input that returns positive
-			output2 := transformedFunc(15) // 15 - 10 = 5
-			assert.Equal(t, 5, output2)
+		if got, ok := result.(func(int) int); ok {
+			assert.Equal(t, 0, got(5))  // 5-10=-5, clamped to 0
+			assert.Equal(t, 5, got(15)) // 15-10=5
 		} else {
-			t.Fatal("Expected transformed function")
+			t.Fatalf("got type %T, want func(int) int", result)
 		}
 	})
 
 	t.Run("error handling preservation", func(t *testing.T) {
-		schema := Function().
-			Overwrite(func(fn any) any {
-				return fn // Identity transformation
-			})
+		schema := Function().Overwrite(func(fn any) any { return fn })
 
-		// Non-function input should still fail validation
 		_, err := schema.Parse("not a function")
 		assert.Error(t, err)
 
@@ -887,29 +672,19 @@ func TestFunction_Overwrite(t *testing.T) {
 	t.Run("function composition", func(t *testing.T) {
 		schema := Function().
 			Overwrite(func(fn any) any {
-				// Compose with a prefix function
 				if f, ok := fn.(func(string) string); ok {
-					prefix := func(s string) string {
-						return "prefix_" + s
-					}
-					// Compose: prefix(f(input))
-					return func(s string) string {
-						return prefix(f(s))
-					}
+					return func(s string) string { return "prefix_" + f(s) }
 				}
 				return fn
 			})
 
-		originalFunc := strings.ToUpper
-
-		result, err := schema.Parse(originalFunc)
+		result, err := schema.Parse(strings.ToUpper)
 		require.NoError(t, err)
 
-		if composedFunc, ok := result.(func(string) string); ok {
-			output := composedFunc("hello")
-			assert.Equal(t, "prefix_HELLO", output)
+		if got, ok := result.(func(string) string); ok {
+			assert.Equal(t, "prefix_HELLO", got("hello"))
 		} else {
-			t.Fatal("Expected composed function")
+			t.Fatalf("got type %T, want func(string) string", result)
 		}
 	})
 }

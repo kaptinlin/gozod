@@ -190,13 +190,13 @@ func (z *ZodEnum[T, R]) Meta(meta core.GlobalMeta) *ZodEnum[T, R] {
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodEnum[T, R]) Describe(description string) *ZodEnum[T, R] {
+func (z *ZodEnum[T, R]) Describe(desc string) *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
+	existing.Description = desc
 	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
@@ -285,45 +285,66 @@ func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 			if v == nil {
 				return fn(any((*T)(nil)).(R))
 			}
-			if enumVal, ok := v.(T); ok {
-				return fn(any(&enumVal).(R))
+			if val, ok := v.(T); ok {
+				return fn(any(&val).(R))
 			}
 			return false
 		default:
 			if v == nil {
 				return false
 			}
-			if enumVal, ok := v.(T); ok {
-				return fn(any(enumVal).(R))
+			if val, ok := v.(T); ok {
+				return fn(any(val).(R))
 			}
 			return false
 		}
 	}
 
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](wrapper, errorMessage)
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	check := checks.NewCustom[any](wrapper, msg)
+	return z.withCheck(check)
 }
 
 // RefineAny applies validation without type conversion.
 func (z *ZodEnum[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodEnum[T, R] {
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](fn, errorMessage)
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	check := checks.NewCustom[any](fn, msg)
+	return z.withCheck(check)
+}
+
+// Check adds a custom validation function that can push multiple issues.
+func (z *ZodEnum[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodEnum[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		if val, ok := payload.Value().(R); ok {
+			fn(val, payload)
+			return
+		}
+
+		var zero R
+		if _, ok := any(zero).(*T); ok {
+			if v, ok := payload.Value().(T); ok {
+				cp := v
+				fn(any(&cp).(R), payload)
+			}
+		}
+	}
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
+	return z.withCheck(check)
+}
+
+// With is an alias for Check (Zod v4 API compatibility).
+func (z *ZodEnum[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodEnum[T, R] {
+	return z.Check(fn, params...)
 }
 
 // =============================================================================
@@ -332,17 +353,17 @@ func (z *ZodEnum[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodEnum[T, 
 
 // validateEnum validates the enum value and applies checks, collecting all issues.
 func (z *ZodEnum[T, R]) validateEnum(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-	var collectedIssues []core.ZodRawIssue
+	var collected []core.ZodRawIssue
 
-	if _, exists := z.internals.Values[value]; !exists {
-		validValues := make([]any, 0, len(z.internals.Values))
+	if _, ok := z.internals.Values[value]; !ok {
+		opts := make([]any, 0, len(z.internals.Values))
 		for v := range z.internals.Values {
-			validValues = append(validValues, v)
+			opts = append(opts, v)
 		}
-		collectedIssues = append(collectedIssues, issues.CreateIssue(
+		collected = append(collected, issues.CreateIssue(
 			core.InvalidValue, "Invalid enum value", map[string]any{
 				"received": fmt.Sprintf("%v", value),
-				"options":  validValues,
+				"options":  opts,
 			}, value))
 	}
 
@@ -350,27 +371,61 @@ func (z *ZodEnum[T, R]) validateEnum(value T, chks []core.ZodCheck, ctx *core.Pa
 		payload := core.NewParsePayload(value)
 		result := engine.RunChecksOnValue(value, chks, payload, ctx)
 		if result.HasIssues() {
-			collectedIssues = append(collectedIssues, result.Issues()...)
+			collected = append(collected, result.Issues()...)
 		}
 		if result.Value() != nil {
-			if transformed, ok := result.Value().(T); ok {
-				value = transformed
+			if v, ok := result.Value().(T); ok {
+				value = v
 			}
 		}
 	}
 
-	if len(collectedIssues) > 0 {
+	if len(collected) > 0 {
 		var zero T
-		return zero, issues.CreateArrayValidationIssues(collectedIssues)
+		return zero, issues.CreateArrayValidationIssues(collected)
 	}
 	return value, nil
+}
+
+// =============================================================================
+// COMPOSITION METHODS
+// =============================================================================
+
+// And creates an intersection with another schema.
+func (z *ZodEnum[T, R]) And(other any) *ZodIntersection[any, any] {
+	return Intersection(z, other)
+}
+
+// Or creates a union with another schema.
+func (z *ZodEnum[T, R]) Or(other any) *ZodUnion[any, any] {
+	return Union([]any{z, other})
+}
+
+// NonOptional removes the optional flag, returning a T constraint.
+func (z *ZodEnum[T, R]) NonOptional() *ZodEnum[T, T] {
+	in := z.internals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+	return &ZodEnum[T, T]{internals: &ZodEnumInternals[T]{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Entries:          z.internals.Entries,
+		Values:           z.internals.Values,
+	}}
 }
 
 // =============================================================================
 // HELPER AND PRIVATE METHODS
 // =============================================================================
 
-// withPtrInternals creates a new ZodEnum with *T constraint for Optional/Nilable/Nullish.
+// withCheck clones internals, adds a check, and returns a new schema.
+func (z *ZodEnum[T, R]) withCheck(check core.ZodCheck) *ZodEnum[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
+}
+
+// withPtrInternals creates a new ZodEnum with *T constraint.
 func (z *ZodEnum[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodEnum[T, *T] {
 	return &ZodEnum[T, *T]{internals: &ZodEnumInternals[T]{
 		ZodTypeInternals: *in,
@@ -380,7 +435,7 @@ func (z *ZodEnum[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodEnum[T, 
 	}}
 }
 
-// withInternals creates a new ZodEnum keeping the original constraint type R.
+// withInternals creates a new ZodEnum preserving generic type R.
 func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] {
 	return &ZodEnum[T, R]{internals: &ZodEnumInternals[T]{
 		ZodTypeInternals: *in,
@@ -393,9 +448,9 @@ func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] 
 // CloneFrom copies configuration from another schema, preserving original checks.
 func (z *ZodEnum[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodEnum[T, R]); ok {
-		originalChecks := z.internals.Checks
+		orig := z.internals.Checks
 		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+		z.internals.Checks = orig
 	}
 }
 
@@ -413,43 +468,42 @@ func extractEnumValue[T comparable, R any](value R) T {
 
 // newZodEnumFromDef constructs a new ZodEnum from a definition.
 func newZodEnumFromDef[T comparable, R any](def *ZodEnumDef[T]) *ZodEnum[T, R] {
-	values := make(map[T]struct{}, len(def.Entries))
-	for _, value := range def.Entries {
-		values[value] = struct{}{}
+	vals := make(map[T]struct{}, len(def.Entries))
+	for _, v := range def.Entries {
+		vals[v] = struct{}{}
 	}
 
-	anyValues := make(map[any]struct{}, len(values))
-	for value := range values {
-		anyValues[value] = struct{}{}
+	av := make(map[any]struct{}, len(vals))
+	for v := range vals {
+		av[v] = struct{}{}
 	}
 
-	internals := &ZodEnumInternals[T]{
+	in := &ZodEnumInternals[T]{
 		ZodTypeInternals: core.ZodTypeInternals{
 			Type:   def.Type,
 			Checks: def.Checks,
 			Coerce: def.Coerce,
-			Values: anyValues,
+			Values: av,
 			Bag:    make(map[string]any),
 		},
 		Def:     def,
 		Entries: def.Entries,
-		Values:  values,
+		Values:  vals,
 	}
 
-	// Provide constructor for AddCheck functionality.
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		enumDef := &ZodEnumDef[T]{
-			ZodTypeDef: *newDef,
+	in.Constructor = func(d *core.ZodTypeDef) core.ZodType[any] {
+		ed := &ZodEnumDef[T]{
+			ZodTypeDef: *d,
 			Entries:    def.Entries,
 		}
-		return any(newZodEnumFromDef[T, R](enumDef)).(core.ZodType[any])
+		return any(newZodEnumFromDef[T, R](ed)).(core.ZodType[any])
 	}
 
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
 	}
 
-	return &ZodEnum[T, R]{internals: internals}
+	return &ZodEnum[T, R]{internals: in}
 }
 
 // =============================================================================
@@ -477,8 +531,7 @@ func EnumMap[T comparable](entries map[string]T, params ...any) *ZodEnum[T, T] {
 
 // EnumMapTyped is the generic constructor for enum schemas.
 func EnumMapTyped[T comparable, R any](entries map[string]T, args ...any) *ZodEnum[T, R] {
-	param := utils.FirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
+	sp := utils.NormalizeParams(utils.FirstParam(args...))
 
 	def := &ZodEnumDef[T]{
 		ZodTypeDef: core.ZodTypeDef{
@@ -488,8 +541,8 @@ func EnumMapTyped[T comparable, R any](entries map[string]T, args ...any) *ZodEn
 		Entries: entries,
 	}
 
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
 	return newZodEnumFromDef[T, R](def)

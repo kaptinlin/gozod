@@ -999,3 +999,106 @@ func TestEnum_MultiErrorCollection(t *testing.T) {
 		assert.Equal(t, 3, result)
 	})
 }
+
+// =============================================================================
+// Check and With tests
+// =============================================================================
+
+func TestEnum_Check(t *testing.T) {
+	t.Run("check pushes custom issue", func(t *testing.T) {
+		enum := Enum("red", "green", "blue").Check(
+			func(v string, p *core.ParsePayload) {
+				if v == "red" {
+					p.AddIssue(core.ZodRawIssue{
+						Code:    "custom",
+						Message: "red is not allowed",
+					})
+				}
+			},
+		)
+
+		_, err := enum.Parse("red")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "red is not allowed")
+
+		result, err := enum.Parse("green")
+		require.NoError(t, err)
+		assert.Equal(t, "green", result)
+	})
+
+	t.Run("check with pointer enum", func(t *testing.T) {
+		enum := EnumPtr("a", "b", "c").Check(
+			func(v *string, p *core.ParsePayload) {
+				if v != nil && *v == "a" {
+					p.AddIssue(core.ZodRawIssue{
+						Code:    "custom",
+						Message: "a is not allowed",
+					})
+				}
+			},
+		)
+
+		_, err := enum.Parse("a")
+		assert.Error(t, err)
+
+		result, err := enum.Parse("b")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "b", *result)
+	})
+
+	t.Run("With is alias for Check", func(t *testing.T) {
+		enum := Enum(1, 2, 3).With(
+			func(v int, p *core.ParsePayload) {
+				if v < 2 {
+					p.AddIssue(core.ZodRawIssue{
+						Code:    "custom",
+						Message: "must be >= 2",
+					})
+				}
+			},
+		)
+
+		_, err := enum.Parse(1)
+		assert.Error(t, err)
+
+		result, err := enum.Parse(2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, result)
+	})
+}
+
+// =============================================================================
+// NonOptional tests
+// =============================================================================
+
+func TestEnum_NonOptional(t *testing.T) {
+	t.Run("removes optional flag", func(t *testing.T) {
+		enum := Enum("a", "b", "c").Optional().NonOptional()
+
+		result, err := enum.Parse("a")
+		require.NoError(t, err)
+		assert.Equal(t, "a", result)
+
+		_, err = enum.Parse(nil)
+		assert.Error(t, err)
+	})
+}
+
+// =============================================================================
+// And/Or composition tests
+// =============================================================================
+
+func TestEnum_Composition(t *testing.T) {
+	t.Run("And creates intersection", func(t *testing.T) {
+		enum := Enum("a", "b", "c")
+		inter := enum.And(Enum("a", "b", "c"))
+		require.NotNil(t, inter)
+	})
+
+	t.Run("Or creates union", func(t *testing.T) {
+		enum := Enum("a", "b")
+		union := enum.Or(Enum("c", "d"))
+		require.NotNil(t, union)
+	})
+}

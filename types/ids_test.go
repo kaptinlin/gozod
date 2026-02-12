@@ -8,584 +8,477 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// GUID Tests
-// =============================================================================
-
 func TestGUID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Guid()
-		// GUID accepts any 8-4-4-4-12 hex pattern regardless of version
-		validGUIDs := []string{
+		s := Guid()
+		valid := []string{
 			"123e4567-e89b-12d3-a456-426655440000",
 			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 			"d9428888-122b-469b-84de-d6e0a77858b7",
 			"00000000-0000-0000-0000-000000000000",
 			"FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
-			"aBcDeF01-1234-5678-90Ab-CdEf12345678", // Mixed case
+			"aBcDeF01-1234-5678-90Ab-CdEf12345678",
 		}
-		for _, guid := range validGUIDs {
-			result, err := schema.Parse(guid)
-			require.NoError(t, err, "should accept: %v", guid)
-			assert.Equal(t, guid, result)
-			assert.IsType(t, "", result)
+		for _, v := range valid {
+			got, err := s.Parse(v)
+			require.NoError(t, err, "Parse(%q)", v)
+			assert.Equal(t, v, got)
+			assert.IsType(t, "", got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Guid()
-		invalidInputs := []any{
-			"not-a-guid",
-			123,
-			true,
-			"",
-			"123e4567-e89b-12d3-a456",              // Too short
-			"123e4567-e89b-12d3-a456-42665544",     // Too short last segment
-			"123e4567e89b12d3a456426655440000",     // No dashes
-			"g23e4567-e89b-12d3-a456-426655440000", // Invalid hex char
+		s := Guid()
+		invalid := []any{
+			"not-a-guid", 123, true, "",
+			"123e4567-e89b-12d3-a456",
+			"123e4567-e89b-12d3-a456-42665544",
+			"123e4567e89b12d3a456426655440000",
+			"g23e4567-e89b-12d3-a456-426655440000",
 		}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 
 	t.Run("pointer", func(t *testing.T) {
-		schema := GuidPtr()
-		guidStr := "123e4567-e89b-12d3-a456-426655440000"
-		result, err := schema.Parse(guidStr)
+		want := "123e4567-e89b-12d3-a456-426655440000"
+		got, err := GuidPtr().Parse(want)
 		require.NoError(t, err)
-		assert.IsType(t, (*string)(nil), result)
-		require.NotNil(t, result)
-		assert.Equal(t, guidStr, *result)
+		assert.IsType(t, (*string)(nil), got)
+		require.NotNil(t, got)
+		assert.Equal(t, want, *got)
 	})
 
 	t.Run("optional", func(t *testing.T) {
-		schema := Guid().Optional()
-		result, err := schema.Parse(nil)
+		got, err := Guid().Optional().Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Nil(t, got)
 	})
 
 	t.Run("default", func(t *testing.T) {
-		defaultValue := "123e4567-e89b-12d3-a456-426655440000"
-		schema := Guid().Default(defaultValue)
-		result, err := schema.Parse(nil)
+		want := "123e4567-e89b-12d3-a456-426655440000"
+		got, err := Guid().Default(want).Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
+		assert.Equal(t, want, got)
 	})
 
 	t.Run("StrictParse", func(t *testing.T) {
-		schema := Guid()
-		validGUID := "123e4567-e89b-12d3-a456-426655440000"
-
-		result, err := schema.StrictParse(validGUID)
+		s := Guid()
+		want := "123e4567-e89b-12d3-a456-426655440000"
+		got, err := s.StrictParse(want)
 		require.NoError(t, err)
-		assert.Equal(t, validGUID, result)
+		assert.Equal(t, want, got)
 	})
 
 	t.Run("MustStrictParse", func(t *testing.T) {
-		schema := Guid()
-		validGUID := "123e4567-e89b-12d3-a456-426655440000"
+		s := Guid()
+		want := "123e4567-e89b-12d3-a456-426655440000"
+		got := s.MustStrictParse(want)
+		assert.Equal(t, want, got)
 
-		result := schema.MustStrictParse(validGUID)
-		assert.Equal(t, validGUID, result)
-
-		// Test panic on invalid
 		assert.Panics(t, func() {
-			schema.MustStrictParse("invalid")
+			s.MustStrictParse("invalid")
 		})
 	})
 
 	t.Run("custom error", func(t *testing.T) {
-		customError := "Invalid GUID format"
-		schema := Guid(core.SchemaParams{Error: customError})
-		_, err := schema.Parse("invalid")
+		s := Guid(core.SchemaParams{Error: "Invalid GUID format"})
+		_, err := s.Parse("invalid")
 		assert.Error(t, err)
 	})
 
 	t.Run("chaining with min length", func(t *testing.T) {
-		// A GUID is 36 chars long (8-4-4-4-12 with dashes)
-		schema := Guid().Min(36)
-		result, err := schema.Parse("123e4567-e89b-12d3-a456-426655440000")
+		got, err := Guid().Min(36).Parse("123e4567-e89b-12d3-a456-426655440000")
 		require.NoError(t, err)
-		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", result)
+		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", got)
 
 		_, err = Guid().Min(37).Parse("123e4567-e89b-12d3-a456-426655440000")
 		assert.Error(t, err)
 	})
 }
 
-// =============================================================================
-// CUID Tests
-// =============================================================================
-
 func TestCUID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Cuid()
-		validCUIDs := []string{"ck7q2g3ak0001psr9pbfgx83z", "clegxv4h2000008ld9bs2a2vr"}
-		for _, cuid := range validCUIDs {
-			result, err := schema.Parse(cuid)
+		s := Cuid()
+		valid := []string{"ck7q2g3ak0001psr9pbfgx83z", "clegxv4h2000008ld9bs2a2vr"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, cuid, result)
-			assert.IsType(t, "", result)
+			assert.Equal(t, v, got)
+			assert.IsType(t, "", got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Cuid()
-		invalidInputs := []any{"not-a-cuid", 123, true, "", "ck7q2g3ak0001psr9pbfgx83z-"}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Cuid()
+		invalid := []any{"not-a-cuid", 123, true, "", "ck7q2g3ak0001psr9pbfgx83z-"}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 
 	t.Run("pointer", func(t *testing.T) {
-		schema := CuidPtr()
-		cuidStr := "ck7q2g3ak0001psr9pbfgx83z"
-		result, err := schema.Parse(cuidStr)
+		want := "ck7q2g3ak0001psr9pbfgx83z"
+		got, err := CuidPtr().Parse(want)
 		require.NoError(t, err)
-		assert.IsType(t, (*string)(nil), result)
-		require.NotNil(t, result)
-		assert.Equal(t, cuidStr, *result)
+		assert.IsType(t, (*string)(nil), got)
+		require.NotNil(t, got)
+		assert.Equal(t, want, *got)
 	})
 
 	t.Run("optional", func(t *testing.T) {
-		schema := Cuid().Optional()
-		result, err := schema.Parse(nil)
+		got, err := Cuid().Optional().Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Nil(t, got)
 	})
 
 	t.Run("default", func(t *testing.T) {
-		defaultValue := "ck7q2g3ak0001psr9pbfgx83z"
-		schema := Cuid().Default(defaultValue)
-		result, err := schema.Parse(nil)
+		want := "ck7q2g3ak0001psr9pbfgx83z"
+		got, err := Cuid().Default(want).Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
+		assert.Equal(t, want, got)
 	})
 
 	t.Run("chaining with min length", func(t *testing.T) {
-		// A CUID is 25 chars long
-		schema := Cuid().Min(25)
-		result, err := schema.Parse("ck7q2g3ak0001psr9pbfgx83z")
+		got, err := Cuid().Min(25).Parse("ck7q2g3ak0001psr9pbfgx83z")
 		require.NoError(t, err)
-		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got)
 
 		_, err = Cuid().Min(26).Parse("ck7q2g3ak0001psr9pbfgx83z")
 		assert.Error(t, err)
 	})
 
 	t.Run("custom error", func(t *testing.T) {
-		customError := "Invalid CUID format"
-		schema := Cuid(core.SchemaParams{Error: customError})
-		_, err := schema.Parse("invalid")
+		s := Cuid(core.SchemaParams{Error: "Invalid CUID format"})
+		_, err := s.Parse("invalid")
 		assert.Error(t, err)
 	})
 }
 
-// =============================================================================
-// CUID2 Tests
-// =============================================================================
-
 func TestCUID2(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Cuid2()
-		validCUIDs := []string{"ahkiaa2j7k63ufbpq688f3id", "b3his4na8s72mb275evbr83d"}
-		for _, cuid := range validCUIDs {
-			result, err := schema.Parse(cuid)
+		s := Cuid2()
+		valid := []string{"ahkiaa2j7k63ufbpq688f3id", "b3his4na8s72mb275evbr83d"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, cuid, result)
-			assert.IsType(t, "", result)
+			assert.Equal(t, v, got)
+			assert.IsType(t, "", got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Cuid2()
-		invalidInputs := []any{"not-a-cuid2", "CUID2-WITH-UPPER", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Cuid2()
+		invalid := []any{"not-a-cuid2", "CUID2-WITH-UPPER", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 
 	t.Run("pointer", func(t *testing.T) {
-		schema := Cuid2Ptr()
-		cuid2Str := "ahkiaa2j7k63ufbpq688f3id"
-		result, err := schema.Parse(cuid2Str)
+		want := "ahkiaa2j7k63ufbpq688f3id"
+		got, err := Cuid2Ptr().Parse(want)
 		require.NoError(t, err)
-		assert.IsType(t, (*string)(nil), result)
-		require.NotNil(t, result)
-		assert.Equal(t, cuid2Str, *result)
+		assert.IsType(t, (*string)(nil), got)
+		require.NotNil(t, got)
+		assert.Equal(t, want, *got)
 	})
 }
-
-// =============================================================================
-// ULID Tests
-// =============================================================================
 
 func TestULID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Ulid()
-		validULIDs := []string{"01H8XGJWBWBAQ2XF7JGRB4B4B4", "01H8XGJWBYJ5M8M4J0Z5J3B3B3"}
-		for _, ulid := range validULIDs {
-			result, err := schema.Parse(ulid)
+		s := Ulid()
+		valid := []string{"01H8XGJWBWBAQ2XF7JGRB4B4B4", "01H8XGJWBYJ5M8M4J0Z5J3B3B3"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, ulid, result)
+			assert.Equal(t, v, got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Ulid()
-		invalidInputs := []any{"01H8XGJWBYJ5M8M4J0Z5J3B3B3I", "not-a-ulid", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Ulid()
+		invalid := []any{"01H8XGJWBYJ5M8M4J0Z5J3B3B3I", "not-a-ulid", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 }
-
-// =============================================================================
-// XID Tests
-// =============================================================================
 
 func TestXID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Xid()
-		validXIDs := []string{"chc2vbt2mcc0000abs80", "chc2vbt2mcc0000abs8g", "CHC2VBT2MCC0000ABS8G"}
-		for _, xid := range validXIDs {
-			result, err := schema.Parse(xid)
+		s := Xid()
+		valid := []string{"chc2vbt2mcc0000abs80", "chc2vbt2mcc0000abs8g", "CHC2VBT2MCC0000ABS8G"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, xid, result)
+			assert.Equal(t, v, got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Xid()
-		invalidInputs := []any{"not-an-xid", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Xid()
+		invalid := []any{"not-an-xid", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 }
-
-// =============================================================================
-// KSUID Tests
-// =============================================================================
 
 func TestKSUID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Ksuid()
-		validKSUIDs := []string{"24Stb6wH3k7W5PpkBN24q4jCnsa", "24Stb6wH3k7W5PpkBN24q4jCnsb"}
-		for _, ksuid := range validKSUIDs {
-			result, err := schema.Parse(ksuid)
+		s := Ksuid()
+		valid := []string{"24Stb6wH3k7W5PpkBN24q4jCnsa", "24Stb6wH3k7W5PpkBN24q4jCnsb"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, ksuid, result)
+			assert.Equal(t, v, got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Ksuid()
-		invalidInputs := []any{"not-a-ksuid", "24Stb6wH3k7W5PpkBN24q4jCnsa-", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Ksuid()
+		invalid := []any{"not-a-ksuid", "24Stb6wH3k7W5PpkBN24q4jCnsa-", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 }
-
-// =============================================================================
-// NanoID Tests
-// =============================================================================
 
 func TestNanoID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		schema := Nanoid()
-		validNanoIDs := []string{"J_ATaM-qZ8-Qk3Y-bY5c2", "c_U1bA-qZ8-Qk3Y-bY5c2"}
-		for _, nanoid := range validNanoIDs {
-			result, err := schema.Parse(nanoid)
+		s := Nanoid()
+		valid := []string{"J_ATaM-qZ8-Qk3Y-bY5c2", "c_U1bA-qZ8-Qk3Y-bY5c2"}
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, nanoid, result)
+			assert.Equal(t, v, got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		schema := Nanoid()
-		invalidInputs := []any{"not-a-nanoid", "J_ATaM-qZ8-Qk3Y-bY5c2!", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Nanoid()
+		invalid := []any{"not-a-nanoid", "J_ATaM-qZ8-Qk3Y-bY5c2!", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 }
 
-// =============================================================================
-// UUID Tests
-// =============================================================================
-
 func TestUUID(t *testing.T) {
 	t.Run("valid generic", func(t *testing.T) {
-		schema := Uuid()
-		validUUIDs := []string{
-			"123e4567-e89b-12d3-a456-426655440000", // v1
+		s := Uuid()
+		valid := []string{
+			"123e4567-e89b-12d3-a456-426655440000",
 			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-			"d9428888-122b-469b-84de-d6e0a77858b7", // v4
-			"1ee9b3b0-0b4a-6290-9b49-0242ac120002", // v6
-			"01890de4-7f13-7d5a-a439-c5f10a8a71d1", // v7
+			"d9428888-122b-469b-84de-d6e0a77858b7",
+			"1ee9b3b0-0b4a-6290-9b49-0242ac120002",
+			"01890de4-7f13-7d5a-a439-c5f10a8a71d1",
 		}
-		for _, uuid := range validUUIDs {
-			result, err := schema.Parse(uuid)
+		for _, v := range valid {
+			got, err := s.Parse(v)
 			require.NoError(t, err)
-			assert.Equal(t, uuid, result)
+			assert.Equal(t, v, got)
 		}
 	})
 
 	t.Run("invalid generic", func(t *testing.T) {
-		schema := Uuid()
-		invalidInputs := []any{"not-a-uuid", 123, true, ""}
-		for _, input := range invalidInputs {
-			_, err := schema.Parse(input)
-			assert.Error(t, err, "should reject: %v", input)
+		s := Uuid()
+		invalid := []any{"not-a-uuid", 123, true, ""}
+		for _, v := range invalid {
+			_, err := s.Parse(v)
+			assert.Error(t, err, "Parse(%v)", v)
 		}
 	})
 
 	t.Run("version v4", func(t *testing.T) {
 		valid := "d9428888-122b-469b-84de-d6e0a77858b7"
-		invalid := "d9428888-122b-169b-84de-d6e0a77858b7" // Invalid version
+		invalid := "d9428888-122b-169b-84de-d6e0a77858b7"
 
-		// Test with versioned constructor
-		schema1 := Uuid("v4")
-		_, err := schema1.Parse(valid)
+		s1 := Uuid("v4")
+		_, err := s1.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema1.Parse(invalid)
+		_, err = s1.Parse(invalid)
 		require.Error(t, err)
 
-		// Test with convenience function
-		schema2 := Uuidv4()
-		_, err = schema2.Parse(valid)
+		s2 := Uuidv4()
+		_, err = s2.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema2.Parse(invalid)
+		_, err = s2.Parse(invalid)
 		require.Error(t, err)
 	})
 
 	t.Run("version v6", func(t *testing.T) {
 		valid := "1ee9b3b0-0b4a-6290-9b49-0242ac120002"
-		invalid := "1ee9b3b0-0b4a-1290-9b49-0242ac120002" // Invalid version
+		invalid := "1ee9b3b0-0b4a-1290-9b49-0242ac120002"
 
-		schema1 := Uuid("v6")
-		_, err := schema1.Parse(valid)
+		s1 := Uuid("v6")
+		_, err := s1.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema1.Parse(invalid)
+		_, err = s1.Parse(invalid)
 		require.Error(t, err)
 
-		schema2 := Uuidv6()
-		_, err = schema2.Parse(valid)
+		s2 := Uuidv6()
+		_, err = s2.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema2.Parse(invalid)
+		_, err = s2.Parse(invalid)
 		require.Error(t, err)
 	})
 
 	t.Run("version v7", func(t *testing.T) {
 		valid := "01890de4-7f13-7d5a-a439-c5f10a8a71d1"
-		invalid := "01890de4-7f13-4d5a-a439-c5f10a8a71d1" // Invalid version
+		invalid := "01890de4-7f13-4d5a-a439-c5f10a8a71d1"
 
-		schema1 := Uuid("v7")
-		_, err := schema1.Parse(valid)
+		s1 := Uuid("v7")
+		_, err := s1.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema1.Parse(invalid)
+		_, err = s1.Parse(invalid)
 		require.Error(t, err)
 
-		schema2 := Uuidv7()
-		_, err = schema2.Parse(valid)
+		s2 := Uuidv7()
+		_, err = s2.Parse(valid)
 		require.NoError(t, err)
-		_, err = schema2.Parse(invalid)
+		_, err = s2.Parse(invalid)
 		require.Error(t, err)
 	})
 
 	t.Run("optional with version", func(t *testing.T) {
-		schema := Uuidv4().Optional()
-		result, err := schema.Parse(nil)
+		got, err := Uuidv4().Optional().Parse(nil)
 		require.NoError(t, err)
-		assert.Nil(t, result)
+		assert.Nil(t, got)
 	})
 
 	t.Run("default with generic", func(t *testing.T) {
-		defaultValue := "123e4567-e89b-12d3-a456-426655440000"
-		schema := Uuid().Default(defaultValue)
-		result, err := schema.Parse(nil)
+		want := "123e4567-e89b-12d3-a456-426655440000"
+		got, err := Uuid().Default(want).Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, defaultValue, result)
+		assert.Equal(t, want, got)
 	})
 }
 
-// =============================================================================
-// Default and prefault tests
-// =============================================================================
-
-func TestIds_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// CUID type
-		schema1 := Cuid().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr")
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1) // Should be default, not prefault
-
-		// UUID type
-		schema2 := Uuid().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7")
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", result2) // Should be default, not prefault
-
-		// CuidPtr type
-		schema3 := CuidPtr().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr")
-		result3, err3 := schema3.Parse(nil)
-		require.NoError(t, err3)
-		require.NotNil(t, result3)
-		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", *result3) // Should be default, not prefault
-	})
-
-	// Test 2: Default short-circuits validation
-	t.Run("Default short-circuits validation", func(t *testing.T) {
-		// CUID type - default value violates Min(30) but should still work
-		schema1 := Cuid().Min(30).Default("short") // "short" is too short for Min(30)
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, "short", result1) // Default bypasses validation
-
-		// UUID type - default value violates refinement but should still work
-		schema2 := Uuid().Refine(func(s string) bool {
-			return false // Always fail refinement
-		}, "Should never pass").Default("invalid-uuid-format")
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, "invalid-uuid-format", result2) // Default bypasses validation
-
-		// ULID type - default value violates format but should still work
-		schema3 := Ulid().Default("not-a-ulid")
-		result3, err3 := schema3.Parse(nil)
-		require.NoError(t, err3)
-		assert.Equal(t, "not-a-ulid", result3) // Default bypasses validation
-	})
-
-	// Test 3: Prefault goes through full validation
-	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		// CUID type - prefault value passes validation
-		schema1 := Cuid().Min(25).Prefault("ck7q2g3ak0001psr9pbfgx83z") // Valid CUID with 25 chars
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1)
-
-		// UUID type - prefault value passes validation
-		schema2 := Uuidv4().Prefault("d9428888-122b-469b-84de-d6e0a77858b7") // Valid v4 UUID
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, "d9428888-122b-469b-84de-d6e0a77858b7", result2)
-
-		// ULID type - prefault value passes validation
-		schema3 := Ulid().Prefault("01H8XGJWBWBAQ2XF7JGRB4B4B4") // Valid ULID
-		result3, err3 := schema3.Parse(nil)
-		require.NoError(t, err3)
-		assert.Equal(t, "01H8XGJWBWBAQ2XF7JGRB4B4B4", result3)
-	})
-
-	// Test 4: Prefault only triggered by nil input
-	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
-		schema := Cuid().Prefault("ck7q2g3ak0001psr9pbfgx83z")
-
-		// Valid input should override prefault
-		result, err := schema.Parse("clegxv4h2000008ld9bs2a2vr")
+func TestIDs_DefaultAndPrefault(t *testing.T) {
+	t.Run("default has higher priority than prefault", func(t *testing.T) {
+		got1, err := Cuid().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr").Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", result) // Should be input, not prefault
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got1)
 
-		// Invalid input should NOT trigger prefault (should return error)
-		_, err = schema.Parse("invalid-cuid")
+		got2, err := Uuid().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", got2)
+
+		got3, err := CuidPtr().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr").Parse(nil)
+		require.NoError(t, err)
+		require.NotNil(t, got3)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", *got3)
+	})
+
+	t.Run("default short-circuits validation", func(t *testing.T) {
+		got1, err := Cuid().Min(30).Default("short").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "short", got1)
+
+		got2, err := Uuid().Refine(func(s string) bool {
+			return false
+		}, "Should never pass").Default("invalid-uuid-format").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid-uuid-format", got2)
+
+		got3, err := Ulid().Default("not-a-ulid").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "not-a-ulid", got3)
+	})
+
+	t.Run("prefault goes through full validation", func(t *testing.T) {
+		got1, err := Cuid().Min(25).Prefault("ck7q2g3ak0001psr9pbfgx83z").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got1)
+
+		got2, err := Uuidv4().Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "d9428888-122b-469b-84de-d6e0a77858b7", got2)
+
+		got3, err := Ulid().Prefault("01H8XGJWBWBAQ2XF7JGRB4B4B4").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "01H8XGJWBWBAQ2XF7JGRB4B4B4", got3)
+	})
+
+	t.Run("prefault only triggered by nil input", func(t *testing.T) {
+		s := Cuid().Prefault("ck7q2g3ak0001psr9pbfgx83z")
+
+		got, err := s.Parse("clegxv4h2000008ld9bs2a2vr")
+		require.NoError(t, err)
+		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", got)
+
+		_, err = s.Parse("invalid-cuid")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Invalid cuid")
 	})
 
-	// Test 5: DefaultFunc and PrefaultFunc behavior
-	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
+	t.Run("DefaultFunc and PrefaultFunc", func(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		defaultFunc := func() string {
+		dfn := func() string {
 			defaultCalled = true
 			return "ck7q2g3ak0001psr9pbfgx83z"
 		}
-
-		prefaultFunc := func() string {
+		pfn := func() string {
 			prefaultCalled = true
 			return "clegxv4h2000008ld9bs2a2vr"
 		}
 
-		// Test DefaultFunc priority over PrefaultFunc
-		schema1 := Cuid().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
+		got1, err := Cuid().DefaultFunc(dfn).PrefaultFunc(pfn).Parse(nil)
+		require.NoError(t, err)
 		assert.True(t, defaultCalled)
-		assert.False(t, prefaultCalled) // Should not be called due to default priority
-		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", result1)
+		assert.False(t, prefaultCalled)
+		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got1)
 
-		// Reset flags
 		defaultCalled = false
 		prefaultCalled = false
 
-		// Test PrefaultFunc alone
-		schema2 := Cuid().PrefaultFunc(prefaultFunc)
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
+		got2, err := Cuid().PrefaultFunc(pfn).Parse(nil)
+		require.NoError(t, err)
 		assert.True(t, prefaultCalled)
-		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", result2)
+		assert.Equal(t, "clegxv4h2000008ld9bs2a2vr", got2)
 	})
 
-	// Test 6: Prefault validation failure
-	t.Run("Prefault validation failure", func(t *testing.T) {
-		// CUID with invalid prefault value
-		schema1 := Cuid().Prefault("invalid-cuid")
-		_, err1 := schema1.Parse(nil)
-		require.Error(t, err1) // Prefault should fail validation
-		assert.Contains(t, err1.Error(), "Invalid cuid")
+	t.Run("prefault validation failure", func(t *testing.T) {
+		_, err := Cuid().Prefault("invalid-cuid").Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid cuid")
 
-		// UUID v4 with invalid prefault value (wrong version)
-		schema2 := Uuidv4().Prefault("01890de4-7f13-7d5a-a439-c5f10a8a71d1") // v7 UUID, not v4
-		_, err2 := schema2.Parse(nil)
-		require.Error(t, err2) // Prefault should fail validation
-		assert.Contains(t, err2.Error(), "Invalid uuid")
+		_, err = Uuidv4().Prefault("01890de4-7f13-7d5a-a439-c5f10a8a71d1").Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid uuid")
 
-		// ULID with invalid prefault value
-		schema3 := Ulid().Prefault("invalid-ulid")
-		_, err3 := schema3.Parse(nil)
-		require.Error(t, err3) // Prefault should fail validation
-		assert.Contains(t, err3.Error(), "Invalid ulid")
+		_, err = Ulid().Prefault("invalid-ulid").Parse(nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Invalid ulid")
 	})
 
-	// Test 7: Different ID types with Default and Prefault
-	t.Run("Different ID types with Default and Prefault", func(t *testing.T) {
-		// CUID2
-		schema1 := Cuid2().Default("ahkiaa2j7k63ufbpq688f3id").Prefault("b3his4na8s72mb275evbr83d")
-		result1, err1 := schema1.Parse(nil)
-		require.NoError(t, err1)
-		assert.Equal(t, "ahkiaa2j7k63ufbpq688f3id", result1) // Should be default
+	t.Run("all ID types with default and prefault", func(t *testing.T) {
+		got1, err := Cuid2().Default("ahkiaa2j7k63ufbpq688f3id").Prefault("b3his4na8s72mb275evbr83d").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "ahkiaa2j7k63ufbpq688f3id", got1)
 
-		// XID
-		schema2 := Xid().Default("chc2vbt2mcc0000abs80").Prefault("chc2vbt2mcc0000abs8g")
-		result2, err2 := schema2.Parse(nil)
-		require.NoError(t, err2)
-		assert.Equal(t, "chc2vbt2mcc0000abs80", result2) // Should be default
+		got2, err := Xid().Default("chc2vbt2mcc0000abs80").Prefault("chc2vbt2mcc0000abs8g").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "chc2vbt2mcc0000abs80", got2)
 
-		// KSUID
-		schema3 := Ksuid().Default("24Stb6wH3k7W5PpkBN24q4jCnsa").Prefault("24Stb6wH3k7W5PpkBN24q4jCnsb")
-		result3, err3 := schema3.Parse(nil)
-		require.NoError(t, err3)
-		assert.Equal(t, "24Stb6wH3k7W5PpkBN24q4jCnsa", result3) // Should be default
+		got3, err := Ksuid().Default("24Stb6wH3k7W5PpkBN24q4jCnsa").Prefault("24Stb6wH3k7W5PpkBN24q4jCnsb").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "24Stb6wH3k7W5PpkBN24q4jCnsa", got3)
 
-		// NanoID
-		schema4 := Nanoid().Default("J_ATaM-qZ8-Qk3Y-bY5c2").Prefault("c_U1bA-qZ8-Qk3Y-bY5c2")
-		result4, err4 := schema4.Parse(nil)
-		require.NoError(t, err4)
-		assert.Equal(t, "J_ATaM-qZ8-Qk3Y-bY5c2", result4) // Should be default
+		got4, err := Nanoid().Default("J_ATaM-qZ8-Qk3Y-bY5c2").Prefault("c_U1bA-qZ8-Qk3Y-bY5c2").Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "J_ATaM-qZ8-Qk3Y-bY5c2", got4)
 	})
 }

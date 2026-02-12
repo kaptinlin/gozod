@@ -184,14 +184,14 @@ func (z *ZodFile[T, R]) Meta(meta core.GlobalMeta) *ZodFile[T, R] {
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodFile[T, R]) Describe(description string) *ZodFile[T, R] {
-	newInternals := z.internals.Clone()
+func (z *ZodFile[T, R]) Describe(desc string) *ZodFile[T, R] {
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
+	existing.Description = desc
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
 	return clone
 }
@@ -236,25 +236,41 @@ func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 		return false
 	}
 
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](wrapper, errorMessage)
+	check := checks.NewCustom[any](wrapper, msg)
 	return z.withCheck(check)
 }
 
 // RefineAny applies a custom validation function that receives the raw value.
 func (z *ZodFile[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFile[T, R] {
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
-	check := checks.NewCustom[any](fn, errorMessage)
+	check := checks.NewCustom[any](fn, msg)
 	return z.withCheck(check)
+}
+
+// Check adds a custom validation function that can push multiple issues.
+func (z *ZodFile[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodFile[T, R] {
+	wrapper := func(payload *core.ParsePayload) {
+		if val, ok := payload.Value().(R); ok {
+			fn(val, payload)
+		}
+	}
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
+	return z.withCheck(check)
+}
+
+// With is an alias for Check (Zod v4 API compatibility).
+func (z *ZodFile[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodFile[T, R] {
+	return z.Check(fn, params...)
 }
 
 // =============================================================================
@@ -521,8 +537,7 @@ func newZodFileFromDef[T any, R any](def *ZodFileDef) *ZodFile[T, R] {
 
 // newFileDef creates a ZodFileDef from optional params.
 func newFileDef(params ...any) *ZodFileDef {
-	param := utils.FirstParam(params...)
-	normalizedParams := utils.NormalizeParams(param)
+	sp := utils.NormalizeParams(utils.FirstParam(params...))
 
 	def := &ZodFileDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -531,8 +546,8 @@ func newFileDef(params ...any) *ZodFileDef {
 		},
 	}
 
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
 	return def

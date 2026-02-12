@@ -1,11 +1,10 @@
 package types
 
 import (
+	"mime/multipart"
 	"os"
 	"strings"
 	"testing"
-
-	"mime/multipart"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
@@ -178,17 +177,17 @@ func TestFile_Meta(t *testing.T) {
 
 func TestFile_StrictParse(t *testing.T) {
 	t.Run("accepts valid os.File", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "strict_*.txt")
+		tmpFile, err := os.CreateTemp("", "strict_*.txt")
 		require.NoError(t, err)
 		defer func() {
-			_ = tempFile.Close()
-			_ = os.Remove(tempFile.Name())
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpFile.Name())
 		}()
 
 		schema := File()
-		result, err := schema.StrictParse(tempFile)
+		result, err := schema.StrictParse(tmpFile)
 		require.NoError(t, err)
-		assert.Equal(t, tempFile, result)
+		assert.Equal(t, tmpFile, result)
 	})
 
 	t.Run("accepts multipart file header", func(t *testing.T) {
@@ -217,7 +216,6 @@ func TestFile_StrictParse(t *testing.T) {
 // =============================================================================
 
 func TestFile_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
 	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
 		defaultFile := &multipart.FileHeader{
 			Filename: "default.txt",
@@ -230,89 +228,79 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			Size:     2048,
 		}
 
-		// File type
 		schema1 := File().Default(defaultFile).Prefault(prefaultFile)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		if file, ok := result1.(*multipart.FileHeader); ok {
-			assert.Equal(t, "default.txt", file.Filename) // Should be default, not prefault
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file1, ok := result1.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result1)
 		}
+		assert.Equal(t, "default.txt", file1.Filename)
 
-		// FilePtr type
 		schema2 := FilePtr().Default(defaultFile).Prefault(prefaultFile)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		if file, ok := (*result2).(*multipart.FileHeader); ok {
-			assert.Equal(t, "default.txt", file.Filename) // Should be default, not prefault
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file2, ok := (*result2).(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", *result2)
 		}
+		assert.Equal(t, "default.txt", file2.Filename)
 	})
 
-	// Test 2: Default short-circuits validation
 	t.Run("Default short-circuits validation", func(t *testing.T) {
-		// Create a default file that would fail size validation
 		defaultFile := &multipart.FileHeader{
 			Filename: "small.txt",
 			Header:   make(map[string][]string),
-			Size:     100, // Too small for Min(1000)
+			Size:     100,
 		}
 
-		// File type - default value violates Min(1000) but should still work
 		schema1 := File().Min(1000).Default(defaultFile)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		if file, ok := result1.(*multipart.FileHeader); ok {
-			assert.Equal(t, int64(100), file.Size) // Default bypasses validation
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file1, ok := result1.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result1)
 		}
+		assert.Equal(t, int64(100), file1.Size)
 
-		// FilePtr type - default value violates Min(1000) but should still work
 		schema2 := FilePtr().Min(1000).Default(defaultFile)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		if file, ok := (*result2).(*multipart.FileHeader); ok {
-			assert.Equal(t, int64(100), file.Size) // Default bypasses validation
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file2, ok := (*result2).(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", *result2)
 		}
+		assert.Equal(t, int64(100), file2.Size)
 	})
 
-	// Test 3: Prefault goes through full validation
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		// File type - prefault value passes validation
 		prefaultFile := &multipart.FileHeader{
 			Filename: "large.txt",
 			Header:   make(map[string][]string),
-			Size:     2000, // Passes Min(1000)
+			Size:     2000,
 		}
 		schema1 := File().Min(1000).Prefault(prefaultFile)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		if file, ok := result1.(*multipart.FileHeader); ok {
-			assert.Equal(t, int64(2000), file.Size)
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file1, ok := result1.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result1)
 		}
+		assert.Equal(t, int64(2000), file1.Size)
 
-		// FilePtr type - prefault value passes validation
 		schema2 := FilePtr().Min(1000).Prefault(prefaultFile)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		if file, ok := (*result2).(*multipart.FileHeader); ok {
-			assert.Equal(t, int64(2000), file.Size)
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file2, ok := (*result2).(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", *result2)
 		}
+		assert.Equal(t, int64(2000), file2.Size)
 	})
 
-	// Test 4: Prefault only triggered by nil input
 	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
 		prefaultFile := &multipart.FileHeader{
 			Filename: "prefault.txt",
@@ -321,7 +309,6 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 		}
 		schema := File().Prefault(prefaultFile)
 
-		// Valid input should override prefault
 		validFile := &multipart.FileHeader{
 			Filename: "valid.txt",
 			Header:   make(map[string][]string),
@@ -329,23 +316,21 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 		}
 		result, err := schema.Parse(validFile)
 		require.NoError(t, err)
-		if file, ok := result.(*multipart.FileHeader); ok {
-			assert.Equal(t, "valid.txt", file.Filename) // Should be input, not prefault
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, "valid.txt", file.Filename)
 
-		// Invalid input should NOT trigger prefault (should return error)
 		_, err = schema.Parse("invalid_input")
 		require.Error(t, err)
 	})
 
-	// Test 5: DefaultFunc and PrefaultFunc behavior
 	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		defaultFunc := func() any {
+		defaultFn := func() any {
 			defaultCalled = true
 			return &multipart.FileHeader{
 				Filename: "default_func.txt",
@@ -354,7 +339,7 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			}
 		}
 
-		prefaultFunc := func() any {
+		prefaultFn := func() any {
 			prefaultCalled = true
 			return &multipart.FileHeader{
 				Filename: "prefault_func.txt",
@@ -363,50 +348,44 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			}
 		}
 
-		// Test DefaultFunc priority over PrefaultFunc
-		schema1 := File().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
+		schema1 := File().DefaultFunc(defaultFn).PrefaultFunc(prefaultFn)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
 		assert.True(t, defaultCalled)
-		assert.False(t, prefaultCalled) // Should not be called due to default priority
-		if file, ok := result1.(*multipart.FileHeader); ok {
-			assert.Equal(t, "default_func.txt", file.Filename)
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		assert.False(t, prefaultCalled)
+		file1, ok := result1.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result1)
 		}
+		assert.Equal(t, "default_func.txt", file1.Filename)
 
-		// Reset flags
 		defaultCalled = false
 		prefaultCalled = false
 
-		// Test PrefaultFunc alone
-		schema2 := File().PrefaultFunc(prefaultFunc)
+		schema2 := File().PrefaultFunc(prefaultFn)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		assert.True(t, prefaultCalled)
-		if file, ok := result2.(*multipart.FileHeader); ok {
-			assert.Equal(t, "prefault_func.txt", file.Filename)
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file2, ok := result2.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result2)
 		}
+		assert.Equal(t, "prefault_func.txt", file2.Filename)
 	})
 
-	// Test 6: Prefault validation failure
 	t.Run("Prefault validation failure", func(t *testing.T) {
-		// Create a prefault file that fails validation
 		prefaultFile := &multipart.FileHeader{
 			Filename: "small.txt",
 			Header:   make(map[string][]string),
-			Size:     100, // Too small for Min(1000)
+			Size:     100,
 		}
 
 		schema := File().Min(1000).Prefault(prefaultFile)
 		_, err := schema.Parse(nil)
-		require.Error(t, err) // Prefault should fail validation
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "File size must be at least 1000 bytes")
 	})
 
-	// Test 7: FilePtr with Default and Prefault
 	t.Run("FilePtr with Default and Prefault", func(t *testing.T) {
 		defaultFile := &multipart.FileHeader{
 			Filename: "default_ptr.txt",
@@ -423,11 +402,11 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		if file, ok := (*result).(*multipart.FileHeader); ok {
-			assert.Equal(t, "default_ptr.txt", file.Filename) // Should be default
-		} else {
-			t.Fatal("Expected multipart.FileHeader")
+		file, ok := (*result).(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", *result)
 		}
+		assert.Equal(t, "default_ptr.txt", file.Filename)
 	})
 }
 
@@ -438,206 +417,170 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 func TestFile_Overwrite(t *testing.T) {
 	t.Run("basic file transformation", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				// Transform file size validation
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					// Create a new file header with modified size for testing
-					newFile := &multipart.FileHeader{
-						Filename: "transformed_" + multipartFile.Filename,
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size * 2, // Double the size
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					return &multipart.FileHeader{
+						Filename: "transformed_" + fh.Filename,
+						Header:   fh.Header,
+						Size:     fh.Size * 2,
 					}
-					return newFile
 				}
-				return file
+				return f
 			})
 
-		// Create a test multipart file
-		originalFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "test.txt",
 			Header:   make(map[string][]string),
 			Size:     1024,
 		}
 
-		result, err := schema.Parse(originalFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		if transformedFile, ok := result.(*multipart.FileHeader); ok {
-			assert.Equal(t, "transformed_test.txt", transformedFile.Filename)
-			assert.Equal(t, int64(2048), transformedFile.Size)
-		} else {
-			t.Fatal("Expected transformed multipart file")
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, "transformed_test.txt", got.Filename)
+		assert.Equal(t, int64(2048), got.Size)
 	})
 
 	t.Run("file name normalization", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					// Normalize filename: lowercase and replace spaces with underscores
-					normalizedName := strings.ToLower(multipartFile.Filename)
-					normalizedName = strings.ReplaceAll(normalizedName, " ", "_")
-
-					newFile := &multipart.FileHeader{
-						Filename: normalizedName,
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size,
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					name := strings.ToLower(fh.Filename)
+					name = strings.ReplaceAll(name, " ", "_")
+					return &multipart.FileHeader{
+						Filename: name,
+						Header:   fh.Header,
+						Size:     fh.Size,
 					}
-					return newFile
 				}
-				return file
+				return f
 			})
 
-		originalFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "My Document File.PDF",
 			Header:   make(map[string][]string),
 			Size:     2048,
 		}
 
-		result, err := schema.Parse(originalFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		if transformedFile, ok := result.(*multipart.FileHeader); ok {
-			assert.Equal(t, "my_document_file.pdf", transformedFile.Filename)
-		} else {
-			t.Fatal("Expected transformed file")
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, "my_document_file.pdf", got.Filename)
 	})
 
 	t.Run("os.File transformation", func(t *testing.T) {
-		// Create a temporary file for testing
-		tempFile, err := os.CreateTemp("", "test_*.txt")
+		tmpFile, err := os.CreateTemp("", "test_*.txt")
 		require.NoError(t, err)
 		defer func() {
-			err := tempFile.Close()
-			if err != nil {
-				// Handle or log the error if necessary
-				t.Logf("Failed to close temp file: %v", err)
-			}
-			err = os.Remove(tempFile.Name())
-			if err != nil {
-				// Handle or log the error if necessary
-				t.Logf("Failed to remove temp file: %v", err)
-			}
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpFile.Name())
 		}()
 
 		schema := File().
-			Overwrite(func(file any) any {
-				// For os.File, we can't easily transform it, so return as-is
-				// In practice, you might want to wrap it or change permissions
-				return file
+			Overwrite(func(f any) any {
+				return f
 			})
 
-		result, err := schema.Parse(tempFile)
+		result, err := schema.Parse(tmpFile)
 		require.NoError(t, err)
-
-		// Should preserve the file
-		assert.Equal(t, tempFile, result)
+		assert.Equal(t, tmpFile, result)
 	})
 
 	t.Run("pointer type handling", func(t *testing.T) {
 		schema := FilePtr().
-			Overwrite(func(file *any) *any {
-				if file == nil {
+			Overwrite(func(f *any) *any {
+				if f == nil {
 					return nil
 				}
-
-				if multipartFile, ok := (*file).(*multipart.FileHeader); ok {
-					// Add timestamp prefix to filename
-					newFile := &multipart.FileHeader{
-						Filename: "2024_" + multipartFile.Filename,
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size,
+				if fh, ok := (*f).(*multipart.FileHeader); ok {
+					newFH := &multipart.FileHeader{
+						Filename: "2024_" + fh.Filename,
+						Header:   fh.Header,
+						Size:     fh.Size,
 					}
-					// Create nested pointer structure: *any -> *any -> *multipart.FileHeader
-					innerAny := any(newFile)
-					result := any(&innerAny)
-					return &result
+					inner := any(newFH)
+					outer := any(&inner)
+					return &outer
 				}
-				return file
+				return f
 			})
 
-		// Use the actual file type, not wrapped in any
-		originalFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "document.txt",
 			Header:   make(map[string][]string),
 			Size:     512,
 		}
 
-		result, err := schema.Parse(originalFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Handle the nested pointer structure: *any -> *any -> *multipart.FileHeader
-		if anyPtr, ok := (*result).(*any); ok {
-			if transformedFile, ok := (*anyPtr).(*multipart.FileHeader); ok {
-				assert.Equal(t, "2024_document.txt", transformedFile.Filename)
-			} else {
-				t.Fatalf("Expected transformed file, got: %T", *anyPtr)
-			}
-		} else {
-			t.Fatalf("Expected *any, got: %T", *result)
+		anyPtr, ok := (*result).(*any)
+		if !ok {
+			t.Fatalf("got %T, want *any", *result)
 		}
+		got, ok := (*anyPtr).(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", *anyPtr)
+		}
+		assert.Equal(t, "2024_document.txt", got.Filename)
 	})
 
 	t.Run("chaining with size validation", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				// Ensure minimum file size by padding metadata
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					minSize := int64(1000)
-					if multipartFile.Size < minSize {
-						newFile := &multipart.FileHeader{
-							Filename: multipartFile.Filename,
-							Header:   multipartFile.Header,
-							Size:     minSize, // Enforce minimum size
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					if fh.Size < 1000 {
+						return &multipart.FileHeader{
+							Filename: fh.Filename,
+							Header:   fh.Header,
+							Size:     1000,
 						}
-						return newFile
 					}
 				}
-				return file
+				return f
 			})
 
-		smallFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "small.txt",
 			Header:   make(map[string][]string),
-			Size:     100, // Below minimum
+			Size:     100,
 		}
 
-		result, err := schema.Parse(smallFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		if transformedFile, ok := result.(*multipart.FileHeader); ok {
-			assert.Equal(t, int64(1000), transformedFile.Size) // Should be padded to minimum
-		} else {
-			t.Fatal("Expected transformed file")
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, int64(1000), got.Size)
 	})
 
 	t.Run("type preservation", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				return file // Identity transformation
-			})
+			Overwrite(func(f any) any { return f })
 
-		testFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "test.txt",
 			Header:   make(map[string][]string),
 			Size:     1024,
 		}
 
-		result, err := schema.Parse(testFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-		assert.Equal(t, testFile, result)
+		assert.Equal(t, input, result)
 	})
 
 	t.Run("error handling preservation", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				return file
-			})
+			Overwrite(func(f any) any { return f })
 
-		// Invalid input should still fail validation
 		_, err := schema.Parse("not a file")
 		assert.Error(t, err)
 
@@ -647,81 +590,150 @@ func TestFile_Overwrite(t *testing.T) {
 
 	t.Run("file extension transformation", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					// Ensure .txt extension
-					filename := multipartFile.Filename
-					if !strings.HasSuffix(strings.ToLower(filename), ".txt") {
-						filename += ".txt"
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					name := fh.Filename
+					if !strings.HasSuffix(strings.ToLower(name), ".txt") {
+						name += ".txt"
 					}
-
-					newFile := &multipart.FileHeader{
-						Filename: filename,
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size,
+					return &multipart.FileHeader{
+						Filename: name,
+						Header:   fh.Header,
+						Size:     fh.Size,
 					}
-					return newFile
 				}
-				return file
+				return f
 			})
 
-		fileWithoutExt := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "document",
 			Header:   make(map[string][]string),
 			Size:     1024,
 		}
 
-		result, err := schema.Parse(fileWithoutExt)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		if transformedFile, ok := result.(*multipart.FileHeader); ok {
-			assert.Equal(t, "document.txt", transformedFile.Filename)
-		} else {
-			t.Fatal("Expected transformed file")
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, "document.txt", got.Filename)
 	})
 
 	t.Run("multiple transformations", func(t *testing.T) {
 		schema := File().
-			Overwrite(func(file any) any {
-				// First transformation: normalize filename
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					newFile := &multipart.FileHeader{
-						Filename: strings.ToLower(multipartFile.Filename),
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size,
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					return &multipart.FileHeader{
+						Filename: strings.ToLower(fh.Filename),
+						Header:   fh.Header,
+						Size:     fh.Size,
 					}
-					return newFile
 				}
-				return file
+				return f
 			}).
-			Overwrite(func(file any) any {
-				// Second transformation: add prefix
-				if multipartFile, ok := file.(*multipart.FileHeader); ok {
-					newFile := &multipart.FileHeader{
-						Filename: "processed_" + multipartFile.Filename,
-						Header:   multipartFile.Header,
-						Size:     multipartFile.Size,
+			Overwrite(func(f any) any {
+				if fh, ok := f.(*multipart.FileHeader); ok {
+					return &multipart.FileHeader{
+						Filename: "processed_" + fh.Filename,
+						Header:   fh.Header,
+						Size:     fh.Size,
 					}
-					return newFile
 				}
-				return file
+				return f
 			})
 
-		originalFile := &multipart.FileHeader{
+		input := &multipart.FileHeader{
 			Filename: "MyFile.TXT",
 			Header:   make(map[string][]string),
 			Size:     1024,
 		}
 
-		result, err := schema.Parse(originalFile)
+		result, err := schema.Parse(input)
 		require.NoError(t, err)
-
-		if transformedFile, ok := result.(*multipart.FileHeader); ok {
-			// Should be lowercase with prefix
-			assert.Equal(t, "processed_myfile.txt", transformedFile.Filename)
-		} else {
-			t.Fatal("Expected transformed file")
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
 		}
+		assert.Equal(t, "processed_myfile.txt", got.Filename)
+	})
+}
+
+// =============================================================================
+// Check and With tests
+// =============================================================================
+
+func TestFile_Check(t *testing.T) {
+	t.Run("check pushes custom issue", func(t *testing.T) {
+		schema := File().Check(
+			func(v any, p *core.ParsePayload) {
+				if fh, ok := v.(*multipart.FileHeader); ok {
+					if fh.Size > 1000 {
+						p.AddIssue(core.ZodRawIssue{
+							Code:    "custom",
+							Message: "file too large",
+						})
+					}
+				}
+			},
+		)
+
+		large := &multipart.FileHeader{
+			Filename: "big.txt",
+			Header:   make(map[string][]string),
+			Size:     2000,
+		}
+		_, err := schema.Parse(large)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "file too large")
+
+		small := &multipart.FileHeader{
+			Filename: "small.txt",
+			Header:   make(map[string][]string),
+			Size:     500,
+		}
+		result, err := schema.Parse(small)
+		require.NoError(t, err)
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
+		}
+		assert.Equal(t, "small.txt", got.Filename)
+	})
+
+	t.Run("With is alias for Check", func(t *testing.T) {
+		schema := File().With(
+			func(v any, p *core.ParsePayload) {
+				if fh, ok := v.(*multipart.FileHeader); ok {
+					if fh.Filename == "" {
+						p.AddIssue(core.ZodRawIssue{
+							Code:    "custom",
+							Message: "filename required",
+						})
+					}
+				}
+			},
+		)
+
+		noName := &multipart.FileHeader{
+			Header: make(map[string][]string),
+			Size:   100,
+		}
+		_, err := schema.Parse(noName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "filename required")
+
+		named := &multipart.FileHeader{
+			Filename: "test.txt",
+			Header:   make(map[string][]string),
+			Size:     100,
+		}
+		result, err := schema.Parse(named)
+		require.NoError(t, err)
+		got, ok := result.(*multipart.FileHeader)
+		if !ok {
+			t.Fatalf("got %T, want *multipart.FileHeader", result)
+		}
+		assert.Equal(t, "test.txt", got.Filename)
 	})
 }

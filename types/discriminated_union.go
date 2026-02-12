@@ -14,23 +14,23 @@ import (
 
 // Sentinel errors for discriminated union construction and validation.
 var (
-	ErrSchemaIsNil                   = errors.New("schema is nil")
-	ErrSchemaInternalsIsNil          = errors.New("schema internals is nil")
-	ErrNoDiscriminatorValuesFound    = errors.New("no discriminator values found for field")
-	ErrOptionIsNil                   = errors.New("option is nil")
-	ErrDuplicateDiscriminatorValue   = errors.New("duplicate discriminator value")
-	ErrFailedToBuildDiscriminatorMap = errors.New("failed to build discriminator map")
-	ErrNoValidDiscriminatorValues    = errors.New("no valid discriminator values found for field")
+	ErrSchemaIsNil                = errors.New("schema is nil")
+	ErrSchemaInternalsIsNil       = errors.New("schema internals is nil")
+	ErrNoDiscriminatorValues      = errors.New("no discriminator values found for field")
+	ErrOptionIsNil                = errors.New("option is nil")
+	ErrDuplicateDiscriminator     = errors.New("duplicate discriminator value")
+	ErrFailedToBuildDiscriminator = errors.New("failed to build discriminator map")
+	ErrNoValidDiscriminators      = errors.New("no valid discriminator values found for field")
 )
 
-// ZodDiscriminatedUnionDef is the configuration for discriminated union validation.
+// ZodDiscriminatedUnionDef holds the configuration for discriminated union validation.
 type ZodDiscriminatedUnionDef struct {
 	core.ZodTypeDef
 	Discriminator string
 	Options       []core.ZodSchema
 }
 
-// ZodDiscriminatedUnionInternals contains discriminated union validator internal state.
+// ZodDiscriminatedUnionInternals contains the internal state of a discriminated union validator.
 type ZodDiscriminatedUnionInternals struct {
 	core.ZodTypeInternals
 	Def           *ZodDiscriminatedUnionDef
@@ -39,12 +39,12 @@ type ZodDiscriminatedUnionInternals struct {
 	DiscMap       map[any]core.ZodSchema
 }
 
-// ZodDiscriminatedUnion is a discriminated union validation schema.
+// ZodDiscriminatedUnion is a type-safe discriminated union validation schema.
 type ZodDiscriminatedUnion[T any, R any] struct {
 	internals *ZodDiscriminatedUnionInternals
 }
 
-// Internals returns the internal state for framework usage.
+// Internals returns the internal state of the schema.
 func (z *ZodDiscriminatedUnion[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
@@ -61,25 +61,21 @@ func (z *ZodDiscriminatedUnion[T, R]) IsNilable() bool {
 
 // Parse validates input and returns a value matching the constraint type R.
 func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
+	var zero R
+
+	pctx := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+		pctx = ctx[0]
 	}
 
-	if constructionError, exists := z.internals.Bag["construction_error"]; exists {
-		if errMsg, ok := constructionError.(string); ok {
-			var zero R
-			return zero, issues.CreateInvalidSchemaError(errMsg, input, parseCtx)
+	if ce, ok := z.internals.Bag["construction_error"]; ok {
+		if msg, ok := ce.(string); ok {
+			return zero, issues.CreateInvalidSchemaError(msg, input, pctx)
 		}
 	}
 
-	if input == nil {
-		if z.internals.Nilable || z.internals.Optional {
-			var zero R
-			return zero, nil
-		}
+	if input == nil && (z.internals.Nilable || z.internals.Optional) {
+		return zero, nil
 	}
 
 	if input == nil && (z.internals.DefaultValue != nil || z.internals.DefaultFunc != nil) {
@@ -90,119 +86,102 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 		}
 	}
 
-	inputMap, ok := input.(map[string]any)
+	m, ok := input.(map[string]any)
 	if !ok {
 		if z.internals.PrefaultValue != nil || z.internals.PrefaultFunc != nil {
-			var pv any
+			pv := z.internals.PrefaultValue
 			if z.internals.PrefaultFunc != nil {
 				pv = z.internals.PrefaultFunc()
-			} else {
-				pv = z.internals.PrefaultValue
 			}
-			return z.Parse(pv, parseCtx)
+			return z.Parse(pv, pctx)
 		}
-		var zero R
-		return zero, issues.CreateInvalidTypeError(core.ZodTypeObject, input, parseCtx)
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeObject, input, pctx)
 	}
 
-	discVal, exists := inputMap[z.internals.Discriminator]
+	dv, exists := m[z.internals.Discriminator]
 	if !exists {
-		var zero R
-		return zero, issues.CreateMissingRequiredError(z.internals.Discriminator, "discriminator field", input, parseCtx)
+		return zero, issues.CreateMissingRequiredError(z.internals.Discriminator, "discriminator field", input, pctx)
 	}
 
-	targetSchema, found := z.internals.DiscMap[discVal]
-	var result any
-	var err error
-	if found {
-		result, err = targetSchema.ParseAny(inputMap, parseCtx)
-	} else {
-		var errs []error
-		for _, option := range z.internals.Options {
-			if option == nil {
-				continue
-			}
-			if res, e := option.ParseAny(inputMap, parseCtx); e == nil {
-				result = res
-				err = nil
-				break
-			} else {
-				errs = append(errs, e)
-			}
-		}
-		if result == nil {
-			var zero R
-			return zero, issues.CreateInvalidUnionError(errs, input, parseCtx)
-		}
-	}
-
+	r, err := z.parseVariant(m, dv, pctx)
 	if err != nil {
-		var zero R
 		return zero, err
 	}
 
 	if len(z.internals.Checks) > 0 {
-		checked, validationErr := engine.ApplyChecks[any](result, z.internals.Checks, parseCtx)
-		if validationErr != nil {
-			var zero R
-			return zero, validationErr
+		r, err = engine.ApplyChecks[any](r, z.internals.Checks, pctx)
+		if err != nil {
+			return zero, err
 		}
-		result = checked
 	}
 
-	return convertToDiscriminatedUnionConstraintType[T, R](result), nil
+	return convertToDiscriminatedUnionConstraintType[T, R](r), nil
 }
 
-// MustParse validates input and panics on failure.
+// parseVariant dispatches to the matching schema or falls back to trying all options.
+func (z *ZodDiscriminatedUnion[T, R]) parseVariant(m map[string]any, dv any, pctx *core.ParseContext) (any, error) {
+	if target, ok := z.internals.DiscMap[dv]; ok {
+		return target.ParseAny(m, pctx)
+	}
+
+	var errs []error
+	for _, opt := range z.internals.Options {
+		if opt == nil {
+			continue
+		}
+		if r, e := opt.ParseAny(m, pctx); e == nil {
+			return r, nil
+		} else {
+			errs = append(errs, e)
+		}
+	}
+	return nil, issues.CreateInvalidUnionError(errs, m, pctx)
+}
+
+// MustParse panics on validation failure.
 func (z *ZodDiscriminatedUnion[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
-	result, err := z.Parse(input, ctx...)
+	r, err := z.Parse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
-// StrictParse provides compile-time type safety by requiring exact type T.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodDiscriminatedUnion[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	constraintInput, ok := convertToDiscriminatedUnionConstraintValue[T, R](input)
+	cv, ok := convertToDiscriminatedUnionConstraintValue[T, R](input)
 	if !ok {
 		var zero R
 		if len(ctx) == 0 {
 			ctx = []*core.ParseContext{core.NewParseContext()}
 		}
-		return zero, issues.CreateTypeConversionError(
-			fmt.Sprintf("%T", input),
-			"discriminated union constraint type",
-			any(input),
-			ctx[0],
-		)
+		return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", input), "discriminated union constraint type", any(input), ctx[0])
 	}
-
-	return z.Parse(constraintInput, ctx...)
+	return z.Parse(cv, ctx...)
 }
 
-// MustStrictParse validates input with compile-time type safety and panics on failure.
+// MustStrictParse panics on validation failure with compile-time type safety.
 func (z *ZodDiscriminatedUnion[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
-// ParseAny validates input and returns any type for runtime interface usage.
+// ParseAny validates input and returns an untyped result.
 func (z *ZodDiscriminatedUnion[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// Optional creates an optional schema that returns pointer constraint.
+// Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodDiscriminatedUnion[T, R]) Optional() *ZodDiscriminatedUnion[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable allows nil values and returns pointer constraint.
+// Nilable returns a schema that accepts nil values with pointer constraint.
 func (z *ZodDiscriminatedUnion[T, R]) Nilable() *ZodDiscriminatedUnion[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
@@ -217,55 +196,50 @@ func (z *ZodDiscriminatedUnion[T, R]) Nullish() *ZodDiscriminatedUnion[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a default value used when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits).
 func (z *ZodDiscriminatedUnion[T, R]) Default(v T) *ZodDiscriminatedUnion[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a default value function used when input is nil.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits).
 func (z *ZodDiscriminatedUnion[T, R]) DefaultFunc(fn func() T) *ZodDiscriminatedUnion[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides a fallback value on validation failure.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodDiscriminatedUnion[T, R]) Prefault(v T) *ZodDiscriminatedUnion[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a fallback value function on validation failure.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodDiscriminatedUnion[T, R]) PrefaultFunc(fn func() T) *ZodDiscriminatedUnion[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this schema.
+// Meta stores metadata in the global registry.
 func (z *ZodDiscriminatedUnion[T, R]) Meta(meta core.GlobalMeta) *ZodDiscriminatedUnion[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodDiscriminatedUnion[T, R]) Describe(description string) *ZodDiscriminatedUnion[T, R] {
-	newInternals := z.internals.Clone()
-
+func (z *ZodDiscriminatedUnion[T, R]) Describe(desc string) *ZodDiscriminatedUnion[T, R] {
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
-
-	clone := z.withInternals(newInternals)
+	existing.Description = desc
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
-
 	return clone
 }
 
@@ -276,73 +250,59 @@ func (z *ZodDiscriminatedUnion[T, R]) Discriminator() string {
 
 // Options returns a copy of all union member schemas.
 func (z *ZodDiscriminatedUnion[T, R]) Options() []core.ZodSchema {
-	result := make([]core.ZodSchema, len(z.internals.Options))
-	copy(result, z.internals.Options)
-	return result
+	r := make([]core.ZodSchema, len(z.internals.Options))
+	copy(r, z.internals.Options)
+	return r
 }
 
-// DiscriminatorMap returns a copy of the discriminator value to schema mapping.
+// DiscriminatorMap returns a copy of the discriminator-to-schema mapping.
 func (z *ZodDiscriminatedUnion[T, R]) DiscriminatorMap() map[any]core.ZodSchema {
-	result := make(map[any]core.ZodSchema, len(z.internals.DiscMap))
-	maps.Copy(result, z.internals.DiscMap)
-	return result
+	r := make(map[any]core.ZodSchema, len(z.internals.DiscMap))
+	maps.Copy(r, z.internals.DiscMap)
+	return r
 }
 
-// Transform creates a type-safe transformation pipeline.
+// Transform applies a transformation function to the parsed value.
 func (z *ZodDiscriminatedUnion[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		baseValue := extractDiscriminatedUnionValue[T, R](input)
-		return fn(baseValue, ctx)
+	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
+		return fn(extractDiscriminatedUnionValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapper)
 }
 
-// Pipe creates a validation pipeline to another schema.
+// Pipe creates a validation pipeline with another schema.
 func (z *ZodDiscriminatedUnion[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		baseValue := extractDiscriminatedUnionValue[T, R](input)
-		return target.Parse(baseValue, ctx)
+	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
+		return target.Parse(extractDiscriminatedUnionValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapper)
 }
 
-// Refine applies type-safe validation with constraint type R.
+// Refine applies a custom validation function matching the schema's output type R.
 func (z *ZodDiscriminatedUnion[T, R]) Refine(fn func(R) bool, params ...any) *ZodDiscriminatedUnion[T, R] {
 	wrapper := func(v any) bool {
-		if cv, ok := convertToDiscriminatedUnionConstraintValue[T, R](v); ok {
-			return fn(cv)
+		cv, ok := convertToDiscriminatedUnionConstraintValue[T, R](v)
+		if !ok {
+			return false
 		}
-		return false
+		return fn(cv)
 	}
-
-	p := utils.NormalizeParams(params...)
-
-	var errMsg any
-	if p.Error != nil {
-		errMsg = p.Error
-	}
-
-	return z.withCheck(checks.NewCustom[any](wrapper, errMsg))
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
-// RefineAny provides flexible validation without type conversion.
+// RefineAny applies a custom validation function that receives the raw value.
 func (z *ZodDiscriminatedUnion[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodDiscriminatedUnion[T, R] {
-	p := utils.NormalizeParams(params...)
-
-	var errMsg any
-	if p.Error != nil {
-		errMsg = p.Error
-	}
-
-	return z.withCheck(checks.NewCustom[any](fn, errMsg))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
-func (z *ZodDiscriminatedUnion[T, R]) withCheck(check core.ZodCheck) *ZodDiscriminatedUnion[T, R] {
+// withCheck clones internals, adds a check, and returns a new schema.
+func (z *ZodDiscriminatedUnion[T, R]) withCheck(c core.ZodCheck) *ZodDiscriminatedUnion[T, R] {
 	in := z.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(c)
 	return z.withInternals(in)
 }
 
+// withPtrInternals creates a new pointer-constraint schema from cloned internals.
 func (z *ZodDiscriminatedUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodDiscriminatedUnion[T, *T] {
 	return &ZodDiscriminatedUnion[T, *T]{internals: &ZodDiscriminatedUnionInternals{
 		ZodTypeInternals: *in,
@@ -353,6 +313,7 @@ func (z *ZodDiscriminatedUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals
 	}}
 }
 
+// withInternals creates a new schema preserving generic type parameters.
 func (z *ZodDiscriminatedUnion[T, R]) withInternals(in *core.ZodTypeInternals) *ZodDiscriminatedUnion[T, R] {
 	return &ZodDiscriminatedUnion[T, R]{internals: &ZodDiscriminatedUnionInternals{
 		ZodTypeInternals: *in,
@@ -363,31 +324,31 @@ func (z *ZodDiscriminatedUnion[T, R]) withInternals(in *core.ZodTypeInternals) *
 	}}
 }
 
-// CloneFrom copies configuration from another schema.
+// CloneFrom copies configuration from another schema of the same type.
 func (z *ZodDiscriminatedUnion[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodDiscriminatedUnion[T, R]); ok {
 		z.internals = src.internals
 	}
 }
 
-// convertToDiscriminatedUnionConstraintType converts a base type T to constraint type R.
-func convertToDiscriminatedUnionConstraintType[T any, R any](value any) R {
+// convertToDiscriminatedUnionConstraintType converts a value to constraint type R.
+func convertToDiscriminatedUnionConstraintType[T any, R any](v any) R {
 	var zero R
 	switch any(zero).(type) {
 	case *any:
-		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R)
+		if v != nil {
+			cp := v
+			return any(&cp).(R)
 		}
 		return any((*any)(nil)).(R)
 	default:
-		return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
+		return any(v).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
 }
 
 // extractDiscriminatedUnionValue extracts base type T from constraint type R.
-func extractDiscriminatedUnionValue[T any, R any](value R) T {
-	switch v := any(value).(type) {
+func extractDiscriminatedUnionValue[T any, R any](val R) T {
+	switch v := any(val).(type) {
 	case *any:
 		if v != nil {
 			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
@@ -395,50 +356,43 @@ func extractDiscriminatedUnionValue[T any, R any](value R) T {
 		var zero T
 		return zero
 	default:
-		return any(value).(T)
+		return any(val).(T)
 	}
 }
 
 // convertToDiscriminatedUnionConstraintValue converts any value to constraint type R.
-func convertToDiscriminatedUnionConstraintValue[T any, R any](value any) (R, bool) {
+func convertToDiscriminatedUnionConstraintValue[T any, R any](v any) (R, bool) {
 	var zero R
-
-	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
+	if r, ok := any(v).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
-
 	if _, ok := any(zero).(*any); ok {
-		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R), true
+		if v != nil {
+			cp := v
+			return any(&cp).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}
-
 	return zero, false
 }
 
-// getDiscriminatorValues extracts discriminator values from a schema.
-func getDiscriminatorValues(schema core.ZodSchema, discriminatorField string) ([]any, error) {
+// discValues extracts discriminator values from a schema.
+func discValues(schema core.ZodSchema, field string) ([]any, error) {
 	if schema == nil {
 		return nil, ErrSchemaIsNil
 	}
-
-	internals := schema.Internals()
-	if internals == nil {
+	in := schema.Internals()
+	if in == nil {
 		return nil, ErrSchemaInternalsIsNil
 	}
-
-	values := extractDiscriminatorFromInternals(internals, discriminatorField)
-	if len(values) > 0 {
-		return values, nil
+	if vals := extractDiscVals(in); len(vals) > 0 {
+		return vals, nil
 	}
-
-	return getDiscriminatorValuesFromAnySchema(schema, discriminatorField)
+	return discValuesFromAny(schema, field)
 }
 
-// getDiscriminatorValuesFromAnySchema extracts discriminator values via type assertion on Shape methods.
-func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) ([]any, error) {
+// discValuesFromAny extracts discriminator values via type assertion on Shape methods.
+func discValuesFromAny(schema any, field string) ([]any, error) {
 	if schema == nil {
 		return nil, ErrSchemaIsNil
 	}
@@ -446,10 +400,9 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	if s, ok := schema.(interface {
 		Internals() *core.ZodTypeInternals
 	}); ok {
-		if internals := s.Internals(); internals != nil {
-			values := extractDiscriminatorFromInternals(internals, discriminatorField)
-			if len(values) > 0 {
-				return values, nil
+		if in := s.Internals(); in != nil {
+			if vals := extractDiscVals(in); len(vals) > 0 {
+				return vals, nil
 			}
 		}
 	}
@@ -457,12 +410,10 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	if s, ok := schema.(interface {
 		Shape() core.ObjectSchema
 	}); ok {
-		shape := s.Shape()
-		if fieldSchema, exists := shape[discriminatorField]; exists {
-			if fi := fieldSchema.Internals(); fi != nil {
-				values := extractDiscriminatorFromInternals(fi, discriminatorField)
-				if len(values) > 0 {
-					return values, nil
+		if fs, exists := s.Shape()[field]; exists {
+			if fi := fs.Internals(); fi != nil {
+				if vals := extractDiscVals(fi); len(vals) > 0 {
+					return vals, nil
 				}
 			}
 		}
@@ -471,164 +422,152 @@ func getDiscriminatorValuesFromAnySchema(schema any, discriminatorField string) 
 	if s, ok := schema.(interface {
 		Shape() core.StructSchema
 	}); ok {
-		shape := s.Shape()
-		if fieldSchema, exists := shape[discriminatorField]; exists {
-			if fi := fieldSchema.Internals(); fi != nil {
-				values := extractDiscriminatorFromInternals(fi, discriminatorField)
-				if len(values) > 0 {
-					return values, nil
+		if fs, exists := s.Shape()[field]; exists {
+			if fi := fs.Internals(); fi != nil {
+				if vals := extractDiscVals(fi); len(vals) > 0 {
+					return vals, nil
 				}
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("%w '%s' in schema", ErrNoDiscriminatorValuesFound, discriminatorField)
+	return nil, fmt.Errorf("%w '%s' in schema", ErrNoDiscriminatorValues, field)
 }
 
-// extractDiscriminatorFromInternals extracts discriminator values from schema internals.
-func extractDiscriminatorFromInternals(internals *core.ZodTypeInternals, _ string) []any {
-	if internals == nil {
+// extractDiscVals extracts discriminator values from schema internals.
+func extractDiscVals(in *core.ZodTypeInternals) []any {
+	if in == nil {
 		return nil
 	}
 
-	var values []any
-
-	if len(internals.Values) > 0 {
-		for value := range internals.Values {
-			values = append(values, value)
+	if len(in.Values) > 0 {
+		vals := make([]any, 0, len(in.Values))
+		for v := range in.Values {
+			vals = append(vals, v)
 		}
-		return values
+		return vals
 	}
 
-	if internals.Bag != nil {
-		if bagValues, exists := internals.Bag["values"]; exists {
-			if valueMap, ok := bagValues.(map[any]struct{}); ok {
-				for value := range valueMap {
-					values = append(values, value)
+	if in.Bag != nil {
+		if bv, exists := in.Bag["values"]; exists {
+			if vm, ok := bv.(map[any]struct{}); ok {
+				vals := make([]any, 0, len(vm))
+				for v := range vm {
+					vals = append(vals, v)
 				}
-				return values
+				return vals
 			}
 		}
 	}
 
+	var vals []any
 	//nolint:exhaustive // Only interested in Literal and Enum types here
-	switch internals.Type {
+	switch in.Type {
 	case core.ZodTypeLiteral:
-		if literalValue, exists := internals.Bag["literal"]; exists {
-			values = append(values, literalValue)
+		if lv, exists := in.Bag["literal"]; exists {
+			vals = append(vals, lv)
 		}
 	case core.ZodTypeEnum:
-		if enumValues, exists := internals.Bag["enum"]; exists {
-			if enumMap, ok := enumValues.(map[any]struct{}); ok {
-				for value := range enumMap {
-					values = append(values, value)
+		if ev, exists := in.Bag["enum"]; exists {
+			if em, ok := ev.(map[any]struct{}); ok {
+				for v := range em {
+					vals = append(vals, v)
 				}
 			}
 		}
 	}
-
-	return values
+	return vals
 }
 
-// buildDiscriminatorMap builds the discriminator value to schema mapping.
-func buildDiscriminatorMap(discriminator string, options []core.ZodSchema) (map[any]core.ZodSchema, error) {
-	discMap := make(map[any]core.ZodSchema)
+// buildDiscriminatorMap builds the discriminator-to-schema mapping.
+func buildDiscriminatorMap(disc string, options []core.ZodSchema) (map[any]core.ZodSchema, error) {
+	dm := make(map[any]core.ZodSchema)
 	var errs []error
 
-	for i, option := range options {
-		if option == nil {
+	for i, opt := range options {
+		if opt == nil {
 			errs = append(errs, fmt.Errorf("%w: option %d", ErrOptionIsNil, i))
 			continue
 		}
-
-		values, err := getDiscriminatorValues(option, discriminator)
+		vals, err := discValues(opt, disc)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("option %d: %w", i, err))
 			continue
 		}
-
-		for _, value := range values {
-			if _, exists := discMap[value]; exists {
-				return nil, fmt.Errorf("%w: %v", ErrDuplicateDiscriminatorValue, value)
+		for _, v := range vals {
+			if _, exists := dm[v]; exists {
+				return nil, fmt.Errorf("%w: %v", ErrDuplicateDiscriminator, v)
 			}
-			discMap[value] = option
+			dm[v] = opt
 		}
 	}
 
-	if len(discMap) == 0 && len(errs) > 0 {
-		return nil, fmt.Errorf("%w: %v", ErrFailedToBuildDiscriminatorMap, errs)
+	if len(dm) == 0 && len(errs) > 0 {
+		return nil, fmt.Errorf("%w: %v", ErrFailedToBuildDiscriminator, errs)
 	}
-
-	if len(discMap) == 0 {
-		return nil, fmt.Errorf("%w: %s", ErrNoValidDiscriminatorValues, discriminator)
+	if len(dm) == 0 {
+		return nil, fmt.Errorf("%w: %s", ErrNoValidDiscriminators, disc)
 	}
-
-	return discMap, nil
+	return dm, nil
 }
 
 // newZodDiscriminatedUnionFromDef constructs a ZodDiscriminatedUnion from a definition.
 // Construction errors are deferred to parse-time for graceful handling.
 func newZodDiscriminatedUnionFromDef[T any, R any](def *ZodDiscriminatedUnionDef) *ZodDiscriminatedUnion[T, R] {
-	discMap, err := buildDiscriminatorMap(def.Discriminator, def.Options)
+	dm, err := buildDiscriminatorMap(def.Discriminator, def.Options)
 
-	internals := &ZodDiscriminatedUnionInternals{
+	in := &ZodDiscriminatedUnionInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Discriminator:    def.Discriminator,
 		Options:          def.Options,
-		DiscMap:          discMap,
+		DiscMap:          dm,
 	}
 
 	if err != nil {
-		internals.Bag["construction_error"] = fmt.Sprintf("DiscriminatedUnion construction error: %v", err)
+		in.Bag["construction_error"] = fmt.Sprintf("DiscriminatedUnion construction error: %v", err)
 	}
 
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		d := &ZodDiscriminatedUnionDef{
-			ZodTypeDef:    *newDef,
+	in.Constructor = func(d *core.ZodTypeDef) core.ZodType[any] {
+		cd := &ZodDiscriminatedUnionDef{
+			ZodTypeDef:    *d,
 			Discriminator: def.Discriminator,
 			Options:       def.Options,
 		}
-		return any(newZodDiscriminatedUnionFromDef[T, R](d)).(core.ZodType[any])
+		return any(newZodDiscriminatedUnionFromDef[T, R](cd)).(core.ZodType[any])
 	}
-
-	schema := &ZodDiscriminatedUnion[T, R]{internals: internals}
 
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
+	}
+	for _, c := range def.Checks {
+		in.AddCheck(c)
 	}
 
-	if len(def.Checks) > 0 {
-		for _, check := range def.Checks {
-			internals.AddCheck(check)
-		}
-	}
-
-	return schema
+	return &ZodDiscriminatedUnion[T, R]{internals: in}
 }
 
 // DiscriminatedUnion creates a discriminated union schema with value constraint.
-func DiscriminatedUnion(discriminator string, options []any, args ...any) *ZodDiscriminatedUnion[any, any] {
-	return DiscriminatedUnionTyped[any, any](discriminator, options, args...)
+func DiscriminatedUnion(disc string, options []any, args ...any) *ZodDiscriminatedUnion[any, any] {
+	return DiscriminatedUnionTyped[any, any](disc, options, args...)
 }
 
 // DiscriminatedUnionPtr creates a discriminated union schema with pointer constraint.
-func DiscriminatedUnionPtr(discriminator string, options []any, args ...any) *ZodDiscriminatedUnion[any, *any] {
-	return DiscriminatedUnionTyped[any, *any](discriminator, options, args...)
+func DiscriminatedUnionPtr(disc string, options []any, args ...any) *ZodDiscriminatedUnion[any, *any] {
+	return DiscriminatedUnionTyped[any, *any](disc, options, args...)
 }
 
-// DiscriminatedUnionTyped creates a typed discriminated union schema with generic constraints.
-func DiscriminatedUnionTyped[T any, R any](discriminator string, options []any, args ...any) *ZodDiscriminatedUnion[T, R] {
-	param := utils.FirstParam(args...)
-	params := utils.NormalizeParams(param)
+// DiscriminatedUnionTyped creates a typed discriminated union schema.
+func DiscriminatedUnionTyped[T any, R any](disc string, options []any, args ...any) *ZodDiscriminatedUnion[T, R] {
+	sp := utils.NormalizeParams(utils.FirstParam(args...))
 
-	wrappedOptions := make([]core.ZodSchema, len(options))
-	for i, option := range options {
-		zodSchema, err := core.ConvertToZodSchema(option)
+	opts := make([]core.ZodSchema, len(options))
+	for i, opt := range options {
+		s, err := core.ConvertToZodSchema(opt)
 		if err != nil {
 			panic(fmt.Sprintf("DiscriminatedUnion option %d: %v", i, err))
 		}
-		wrappedOptions[i] = zodSchema
+		opts[i] = s
 	}
 
 	def := &ZodDiscriminatedUnionDef{
@@ -636,13 +575,11 @@ func DiscriminatedUnionTyped[T any, R any](discriminator string, options []any, 
 			Type:   core.ZodTypeDiscriminated,
 			Checks: []core.ZodCheck{},
 		},
-		Discriminator: discriminator,
-		Options:       wrappedOptions,
+		Discriminator: disc,
+		Options:       opts,
 	}
-
-	if params != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, params)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
-
 	return newZodDiscriminatedUnionFromDef[T, R](def)
 }

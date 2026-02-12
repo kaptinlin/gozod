@@ -233,8 +233,8 @@ func TestZodEmail_Patterns(t *testing.T) {
 		invalid string
 	}{
 		{"Default", Email(), "test@example.com", "invalid-email"},
-		{"HTML5", Email().Html5(), "test@example.com", "invalid-email"},
-		{"RFC5322", Email().Rfc5322(), "test@example.com", "invalid-email"},
+		{"HTML5", Email().HTML5(), "test@example.com", "invalid-email"},
+		{"RFC5322", Email().RFC5322(), "test@example.com", "invalid-email"},
 		{"Unicode", Email().Unicode(), "test@example.com", "invalid-email"},
 		{"Browser", Email().Browser(), "test@example.com", "invalid-email"},
 	}
@@ -310,7 +310,7 @@ func TestZodEmail_WithOptions(t *testing.T) {
 	})
 
 	t.Run("Preset pattern via method", func(t *testing.T) {
-		schema := Email().Html5()
+		schema := Email().HTML5()
 
 		result, err := schema.Parse("test@example.com")
 		require.NoError(t, err)
@@ -395,8 +395,8 @@ func TestZodEmail_BackwardCompatibility(t *testing.T) {
 	schemas := map[string]*ZodEmail[string]{
 		"Email()":              Email(),
 		"EmailTyped[string]()": EmailTyped[string](),
-		"Email().Html5()":      Email().Html5(),
-		"Email().Rfc5322()":    Email().Rfc5322(),
+		"Email().HTML5()":      Email().HTML5(),
+		"Email().RFC5322()":    Email().RFC5322(),
 		"Email().Unicode()":    Email().Unicode(),
 		"Email().Browser()":    Email().Browser(),
 	}
