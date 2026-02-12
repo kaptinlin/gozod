@@ -1889,4 +1889,26 @@ func TestRecord_NumericStringKeys(t *testing.T) {
 			schema.MustParse(map[string]any{"not-a-number": "value"})
 		})
 	})
+
+	t.Run("generalized numeric key handling with Literal keys", func(t *testing.T) {
+		// Zod v4 generalized numeric key handling (762e911e):
+		// Any schema (not just numeric schemas) should get a numeric retry
+		// when the string key is a valid number and the initial parse failed.
+		keys := LiteralOf([]int{1, 2, 3})
+		schema := PartialRecord(keys, String())
+
+		result, err := schema.Parse(map[string]any{"1": "one", "2": "two"})
+		require.NoError(t, err)
+		assert.Equal(t, "one", result["1"])
+		assert.Equal(t, "two", result["2"])
+	})
+
+	t.Run("generalized numeric key handling rejects non-matching", func(t *testing.T) {
+		keys := LiteralOf([]int{1, 2, 3})
+		schema := Record(keys, String())
+
+		// "4" is not in the literal set — should fail
+		_, err := schema.Parse(map[string]any{"4": "four"})
+		require.Error(t, err)
+	})
 }

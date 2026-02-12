@@ -771,27 +771,6 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 	return value, nil
 }
 
-// isNumericKeySchema checks if the key schema expects a numeric type (int or float).
-// This is used to support Zod v4's numeric string keys feature.
-func isNumericKeySchema(keySchema any) bool {
-	if keySchema == nil {
-		return false
-	}
-
-	// Try to get internals via interface.
-	if zt, ok := keySchema.(interface{ Internals() *core.ZodTypeInternals }); ok {
-		t := zt.Internals().Type
-		switch t { //nolint:exhaustive // Only checking numeric types.
-		case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64,
-			core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64, core.ZodTypeUintptr,
-			core.ZodTypeFloat, core.ZodTypeFloat32, core.ZodTypeFloat64,
-			core.ZodTypeInteger, core.ZodTypeNumber: // Also handle generic integer/number types.
-			return true
-		}
-	}
-	return false
-}
-
 // isNumericString checks if a string can be parsed as a valid number.
 // Matches Zod v4's regexes.number pattern for numeric string detection.
 func isNumericString(s string) bool {
@@ -882,19 +861,27 @@ func (z *ZodRecord[T, R]) parseKeyWithSchema(key string) (any, error) {
 	// First try parsing the key as a string.
 	result, err := z.parseSchemaValueAny(key, z.internals.KeyType)
 
-	// If string parsing failed and key schema expects numeric type,
-	// try parsing the string as a number (Zod v4 numeric string keys feature).
-	if err != nil && isNumericKeySchema(z.internals.KeyType) && isNumericString(key) {
+	// If string parsing failed and the key is a numeric string, retry with numeric
+	// value for any schema — not just explicitly numeric key schemas. This enables
+	// Literal(1, 2, 3), unions containing numeric literals, etc. to work as record
+	// key schemas (Zod v4 generalized numeric key handling: 762e911e).
+	if err != nil && isNumericString(key) {
 		floatValue, parseErr := strconv.ParseFloat(key, 64)
 		if parseErr == nil {
-			// Convert to the appropriate Go type based on the schema.
+			// For known numeric schemas, convert to the expected Go type.
 			numValue := convertToSchemaNumericType(floatValue, z.internals.KeyType)
-
 			numResult, numErr := z.parseSchemaValueAny(numValue, z.internals.KeyType)
 			if numErr == nil {
-				// Return the transformed key as string for Go map compatibility.
-				// The numeric value may have been transformed (e.g., by Overwrite).
 				return fmt.Sprintf("%v", numResult), nil
+			}
+
+			// For non-numeric schemas (Literal, Union, etc.), also try as int.
+			if floatValue == float64(int64(floatValue)) {
+				intValue := int(int64(floatValue))
+				intResult, intErr := z.parseSchemaValueAny(intValue, z.internals.KeyType)
+				if intErr == nil {
+					return fmt.Sprintf("%v", intResult), nil
+				}
 			}
 		}
 	}
