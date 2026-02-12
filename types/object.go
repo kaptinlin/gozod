@@ -64,13 +64,13 @@ func (z *ZodObject[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetUnknownKeys returns the unknown keys handling mode.
-func (z *ZodObject[T, R]) GetUnknownKeys() ObjectMode {
+// UnknownKeys returns the unknown keys handling mode.
+func (z *ZodObject[T, R]) UnknownKeys() ObjectMode {
 	return z.internals.UnknownKeys
 }
 
-// GetCatchall returns the catchall schema for unknown fields.
-func (z *ZodObject[T, R]) GetCatchall() core.ZodSchema {
+// Catchall returns the catchall schema for unknown fields.
+func (z *ZodObject[T, R]) Catchall() core.ZodSchema {
 	return z.internals.Catchall
 }
 
@@ -250,8 +250,8 @@ func (z *ZodObject[T, R]) Max(maxLen int, params ...any) *ZodObject[T, R] {
 	return z.withCheck(checks.MaxSize(maxLen, params...))
 }
 
-// Size sets the exact number of fields required.
-func (z *ZodObject[T, R]) Size(exactLen int, params ...any) *ZodObject[T, R] {
+// Length sets the exact number of fields required.
+func (z *ZodObject[T, R]) Length(exactLen int, params ...any) *ZodObject[T, R] {
 	return z.withCheck(checks.Size(exactLen, params...))
 }
 
@@ -263,11 +263,6 @@ func (z *ZodObject[T, R]) Property(key string, schema core.ZodSchema, params ...
 // Shape returns the object shape (field schemas).
 func (z *ZodObject[T, R]) Shape() core.ObjectSchema {
 	return maps.Clone(z.internals.Shape)
-}
-
-// Properties is an alias for Shape.
-func (z *ZodObject[T, R]) Properties() core.ObjectSchema {
-	return z.Shape()
 }
 
 // Pick creates a new object with only the specified keys.
@@ -419,8 +414,8 @@ func (z *ZodObject[T, R]) Passthrough() *ZodObject[T, R] {
 	return z.withUnknownKeys(ObjectModePassthrough)
 }
 
-// Catchall sets a schema for validating unknown keys.
-func (z *ZodObject[T, R]) Catchall(catchallSchema core.ZodSchema) *ZodObject[T, R] {
+// WithCatchall sets a schema for validating unknown keys.
+func (z *ZodObject[T, R]) WithCatchall(catchallSchema core.ZodSchema) *ZodObject[T, R] {
 	newInternals := z.internals.Clone()
 	oi := z.newObjectInternals(newInternals)
 	oi.Catchall = catchallSchema

@@ -244,8 +244,11 @@ func (z *ZodSlice[T, R]) NonEmpty(params ...any) *ZodSlice[T, R] {
 }
 
 // Element returns the element schema.
-func (z *ZodSlice[T, R]) Element() any {
-	return z.internals.Element
+func (z *ZodSlice[T, R]) Element() core.ZodSchema {
+	if schema, ok := z.internals.Element.(core.ZodSchema); ok {
+		return schema
+	}
+	return nil
 }
 
 // Transform applies a transformation function to the parsed slice value.
@@ -455,9 +458,9 @@ func (z *ZodSlice[T, R]) validateForEngine(
 		}
 	}
 
-	if z.internals.Element != nil {
+	if schema, ok := z.internals.Element.(core.ZodSchema); ok && schema != nil {
 		for i, elem := range validated {
-			if err := parseElement(elem, z.internals.Element); err != nil {
+			if err := validateElement(elem, schema); err != nil {
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
 					for _, issue := range zodErr.Issues {

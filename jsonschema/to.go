@@ -608,13 +608,13 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 
 // catchaller is an interface for schemas that have a catch-all schema.
 type catchaller interface {
-	GetCatchall() core.ZodSchema
+	Catchall() core.ZodSchema
 }
 
 // unknownKeysHandler is an interface for schemas that handle unknown keys.
 // We use a generic method signature to avoid circular imports.
 type unknownKeysHandler interface {
-	GetUnknownKeys() any
+	UnknownKeys() any
 }
 
 // unwrapper is an interface for schemas that can unwrap to reveal inner schemas.
@@ -680,9 +680,9 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 	}
 
 	// Handle additionalProperties based on catchall and unknown keys mode
-	// Try to call GetUnknownKeys and GetCatchall methods
+	// Try to call UnknownKeys and Catchall methods
 	if s, ok := schema.(catchaller); ok {
-		if catchallSchema := s.GetCatchall(); catchallSchema != nil {
+		if catchallSchema := s.Catchall(); catchallSchema != nil {
 			// If there's a catchall schema, convert it to additionalProperties
 			c.path = append(c.path, "additionalProperties")
 			catchallJsonSchema, err := c.convert(catchallSchema)
@@ -697,7 +697,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 	if jsonSchema.AdditionalProperties == nil {
 		// Prefer the fast interface assertion path.
 		if uk, ok := schema.(unknownKeysHandler); ok {
-			modeStr := fmt.Sprint(uk.GetUnknownKeys())
+			modeStr := fmt.Sprint(uk.UnknownKeys())
 			if modeStr == string(types.ObjectModePassthrough) || modeStr == "passthrough" {
 				trueValue := true
 				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &trueValue}
@@ -706,7 +706,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 				falseValue := false
 				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
 			}
-		} else if unknownKeysMethod := reflect.ValueOf(schema).MethodByName("GetUnknownKeys"); unknownKeysMethod.IsValid() {
+		} else if unknownKeysMethod := reflect.ValueOf(schema).MethodByName("UnknownKeys"); unknownKeysMethod.IsValid() {
 			if results := unknownKeysMethod.Call(nil); len(results) == 1 {
 				modeStr := fmt.Sprint(results[0].Interface())
 				if modeStr == "passthrough" {
@@ -731,42 +731,39 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 	jsonSchema := &lib.Schema{Type: []string{"array"}}
 
 	// Handle ZodSlice (variable-length arrays)
-	if s, ok := schema.(interface{ Element() any }); ok {
-		if elemSchema, ok := s.Element().(core.ZodSchema); ok {
-			items, err := c.convert(elemSchema)
+	if s, ok := schema.(interface{ Element() core.ZodSchema }); ok {
+		elemSchema := s.Element()
+		if elemSchema == nil {
+			return nil, ErrSliceElementNotSchema
+		}
+		items, err := c.convert(elemSchema)
+		if err != nil {
+			return nil, err
+		}
+		jsonSchema.Items = items
+	} else if s, ok := schema.(interface {
+		Items() []core.ZodSchema
+		Rest() core.ZodSchema
+	}); ok { // Handle ZodArray (tuples)
+		elements := s.Items()
+		jsonSchema.PrefixItems = make([]*lib.Schema, len(elements))
+		for i, itemSchema := range elements {
+			if itemSchema == nil {
+				return nil, fmt.Errorf("%w: index %d", ErrArrayItemNotSchema, i)
+			}
+			converted, err := c.convert(itemSchema)
+			if err != nil {
+				return nil, err
+			}
+			jsonSchema.PrefixItems[i] = converted
+		}
+
+		if rest := s.Rest(); rest != nil {
+			items, err := c.convert(rest)
 			if err != nil {
 				return nil, err
 			}
 			jsonSchema.Items = items
-		} else {
-			return nil, ErrSliceElementNotSchema
-		}
-	} else if s, ok := schema.(interface {
-		ElementSchemas() []any
-		RestSchema() any
-	}); ok { // Handle ZodArray (tuples)
-		elements := s.ElementSchemas()
-		jsonSchema.PrefixItems = make([]*lib.Schema, len(elements))
-		for i, el := range elements {
-			if itemSchema, ok := el.(core.ZodSchema); ok {
-				converted, err := c.convert(itemSchema)
-				if err != nil {
-					return nil, err
-				}
-				jsonSchema.PrefixItems[i] = converted
-			} else {
-				return nil, fmt.Errorf("%w: index %d", ErrArrayItemNotSchema, i)
-			}
-		}
-
-		if rest := s.RestSchema(); rest != nil {
-			if restSchema, ok := rest.(core.ZodSchema); ok {
-				items, err := c.convert(restSchema)
-				if err != nil {
-					return nil, err
-				}
-				jsonSchema.Items = items
-			}
 		} else {
 			// If only one tuple element and no rest, treat as standard variable-length array for compatibility
 			if len(elements) == 1 {
@@ -789,15 +786,15 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 // convertTuple handles ZodTuple -> JSON Schema array with prefixItems
 func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 	tupleSchema, ok := schema.(interface {
-		GetItems() []core.ZodSchema
-		GetRest() core.ZodSchema
+		Items() []core.ZodSchema
+		Rest() core.ZodSchema
 	})
 	if !ok {
-		return nil, fmt.Errorf("%w: expected tuple schema with GetItems/GetRest methods", ErrUnhandledArrayLike)
+		return nil, fmt.Errorf("%w: expected tuple schema with Items/Rest methods", ErrUnhandledArrayLike)
 	}
 
-	items := tupleSchema.GetItems()
-	rest := tupleSchema.GetRest()
+	items := tupleSchema.Items()
+	rest := tupleSchema.Rest()
 
 	jsonSchema := &lib.Schema{Type: []string{"array"}}
 

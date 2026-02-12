@@ -580,11 +580,11 @@ func TestObject_ValidationMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("Size validation", func(t *testing.T) {
+	t.Run("Length validation", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Size(2)
+		}).Length(2)
 
 		// Valid - has exactly 2 fields
 		validInput := map[string]any{
@@ -1180,7 +1180,7 @@ func TestObject_Modes(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Passthrough().Catchall(String())
+		}).Passthrough().WithCatchall(String())
 
 		// Valid input with string unknown field
 		validInput := map[string]any{

@@ -85,13 +85,13 @@ func (z *ZodStruct[T, R]) Shape() core.StructSchema {
 	return z.internals.Shape
 }
 
-// GetUnknownKeys returns the unknown keys handling mode.
-func (z *ZodStruct[T, R]) GetUnknownKeys() string {
+// UnknownKeys returns the unknown keys handling mode.
+func (z *ZodStruct[T, R]) UnknownKeys() string {
 	return "strict"
 }
 
-// GetCatchall returns nil.
-func (z *ZodStruct[T, R]) GetCatchall() core.ZodSchema {
+// Catchall returns nil because struct schemas are always strict.
+func (z *ZodStruct[T, R]) Catchall() core.ZodSchema {
 	return nil
 }
 

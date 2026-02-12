@@ -846,7 +846,7 @@ func TestToJSONSchema_Objects(t *testing.T) {
 	t.Run("Object with Catchall", func(t *testing.T) {
 		schema := types.Object(core.ObjectSchema{
 			"name": types.String(),
-		}).Catchall(types.String())
+		}).WithCatchall(types.String())
 		expected := `{
 			"type": "object",
 			"properties": {

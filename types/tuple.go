@@ -55,13 +55,13 @@ func (z *ZodTuple[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// GetItems returns the tuple item schemas.
-func (z *ZodTuple[T, R]) GetItems() []core.ZodSchema {
+// Items returns the tuple item schemas.
+func (z *ZodTuple[T, R]) Items() []core.ZodSchema {
 	return z.internals.Items
 }
 
-// GetRest returns the rest element schema.
-func (z *ZodTuple[T, R]) GetRest() core.ZodSchema {
+// Rest returns the rest element schema.
+func (z *ZodTuple[T, R]) Rest() core.ZodSchema {
 	return z.internals.Rest
 }
 
@@ -299,8 +299,8 @@ func (z *ZodTuple[T, R]) Describe(description string) *ZodTuple[T, R] {
 // TUPLE-SPECIFIC METHODS
 // =============================================================================
 
-// Rest sets a rest element schema for additional elements beyond the fixed items.
-func (z *ZodTuple[T, R]) Rest(restSchema core.ZodSchema) *ZodTuple[T, R] {
+// WithRest sets a rest element schema for additional elements beyond the fixed items.
+func (z *ZodTuple[T, R]) WithRest(restSchema core.ZodSchema) *ZodTuple[T, R] {
 	newDef := &ZodTupleDef{
 		ZodTypeDef: z.internals.Def.ZodTypeDef,
 		Items:      z.internals.Items,

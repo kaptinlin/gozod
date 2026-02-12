@@ -24,16 +24,16 @@ var (
 // ZodArrayDef holds the schema definition for fixed-length array validation.
 type ZodArrayDef struct {
 	core.ZodTypeDef
-	Items []any // Element schemas per position.
-	Rest  any   // Rest schema for variadic elements (nil if none).
+	Items []core.ZodSchema // Element schemas per position.
+	Rest  core.ZodSchema   // Rest schema for variadic elements (nil if none).
 }
 
 // ZodArrayInternals contains the internal state for an array schema.
 type ZodArrayInternals struct {
 	core.ZodTypeInternals
 	Def   *ZodArrayDef
-	Items []any
-	Rest  any
+	Items []core.ZodSchema
+	Rest  core.ZodSchema
 }
 
 // ZodArray is a type-safe fixed-length array validation schema.
@@ -79,13 +79,13 @@ func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 
 	switch v := result.(type) {
 	case []any:
-		return toConstraint[T, R](v), nil
+		return convertToConstraint[T, R](v), nil
 	case *[]any:
 		if v == nil {
 			var zero R
 			return zero, nil
 		}
-		return toConstraint[T, R](*v), nil
+		return convertToConstraint[T, R](*v), nil
 	case nil:
 		var zero R
 		return zero, nil
@@ -113,7 +113,7 @@ func (z *ZodArray[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 
 // StrictParse validates input with compile-time type safety.
 func (z *ZodArray[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	converted, ok := toArrayType[T, R](input)
+	converted, ok := convertToArrayType[T, R](input)
 	if !ok {
 		var zero R
 		if len(ctx) == 0 {
@@ -288,22 +288,22 @@ func (z *ZodArray[T, R]) NonEmpty(args ...any) *ZodArray[T, R] {
 // Schema accessor methods
 
 // Element returns the schema at the given index, or nil if out of range.
-func (z *ZodArray[T, R]) Element(index int) any {
+func (z *ZodArray[T, R]) Element(index int) core.ZodSchema {
 	if index >= 0 && index < len(z.internals.Items) {
 		return z.internals.Items[index]
 	}
 	return nil
 }
 
-// ElementSchemas returns a copy of all element schemas.
-func (z *ZodArray[T, R]) ElementSchemas() []any {
-	result := make([]any, len(z.internals.Items))
+// Items returns a copy of all element schemas.
+func (z *ZodArray[T, R]) Items() []core.ZodSchema {
+	result := make([]core.ZodSchema, len(z.internals.Items))
 	copy(result, z.internals.Items)
 	return result
 }
 
-// RestSchema returns the rest parameter schema, or nil if none.
-func (z *ZodArray[T, R]) RestSchema() any {
+// Rest returns the rest parameter schema, or nil if none.
+func (z *ZodArray[T, R]) Rest() core.ZodSchema {
 	return z.internals.Rest
 }
 
@@ -312,7 +312,7 @@ func (z *ZodArray[T, R]) RestSchema() any {
 // Transform applies a transformation function to the parsed value.
 func (z *ZodArray[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
-		return fn(baseValue[T, R](input), ctx)
+		return fn(extractBaseValue[T, R](input), ctx)
 	}
 	return core.NewZodTransform[R, any](z, wrapper)
 }
@@ -320,7 +320,7 @@ func (z *ZodArray[T, R]) Transform(fn func(T, *core.RefinementContext) (any, err
 // Overwrite transforms the value while preserving the original type.
 func (z *ZodArray[T, R]) Overwrite(fn func(R) R, params ...any) *ZodArray[T, R] {
 	wrap := func(input any) any {
-		converted, ok := toArrayType[T, R](input)
+		converted, ok := convertToArrayType[T, R](input)
 		if !ok {
 			return input
 		}
@@ -335,7 +335,7 @@ func (z *ZodArray[T, R]) Overwrite(fn func(R) R, params ...any) *ZodArray[T, R] 
 // Pipe passes the parsed value to a target schema.
 func (z *ZodArray[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
-		return target.Parse(baseValue[T, R](input), ctx)
+		return target.Parse(extractBaseValue[T, R](input), ctx)
 	}
 	return core.NewZodPipe[R, any](z, target, wrapper)
 }
@@ -436,8 +436,8 @@ func (z *ZodArray[T, R]) CloneFrom(source any) {
 
 // Type conversion helpers
 
-// toConstraint converts []any to the constraint type R.
-func toConstraint[T any, R any](v []any) R {
+// convertToConstraint converts []any to the constraint type R.
+func convertToConstraint[T any, R any](v []any) R {
 	if r, ok := any(v).(R); ok {
 		return r
 	}
@@ -453,8 +453,8 @@ func toConstraint[T any, R any](v []any) R {
 	return zero
 }
 
-// toArrayType converts any value to the array constraint type R.
-func toArrayType[T any, R any](value any) (R, bool) {
+// convertToArrayType converts any value to the array constraint type R.
+func convertToArrayType[T any, R any](value any) (R, bool) {
 	var zero R
 
 	if value == nil {
@@ -502,8 +502,8 @@ func toArrayType[T any, R any](value any) (R, bool) {
 	return zero, false
 }
 
-// baseValue extracts the base value T from constraint type R.
-func baseValue[T any, R any](value R) T {
+// extractBaseValue extracts the base value T from constraint type R.
+func extractBaseValue[T any, R any](value R) T {
 	if ptr, ok := any(value).(*T); ok && ptr != nil {
 		return *ptr
 	}
@@ -577,14 +577,14 @@ func (z *ZodArray[T, R]) validate(value []any, chks []core.ZodCheck, ctx *core.P
 	var errs []core.ZodRawIssue
 
 	for i := range min(fixed, actual) {
-		if err := parseElement(value[i], z.internals.Items[i]); err != nil {
+		if err := validateElement(value[i], z.internals.Items[i]); err != nil {
 			errs = append(errs, issues.CreateElementValidationIssue(i, "array", value[i], err))
 		}
 	}
 
 	if hasRest && actual > fixed {
 		for i := fixed; i < actual; i++ {
-			if err := parseElement(value[i], z.internals.Rest); err != nil {
+			if err := validateElement(value[i], z.internals.Rest); err != nil {
 				errs = append(errs, issues.CreateElementValidationIssue(i, "array rest", value[i], err))
 			}
 		}
@@ -597,32 +597,13 @@ func (z *ZodArray[T, R]) validate(value []any, chks []core.ZodCheck, ctx *core.P
 	return value, nil
 }
 
-// parseElement validates a single element against its schema.
-func parseElement(value, schema any) error {
+// validateElement validates a single element against its schema.
+func validateElement(value any, schema core.ZodSchema) error {
 	if schema == nil {
 		return nil
 	}
-
-	sv := reflect.ValueOf(schema)
-	if !sv.IsValid() || sv.IsNil() {
-		return nil
-	}
-
-	m := sv.MethodByName("Parse")
-	if !m.IsValid() || m.Type().NumIn() < 1 {
-		return nil
-	}
-
-	results := m.Call([]reflect.Value{reflect.ValueOf(value)})
-	if len(results) >= 2 {
-		if errVal := results[1].Interface(); errVal != nil {
-			if err, ok := errVal.(error); ok {
-				return err
-			}
-		}
-	}
-
-	return nil
+	_, err := schema.ParseAny(value)
+	return err
 }
 
 // Constructor functions
@@ -689,14 +670,22 @@ func ArrayTyped[T any, R any](items []any, args ...any) *ZodArray[T, R] {
 		items = []any{}
 	}
 
-	var rest any
+	var rest core.ZodSchema
 	var param any
+	normalizedItems := make([]core.ZodSchema, len(items))
+	for i, item := range items {
+		if schema, ok := item.(core.ZodSchema); ok {
+			normalizedItems[i] = schema
+		}
+	}
 
 	for _, arg := range args {
 		if v, ok := arg.(core.SchemaParams); ok {
 			param = v
 		} else if rest == nil {
-			rest = arg
+			if schema, ok := arg.(core.ZodSchema); ok {
+				rest = schema
+			}
 		}
 	}
 
@@ -706,7 +695,7 @@ func ArrayTyped[T any, R any](items []any, args ...any) *ZodArray[T, R] {
 		ZodTypeDef: core.ZodTypeDef{
 			Type: core.ZodTypeArray,
 		},
-		Items: items,
+		Items: normalizedItems,
 		Rest:  rest,
 	}
 

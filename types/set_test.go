@@ -127,7 +127,7 @@ func TestSetMax(t *testing.T) {
 
 func TestSetSize(t *testing.T) {
 	t.Run("valid exact size", func(t *testing.T) {
-		schema := types.Set[string](types.String()).Size(2)
+		schema := types.Set[string](types.String()).Length(2)
 		input := map[string]struct{}{"a": {}, "b": {}}
 		result, err := schema.Parse(input)
 		require.NoError(t, err)
@@ -135,14 +135,14 @@ func TestSetSize(t *testing.T) {
 	})
 
 	t.Run("invalid exact size - too few", func(t *testing.T) {
-		schema := types.Set[string](types.String()).Size(3)
+		schema := types.Set[string](types.String()).Length(3)
 		input := map[string]struct{}{"a": {}, "b": {}}
 		_, err := schema.Parse(input)
 		require.Error(t, err)
 	})
 
 	t.Run("invalid exact size - too many", func(t *testing.T) {
-		schema := types.Set[string](types.String()).Size(1)
+		schema := types.Set[string](types.String()).Length(1)
 		input := map[string]struct{}{"a": {}, "b": {}}
 		_, err := schema.Parse(input)
 		require.Error(t, err)

@@ -413,7 +413,7 @@ func TestRecord_Chaining(t *testing.T) {
 	t.Run("complex chaining preserves type", func(t *testing.T) {
 		recordSchema := Record(String(), Bool()).
 			Nilable().
-			Size(2).
+			Length(2).
 			Default(map[string]any{"default1": true, "default2": false})
 
 		// Valid input maintains type - returns pointer
@@ -461,8 +461,8 @@ func TestRecord_ValidationMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("Size sets exact number of entries", func(t *testing.T) {
-		recordSchema := Record(String(), String()).Size(2)
+	t.Run("Length sets exact number of entries", func(t *testing.T) {
+		recordSchema := Record(String(), String()).Length(2)
 
 		// Valid: exact size
 		validRecord := map[string]any{"key1": "value1", "key2": "value2"}
@@ -483,7 +483,7 @@ func TestRecord_ValidationMethods(t *testing.T) {
 
 	t.Run("validation with custom error messages", func(t *testing.T) {
 		errorMsg := "Record must have exactly 3 entries"
-		recordSchema := Record(String(), Int()).Size(3, core.SchemaParams{Error: errorMsg})
+		recordSchema := Record(String(), Int()).Length(3, core.SchemaParams{Error: errorMsg})
 
 		invalidRecord := map[string]any{"key1": 1}
 		_, err := recordSchema.Parse(invalidRecord)

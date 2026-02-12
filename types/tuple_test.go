@@ -138,7 +138,7 @@ func TestTuple_Rest(t *testing.T) {
 	})
 
 	t.Run("rest method creates new tuple with rest", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int()).Rest(gozod.Bool())
+		schema := types.Tuple(gozod.String(), gozod.Int()).WithRest(gozod.Bool())
 		result, err := schema.Parse([]any{"hello", 42, true, false})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"hello", 42, true, false}, result)
@@ -369,13 +369,13 @@ func TestTuple_Internals(t *testing.T) {
 
 	t.Run("get items returns item schemas", func(t *testing.T) {
 		schema := types.Tuple(gozod.String(), gozod.Int())
-		items := schema.GetItems()
+		items := schema.Items()
 		assert.Len(t, items, 2)
 	})
 
 	t.Run("get rest returns nil when no rest", func(t *testing.T) {
 		schema := types.Tuple(gozod.String())
-		rest := schema.GetRest()
+		rest := schema.Rest()
 		assert.Nil(t, rest)
 	})
 
@@ -384,7 +384,7 @@ func TestTuple_Internals(t *testing.T) {
 			[]core.ZodSchema{gozod.String()},
 			gozod.Int(),
 		)
-		rest := schema.GetRest()
+		rest := schema.Rest()
 		assert.NotNil(t, rest)
 	})
 
@@ -572,7 +572,7 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 
 	t.Run("tuple immutability - Rest returns new instance", func(t *testing.T) {
 		original := types.Tuple(gozod.String(), gozod.Int())
-		withRest := original.Rest(gozod.Bool())
+		withRest := original.WithRest(gozod.Bool())
 
 		// Original should still reject extra elements
 		_, err := original.Parse([]any{"hello", 42, true})

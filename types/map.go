@@ -290,8 +290,8 @@ func (z *ZodMap[T, R]) Max(maxLen int, params ...any) *ZodMap[T, R] {
 	return z.withCheck(checks.MaxSize(maxLen, errMsg))
 }
 
-// Size sets the exact number of entries required.
-func (z *ZodMap[T, R]) Size(exactLen int, params ...any) *ZodMap[T, R] {
+// Length sets the exact number of entries required.
+func (z *ZodMap[T, R]) Length(exactLen int, params ...any) *ZodMap[T, R] {
 	sp := utils.NormalizeParams(params...)
 	var errMsg any
 	if sp.Error != nil {

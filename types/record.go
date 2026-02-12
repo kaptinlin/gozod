@@ -285,8 +285,8 @@ func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
 	return z.withCheck(checks.MaxSize(maxLen, extractErrorMessage(params...)))
 }
 
-// Size sets the exact number of entries.
-func (z *ZodRecord[T, R]) Size(exactLen int, params ...any) *ZodRecord[T, R] {
+// Length sets the exact number of entries.
+func (z *ZodRecord[T, R]) Length(exactLen int, params ...any) *ZodRecord[T, R] {
 	return z.withCheck(checks.Size(exactLen, extractErrorMessage(params...)))
 }
 

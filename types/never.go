@@ -164,9 +164,9 @@ func (z *ZodNever[T, R]) Nullish() *ZodNever[T, *T] {
 
 // Default sets a default value that is returned when the input is nil. The
 // default value bypasses validation (short-circuit behavior).
-func (z *ZodNever[T, R]) Default(value T) *ZodNever[T, R] {
+func (z *ZodNever[T, R]) Default(v T) *ZodNever[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultValue(value)
+	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
@@ -180,9 +180,9 @@ func (z *ZodNever[T, R]) DefaultFunc(fn func() T) *ZodNever[T, R] {
 
 // Prefault sets a fallback value that is used when the input is nil. Unlike
 // Default, the prefault value goes through the full parsing pipeline.
-func (z *ZodNever[T, R]) Prefault(value T) *ZodNever[T, R] {
+func (z *ZodNever[T, R]) Prefault(v T) *ZodNever[T, R] {
 	in := z.internals.Clone()
-	in.SetPrefaultValue(value)
+	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 

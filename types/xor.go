@@ -74,7 +74,7 @@ func (z *ZodXor[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 		var zero R
 		return zero, err
 	}
-	return unionToConstraint[T, R](result), nil
+	return convertUnionToConstraint[T, R](result), nil
 }
 
 func (z *ZodXor[T, R]) extractType(input any) (any, bool) {
@@ -142,7 +142,7 @@ func (z *ZodXor[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 // StrictParse validates input with compile-time type safety.
 // The input must exactly match the schema's base type T.
 func (z *ZodXor[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	constraintInput, ok := asConstraint[T, R](input)
+	constraintInput, ok := convertToUnionConstraint[T, R](input)
 	if !ok {
 		var zero R
 		var parseCtx *core.ParseContext
@@ -291,7 +291,7 @@ func (z *ZodXor[T, R]) Options() []core.ZodSchema {
 // Transform creates a type-safe transformation pipeline.
 func (z *ZodXor[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		return fn(unwrapValue[T, R](input), ctx)
+		return fn(extractUnionValue[T, R](input), ctx)
 	}
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
@@ -299,7 +299,7 @@ func (z *ZodXor[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error
 // Pipe chains this schema's output into another schema for further validation.
 func (z *ZodXor[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		return target.Parse(unwrapValue[T, R](input), ctx)
+		return target.Parse(extractUnionValue[T, R](input), ctx)
 	}
 	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
@@ -311,7 +311,7 @@ func (z *ZodXor[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // Refine adds a custom validation check with type-safe access to the parsed value.
 func (z *ZodXor[T, R]) Refine(fn func(R) bool, params ...any) *ZodXor[T, R] {
 	wrapper := func(v any) bool {
-		cv, ok := asConstraint[T, R](v)
+		cv, ok := convertToUnionConstraint[T, R](v)
 		if !ok {
 			return false
 		}

@@ -244,8 +244,8 @@ func (z *ZodSet[T, R]) Max(maxLen int, params ...any) *ZodSet[T, R] {
 	return z.withCheck(checks.MaxSize(maxLen, errMsg))
 }
 
-// Size sets the exact number of elements required.
-func (z *ZodSet[T, R]) Size(exactLen int, params ...any) *ZodSet[T, R] {
+// Length sets the exact number of elements required.
+func (z *ZodSet[T, R]) Length(exactLen int, params ...any) *ZodSet[T, R] {
 	sp := utils.NormalizeParams(params...)
 	var errMsg any
 	if sp.Error != nil {

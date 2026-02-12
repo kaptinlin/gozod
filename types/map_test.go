@@ -299,7 +299,7 @@ func TestMap_ValidationMethods(t *testing.T) {
 	})
 
 	t.Run("Size validation", func(t *testing.T) {
-		mapSchema := Map(String(), Int()).Size(2)
+		mapSchema := Map(String(), Int()).Length(2)
 
 		// Should pass with exactly 2 entries
 		validMap := map[any]any{"key1": 1, "key2": 2}

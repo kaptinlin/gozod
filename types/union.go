@@ -58,7 +58,7 @@ func (z *ZodUnion[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 		var zero R
 		return zero, err
 	}
-	return unionToConstraint[T, R](result), nil
+	return convertUnionToConstraint[T, R](result), nil
 }
 
 func (z *ZodUnion[T, R]) extractType(input any) (any, bool) {
@@ -142,7 +142,7 @@ func (z *ZodUnion[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 
 // StrictParse validates input with compile-time type safety.
 func (z *ZodUnion[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	constrained, ok := asConstraint[T, R](input)
+	constrained, ok := convertToUnionConstraint[T, R](input)
 	if !ok {
 		var zero R
 		if len(ctx) == 0 {
@@ -276,7 +276,7 @@ func (z *ZodUnion[T, R]) Transform(
 	fn func(T, *core.RefinementContext) (any, error),
 ) *core.ZodTransform[R, any] {
 	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
-		return fn(unwrapValue[T, R](input), ctx)
+		return fn(extractUnionValue[T, R](input), ctx)
 	}
 	return core.NewZodTransform[R, any](z, wrapper)
 }
@@ -286,7 +286,7 @@ func (z *ZodUnion[T, R]) Pipe(
 	target core.ZodType[any],
 ) *core.ZodPipe[R, any] {
 	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
-		return target.Parse(unwrapValue[T, R](input), ctx)
+		return target.Parse(extractUnionValue[T, R](input), ctx)
 	}
 	return core.NewZodPipe[R, any](z, target, wrapper)
 }
@@ -297,7 +297,7 @@ func (z *ZodUnion[T, R]) Refine(
 	params ...any,
 ) *ZodUnion[T, R] {
 	wrapper := func(v any) bool {
-		cv, ok := asConstraint[T, R](v)
+		cv, ok := convertToUnionConstraint[T, R](v)
 		if !ok {
 			return false
 		}
@@ -376,9 +376,9 @@ func resolveCtx(ctx []*core.ParseContext) *core.ParseContext {
 	return &core.ParseContext{}
 }
 
-// unionToConstraint converts a value to constraint type R,
+// convertUnionToConstraint converts a value to constraint type R,
 // handling pointer wrapping/unwrapping based on whether R is a pointer type.
-func unionToConstraint[T any, R any](value any) R {
+func convertUnionToConstraint[T any, R any](value any) R {
 	rType := reflect.TypeFor[R]()
 
 	if value == nil {
@@ -410,16 +410,16 @@ func unionToConstraint[T any, R any](value any) R {
 	return any(value).(R) //nolint:unconvert // generic constraint conversion
 }
 
-// unwrapValue extracts the base type T from constraint type R.
-func unwrapValue[T any, R any](value R) T {
+// extractUnionValue extracts the base type T from constraint type R.
+func extractUnionValue[T any, R any](value R) T {
 	if v, ok := any(value).(*any); ok && v != nil {
 		return any(*v).(T) //nolint:unconvert // generic constraint conversion
 	}
 	return any(value).(T)
 }
 
-// asConstraint attempts to convert a value to constraint type R.
-func asConstraint[T any, R any](value any) (R, bool) {
+// convertToUnionConstraint attempts to convert a value to constraint type R.
+func convertToUnionConstraint[T any, R any](value any) (R, bool) {
 	var zero R
 
 	if r, ok := any(value).(R); ok { //nolint:unconvert // generic constraint conversion

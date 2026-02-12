@@ -57,8 +57,8 @@ func (z *ZodIntegerTyped[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// typeCode returns the ZodTypeCode for the base type T.
-func (*ZodIntegerTyped[T, R]) typeCode() core.ZodTypeCode {
+// expectedType returns the ZodTypeCode for the base type T.
+func (*ZodIntegerTyped[T, R]) expectedType() core.ZodTypeCode {
 	return integerTypeCode[T]()
 }
 
@@ -135,7 +135,7 @@ func (z *ZodIntegerTyped[T, R]) Parse(
 	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
-		z.typeCode(),
+		z.expectedType(),
 		engine.ApplyChecks[T],
 		engine.ConvertToConstraintType[T, R],
 		ctx...,
@@ -160,7 +160,7 @@ func (z *ZodIntegerTyped[T, R]) StrictParse(
 	input R,
 	ctx ...*core.ParseContext,
 ) (R, error) {
-	expected := z.typeCode()
+	expected := z.expectedType()
 	if z.internals.Type != "" {
 		expected = z.internals.Type
 	}

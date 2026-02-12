@@ -161,7 +161,7 @@ userSchema := gozod.Object(map[string]gozod.Schema{
     "email": gozod.Email(),
 })
 
-formReg.Add(userSchema.Properties()["name"], FormField{
+formReg.Add(userSchema.Shape()["name"], FormField{
     Label:       "Full Name",
     Placeholder: "Jane Doe",
     Required:    true,

@@ -199,7 +199,7 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.strict()` | Default behavior | ✅ | Objects are strict by default |
 | `.strip()` | `.Strip()` | ✅ | Strip unknown fields |
 | `.passthrough()` | `.Passthrough()` | ✅ | Pass through unknown fields |
-| `.catchall(schema)` | `.Catchall(schema)` | ✅ | Validate unknown fields |
+| `.catchall(schema)` | `.WithCatchall(schema)` | ✅ | Validate unknown fields |
 
 ## 🏷️ Struct Tag Validation System
 
@@ -483,7 +483,7 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | **Circular reference handling** | Automatic detection with lazy evaluation | Manual lazy schemas |
 | **JSON tag mapping** | Automatic field mapping | Manual specification |
 | **Apply function** | `gozod.Apply(schema, fn)` for composable schema modifiers | No equivalent |
-| **Tuple with Rest** | `gozod.TupleWithRest([items], rest)` for variadic tuples | `z.tuple([...]).rest(schema)` |
+| **Tuple with Rest** | `gozod.TupleWithRest([items], rest)` or `gozod.Tuple(...).WithRest(schema)` for variadic tuples | `z.tuple([...]).rest(schema)` |
 | **LooseRecord** | `gozod.LooseRecord(keySchema, valueSchema)` passes non-matching keys | `z.looseRecord()` |
 | **Map NonEmpty** | `gozod.Map(...).NonEmpty()` ensures at least one entry | `z.map().nonempty()` |
 | **SafeExtend** | `.SafeExtend()` extends object without refinement check | No equivalent |

@@ -615,8 +615,8 @@ schema := gozod.TupleWithRest(
 result, err := schema.Parse([]any{"hello", 42, true, false, true})
 // result: []any{"hello", 42, true, false, true}
 
-// Chain with Rest method
-schema = gozod.Tuple(gozod.String(), gozod.Int()).Rest(gozod.Bool())
+// Chain with WithRest method
+schema = gozod.Tuple(gozod.String(), gozod.Int()).WithRest(gozod.Bool())
 ```
 
 ### Tuple with Optional Elements
@@ -639,7 +639,7 @@ result, _ = schema.Parse([]any{"hello"})       // ✅
 
 | Method | Description |
 |--------|-------------|
-| `.Rest(schema)` | Add rest element schema for variadic elements |
+| `.WithRest(schema)` | Add rest element schema for variadic elements |
 | `.Min(n)` | Minimum length validation |
 | `.Max(n)` | Maximum length validation |
 | `.Length(n)` | Exact length validation |

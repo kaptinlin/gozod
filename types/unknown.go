@@ -206,7 +206,7 @@ func (z *ZodUnknown[T, R]) Overwrite(transform func(T) T, params ...any) *ZodUnk
 }
 
 // Refine applies a custom validation function matching the schema's output type R.
-func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R] {
+func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnknown[T, R] {
 	wrapper := func(v any) bool {
 		if r, ok := v.(R); ok {
 			return fn(r)
@@ -223,7 +223,7 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 		return false
 	}
 
-	param := utils.FirstParam(args...)
+	param := utils.FirstParam(params...)
 	norm := utils.NormalizeParams(param)
 
 	var msg any
@@ -238,8 +238,8 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 }
 
 // RefineAny provides flexible validation without type conversion.
-func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown[T, R] {
-	param := utils.FirstParam(args...)
+func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodUnknown[T, R] {
+	param := utils.FirstParam(params...)
 	norm := utils.NormalizeParams(param)
 
 	var msg any
