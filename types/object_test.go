@@ -11,10 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// Basic functionality tests
-// =============================================================================
-
 func TestObject_BasicFunctionality(t *testing.T) {
 	t.Run("valid object inputs", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
@@ -125,10 +121,6 @@ func TestObject_BasicFunctionality(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Type safety tests
-// =============================================================================
-
 func TestObject_TypeSafety(t *testing.T) {
 	t.Run("Object returns map[string]any type", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
@@ -181,10 +173,6 @@ func TestObject_TypeSafety(t *testing.T) {
 		assert.Equal(t, 123, result["age"])
 	})
 }
-
-// =============================================================================
-// Modifier methods tests
-// =============================================================================
 
 func TestObject_Modifiers(t *testing.T) {
 	t.Run("Optional modifier", func(t *testing.T) {
@@ -279,10 +267,6 @@ func TestObject_Modifiers(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Chaining tests
-// =============================================================================
-
 func TestObject_Chaining(t *testing.T) {
 	t.Run("complex chaining", func(t *testing.T) {
 		defaultValue := map[string]any{
@@ -351,10 +335,6 @@ func TestObject_Chaining(t *testing.T) {
 		assert.Nil(t, result2)
 	})
 }
-
-// =============================================================================
-// Default and prefault tests
-// =============================================================================
 
 func TestObject_DefaultAndPrefault(t *testing.T) {
 	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
@@ -442,10 +422,6 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 		}
 	})
 }
-
-// =============================================================================
-// Refine tests
-// =============================================================================
 
 func TestObject_Refine(t *testing.T) {
 	t.Run("refine validation", func(t *testing.T) {
@@ -546,10 +522,6 @@ func TestObject_RefineAny(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-// =============================================================================
-// Validation methods tests
-// =============================================================================
 
 func TestObject_ValidationMethods(t *testing.T) {
 	t.Run("Min size validation", func(t *testing.T) {
@@ -737,10 +709,6 @@ func TestObject_ValidationMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-// =============================================================================
-// Type-specific methods tests
-// =============================================================================
 
 func TestObject_TypeSpecificMethods(t *testing.T) {
 	t.Run("Shape method returns field schemas", func(t *testing.T) {
@@ -1142,10 +1110,6 @@ func TestObject_TypeSpecificMethods(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Object modes tests
-// =============================================================================
-
 func TestObject_Modes(t *testing.T) {
 	t.Run("Strip mode (default) removes unknown fields", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
@@ -1238,10 +1202,6 @@ func TestObject_Modes(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-// =============================================================================
-// Error handling tests
-// =============================================================================
 
 func TestObject_ErrorHandling(t *testing.T) {
 	t.Run("custom error messages", func(t *testing.T) {
@@ -1337,10 +1297,6 @@ func TestObject_ErrorHandling(t *testing.T) {
 		assert.Equal(t, input, result)
 	})
 }
-
-// =============================================================================
-// Edge case tests
-// =============================================================================
 
 func TestObject_EdgeCases(t *testing.T) {
 	t.Run("empty object schema", func(t *testing.T) {
@@ -1452,10 +1408,6 @@ func TestObject_EdgeCases(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Constructors tests
-// =============================================================================
-
 func TestObject_Constructors(t *testing.T) {
 	t.Run("Object constructor with default strip mode", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
@@ -1521,10 +1473,6 @@ func TestObject_Constructors(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-// =============================================================================
-// OVERWRITE TESTS
-// =============================================================================
 
 func TestObject_Overwrite(t *testing.T) {
 	t.Run("basic object field transformation", func(t *testing.T) {
@@ -1701,10 +1649,6 @@ func TestObject_Overwrite(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// Check Method Tests
-// =============================================================================
-
 func TestObject_Check(t *testing.T) {
 	simpleShape := core.ObjectSchema{
 		"name": String(),
@@ -1738,10 +1682,6 @@ func TestObject_Check(t *testing.T) {
 		assert.Len(t, zErr.Issues, 1)
 	})
 }
-
-// =============================================================================
-// NonOptional tests for Object schema
-// =============================================================================
 
 func TestObject_NonOptional(t *testing.T) {
 	// base schema
@@ -1778,10 +1718,6 @@ func TestObject_NonOptional(t *testing.T) {
 	_, err = outer.Parse(map[string]any{"inner": nil})
 	assert.Error(t, err)
 }
-
-// =============================================================================
-// ExactOptional tests (TypeScript Zod v4: accepts absent keys, rejects explicit nil)
-// =============================================================================
 
 func TestObject_ExactOptional(t *testing.T) {
 	t.Run("exactOptional accepts absent keys", func(t *testing.T) {
@@ -1890,10 +1826,6 @@ func TestObject_ExactOptional(t *testing.T) {
 		assert.Contains(t, err.Error(), "nil")
 	})
 }
-
-// =============================================================================
-// Multiple Error Collection tests (TypeScript Zod v4 object behavior)
-// =============================================================================
 
 func TestObject_MultipleErrorCollection(t *testing.T) {
 	t.Run("collects multiple field validation errors", func(t *testing.T) {
@@ -2064,10 +1996,6 @@ func TestObject_MultipleErrorCollection(t *testing.T) {
 		assert.Equal(t, 25, result["age"])
 	})
 }
-
-// =============================================================================
-// SafeExtend tests - Zod v4 Compatible
-// =============================================================================
 
 func TestObject_SafeExtend(t *testing.T) {
 	t.Run("SafeExtend allows overwriting existing keys", func(t *testing.T) {

@@ -6,19 +6,9 @@ import (
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-// =============================================================================
-// INTERNAL HELPERS
-// =============================================================================
-
-// intPtr returns a pointer to the given int value.
 func intPtr(v int) *int { return &v }
 
-// =============================================================================
-// PRECISION CONSTANTS
-// =============================================================================
-
 // Precision constants control fractional-second digits in ISO 8601 strings.
-// Use with IsoDatetimeOptions.Precision or IsoTimeOptions.Precision.
 var (
 	PrecisionMinute      = intPtr(-1) // no seconds component
 	PrecisionSecond      = intPtr(0)  // seconds, no fraction
@@ -28,10 +18,6 @@ var (
 	PrecisionMicrosecond = intPtr(6)  // 6 fractional digits
 	PrecisionNanosecond  = intPtr(9)  // 9 fractional digits
 )
-
-// =============================================================================
-// ISO SCHEMA TYPE
-// =============================================================================
 
 // IsoConstraint restricts generic type parameters to string or *string.
 type IsoConstraint interface {
@@ -43,27 +29,23 @@ type ZodIso[T IsoConstraint] struct{ *ZodString[T] }
 
 // IsoDatetimeOptions configures ISO 8601 datetime validation.
 type IsoDatetimeOptions struct {
-	Precision *int // fractional-second digits; nil = any (see Precision* constants)
+	Precision *int // fractional-second digits; nil = any
 	Offset    bool // allow timezone offsets like +08:00
 	Local     bool // make trailing "Z" optional
 }
 
 // IsoTimeOptions configures ISO 8601 time validation.
 type IsoTimeOptions struct {
-	Precision *int // fractional-second digits; nil = any, -1 = minute precision
+	Precision *int // fractional-second digits; nil = any, -1 = minute
 }
 
 func newIso[T IsoConstraint](s *ZodString[T]) *ZodIso[T] { return &ZodIso[T]{s} }
 
-func (z *ZodIso[T]) cloneWithCheck(check core.ZodCheck) *ZodIso[T] {
+func (z *ZodIso[T]) cloneWithCheck(c core.ZodCheck) *ZodIso[T] {
 	in := z.Internals().Clone()
-	in.AddCheck(check)
+	in.AddCheck(c)
 	return newIso(z.withInternals(in))
 }
-
-// =============================================================================
-// MODIFIERS
-// =============================================================================
 
 // Optional returns a new schema that accepts nil values.
 func (z *ZodIso[T]) Optional() *ZodIso[*string] { return newIso(z.ZodString.Optional()) }
@@ -74,37 +56,33 @@ func (z *ZodIso[T]) Nilable() *ZodIso[*string] { return newIso(z.ZodString.Nilab
 // Nullish returns a new schema combining optional and nilable.
 func (z *ZodIso[T]) Nullish() *ZodIso[*string] { return newIso(z.ZodString.Nullish()) }
 
-// Default returns a new schema that uses v when input is nil (bypasses validation).
+// Default uses v when input is nil, bypassing validation.
 func (z *ZodIso[T]) Default(v string) *ZodIso[T] { return newIso(z.ZodString.Default(v)) }
 
-// DefaultFunc returns a new schema that calls fn when input is nil (bypasses validation).
+// DefaultFunc calls fn when input is nil, bypassing validation.
 func (z *ZodIso[T]) DefaultFunc(fn func() string) *ZodIso[T] {
 	return newIso(z.ZodString.DefaultFunc(fn))
 }
 
-// Prefault returns a new schema that uses v when input is nil (runs through full validation).
+// Prefault uses v when input is nil, running through full validation.
 func (z *ZodIso[T]) Prefault(v string) *ZodIso[T] { return newIso(z.ZodString.Prefault(v)) }
 
-// PrefaultFunc returns a new schema that calls fn when input is nil (runs through full validation).
+// PrefaultFunc calls fn when input is nil, running through full validation.
 func (z *ZodIso[T]) PrefaultFunc(fn func() string) *ZodIso[T] {
 	return newIso(z.ZodString.PrefaultFunc(fn))
 }
 
-// Min validates that the ISO string is >= minVal using lexicographic comparison.
-func (z *ZodIso[T]) Min(minVal string, params ...any) *ZodIso[T] {
-	return z.cloneWithCheck(checks.StringGte(minVal, params...))
+// Min validates the ISO string is >= v using lexicographic comparison.
+func (z *ZodIso[T]) Min(v string, params ...any) *ZodIso[T] {
+	return z.cloneWithCheck(checks.StringGte(v, params...))
 }
 
-// Max validates that the ISO string is <= maxVal using lexicographic comparison.
-func (z *ZodIso[T]) Max(maxVal string, params ...any) *ZodIso[T] {
-	return z.cloneWithCheck(checks.StringLte(maxVal, params...))
+// Max validates the ISO string is <= v using lexicographic comparison.
+func (z *ZodIso[T]) Max(v string, params ...any) *ZodIso[T] {
+	return z.cloneWithCheck(checks.StringLte(v, params...))
 }
 
-// =============================================================================
-// ISO-SPECIFIC VALIDATION
-// =============================================================================
-
-// DateTime adds ISO 8601 datetime validation to the schema.
+// DateTime adds ISO 8601 datetime validation.
 func (z *ZodIso[T]) DateTime(opts ...IsoDatetimeOptions) *ZodIso[T] {
 	if len(opts) > 0 {
 		o := opts[0]
@@ -115,12 +93,12 @@ func (z *ZodIso[T]) DateTime(opts ...IsoDatetimeOptions) *ZodIso[T] {
 	return z.cloneWithCheck(checks.ISODateTime())
 }
 
-// Date adds ISO 8601 date validation to the schema.
+// Date adds ISO 8601 date validation.
 func (z *ZodIso[T]) Date(params ...any) *ZodIso[T] {
 	return z.cloneWithCheck(checks.ISODate(params...))
 }
 
-// Time adds ISO 8601 time validation to the schema.
+// Time adds ISO 8601 time validation.
 func (z *ZodIso[T]) Time(opts ...IsoTimeOptions) *ZodIso[T] {
 	if len(opts) > 0 {
 		return z.cloneWithCheck(checks.ISOTimeWithOptions(validate.ISOTimeOptions{
@@ -130,28 +108,24 @@ func (z *ZodIso[T]) Time(opts ...IsoTimeOptions) *ZodIso[T] {
 	return z.cloneWithCheck(checks.ISOTime())
 }
 
-// Duration adds ISO 8601 duration validation to the schema.
+// Duration adds ISO 8601 duration validation.
 func (z *ZodIso[T]) Duration(params ...any) *ZodIso[T] {
 	return z.cloneWithCheck(checks.ISODuration(params...))
 }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodIso[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodIso[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
-
-// =============================================================================
-// CONSTRUCTORS
-// =============================================================================
 
 // Iso creates a base ISO string schema without format-specific validation.
 func Iso(params ...any) *ZodIso[string] { return IsoTyped[string](params...) }
@@ -164,14 +138,13 @@ func IsoTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 	return newIso(StringTyped[T](params...))
 }
 
-// IsoDateTime creates a schema that validates ISO 8601 datetime strings.
+// IsoDateTime creates a schema validating ISO 8601 datetime strings.
 func IsoDateTime(params ...any) *ZodIso[string] { return IsoDateTimeTyped[string](params...) }
 
 // IsoDateTimePtr creates a pointer ISO 8601 datetime schema.
 func IsoDateTimePtr(params ...any) *ZodIso[*string] { return IsoDateTimeTyped[*string](params...) }
 
 // IsoDateTimeTyped creates a typed ISO 8601 datetime schema.
-// Accepts IsoDatetimeOptions in params to configure precision, offset, and local behavior.
 func IsoDateTimeTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 	var opt *IsoDatetimeOptions
 	var rest []any
@@ -182,14 +155,14 @@ func IsoDateTimeTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 			rest = append(rest, p)
 		}
 	}
-	schema := IsoTyped[T](rest...)
+	s := IsoTyped[T](rest...)
 	if opt != nil {
-		return schema.DateTime(*opt)
+		return s.DateTime(*opt)
 	}
-	return schema.DateTime()
+	return s.DateTime()
 }
 
-// IsoDate creates a schema that validates ISO 8601 date strings (YYYY-MM-DD).
+// IsoDate creates a schema validating ISO 8601 date strings (YYYY-MM-DD).
 func IsoDate(params ...any) *ZodIso[string] { return IsoDateTyped[string](params...) }
 
 // IsoDatePtr creates a pointer ISO 8601 date schema.
@@ -200,14 +173,13 @@ func IsoDateTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 	return IsoTyped[T](params...).Date()
 }
 
-// IsoTime creates a schema that validates ISO 8601 time strings (HH:MM:SS).
+// IsoTime creates a schema validating ISO 8601 time strings (HH:MM:SS).
 func IsoTime(params ...any) *ZodIso[string] { return IsoTimeTyped[string](params...) }
 
 // IsoTimePtr creates a pointer ISO 8601 time schema.
 func IsoTimePtr(params ...any) *ZodIso[*string] { return IsoTimeTyped[*string](params...) }
 
 // IsoTimeTyped creates a typed ISO 8601 time schema.
-// Accepts IsoTimeOptions in params to configure precision.
 func IsoTimeTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 	var opt *IsoTimeOptions
 	var rest []any
@@ -218,14 +190,14 @@ func IsoTimeTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 			rest = append(rest, p)
 		}
 	}
-	schema := IsoTyped[T](rest...)
+	s := IsoTyped[T](rest...)
 	if opt != nil {
-		return schema.Time(*opt)
+		return s.Time(*opt)
 	}
-	return schema.Time()
+	return s.Time()
 }
 
-// IsoDuration creates a schema that validates ISO 8601 duration strings (e.g., P1Y2M3DT4H5M6S).
+// IsoDuration creates a schema validating ISO 8601 duration strings.
 func IsoDuration(params ...any) *ZodIso[string] { return IsoDurationTyped[string](params...) }
 
 // IsoDurationPtr creates a pointer ISO 8601 duration schema.
@@ -235,10 +207,6 @@ func IsoDurationPtr(params ...any) *ZodIso[*string] { return IsoDurationTyped[*s
 func IsoDurationTyped[T IsoConstraint](params ...any) *ZodIso[T] {
 	return IsoTyped[T](params...).Duration()
 }
-
-// =============================================================================
-// PROXY METHODS
-// =============================================================================
 
 // Internals returns the schema's internal configuration.
 func (z *ZodIso[T]) Internals() *core.ZodTypeInternals { return z.ZodString.Internals() }

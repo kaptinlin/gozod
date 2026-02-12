@@ -12,60 +12,48 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodIntersectionDef defines the schema definition for intersection validation
+// ZodIntersectionDef is the configuration for intersection validation.
 type ZodIntersectionDef struct {
 	core.ZodTypeDef
-	Left  core.ZodSchema // Left schema using unified interface
-	Right core.ZodSchema // Right schema using unified interface
+	Left  core.ZodSchema
+	Right core.ZodSchema
 }
 
-// ZodIntersectionInternals contains intersection validator internal state
+// ZodIntersectionInternals holds the internal state of an intersection validator.
 type ZodIntersectionInternals struct {
 	core.ZodTypeInternals
-	Def   *ZodIntersectionDef // Schema definition reference
-	Left  core.ZodSchema      // Left schema for runtime validation
-	Right core.ZodSchema      // Right schema for runtime validation
+	Def   *ZodIntersectionDef
+	Left  core.ZodSchema
+	Right core.ZodSchema
 }
 
-// ZodIntersection represents an intersection validation schema with dual generic parameters
-// T = base type (any), R = constraint type (any or *any)
+// ZodIntersection is an intersection validation schema with dual generic parameters.
+// T is the base type (any) and R is the constraint type (any or *any).
 type ZodIntersection[T any, R any] struct {
 	internals *ZodIntersectionInternals
 }
 
-// =============================================================================
-// CORE METHODS
-// =============================================================================
-
-// Internals returns the internal state of the schema
+// Internals returns the internal state of the schema.
 func (z *ZodIntersection[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
 
-// IsOptional returns true if this schema accepts undefined/missing values
+// IsOptional reports whether this schema accepts undefined/missing values.
 func (z *ZodIntersection[T, R]) IsOptional() bool {
 	return z.internals.IsOptional()
 }
 
-// IsNilable returns true if this schema accepts nil values
+// IsNilable reports whether this schema accepts nil values.
 func (z *ZodIntersection[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input using engine.ParseComplex for unified Default/Prefault handling
+// Parse validates input using engine.ParseComplex for unified Default/Prefault handling.
 func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
+	pc := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+		pc = ctx[0]
 	}
-
-	// Use engine.ParseComplex for unified Default/Prefault handling
 	result, err := engine.ParseComplex[any](
 		input,
 		&z.internals.ZodTypeInternals,
@@ -73,7 +61,7 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 		z.extractType,
 		z.extractPtr,
 		z.validateValue,
-		parseCtx,
+		pc,
 	)
 	if err != nil {
 		var zero R
@@ -82,12 +70,12 @@ func (z *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, 
 	return convertToIntersectionConstraintType[T, R](result), nil
 }
 
-// extractType extracts the intersection type from input
+// extractType extracts the intersection type from input.
 func (z *ZodIntersection[T, R]) extractType(input any) (any, bool) {
 	return input, true
 }
 
-// extractPtr extracts pointer type from input
+// extractPtr extracts pointer type from input.
 func (z *ZodIntersection[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
@@ -95,7 +83,7 @@ func (z *ZodIntersection[T, R]) extractPtr(input any) (*any, bool) {
 	return &input, true
 }
 
-// collectSchemaIssues extracts ZodIssues from a schema validation error.
+// collectSchemaIssues extracts ZodIssues from a validation error.
 func collectSchemaIssues(err error, input any, ctx *core.ParseContext) []core.ZodIssue {
 	if err == nil {
 		return nil
@@ -108,112 +96,89 @@ func collectSchemaIssues(err error, input any, ctx *core.ParseContext) []core.Zo
 	return []core.ZodIssue{issues.FinalizeIssue(issue, ctx, core.Config())}
 }
 
-// validateValue validates value using intersection logic
-func (z *ZodIntersection[T, R]) validateValue(value any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
-	// Parse with left schema using ParseAny
+// validateValue validates value using intersection logic.
+func (z *ZodIntersection[T, R]) validateValue(value any, chks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	leftResult, leftErr := z.internals.Left.ParseAny(value, ctx)
-
-	// Parse with right schema using ParseAny
 	rightResult, rightErr := z.internals.Right.ParseAny(value, ctx)
 
-	// Collect issues from both sides
 	leftIssues := collectSchemaIssues(leftErr, value, ctx)
 	rightIssues := collectSchemaIssues(rightErr, value, ctx)
 
-	// Merge unrecognized_keys issues (Zod v4 behavior)
-	// Keys recognized by either side should not be reported as unrecognized
+	// Keys recognized by either side should not be reported as unrecognized (Zod v4).
 	mergedIssues := mergeUnrecognizedKeysIssues(leftIssues, rightIssues)
-
-	// If there are remaining issues after merge, return error
 	if len(mergedIssues) > 0 {
 		return nil, issues.NewZodError(mergedIssues)
 	}
 
-	// Both sides succeeded, attempt to merge results
-	merged, mergeErr := mergeValues(leftResult, rightResult)
-	if mergeErr != nil {
-		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, value)
-		finalIssue := issues.FinalizeIssue(issue, ctx, core.Config())
-		return nil, issues.NewZodError([]core.ZodIssue{finalIssue})
+	merged, err := mergeValues(leftResult, rightResult)
+	if err != nil {
+		iss := issues.CreateCustomIssue(err.Error(), map[string]any{"type": "intersection"}, value)
+		return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(iss, ctx, core.Config())})
 	}
 
-	// Apply additional checks if any
-	if len(checks) > 0 {
-		return engine.ApplyChecks[any](merged, checks, ctx)
+	if len(chks) > 0 {
+		return engine.ApplyChecks[any](merged, chks, ctx)
 	}
-
 	return merged, nil
 }
 
 // mergeUnrecognizedKeysIssues filters unrecognized_keys issues to only include
-// keys that both sides reported as unrecognized. This is Zod v4 compatible behavior.
-// For intersection of strict objects, a key is only truly unrecognized if BOTH sides reject it.
+// keys that both sides reported as unrecognized (Zod v4 behavior).
 func mergeUnrecognizedKeysIssues(leftIssues, rightIssues []core.ZodIssue) []core.ZodIssue {
-	// Track which keys each side reported as unrecognized
-	type keyFlag struct {
-		left, right bool
-	}
-	unrecKeys := make(map[string]*keyFlag)
+	type side struct{ left, right bool }
+	unrec := make(map[string]*side)
 
-	// Collect left side unrecognized keys
-	var leftNonUnrecIssues []core.ZodIssue
+	var leftOther []core.ZodIssue
 	for _, iss := range leftIssues {
 		if iss.Code == core.UnrecognizedKeys {
-			// Extract keys from issue (Keys is []string)
 			for _, k := range iss.Keys {
-				if unrecKeys[k] == nil {
-					unrecKeys[k] = &keyFlag{}
+				if unrec[k] == nil {
+					unrec[k] = &side{}
 				}
-				unrecKeys[k].left = true
+				unrec[k].left = true
 			}
 		} else {
-			leftNonUnrecIssues = append(leftNonUnrecIssues, iss)
+			leftOther = append(leftOther, iss)
 		}
 	}
 
-	// Collect right side unrecognized keys
-	var rightNonUnrecIssues []core.ZodIssue
+	var rightOther []core.ZodIssue
 	for _, iss := range rightIssues {
 		if iss.Code == core.UnrecognizedKeys {
 			for _, k := range iss.Keys {
-				if unrecKeys[k] == nil {
-					unrecKeys[k] = &keyFlag{}
+				if unrec[k] == nil {
+					unrec[k] = &side{}
 				}
-				unrecKeys[k].right = true
+				unrec[k].right = true
 			}
 		} else {
-			rightNonUnrecIssues = append(rightNonUnrecIssues, iss)
+			rightOther = append(rightOther, iss)
 		}
 	}
 
-	// Find keys that BOTH sides reported as unrecognized
-	var bothUnrecKeys []string
-	for k, flags := range unrecKeys {
-		if flags.left && flags.right {
-			bothUnrecKeys = append(bothUnrecKeys, k)
+	// Only keys rejected by both sides are truly unrecognized.
+	var bothKeys []string
+	for k, s := range unrec {
+		if s.left && s.right {
+			bothKeys = append(bothKeys, k)
 		}
 	}
 
-	// Combine non-unrecognized issues
-	mergedIssues := leftNonUnrecIssues
-	mergedIssues = append(mergedIssues, rightNonUnrecIssues...)
-
-	// Add merged unrecognized_keys issue if any
-	if len(bothUnrecKeys) > 0 {
-		unrecIssue := core.ZodIssue{
+	result := leftOther
+	result = append(result, rightOther...)
+	if len(bothKeys) > 0 {
+		result = append(result, core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{
 				Code:    core.UnrecognizedKeys,
-				Message: fmt.Sprintf("Unrecognized key(s) in object: %s", strings.Join(bothUnrecKeys, ", ")),
+				Message: fmt.Sprintf("Unrecognized key(s) in object: %s", strings.Join(bothKeys, ", ")),
 			},
-			Keys: bothUnrecKeys,
-		}
-		mergedIssues = append(mergedIssues, unrecIssue)
+			Keys: bothKeys,
+		})
 	}
-
-	return mergedIssues
+	return result
 }
 
-// MustParse validates the input value and panics on failure
+// MustParse panics if Parse returns an error.
 func (z *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -222,67 +187,52 @@ func (z *ZodIntersection[T, R]) MustParse(input any, ctx ...*core.ParseContext) 
 	return result
 }
 
-// ParseAny validates the input value and returns any type (for runtime interface)
+// ParseAny validates input and returns an untyped result for runtime scenarios.
 func (z *ZodIntersection[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// StrictParse validates the input using strict parsing rules
+// StrictParse validates input with compile-time type safety.
 func (z *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
+	pc := &core.ParseContext{}
 	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
+		pc = ctx[0]
 	}
 
-	// Convert input T to any for validation
-	convertedInput := convertToIntersectionConstraintType[T, R](input)
+	converted := convertToIntersectionConstraintType[T, R](input)
 
-	// Parse with left schema using ParseAny
-	leftResult, leftErr := z.internals.Left.ParseAny(convertedInput, parseCtx)
+	leftResult, leftErr := z.internals.Left.ParseAny(converted, pc)
+	rightResult, rightErr := z.internals.Right.ParseAny(converted, pc)
 
-	// Parse with right schema using ParseAny
-	rightResult, rightErr := z.internals.Right.ParseAny(convertedInput, parseCtx)
+	leftIssues := collectSchemaIssues(leftErr, converted, pc)
+	rightIssues := collectSchemaIssues(rightErr, converted, pc)
 
-	// Collect issues from both sides
-	leftIssues := collectSchemaIssues(leftErr, convertedInput, parseCtx)
-	rightIssues := collectSchemaIssues(rightErr, convertedInput, parseCtx)
-
-	// Merge unrecognized_keys issues (Zod v4 behavior)
-	// Keys recognized by either side should not be reported as unrecognized
 	mergedIssues := mergeUnrecognizedKeysIssues(leftIssues, rightIssues)
-
-	// If there are remaining issues after merge, return error
 	if len(mergedIssues) > 0 {
 		var zero R
 		return zero, issues.NewZodError(mergedIssues)
 	}
 
-	// Both sides succeeded, attempt to merge results
-	merged, mergeErr := mergeValues(leftResult, rightResult)
-	if mergeErr != nil {
-		issue := issues.CreateCustomIssue(mergeErr.Error(), map[string]any{"type": "intersection"}, convertedInput)
-		finalIssue := issues.FinalizeIssue(issue, parseCtx, core.Config())
+	merged, err := mergeValues(leftResult, rightResult)
+	if err != nil {
+		iss := issues.CreateCustomIssue(err.Error(), map[string]any{"type": "intersection"}, converted)
 		var zero R
-		return zero, issues.NewZodError([]core.ZodIssue{finalIssue})
+		return zero, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(iss, pc, core.Config())})
 	}
 
-	// Run additional checks if any
 	if len(z.internals.Checks) > 0 {
-		transformedMerged, err := engine.ApplyChecks[any](merged, z.internals.Checks, parseCtx)
+		checked, err := engine.ApplyChecks[any](merged, z.internals.Checks, pc)
 		if err != nil {
 			var zero R
 			return zero, err
 		}
-		merged = transformedMerged
+		merged = checked
 	}
 
-	// Convert result to constraint type R
 	return convertToIntersectionConstraintType[T, R](merged), nil
 }
 
-// MustStrictParse validates the input using strict parsing rules and panics on error
+// MustStrictParse panics if StrictParse returns an error.
 func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -291,25 +241,21 @@ func (z *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseConte
 	return result
 }
 
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
-
-// Optional makes the intersection optional and returns pointer constraint
+// Optional returns a schema that accepts T or nil, with constraint type *T.
 func (z *ZodIntersection[T, R]) Optional() *ZodIntersection[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable makes the intersection nilable and returns pointer constraint
+// Nilable returns a schema that accepts T or nil, with constraint type *T.
 func (z *ZodIntersection[T, R]) Nilable() *ZodIntersection[T, *T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
 	return z.withPtrInternals(in)
 }
 
-// Nullish combines optional and nilable modifiers
+// Nullish combines optional and nilable modifiers.
 func (z *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -317,7 +263,7 @@ func (z *ZodIntersection[T, R]) Nullish() *ZodIntersection[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// NonOptional removes Optional flag and enforces non-nil value (T).
+// NonOptional removes the optional flag and returns a value constraint (T).
 func (z *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
@@ -333,163 +279,122 @@ func (z *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
 	}
 }
 
-// Default preserves current constraint type R
+// Default sets a default value, preserving constraint type R.
 func (z *ZodIntersection[T, R]) Default(v T) *ZodIntersection[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc preserves current constraint type R
+// DefaultFunc sets a default value function, preserving constraint type R.
 func (z *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides fallback values on validation failure
+// Prefault sets a prefault value that goes through the full parsing pipeline.
 func (z *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc keeps current generic type R.
+// PrefaultFunc sets a prefault value function, preserving constraint type R.
 func (z *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this intersection schema.
+// Meta stores metadata for this schema.
 func (z *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
 	core.GlobalRegistry.Add(z, meta)
 	return z
 }
 
 // Describe registers a description in the global registry.
-// TypeScript Zod v4 equivalent: schema.describe(description)
 func (z *ZodIntersection[T, R]) Describe(description string) *ZodIntersection[T, R] {
-	newInternals := z.internals.Clone()
-
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
 	existing.Description = description
-
-	clone := z.withInternals(newInternals)
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
-
 	return clone
 }
 
-// =============================================================================
-// TYPE-SPECIFIC METHODS
-// =============================================================================
-
-// Left returns the left schema of the intersection
+// Left returns the left schema of the intersection.
 func (z *ZodIntersection[T, R]) Left() core.ZodSchema {
 	return z.internals.Left
 }
 
-// Right returns the right schema of the intersection
+// Right returns the right schema of the intersection.
 func (z *ZodIntersection[T, R]) Right() core.ZodSchema {
 	return z.internals.Right
 }
 
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
-
-// Transform creates type-safe transformation pipeline using WrapFn pattern
+// Transform creates a type-safe transformation pipeline.
 func (z *ZodIntersection[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
-		baseValue := extractIntersectionValue[T, R](input)
-		return fn(baseValue, ctx)
+	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
+		return fn(extractIntersectionValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapper)
 }
 
-// Pipe creates validation pipeline to another schema using WrapFn pattern
+// Pipe creates a validation pipeline to another schema.
 func (z *ZodIntersection[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	wrapperFn := func(input R, ctx *core.ParseContext) (any, error) {
-		baseValue := extractIntersectionValue[T, R](input)
-		return target.Parse(baseValue, ctx)
+	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
+		return target.Parse(extractIntersectionValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, wrapperFn)
+	return core.NewZodPipe[R, any](z, target, wrapper)
 }
 
-// =============================================================================
-// TYPE CONVERSION - NO LONGER NEEDED (USING WRAPFN PATTERN)
-// =============================================================================
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
-
-// Refine applies type-safe validation with constraint type R
+// Refine applies type-safe validation with constraint type R.
 func (z *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodIntersection[T, R] {
-	// Wrapper converts the raw value to R before calling fn
 	wrapper := func(v any) bool {
-		// Convert value to constraint type R and call the refinement function
-		if constraintValue, ok := convertToIntersectionConstraintValue[T, R](v); ok {
-			return fn(constraintValue)
+		if cv, ok := convertToIntersectionConstraintValue[T, R](v); ok {
+			return fn(cv)
 		}
 		return false
 	}
-
-	// Use unified parameter handling
-	schemaParams := utils.NormalizeParams(params...)
-
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
+	p := utils.NormalizeParams(params...)
+	var msg any
+	if p.Error != nil {
+		msg = p.Error
 	}
-
-	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	check := checks.NewCustom[any](wrapper, msg)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
-// RefineAny provides flexible validation without type conversion
+// RefineAny applies flexible validation without type conversion.
 func (z *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntersection[T, R] {
-	// Use unified parameter handling
-	schemaParams := utils.NormalizeParams(params...)
-
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error // Pass the actual error message, not the SchemaParams
+	p := utils.NormalizeParams(params...)
+	var msg any
+	if p.Error != nil {
+		msg = p.Error
 	}
-
-	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	check := checks.NewCustom[any](fn, msg)
+	in := z.internals.Clone()
+	in.AddCheck(check)
+	return z.withInternals(in)
 }
 
-// =============================================================================
-// COMPOSITION METHODS (Zod v4 Compatibility)
-// =============================================================================
-
-// And creates an intersection with another schema, enabling chaining.
-// Enables chaining: schema.And(other).And(another)
-// TypeScript Zod v4 equivalent: schema.and(other)
+// And creates an intersection with another schema.
 //
 // Example:
 //
-//	schema := gozod.String().Min(3).And(gozod.String().Max(10)).And(gozod.String().RegexString(`^[a-z]+$`))
-//	result, _ := schema.Parse("hello") // Must satisfy all constraints
+//	schema := gozod.String().Min(3).And(gozod.String().Max(10))
+//	result, _ := schema.Parse("hello")
 func (z *ZodIntersection[T, R]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
 }
 
 // Or creates a union with another schema.
-// Enables chaining: schema.Or(other).Or(another)
-// TypeScript Zod v4 equivalent: schema.or(other)
 //
 // Example:
 //
@@ -497,10 +402,6 @@ func (z *ZodIntersection[T, R]) And(other any) *ZodIntersection[any, any] {
 func (z *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
-
-// =============================================================================
-// HELPER METHODS
-// =============================================================================
 
 func (z *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
 	return &ZodIntersection[T, *T]{internals: &ZodIntersectionInternals{
@@ -520,69 +421,51 @@ func (z *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodInt
 	}}
 }
 
-// CloneFrom copies configuration from another schema
+// CloneFrom copies configuration from another schema.
 func (z *ZodIntersection[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodIntersection[T, R]); ok {
 		z.internals = src.internals
 	}
 }
 
-// =============================================================================
-// TYPE CONVERSION HELPERS
-// =============================================================================
-
-// convertToIntersectionConstraintType converts a base type T to constraint type R
+// convertToIntersectionConstraintType converts a value to constraint type R.
 func convertToIntersectionConstraintType[T any, R any](value any) R {
-	// Handle nil value
 	if value == nil {
-		// Get the type of R to determine if it's a pointer type
-		rType := reflect.TypeOf((*R)(nil)).Elem()
-		if rType.Kind() == reflect.Ptr {
-			// R is a pointer type, return nil pointer
+		rt := reflect.TypeFor[R]()
+		if rt.Kind() == reflect.Pointer {
 			return any((*any)(nil)).(R)
 		}
 		var zero R
 		return zero
 	}
 
-	// Get the type of R to determine if it's a pointer type
-	rType := reflect.TypeOf((*R)(nil)).Elem()
-
-	// Check if R is *any (pointer to interface{})
-	if rType.Kind() == reflect.Ptr {
-		// R is some kind of pointer type
-		// Check if value is already a pointer
-		if reflect.TypeOf(value).Kind() == reflect.Ptr {
-			return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
+	rt := reflect.TypeFor[R]()
+	if rt.Kind() == reflect.Pointer {
+		if reflect.TypeOf(value).Kind() == reflect.Pointer {
+			return any(value).(R) //nolint:unconvert // generic constraint conversion
 		}
-		// Convert value to pointer
-		valueCopy := value
-		return any(&valueCopy).(R)
+		v := value
+		return any(&v).(R)
 	}
 
-	// R is not a pointer type (like any, string, int, etc.)
-	// Check if value is a pointer and R is not a pointer type
-	// This handles values that come as *any but need to be converted to any
-	if reflect.TypeOf(value).Kind() == reflect.Ptr {
-		// Dereference the pointer
-		valueReflect := reflect.ValueOf(value)
-		if !valueReflect.IsNil() {
-			dereferencedValue := valueReflect.Elem().Interface()
-			return any(dereferencedValue).(R) //nolint:unconvert // Required for generic type constraint conversion
+	// R is not a pointer; dereference if value is a pointer.
+	if reflect.TypeOf(value).Kind() == reflect.Pointer {
+		rv := reflect.ValueOf(value)
+		if !rv.IsNil() {
+			return any(rv.Elem().Interface()).(R) //nolint:unconvert // generic constraint conversion
 		}
 		var zero R
 		return zero
 	}
-	// Direct conversion
-	return any(value).(R) //nolint:unconvert // Required for generic type constraint conversion
+	return any(value).(R) //nolint:unconvert // generic constraint conversion
 }
 
-// extractIntersectionValue extracts base type T from constraint type R
+// extractIntersectionValue extracts base type T from constraint type R.
 func extractIntersectionValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
 		if v != nil {
-			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
+			return any(*v).(T) //nolint:unconvert // generic constraint conversion
 		}
 		var zero T
 		return zero
@@ -591,40 +474,27 @@ func extractIntersectionValue[T any, R any](value R) T {
 	}
 }
 
-// convertToIntersectionConstraintValue converts any value to constraint type R if possible
+// convertToIntersectionConstraintValue converts any value to constraint type R if possible.
 func convertToIntersectionConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
-
-	// Direct type match
-	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
+	if r, ok := any(value).(R); ok { //nolint:unconvert // generic constraint conversion
 		return r, true
 	}
-
-	// Handle pointer conversion for intersection types
 	if _, ok := any(zero).(*any); ok {
-		// Need to convert any to *any
 		if value != nil {
-			valueCopy := value
-			return any(&valueCopy).(R), true
+			v := value
+			return any(&v).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}
-
 	return zero, false
 }
 
-// =============================================================================
-// VALUE MERGING HELPERS
-// =============================================================================
-
-// mergeValues attempts to merge two validated values
+// mergeValues attempts to merge two validated values.
 func mergeValues(a, b any) (any, error) {
-	// If values are identical, return one of them
 	if reflect.DeepEqual(a, b) {
 		return a, nil
 	}
-
-	// Handle nil cases
 	if a == nil && b == nil {
 		return nil, nil
 	}
@@ -635,195 +505,146 @@ func mergeValues(a, b any) (any, error) {
 		return a, nil
 	}
 
-	// Get reflection values
-	aVal := reflect.ValueOf(a)
-	bVal := reflect.ValueOf(b)
+	av := reflect.ValueOf(a)
+	bv := reflect.ValueOf(b)
 
-	// Allow merging of different struct types by converting to map; otherwise types must match
-	if aVal.Type() != bVal.Type() {
-		if aVal.Kind() != reflect.Struct || bVal.Kind() != reflect.Struct {
+	// Different struct types can be merged via map conversion.
+	if av.Type() != bv.Type() {
+		if av.Kind() != reflect.Struct || bv.Kind() != reflect.Struct {
 			return nil, issues.CreateIncompatibleTypesError("incompatible types", a, b, nil, &core.ParseContext{})
 		}
-		// Continue to struct merging logic below
 	}
 
-	// Handle different types
 	//nolint:exhaustive
-	switch aVal.Kind() {
+	switch av.Kind() {
 	case reflect.Map:
 		return mergeMaps(a, b)
 	case reflect.Slice, reflect.Array:
 		return mergeSlices(a, b)
 	case reflect.Struct:
-		// Convert both structs to map[string]any and merge maps
-		aMap := structToMap(aVal)
-		bMap := structToMap(bVal)
-		return mergeMaps(aMap, bMap)
+		return mergeMaps(structToMap(av), structToMap(bv))
 	default:
-		// For basic types, values must be identical
 		return nil, issues.CreateIncompatibleTypesError("different values", a, b, nil, &core.ParseContext{})
 	}
 }
 
-// mergeMaps merges two map values
+// mergeMaps merges two map values.
 func mergeMaps(a, b any) (any, error) {
-	aVal := reflect.ValueOf(a)
-	bVal := reflect.ValueOf(b)
-
-	if aVal.Kind() != reflect.Map || bVal.Kind() != reflect.Map {
+	av := reflect.ValueOf(a)
+	bv := reflect.ValueOf(b)
+	if av.Kind() != reflect.Map || bv.Kind() != reflect.Map {
 		return nil, issues.CreateIncompatibleTypesError("both values must be maps", a, b, nil, &core.ParseContext{})
 	}
 
-	// Create new map of the same type
-	mapType := aVal.Type()
-	result := reflect.MakeMap(mapType)
-
-	// Copy all keys from a
-	for _, key := range aVal.MapKeys() {
-		result.SetMapIndex(key, aVal.MapIndex(key))
+	result := reflect.MakeMap(av.Type())
+	for _, key := range av.MapKeys() {
+		result.SetMapIndex(key, av.MapIndex(key))
 	}
-
-	// Merge keys from b
-	for _, key := range bVal.MapKeys() {
-		bValue := bVal.MapIndex(key)
-		if aValue := aVal.MapIndex(key); aValue.IsValid() {
-			// Key exists in both maps - they must have the same value
-			if !reflect.DeepEqual(aValue.Interface(), bValue.Interface()) {
-				return nil, issues.CreateIncompatibleTypesError(fmt.Sprintf("conflicting values for key %v", key.Interface()), aValue.Interface(), bValue.Interface(), nil, &core.ParseContext{})
+	for _, key := range bv.MapKeys() {
+		bVal := bv.MapIndex(key)
+		if aVal := av.MapIndex(key); aVal.IsValid() {
+			if !reflect.DeepEqual(aVal.Interface(), bVal.Interface()) {
+				return nil, issues.CreateIncompatibleTypesError(
+					fmt.Sprintf("conflicting values for key %v", key.Interface()),
+					aVal.Interface(), bVal.Interface(), nil, &core.ParseContext{},
+				)
 			}
 		} else {
-			// Key only exists in b, add it
-			result.SetMapIndex(key, bValue)
+			result.SetMapIndex(key, bVal)
 		}
 	}
-
 	return result.Interface(), nil
 }
 
-// mergeSlices merges two slice values
+// mergeSlices validates that two slices are identical for intersection.
 func mergeSlices(a, b any) (any, error) {
-	aVal := reflect.ValueOf(a)
-	bVal := reflect.ValueOf(b)
-
-	if aVal.Kind() != reflect.Slice && aVal.Kind() != reflect.Array {
+	av := reflect.ValueOf(a)
+	bv := reflect.ValueOf(b)
+	if av.Kind() != reflect.Slice && av.Kind() != reflect.Array {
 		return nil, issues.CreateIncompatibleTypesError("first value must be slice or array", a, b, nil, &core.ParseContext{})
 	}
-	if bVal.Kind() != reflect.Slice && bVal.Kind() != reflect.Array {
+	if bv.Kind() != reflect.Slice && bv.Kind() != reflect.Array {
 		return nil, issues.CreateIncompatibleTypesError("second value must be slice or array", a, b, nil, &core.ParseContext{})
 	}
-
-	// For arrays/slices, they must be identical for intersection
 	if !reflect.DeepEqual(a, b) {
 		return nil, issues.CreateIncompatibleTypesError("slice/array values must be identical for intersection", a, b, nil, &core.ParseContext{})
 	}
-
 	return a, nil
 }
 
-// structToMap converts struct value to map[string]any using exported fields and json tags.
+// structToMap converts a struct to map[string]any using exported fields and json tags.
 func structToMap(v reflect.Value) map[string]any {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	t := v.Type()
-	result := make(map[string]any, t.NumField())
+	m := make(map[string]any, t.NumField())
 	for i := range t.NumField() {
-		field := t.Field(i)
-		if !field.IsExported() {
+		f := t.Field(i)
+		if !f.IsExported() {
 			continue
 		}
-		key := field.Name
-		if tag := field.Tag.Get("json"); tag != "" {
-			tagName := strings.Split(tag, ",")[0]
-			if tagName != "" && tagName != "-" {
-				key = tagName
+		key := f.Name
+		if tag := f.Tag.Get("json"); tag != "" {
+			if name := strings.Split(tag, ",")[0]; name != "" && name != "-" {
+				key = name
 			}
 		}
-		result[key] = v.Field(i).Interface()
+		m[key] = v.Field(i).Interface()
 	}
-	return result
+	return m
 }
 
-// =============================================================================
-// CONSTRUCTOR FUNCTIONS
-// =============================================================================
-
-// newZodIntersectionFromDef constructs new ZodIntersection from definition
+// newZodIntersectionFromDef constructs a new ZodIntersection from a definition.
 func newZodIntersectionFromDef[T any, R any](def *ZodIntersectionDef) *ZodIntersection[T, R] {
-	internals := &ZodIntersectionInternals{
+	in := &ZodIntersectionInternals{
 		ZodTypeInternals: engine.NewBaseZodTypeInternals(def.Type),
 		Def:              def,
 		Left:             def.Left,
 		Right:            def.Right,
 	}
-
-	// Provide constructor for AddCheck functionality
-	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		intersectionDef := &ZodIntersectionDef{
-			ZodTypeDef: *newDef,
-			Left:       def.Left,
-			Right:      def.Right,
-		}
-		return any(newZodIntersectionFromDef[T, R](intersectionDef)).(core.ZodType[any])
+	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
+		d := &ZodIntersectionDef{ZodTypeDef: *newDef, Left: def.Left, Right: def.Right}
+		return any(newZodIntersectionFromDef[T, R](d)).(core.ZodType[any])
 	}
-
-	schema := &ZodIntersection[T, R]{internals: internals}
-
-	// Set error if provided
 	if def.Error != nil {
-		internals.Error = def.Error
+		in.Error = def.Error
 	}
-
-	// Set checks if provided
-	for _, check := range def.Checks {
-		internals.AddCheck(check)
+	for _, c := range def.Checks {
+		in.AddCheck(c)
 	}
-
-	return schema
+	return &ZodIntersection[T, R]{internals: in}
 }
 
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
-
-// Intersection creates intersection schema that validates with both schemas - returns value constraint
+// Intersection creates an intersection schema with value constraint.
 func Intersection(left, right any, args ...any) *ZodIntersection[any, any] {
 	return IntersectionTyped[any, any](left, right, args...)
 }
 
-// IntersectionPtr creates intersection schema that validates with both schemas - returns pointer constraint
+// IntersectionPtr creates an intersection schema with pointer constraint.
 func IntersectionPtr(left, right any, args ...any) *ZodIntersection[any, *any] {
 	return IntersectionTyped[any, *any](left, right, args...)
 }
 
-// IntersectionTyped creates typed intersection schema with generic constraints
+// IntersectionTyped creates a typed intersection schema with generic constraints.
 func IntersectionTyped[T any, R any](left, right any, args ...any) *ZodIntersection[T, R] {
-	param := utils.FirstParam(args...)
-	normalizedParams := utils.NormalizeParams(param)
-
-	// Convert inputs to core.ZodSchema using direct type assertion
-	leftWrapped, err := core.ConvertToZodSchema(left)
+	p := utils.NormalizeParams(utils.FirstParam(args...))
+	leftSchema, err := core.ConvertToZodSchema(left)
 	if err != nil {
 		panic(fmt.Sprintf("Intersection left schema: %v", err))
 	}
-	rightWrapped, err := core.ConvertToZodSchema(right)
+	rightSchema, err := core.ConvertToZodSchema(right)
 	if err != nil {
 		panic(fmt.Sprintf("Intersection right schema: %v", err))
 	}
-
 	def := &ZodIntersectionDef{
 		ZodTypeDef: core.ZodTypeDef{
 			Type:   core.ZodTypeIntersection,
 			Checks: []core.ZodCheck{},
 		},
-		Left:  leftWrapped,
-		Right: rightWrapped,
+		Left:  leftSchema,
+		Right: rightSchema,
 	}
-
-	// Use utils.ApplySchemaParams for consistent parameter handling
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
-	}
-
+	utils.ApplySchemaParams(&def.ZodTypeDef, p)
 	return newZodIntersectionFromDef[T, R](def)
 }

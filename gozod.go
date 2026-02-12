@@ -273,8 +273,8 @@ var (
 	MACWithDelimiter = types.MACWithDelimiter
 	E164             = types.E164
 	E164Ptr          = types.E164Ptr
-	HttpURL          = types.HttpURL
-	HttpURLPtr       = types.HttpURLPtr
+	HTTPURL          = types.HTTPURL
+	HTTPURLPtr       = types.HTTPURLPtr
 )
 
 // ISO 8601 format constructors

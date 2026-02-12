@@ -986,14 +986,14 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("type-safe GetInnerSchema returns original type", func(t *testing.T) {
+	t.Run("type-safe InnerSchema returns original type", func(t *testing.T) {
 		originalString := String().Min(3)
 		schema := Lazy[*ZodString[string]](func() *ZodString[string] {
 			return originalString
 		})
 
 		// InnerSchema returns the original typed schema
-		innerSchema := schema.GetInnerSchema()
+		innerSchema := schema.InnerSchema()
 		assert.Equal(t, originalString, innerSchema)
 
 		// Inner schema should work independently
@@ -1032,12 +1032,12 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 
 		// InnerSchema calls the getter function each time, so it's not cached
 		// This is different from the internal schema caching in Parse operations
-		inner1 := schema.GetInnerSchema()
+		inner1 := schema.InnerSchema()
 		assert.NotNil(t, inner1)
 		assert.Equal(t, 1, evaluationCount)
 
 		// Second access calls getter again (this is expected behavior)
-		inner2 := schema.GetInnerSchema()
+		inner2 := schema.InnerSchema()
 		assert.NotNil(t, inner2)
 		assert.Equal(t, 2, evaluationCount, "InnerSchema calls getter each time")
 
@@ -1048,7 +1048,7 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 		assert.Equal(t, 3, evaluationCount, "Parse operations also call getter")
 
 		// However, the internal caching mechanism works at the wrapper level
-		// The ZodLazyTyped doesn't cache between GetInnerSchema and Parse operations
+		// The ZodLazyTyped doesn't cache between InnerSchema and Parse operations
 		// This is the expected behavior for type-safe schemas
 	})
 
@@ -1075,7 +1075,7 @@ func TestLazy_TypeSpecificMethods(t *testing.T) {
 		})
 
 		// Access inner schema and test its specialized methods
-		innerSchema := schema.GetInnerSchema()
+		innerSchema := schema.InnerSchema()
 
 		// Test that inner schema works correctly
 		result, err := innerSchema.Parse("test@example.com")

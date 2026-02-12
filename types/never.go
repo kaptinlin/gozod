@@ -24,6 +24,8 @@ type ZodNeverInternals struct {
 }
 
 // ZodNever represents a never validation schema that always rejects input.
+// T is the base type and R is the constraint type (may be a pointer for
+// modifiers like Optional/Nilable).
 type ZodNever[T any, R any] struct {
 	internals *ZodNeverInternals
 }
@@ -62,13 +64,30 @@ func validateNeverValue[T any](value T, chks []core.ZodCheck, ctx *core.ParseCon
 	return zero, issues.CreateInvalidTypeError(core.ZodTypeNever, value, ctx)
 }
 
+// newNeverValidator creates a validator that supports custom error messages
+// from schema parameters via the internals' Error field.
+func newNeverValidator[T any](internals *core.ZodTypeInternals) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
+	return func(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+		if len(chks) > 0 {
+			validated, err := engine.ApplyChecks[T](value, chks, ctx)
+			if err != nil {
+				var zero T
+				return zero, err
+			}
+			value = validated
+		}
+		var zero T
+		return zero, issues.CreateInvalidTypeErrorWithInst(core.ZodTypeNever, value, ctx, internals)
+	}
+}
+
 // Parse validates the input and always rejects non-nil values.
 func (z *ZodNever[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	return engine.ParsePrimitive[T, R](
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeNever,
-		validateNeverValue[T],
+		newNeverValidator[T](&z.internals.ZodTypeInternals),
 		engine.ConvertToConstraintType[T, R],
 		ctx...,
 	)
@@ -331,6 +350,12 @@ func newZodNeverFromDef[T any, R any](def *ZodNeverDef) *ZodNever[T, R] {
 }
 
 // Never creates a never schema that always rejects input.
+//
+// Usage:
+//
+//	Never()                    // no parameters
+//	Never("custom error")      // string shorthand
+//	Never(SchemaParams{...})   // full parameters
 func Never(params ...any) *ZodNever[any, any] {
 	return NeverTyped[any, any](params...)
 }
