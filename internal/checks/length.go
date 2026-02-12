@@ -1,4 +1,3 @@
-// Package checks provides length and size constraint validation
 package checks
 
 import (
@@ -9,12 +8,7 @@ import (
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-// =============================================================================
-// LENGTH CONSTRAINT FACTORY FUNCTIONS
-// =============================================================================
-
-// MaxLength creates a maximum length validation check with JSON Schema support
-// Supports: MaxLength(5, "too long") or MaxLength(5, CheckParams{Error: "too long"})
+// MaxLength creates a maximum length validation check.
 func MaxLength(maximum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_length"}
@@ -24,21 +18,17 @@ func MaxLength(maximum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.MaxLength(payload.GetValue(), maximum) {
-				origin := utils.GetLengthableOrigin(payload.GetValue())
+				origin := utils.LengthableOrigin(payload.GetValue())
 				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		OnAttach: []func(any){
-			func(schema any) {
-				// Set maxLength for JSON Schema
-				mergeMaximumLengthConstraint(schema, maximum)
-			},
+			func(schema any) { mergeMaximumLengthConstraint(schema, maximum) },
 		},
 	}
 }
 
-// MinLength creates a minimum length validation check with JSON Schema support
-// Supports: MinLength(3, "too short") or MinLength(3, CheckParams{Error: "too short"})
+// MinLength creates a minimum length validation check.
 func MinLength(minimum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_length"}
@@ -48,21 +38,17 @@ func MinLength(minimum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.MinLength(payload.GetValue(), minimum) {
-				origin := utils.GetLengthableOrigin(payload.GetValue())
+				origin := utils.LengthableOrigin(payload.GetValue())
 				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			}
 		},
 		OnAttach: []func(any){
-			func(schema any) {
-				// Set minLength for JSON Schema
-				mergeMinimumLengthConstraint(schema, minimum)
-			},
+			func(schema any) { mergeMinimumLengthConstraint(schema, minimum) },
 		},
 	}
 }
 
-// Length creates an exact length validation check with JSON Schema support
-// Supports: Length(10, "must be exactly 10 chars") or Length(10, CheckParams{Error: "exact length required"})
+// Length creates an exact length validation check.
 func Length(exact int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_equals"}
@@ -72,9 +58,8 @@ func Length(exact int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.Length(payload.GetValue(), exact) {
-				// Determine if too big or too small based on actual length
 				actualLength := getActualLength(payload.GetValue())
-				origin := utils.GetLengthableOrigin(payload.GetValue())
+				origin := utils.LengthableOrigin(payload.GetValue())
 				if actualLength > exact {
 					payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
 				} else {
@@ -84,7 +69,6 @@ func Length(exact int, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Exact length sets both min and max
 				SetBagProperty(schema, "minLength", exact)
 				SetBagProperty(schema, "maxLength", exact)
 			},
@@ -92,12 +76,7 @@ func Length(exact int, params ...any) core.ZodCheck {
 	}
 }
 
-// =============================================================================
-// SIZE CONSTRAINT FACTORY FUNCTIONS
-// =============================================================================
-
-// MaxSize creates a maximum size validation check with JSON Schema support
-// Supports: MaxSize(100, "too many items") or MaxSize(100, CheckParams{Error: "size limit exceeded"})
+// MaxSize creates a maximum size validation check.
 func MaxSize(maximum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "max_size"}
@@ -107,25 +86,20 @@ func MaxSize(maximum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.MaxSize(payload.GetValue(), maximum) {
-				origin := utils.GetSizableOrigin(payload.GetValue())
+				origin := utils.SizableOrigin(payload.GetValue())
 				payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
-			// Only execute when value has size property
 			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
-			func(schema any) {
-				// Set maxItems/maxProperties based on type
-				setMaxSizeProperty(schema, maximum)
-			},
+			func(schema any) { setMaxSizeProperty(schema, maximum) },
 		},
 	}
 }
 
-// MinSize creates a minimum size validation check with JSON Schema support
-// Supports: MinSize(1, "cannot be empty") or MinSize(1, CheckParams{Error: "minimum size required"})
+// MinSize creates a minimum size validation check.
 func MinSize(minimum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "min_size"}
@@ -135,25 +109,20 @@ func MinSize(minimum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.MinSize(payload.GetValue(), minimum) {
-				origin := utils.GetSizableOrigin(payload.GetValue())
+				origin := utils.SizableOrigin(payload.GetValue())
 				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
-			// Only execute when value has size property
 			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
-			func(schema any) {
-				// Set minItems/minProperties based on type
-				setMinSizeProperty(schema, minimum)
-			},
+			func(schema any) { setMinSizeProperty(schema, minimum) },
 		},
 	}
 }
 
-// Size creates an exact size validation check with JSON Schema support
-// Supports: Size(5, "must have exactly 5 items") or Size(5, CheckParams{Error: "exact size required"})
+// Size creates an exact size validation check.
 func Size(exact int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_equals"}
@@ -163,9 +132,8 @@ func Size(exact int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.Size(payload.GetValue(), exact) {
-				// Determine if too big or too small based on actual size
 				if actualSize, ok := reflectx.Size(payload.GetValue()); ok {
-					origin := utils.GetSizableOrigin(payload.GetValue())
+					origin := utils.SizableOrigin(payload.GetValue())
 					if actualSize > exact {
 						payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.GetValue()))
 					} else {
@@ -175,12 +143,10 @@ func Size(exact int, params ...any) core.ZodCheck {
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
-			// Only execute when value has size property
 			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Exact size sets both min and max
 				setMinSizeProperty(schema, exact)
 				setMaxSizeProperty(schema, exact)
 			},
@@ -188,12 +154,7 @@ func Size(exact int, params ...any) core.ZodCheck {
 	}
 }
 
-// =============================================================================
-// RANGE CONSTRAINT FUNCTIONS
-// =============================================================================
-
-// LengthRange creates a length range validation check with JSON Schema support
-// Supports: LengthRange(3, 10, "length must be 3-10") or LengthRange(3, 10, CheckParams{Error: "invalid length range"})
+// LengthRange creates a length range validation check.
 func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "length_range"}
@@ -203,8 +164,7 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			actualLength := getActualLength(payload.GetValue())
-			origin := utils.GetLengthableOrigin(payload.GetValue())
-
+			origin := utils.LengthableOrigin(payload.GetValue())
 			if actualLength < minimum {
 				payload.AddIssue(issues.CreateTooSmallIssue(minimum, true, origin, payload.GetValue()))
 			} else if actualLength > maximum {
@@ -213,7 +173,6 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set both min and max length for JSON Schema
 				mergeMinimumLengthConstraint(schema, minimum)
 				mergeMaximumLengthConstraint(schema, maximum)
 			},
@@ -221,8 +180,7 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 	}
 }
 
-// SizeRange creates a size range validation check with JSON Schema support
-// Supports: SizeRange(1, 100, "size must be 1-100") or SizeRange(1, 100, CheckParams{Error: "invalid size range"})
+// SizeRange creates a size range validation check.
 func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 	checkParams := NormalizeCheckParams(params...)
 	def := &core.ZodCheckDef{Check: "size_range"}
@@ -232,7 +190,7 @@ func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if actualSize, ok := reflectx.Size(payload.GetValue()); ok {
-				origin := utils.GetSizableOrigin(payload.GetValue())
+				origin := utils.SizableOrigin(payload.GetValue())
 				if actualSize > maximum {
 					payload.AddIssue(issues.CreateTooBigIssue(maximum, true, origin, payload.GetValue()))
 				} else if actualSize < minimum {
@@ -241,12 +199,10 @@ func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 			}
 		},
 		When: func(payload *core.ParsePayload) bool {
-			// Only execute when value has size property
 			return reflectx.HasSize(payload.GetValue()) || reflectx.HasLength(payload.GetValue())
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				// Set both min and max size for JSON Schema
 				setMinSizeProperty(schema, minimum)
 				setMaxSizeProperty(schema, maximum)
 			},
@@ -254,27 +210,13 @@ func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 	}
 }
 
-// =============================================================================
-// CONVENIENCE FUNCTIONS
-// =============================================================================
+// NonEmpty creates a non-empty validation check (minimum length 1).
+func NonEmpty(params ...any) core.ZodCheck { return MinLength(1, params...) }
 
-// NonEmpty creates a non-empty validation check with JSON Schema support
-// Supports: NonEmpty("cannot be empty") or NonEmpty(CheckParams{Error: "value required"})
-func NonEmpty(params ...any) core.ZodCheck {
-	return MinLength(1, params...)
-}
+// Empty creates an empty validation check (exact length 0).
+func Empty(params ...any) core.ZodCheck { return Length(0, params...) }
 
-// Empty creates an empty validation check with JSON Schema support
-// Supports: Empty("must be empty") or Empty(CheckParams{Error: "value must be empty"})
-func Empty(params ...any) core.ZodCheck {
-	return Length(0, params...)
-}
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-// getActualLength returns the actual length using optimized utilities
+// getActualLength returns the length of a value, or 0 if not measurable.
 func getActualLength(value any) int {
 	if l, ok := reflectx.Length(value); ok {
 		return l

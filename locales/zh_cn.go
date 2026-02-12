@@ -308,7 +308,7 @@ func formatSizeConstraintZh(raw core.ZodRawIssue, isTooSmall bool) string {
 	}
 
 	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	adj := issues.GetComparisonOperator(inclusive, isTooSmall)
+	adj := issues.ComparisonOperator(inclusive, isTooSmall)
 	sizing := getSizingZh(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 

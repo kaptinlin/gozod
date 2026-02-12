@@ -18,19 +18,22 @@ import (
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-// =============================================================================
-// PRE-COMPILED REGEX PATTERNS
-// =============================================================================
+// Pre-compiled regex patterns.
+var (
+	isoTimeRegex  = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
+	durationRegex = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
+)
 
-// isoTimeRegex validates ISO time format: HH:MM, HH:MM:SS, HH:MM:SS.sss
-var isoTimeRegex = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.,][0-9]+)?)?$`)
+// matchString extracts a string from value and checks it against pattern.
+func matchString(value any, pattern *regexp.Regexp) bool {
+	str, ok := reflectx.ExtractString(value)
+	if !ok {
+		return false
+	}
+	return pattern.MatchString(str)
+}
 
-// durationRegex validates ISO 8601 duration format
-var durationRegex = regexp.MustCompile(`^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:[.,]\d+)?S)?)?)$`)
-
-// =============================================================================
-// NUMERIC VALIDATION FUNCTIONS
-// =============================================================================
+// Numeric validation
 
 // Lt validates if value is less than limit
 func Lt(value, limit any) bool {
@@ -101,9 +104,7 @@ func MultipleOf(value, divisor any) bool {
 	return math.Abs(remainder) < 1e-10 // Handle floating point precision
 }
 
-// =============================================================================
-// LENGTH VALIDATION FUNCTIONS
-// =============================================================================
+// Length validation
 
 // MaxLength validates if value's length is at most maximum
 func MaxLength(value any, maximum int) bool {
@@ -132,12 +133,9 @@ func Length(value any, expected int) bool {
 	return l == expected
 }
 
-// =============================================================================
-// SIZE VALIDATION FUNCTIONS
-// =============================================================================
+// Size validation
 
-// getCollectionSize returns the size of a collection (map, slice, array, string, etc.)
-// Returns the size and true if successful, or 0 and false if the value is not a collection.
+// getCollectionSize returns the size of a collection (map, slice, array, string, etc.).
 func getCollectionSize(value any) (int, bool) {
 	if reflectx.IsMap(value) {
 		// Support both map[string]any and map[any]any first
@@ -182,36 +180,23 @@ func Size(value any, expected int) bool {
 	return false
 }
 
-// =============================================================================
-// STRING FORMAT VALIDATION FUNCTIONS
-// =============================================================================
+// String format validation
 
-// Regex validates if string matches the pattern
+// Regex validates if string matches the pattern.
 func Regex(value any, pattern *regexp.Regexp) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return pattern.MatchString(str)
-	}
-	return false
+	return matchString(value, pattern)
 }
 
 // Lowercase validates if string contains no uppercase letters.
 // Matches Zod v4's lowercase check: /^[^A-Z]*$/
-// Note: Empty strings pass (as in Zod v4), only uppercase A-Z fails.
 func Lowercase(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Lowercase.MatchString(str)
-	}
-	return false
+	return matchString(value, regex.Lowercase)
 }
 
 // Uppercase validates if string contains no lowercase letters.
 // Matches Zod v4's uppercase check: /^[^a-z]*$/
-// Note: Empty strings pass (as in Zod v4), only lowercase a-z fails.
 func Uppercase(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Uppercase.MatchString(str)
-	}
-	return false
+	return matchString(value, regex.Uppercase)
 }
 
 // Includes validates if string contains the substring
@@ -238,118 +223,56 @@ func EndsWith(value any, suffix string) bool {
 	return false
 }
 
-// =============================================================================
-// FORMAT VALIDATION FUNCTIONS
-// =============================================================================
+// Format validation
 
-// Email validates if string is a valid email format
+// Email validates if string is a valid email format.
 func Email(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Email.MatchString(str)
-	}
-	return false
+	return matchString(value, regex.Email)
 }
 
-// URL validates if string is a valid URL format
+// URL validates if string is a valid URL format.
 func URL(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.URL.MatchString(str)
-	}
-	return false
+	return matchString(value, regex.URL)
 }
 
-// Hostname validates if string is a valid DNS hostname format
-// Matches Zod v4 behavior - validates RFC 1123 hostnames with length check (1-253 chars)
+// Hostname validates if string is a valid DNS hostname (RFC 1123, max 253 chars).
 func Hostname(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		// Check length: max 253 characters (including optional trailing dot)
-		if len(str) == 0 || len(str) > 253 {
-			return false
-		}
-		return regex.Hostname.MatchString(str)
+	str, ok := reflectx.ExtractString(value)
+	if !ok || len(str) == 0 || len(str) > 253 {
+		return false
 	}
-	return false
+	return regex.Hostname.MatchString(str)
 }
 
-// UUID validates if string is a valid UUID format
-func UUID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.UUID.MatchString(str)
-	}
-	return false
-}
+// UUID validates if string is a valid UUID format.
+func UUID(value any) bool { return matchString(value, regex.UUID) }
 
-// GUID validates if string is a valid GUID format
-func GUID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.GUID.MatchString(str)
-	}
-	return false
-}
+// GUID validates if string is a valid GUID format.
+func GUID(value any) bool { return matchString(value, regex.GUID) }
 
-// CUID validates if string is a valid CUID format
-func CUID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.CUID.MatchString(str)
-	}
-	return false
-}
+// CUID validates if string is a valid CUID format.
+func CUID(value any) bool { return matchString(value, regex.CUID) }
 
-// CUID2 validates if string is a valid CUID2 format
-func CUID2(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.CUID2.MatchString(str)
-	}
-	return false
-}
+// CUID2 validates if string is a valid CUID2 format.
+func CUID2(value any) bool { return matchString(value, regex.CUID2) }
 
-// NanoID validates if string is a valid NanoID format
-func NanoID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.NanoID.MatchString(str)
-	}
-	return false
-}
+// NanoID validates if string is a valid NanoID format.
+func NanoID(value any) bool { return matchString(value, regex.NanoID) }
 
-// ULID validates if string is a valid ULID format
-func ULID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.ULID.MatchString(str)
-	}
-	return false
-}
+// ULID validates if string is a valid ULID format.
+func ULID(value any) bool { return matchString(value, regex.ULID) }
 
-// XID validates if string is a valid XID format
-func XID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.XID.MatchString(str)
-	}
-	return false
-}
+// XID validates if string is a valid XID format.
+func XID(value any) bool { return matchString(value, regex.XID) }
 
-// KSUID validates if string is a valid KSUID format
-func KSUID(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.KSUID.MatchString(str)
-	}
-	return false
-}
+// KSUID validates if string is a valid KSUID format.
+func KSUID(value any) bool { return matchString(value, regex.KSUID) }
 
-// IPv4 validates if string is a valid IPv4 address
-func IPv4(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.IPv4.MatchString(str)
-	}
-	return false
-}
+// IPv4 validates if string is a valid IPv4 address.
+func IPv4(value any) bool { return matchString(value, regex.IPv4) }
 
-// IPv6 validates if string is a valid IPv6 address
-func IPv6(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.IPv6.MatchString(str)
-	}
-	return false
-}
+// IPv6 validates if string is a valid IPv6 address.
+func IPv6(value any) bool { return matchString(value, regex.IPv6) }
 
 // CIDR validates CIDR notation with strict format checking.
 // version: 0=both, 4=IPv4 only, 6=IPv6 only
@@ -385,12 +308,7 @@ func CIDR(value any, version int) bool {
 	return true
 }
 
-// ValidateCIDR is a deprecated alias for CIDR.
-//
-// Deprecated: Use CIDR instead.
-var ValidateCIDR = CIDR
-
-// CIDRv4 validates if string is a valid IPv4 CIDR format
+// CIDRv4 validates if string is a valid IPv4 CIDR format.
 func CIDRv4(value any) bool {
 	return CIDR(value, 4)
 }
@@ -400,86 +318,36 @@ func CIDRv6(value any) bool {
 	return CIDR(value, 6)
 }
 
-// Base64 validates if string is valid Base64 encoding
-func Base64(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Base64.MatchString(str)
-	}
-	return false
-}
+// Base64 validates if string is valid Base64 encoding.
+func Base64(value any) bool { return matchString(value, regex.Base64) }
 
-// Base64URL validates if string is valid Base64URL encoding
-func Base64URL(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Base64URL.MatchString(str)
-	}
-	return false
-}
+// Base64URL validates if string is valid Base64URL encoding.
+func Base64URL(value any) bool { return matchString(value, regex.Base64URL) }
 
-// Hex validates if string is a valid hexadecimal string
-// Empty string is considered valid (matches Zod v4 behavior)
-func Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Hex.MatchString(str)
-	}
-	return false
-}
+// Hex validates if string is a valid hexadecimal string.
+func Hex(value any) bool { return matchString(value, regex.Hex) }
 
-// =============================================================================
-// HASH VALIDATION FUNCTIONS
-// =============================================================================
+// Hash validation
 
-// MD5Hex validates if string is a valid MD5 hash in hex format (32 chars)
-func MD5Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.MD5Hex.MatchString(str)
-	}
-	return false
-}
+// MD5Hex validates if string is a valid MD5 hash in hex format (32 chars).
+func MD5Hex(value any) bool { return matchString(value, regex.MD5Hex) }
 
-// SHA1Hex validates if string is a valid SHA-1 hash in hex format (40 chars)
-func SHA1Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.SHA1Hex.MatchString(str)
-	}
-	return false
-}
+// SHA1Hex validates if string is a valid SHA-1 hash in hex format (40 chars).
+func SHA1Hex(value any) bool { return matchString(value, regex.SHA1Hex) }
 
-// SHA256Hex validates if string is a valid SHA-256 hash in hex format (64 chars)
-func SHA256Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.SHA256Hex.MatchString(str)
-	}
-	return false
-}
+// SHA256Hex validates if string is a valid SHA-256 hash in hex format (64 chars).
+func SHA256Hex(value any) bool { return matchString(value, regex.SHA256Hex) }
 
-// SHA384Hex validates if string is a valid SHA-384 hash in hex format (96 chars)
-func SHA384Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.SHA384Hex.MatchString(str)
-	}
-	return false
-}
+// SHA384Hex validates if string is a valid SHA-384 hash in hex format (96 chars).
+func SHA384Hex(value any) bool { return matchString(value, regex.SHA384Hex) }
 
-// SHA512Hex validates if string is a valid SHA-512 hash in hex format (128 chars)
-func SHA512Hex(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.SHA512Hex.MatchString(str)
-	}
-	return false
-}
+// SHA512Hex validates if string is a valid SHA-512 hash in hex format (128 chars).
+func SHA512Hex(value any) bool { return matchString(value, regex.SHA512Hex) }
 
-// E164 validates if string is a valid E.164 phone number format
-func E164(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.E164.MatchString(str)
-	}
-	return false
-}
+// E164 validates if string is a valid E.164 phone number format.
+func E164(value any) bool { return matchString(value, regex.E164) }
 
-// ==============================================================================
-// MAC ADDRESS VALIDATION FUNCTIONS
-// =============================================================================
+// MAC address validation
 
 // MACOptions defines configuration for MAC address validation
 type MACOptions struct {
@@ -533,9 +401,7 @@ func MACWithOptions(value any, opts MACOptions) bool {
 	return regex.MAC(delim).MatchString(str)
 }
 
-// =============================================================================
-// JWT TOKEN VALIDATION FUNCTIONS
-// =============================================================================
+// JWT validation
 
 // JWTOptions defines options for JWT validation
 type JWTOptions struct {
@@ -545,48 +411,37 @@ type JWTOptions struct {
 }
 
 // JWT validates JWT format only (structure and basic claims).
-// WARNING: Does NOT verify signatures. For production use, verify
-// signatures with github.com/golang-jwt/jwt/v5
+// WARNING: Does NOT verify signatures.
 func JWT(value any) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return isValidJWTStructure(str, nil)
+		return isValidJWT(str, nil)
 	}
 	return false
 }
 
 // JWTWithOptions validates JWT format with algorithm constraint.
-// WARNING: Does NOT verify signatures. For production use, verify
-// signatures with github.com/golang-jwt/jwt/v5
+// WARNING: Does NOT verify signatures.
 func JWTWithOptions(value any, options JWTOptions) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
-		return isValidJWTStructure(str, options.Algorithm)
+		return isValidJWT(str, options.Algorithm)
 	}
 	return false
 }
 
-// isValidJWTStructure validates JWT structure without signature verification
-// This is based on the Zod TypeScript implementation but uses golang-jwt for parsing
-func isValidJWTStructure(token string, expectedAlgorithm *string) bool {
-	// Use golang-jwt to parse the token without verification
-	// This validates the structure and basic claims
+// isValidJWT validates JWT structure without signature verification.
+func isValidJWT(token string, expectedAlgorithm *string) bool {
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 
-	// Parse without verification to check structure
 	parsedToken, _, err := parser.ParseUnverified(token, jwt.MapClaims{})
 	if err != nil {
 		return false
 	}
 
-	// Validate header
-	if !validateJWTHeaderWithGolangJWT(parsedToken.Header, expectedAlgorithm) {
-		return false
-	}
-
-	return true
+	return validateJWTHeader(parsedToken.Header, expectedAlgorithm)
 }
 
-// validateJWTHeaderWithGolangJWT validates JWT header using golang-jwt parsed data
-func validateJWTHeaderWithGolangJWT(header map[string]any, expectedAlgorithm *string) bool {
+// validateJWTHeader validates JWT header fields.
+func validateJWTHeader(header map[string]any, expectedAlgorithm *string) bool {
 	// Check if typ claim exists and is "JWT" (if present)
 	if typ, exists := header["typ"]; exists {
 		if typStr, ok := typ.(string); ok && typStr != "JWT" {
@@ -618,17 +473,10 @@ func validateJWTHeaderWithGolangJWT(header map[string]any, expectedAlgorithm *st
 	return true
 }
 
-// =============================================================================
-// EMOJI VALIDATION FUNCTIONS
-// =============================================================================
+// Emoji validation
 
-// Emoji validates if string is valid emoji
-func Emoji(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		return regex.Emoji.MatchString(str)
-	}
-	return false
-}
+// Emoji validates if string is valid emoji.
+func Emoji(value any) bool { return matchString(value, regex.Emoji) }
 
 // ISODateTimeOptions defines parameters for ISO datetime validation
 type ISODateTimeOptions struct {
@@ -695,80 +543,39 @@ func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
 	return false
 }
 
-// ISOTime validates if string is a valid ISO time format
+// ISOTime validates if string is a valid ISO time format.
 func ISOTime(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
-		// Pattern:
-		// HH:MM            (24-hour)
-		// HH:MM:SS         (optional seconds)
-		// HH:MM:SS.sss...  (optional fractional seconds, dot or comma)
-		// This aligns with ISO-8601 and Zod TS implementation.
-		return isoTimeRegex.MatchString(str)
-	}
-	return false
+	return matchString(value, isoTimeRegex)
 }
 
-// ISODuration validates if string is a valid ISO 8601 duration format
+// ISODuration validates if string is a valid ISO 8601 duration format.
 func ISODuration(value any) bool {
-	if duration, ok := reflectx.ExtractString(value); ok {
-		// Use pre-compiled regex for performance
+	duration, ok := reflectx.ExtractString(value)
+	if !ok {
+		return false
+	}
 
-		// First check basic format
-		if !durationRegex.MatchString(duration) {
+	if !durationRegex.MatchString(duration) {
+		return false
+	}
+
+	// Reject empty patterns like "P" or "PT".
+	if duration == "P" || duration == "PT" {
+		return false
+	}
+
+	// If there's a T, there must be at least one time component after it.
+	if _, afterT, found := strings.Cut(duration, "T"); found {
+		if !strings.ContainsAny(afterT, "HMS") {
 			return false
 		}
+	}
 
-		// Reject empty patterns like "P" or "PT"
-		if duration == "P" || duration == "PT" {
-			return false
+	// Ensure at least one digit after P.
+	for i, r := range duration {
+		if i > 0 && r >= '0' && r <= '9' {
+			return true
 		}
-
-		// Check for invalid patterns like "P1Y2MT" or "P1YT"
-		// If there's a T, there must be at least one time component after it
-		tIndex := strings.Index(duration, "T")
-		if tIndex != -1 {
-			// There's a T, check if there's at least one time component after it
-			afterT := duration[tIndex+1:]
-			if afterT == "" {
-				return false // "PT" case
-			}
-
-			// Check if there's at least one valid time component (H, M, or S)
-			hasTimeComponent := false
-			for i, r := range afterT {
-				if r >= '0' && r <= '9' {
-					// Found a digit, check if it's followed by H, M, or S
-					for j := i + 1; j < len(afterT); j++ {
-						if afterT[j] == 'H' || afterT[j] == 'M' || afterT[j] == 'S' {
-							hasTimeComponent = true
-							break
-						}
-						if afterT[j] < '0' || afterT[j] > '9' {
-							if afterT[j] != '.' && afterT[j] != ',' {
-								break // Invalid character
-							}
-						}
-					}
-					if hasTimeComponent {
-						break
-					}
-				}
-			}
-			if !hasTimeComponent {
-				return false
-			}
-		}
-
-		// Check if there's at least one digit after P or T
-		hasDigit := false
-		for i, r := range duration {
-			if i > 0 && (r >= '0' && r <= '9') { // Skip the initial 'P'
-				hasDigit = true
-				break
-			}
-		}
-
-		return hasDigit
 	}
 	return false
 }
@@ -783,11 +590,9 @@ func JSON(value any) bool {
 	return json.Unmarshal([]byte(str), &v) == nil
 }
 
-// =============================================================================
-// PROPERTY VALIDATION FUNCTIONS
-// =============================================================================
+// Property validation
 
-// Property validates if object has a property that passes validation
+// Property validates if object has a property that passes validation.
 func Property(obj any, key string, validator func(any) bool) bool {
 	if reflectx.IsMap(obj) {
 		if m, ok := obj.(map[string]any); ok {
@@ -799,11 +604,9 @@ func Property(obj any, key string, validator func(any) bool) bool {
 	return false
 }
 
-// =============================================================================
-// MIME TYPE VALIDATION FUNCTIONS
-// =============================================================================
+// MIME type validation
 
-// Mime validates if value has allowed MIME types
+// Mime validates if value has allowed MIME types.
 func Mime(value any, allowedTypes []string) bool {
 	if str, ok := reflectx.ExtractString(value); ok {
 		// Basic MIME type format check (type/subtype)
@@ -815,12 +618,9 @@ func Mime(value any, allowedTypes []string) bool {
 	return false
 }
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
+// Helpers
 
-// toFloat64 converts any value to float64 using the coerce package
-// Returns 0 if conversion fails
+// toFloat64 converts any value to float64 using the coerce package.
 func toFloat64(value any) float64 {
 	if result, err := coerce.ToFloat64(value); err == nil {
 		return result
@@ -828,11 +628,9 @@ func toFloat64(value any) float64 {
 	return 0
 }
 
-// =============================================================================
-// URL VALIDATION WITH OPTIONS
-// =============================================================================
+// URL validation with options
 
-// URLOptions defines options for URL validation
+// URLOptions defines options for URL validation.
 type URLOptions struct {
 	// Hostname validation pattern
 	Hostname *regexp.Regexp

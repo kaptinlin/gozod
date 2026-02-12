@@ -299,7 +299,7 @@ func XorOfPtr(schemas ...any) *ZodXor[any, *any] {
 
 // XorTyped creates typed exclusive union schema with generic constraints
 func XorTyped[T any, R any](options []any, args ...any) *ZodXor[T, R] {
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	// Convert all options to ZodSchema

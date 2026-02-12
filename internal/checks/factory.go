@@ -1,18 +1,19 @@
+// Package checks provides validation check factories for the GoZod validation
+// library. It implements Zod v4-compatible check creation with JSON Schema
+// metadata support.
 package checks
 
 import (
+	"maps"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-// =============================================================================
-// PARAMETER NORMALIZATION
-// =============================================================================
-
-// NormalizeCheckParams standardizes check parameters from various input formats
-// Supports: string (shorthand) | core.SchemaParams (detailed)
+// NormalizeCheckParams standardizes check parameters from various input formats.
+// Accepts a string shorthand or core.SchemaParams.
 func NormalizeCheckParams(params ...any) *core.CheckParams {
 	if len(params) == 0 {
 		return nil
@@ -35,7 +36,7 @@ func NormalizeCheckParams(params ...any) *core.CheckParams {
 	return nil
 }
 
-// ApplyCheckParams applies normalized parameters to check definition
+// ApplyCheckParams applies normalized parameters to a check definition.
 func ApplyCheckParams(def *core.ZodCheckDef, params *core.CheckParams) {
 	if params != nil && params.Error != "" {
 		errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
@@ -45,31 +46,22 @@ func ApplyCheckParams(def *core.ZodCheckDef, params *core.CheckParams) {
 	}
 }
 
-// ApplySchemaParamsToCheck applies SchemaParams to a check definition
-// Used for validation checks that support error and abort configuration
+// ApplySchemaParamsToCheck applies SchemaParams to a check definition.
 func ApplySchemaParamsToCheck(def *core.ZodCheckDef, params *core.SchemaParams) {
 	if params == nil {
 		return
 	}
-
-	// Apply error configuration
 	if params.Error != nil {
 		if err, ok := utils.ToErrorMap(params.Error); ok {
 			def.Error = err
 		}
 	}
-
-	// Apply abort configuration
 	if params.Abort {
 		def.Abort = true
 	}
 }
 
-// =============================================================================
-// JSON SCHEMA BAG OPERATIONS
-// =============================================================================
-
-// ensureBag ensures the schema's Bag is initialized and returns it
+// ensureBag ensures the schema's Bag is initialized and returns it.
 func ensureBag(schema any) map[string]any {
 	if s, ok := schema.(interface{ GetInternals() *core.ZodTypeInternals }); ok {
 		internals := s.GetInternals()
@@ -81,16 +73,14 @@ func ensureBag(schema any) map[string]any {
 	return nil
 }
 
-// SetBagProperty sets a property in the schema's bag for JSON Schema generation
-// Used to store metadata that will be included in generated JSON Schema
+// SetBagProperty sets a property in the schema's bag for JSON Schema generation.
 func SetBagProperty(schema any, key string, value any) {
 	if bag := ensureBag(schema); bag != nil {
 		bag[key] = value
 	}
 }
 
-// mergeConstraint merges a constraint into the schema's bag with conflict resolution
-// Uses merge function to handle conflicts when the same constraint exists
+// mergeConstraint merges a constraint into the schema's bag with conflict resolution.
 func mergeConstraint(schema any, key string, value any, merge func(old, new any) any) {
 	if bag := ensureBag(schema); bag != nil {
 		if existing, exists := bag[key]; exists {
@@ -101,7 +91,7 @@ func mergeConstraint(schema any, key string, value any, merge func(old, new any)
 	}
 }
 
-// mergeMinimumConstraint merges minimum constraint, choosing the stricter value
+// mergeMinimumConstraint merges minimum constraint, choosing the stricter value.
 func mergeMinimumConstraint(schema any, value any, inclusive bool) {
 	key := "minimum"
 	if !inclusive {
@@ -140,7 +130,7 @@ func mergeMinimumConstraint(schema any, value any, inclusive bool) {
 	}
 }
 
-// mergeMaximumConstraint merges maximum constraint, choosing the stricter value
+// mergeMaximumConstraint merges maximum constraint, choosing the stricter value.
 func mergeMaximumConstraint(schema any, value any, inclusive bool) {
 	key := "maximum"
 	if !inclusive {
@@ -179,11 +169,7 @@ func mergeMaximumConstraint(schema any, value any, inclusive bool) {
 	}
 }
 
-// =============================================================================
-// CUSTOM VALIDATION CHECKS
-// =============================================================================
-
-// ZodCheckCustomDef defines custom validation constraint for user-defined validation logic
+// ZodCheckCustomDef defines a custom validation constraint.
 type ZodCheckCustomDef struct {
 	core.ZodCheckDef
 	Type   string         // Custom check type identifier
@@ -192,7 +178,7 @@ type ZodCheckCustomDef struct {
 	FnType string         // "refine" or "check" function type
 }
 
-// ZodCheckCustomInternals contains custom check internal state and validation state
+// ZodCheckCustomInternals contains custom check internal state.
 type ZodCheckCustomInternals struct {
 	core.ZodCheckInternals
 	Def  *ZodCheckCustomDef // Custom check definition
@@ -200,8 +186,7 @@ type ZodCheckCustomInternals struct {
 	Bag  map[string]any     // Additional metadata storage
 }
 
-// ZodCheckCustom represents custom validation check for user-defined validation logic
-// This check executes user-provided refine or check functions with proper error handling
+// ZodCheckCustom represents a custom validation check.
 type ZodCheckCustom struct {
 	Internals *ZodCheckCustomInternals
 }
@@ -219,7 +204,7 @@ func (z *ZodCheckCustom) GetZod() *core.ZodCheckInternals {
 // Uses unified parameter handling following Zod TypeScript v4 pattern
 func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 	// Use unified parameter handling with CustomParams
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	customParams := utils.NormalizeCustomParams(param)
 
 	def := &ZodCheckCustomDef{
@@ -249,11 +234,8 @@ func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 		}
 	}
 
-	// Handle additional parameters from CustomParams.Params
 	if len(customParams.Params) > 0 {
-		for k, v := range customParams.Params {
-			def.Params[k] = v
-		}
+		maps.Copy(def.Params, customParams.Params)
 	}
 
 	// Store custom path if provided
@@ -290,7 +272,7 @@ func handleRefineResult(result bool, payload *core.ParsePayload, input any, inte
 	}
 
 	// Construct error path from payload path
-	payloadPath := payload.GetPath()
+	payloadPath := payload.Path()
 	path := make([]any, len(payloadPath))
 	copy(path, payloadPath)
 
@@ -479,7 +461,7 @@ func (c *ZodCheckOverwrite) GetZod() *core.ZodCheckInternals {
 // NewZodCheckOverwrite creates a new check that overwrites input with transformed value
 func NewZodCheckOverwrite(transform func(any) any, args ...any) *ZodCheckOverwrite {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodCheckOverwriteDef{
@@ -568,7 +550,7 @@ func (z *ZodCheckProperty) GetZod() *core.ZodCheckInternals {
 // Validates that input[property] matches the provided schema
 func NewProperty(property string, schema core.ZodSchema, args ...any) *ZodCheckProperty {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodCheckPropertyDef{
@@ -620,7 +602,7 @@ func executePropertyCheck(payload *core.ParsePayload, internals *ZodCheckPropert
 
 	if parseErr != nil {
 		// Validation failed, create an issue with the property path
-		path := append(payload.GetPath(), internals.Def.Property)
+		path := append(payload.Path(), internals.Def.Property)
 
 		// Determine the error message
 		var errorMessage string

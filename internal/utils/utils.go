@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -10,8 +9,8 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// ToErrorMap converts various error representations to ZodErrorMap
-// Supports: string, ZodErrorMap, *ZodErrorMap, func(ZodRawIssue) string
+// ToErrorMap converts various error representations to ZodErrorMap.
+// Supports: string, ZodErrorMap, *ZodErrorMap, func(ZodRawIssue) string.
 func ToErrorMap(err any) (*core.ZodErrorMap, bool) {
 	switch v := err.(type) {
 	case string:
@@ -28,48 +27,17 @@ func ToErrorMap(err any) (*core.ZodErrorMap, bool) {
 	return nil, false
 }
 
-// =============================================================================
-// PARAMETER UTILITIES
-// =============================================================================
-
-// GetFirstParam extracts the first parameter from variadic arguments
-// Provides convenience for Go's variadic parameter style while maintaining
-// compatibility with Zod TypeScript v4's single parameter pattern
-// Returns nil if no parameters provided
-func GetFirstParam(params ...any) any {
+// FirstParam extracts the first parameter from variadic arguments.
+// Returns nil if no parameters provided.
+func FirstParam(params ...any) any {
 	if len(params) == 0 {
 		return nil
 	}
 	return params[0]
 }
 
-// IsPrimitiveType checks if a schema type is a primitive type that supports coercion
-// Only primitive types should support coercion according to TypeScript Zod v4 alignment
-func IsPrimitiveType(typeName core.ZodTypeCode) bool {
-	switch typeName { //nolint:exhaustive // non-primitive types handled by default
-	case core.ZodTypeString, core.ZodTypeBool, core.ZodTypeTime:
-		return true
-	case core.ZodTypeInt, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64:
-		return true
-	case core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64:
-		return true
-	case core.ZodTypeFloat32, core.ZodTypeFloat64:
-		return true
-	case core.ZodTypeComplex64, core.ZodTypeComplex128:
-		return true
-	case core.ZodTypeBigInt:
-		return true
-	default:
-		return false
-	}
-}
-
-// =============================================================================
-// ORIGIN TYPE FUNCTIONS FOR ERROR MESSAGES
-// =============================================================================
-
-// GetOriginFromValue smartly determines the origin of a value (general purpose)
-func GetOriginFromValue(value any) string {
+// OriginFromValue determines the origin of a value for error messages.
+func OriginFromValue(value any) string {
 	if reflectx.IsNumeric(value) {
 		return "number"
 	}
@@ -85,19 +53,19 @@ func GetOriginFromValue(value any) string {
 	return "unknown"
 }
 
-// GetNumericOrigin determines the numeric origin type for error messages
-func GetNumericOrigin(value any) string {
+// NumericOrigin determines the numeric origin type for error messages.
+func NumericOrigin(value any) string {
 	if value == nil {
 		return "nil"
 	}
 
 	switch value.(type) {
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64:
 		return "integer"
 	case float32, float64:
 		return "number"
 	default:
-		// Check for big.Int and string through reflection
 		parsedType := reflectx.ParsedType(value)
 		switch parsedType { //nolint:exhaustive // only bigint and string need special handling
 		case core.ParsedTypeBigint:
@@ -110,13 +78,11 @@ func GetNumericOrigin(value any) string {
 	}
 }
 
-// GetSizableOrigin determines the origin type for sizable values
-func GetSizableOrigin(value any) string {
+// SizableOrigin determines the origin type for sizable values.
+func SizableOrigin(value any) string {
 	if value == nil {
 		return "nil"
 	}
-
-	// Use reflectx for type categorization
 	if reflectx.IsString(value) {
 		return "string"
 	}
@@ -133,7 +99,6 @@ func GetSizableOrigin(value any) string {
 		return "struct"
 	}
 
-	// Check parsed type for other cases
 	parsedType := reflectx.ParsedType(value)
 	switch parsedType { //nolint:exhaustive // only file type needs special handling
 	case core.ParsedTypeFile:
@@ -143,13 +108,11 @@ func GetSizableOrigin(value any) string {
 	}
 }
 
-// GetLengthableOrigin returns the origin type for lengthable values
-func GetLengthableOrigin(value any) string {
+// LengthableOrigin returns the origin type for lengthable values.
+func LengthableOrigin(value any) string {
 	if value == nil {
 		return "nil"
 	}
-
-	// Use reflectx for type checking
 	if reflectx.IsString(value) {
 		return "string"
 	}
@@ -159,68 +122,15 @@ func GetLengthableOrigin(value any) string {
 	if reflectx.IsArray(value) {
 		return "array"
 	}
-
 	return "unknown"
 }
 
-// =============================================================================
-// STRING OPERATIONS
-// =============================================================================
-
-// EscapeRegex escapes special characters in a string for use in regex
-// Optimized with precise memory allocation following TypeScript v4 patterns
-func EscapeRegex(str string) string {
-	if len(str) == 0 {
-		return str
-	}
-
-	// Pre-calculate needed escape count for precise allocation
-	escapeCount := 0
-	for _, r := range str {
-		if needsEscape(r) {
-			escapeCount++
-		}
-	}
-
-	if escapeCount == 0 {
-		return str
-	}
-
-	// Allocate exact capacity needed
-	result := make([]rune, 0, len([]rune(str))+escapeCount)
-	for _, r := range str {
-		if needsEscape(r) {
-			result = append(result, '\\', r)
-		} else {
-			result = append(result, r)
-		}
-	}
-
-	return string(result)
-}
-
-// needsEscape checks if a character needs escaping in regex
-func needsEscape(r rune) bool {
-	switch r {
-	case '\\', '^', '$', '.', '[', ']', '|', '(', ')', '?', '*', '+', '{', '}':
-		return true
-	default:
-		return false
-	}
-}
-
-// =============================================================================
-// COMPARISON FUNCTIONS
-// =============================================================================
-
-// CompareValues compares two values, returns -1, 0, or 1
-// Automatically dereferences pointers before comparison
+// CompareValues compares two values, returns -1, 0, or 1.
+// Automatically dereferences pointers before comparison.
 func CompareValues(a, b any) int {
-	// Dereference pointers using reflectx
 	derefA := reflectx.DerefAll(a)
 	derefB := reflectx.DerefAll(b)
 
-	// Handle nil cases
 	if derefA == nil && derefB == nil {
 		return 0
 	}
@@ -234,70 +144,42 @@ func CompareValues(a, b any) int {
 	switch va := derefA.(type) {
 	case int:
 		if vb, ok := derefB.(int); ok {
-			if va < vb {
-				return -1
-			}
-			if va > vb {
-				return 1
-			}
-			return 0
+			return cmpOrdered(va, vb)
 		}
 	case int64:
 		if vb, ok := derefB.(int64); ok {
-			if va < vb {
-				return -1
-			}
-			if va > vb {
-				return 1
-			}
-			return 0
+			return cmpOrdered(va, vb)
 		}
 	case float64:
 		if vb, ok := derefB.(float64); ok {
-			if va < vb {
-				return -1
-			}
-			if va > vb {
-				return 1
-			}
-			return 0
+			return cmpOrdered(va, vb)
 		}
 	case float32:
 		if vb, ok := derefB.(float32); ok {
-			if va < vb {
-				return -1
-			}
-			if va > vb {
-				return 1
-			}
-			return 0
+			return cmpOrdered(va, vb)
 		}
 	case string:
 		if vb, ok := derefB.(string); ok {
-			if va < vb {
-				return -1
-			}
-			if va > vb {
-				return 1
-			}
-			return 0
+			return cmpOrdered(va, vb)
 		}
 	}
 
-	// Equal or incomparable
 	return 0
 }
 
-// =============================================================================
-// PARAMETER NORMALIZATION (moved from engine to avoid circular dependencies)
-// =============================================================================
+// cmpOrdered returns -1, 0, or 1 for ordered types.
+func cmpOrdered[T ~int | ~int64 | ~float64 | ~float32 | ~string](a, b T) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
 
-// NormalizeParams normalizes input parameters into a standard SchemaParams struct
-// Supports variadic arguments where the first parameter is used:
-// - nil -> empty SchemaParams
-// - string -> { Error: string }
-// - SchemaParams -> normalized copy
-// - *SchemaParams -> normalized copy
+// NormalizeParams normalizes input parameters into a SchemaParams struct.
+// Supports: nil, string, SchemaParams, *SchemaParams.
 func NormalizeParams(params ...any) *core.SchemaParams {
 	if len(params) == 0 {
 		return &core.SchemaParams{}
@@ -310,34 +192,22 @@ func NormalizeParams(params ...any) *core.SchemaParams {
 
 	switch v := param.(type) {
 	case string:
-		// String shorthand for error message
 		return &core.SchemaParams{Error: v}
-
 	case core.SchemaParams:
-		// Copy to avoid mutation
 		return &v
-
 	case *core.SchemaParams:
 		if v == nil {
 			return &core.SchemaParams{}
 		}
-		// Copy to avoid mutation
 		result := *v
 		return &result
-
 	default:
-		// Unsupported types return empty params
 		return &core.SchemaParams{}
 	}
 }
 
-// NormalizeCustomParams normalizes input parameters into a standard CustomParams struct
-// Supports variadic arguments where the first parameter is used:
-// - nil -> empty CustomParams
-// - string -> { Error: string }
-// - CustomParams -> normalized copy
-// - *CustomParams -> normalized copy
-// - any -> { Error: any }
+// NormalizeCustomParams normalizes input parameters into a CustomParams struct.
+// Supports: nil, string, CustomParams, *CustomParams, any (as error).
 func NormalizeCustomParams(params ...any) *core.CustomParams {
 	if len(params) == 0 {
 		return &core.CustomParams{}
@@ -350,257 +220,118 @@ func NormalizeCustomParams(params ...any) *core.CustomParams {
 
 	switch v := param.(type) {
 	case string:
-		// String shorthand for error message
 		return &core.CustomParams{Error: v}
-
 	case core.CustomParams:
-		// Copy to avoid mutation
 		return &v
-
 	case *core.CustomParams:
 		if v == nil {
 			return &core.CustomParams{}
 		}
-		// Copy to avoid mutation
 		result := *v
 		return &result
-
 	default:
-		// For any other type, use it as error message
 		return &core.CustomParams{Error: v}
 	}
 }
 
-// ApplySchemaParams applies SchemaParams to a type definition
-// Updates the definition with normalized parameters
+// ApplySchemaParams applies SchemaParams to a type definition.
 func ApplySchemaParams(def *core.ZodTypeDef, params *core.SchemaParams) {
 	if params == nil {
 		return
 	}
-
-	// Apply error configuration
 	if params.Error != nil {
 		if err, ok := ToErrorMap(params.Error); ok {
 			def.Error = err
 		}
 	}
-
-	// Other parameters can be applied to def as needed
 }
 
-// =============================================================================
-// PATH UTILITIES FOR ERROR FORMATTING
-// =============================================================================
-
-// ToDotPath converts an error path to dot notation string
-// Compatible with TypeScript Zod v4 path formatting
-// Optimized with precise memory allocation
+// ToDotPath converts an error path to dot notation string.
+// Compatible with TypeScript Zod v4 path formatting.
 func ToDotPath(path []any) string {
 	if len(path) == 0 {
 		return ""
 	}
 
-	// Pre-calculate required capacity for optimal allocation
-	capacity := 0
-	for i, segment := range path {
-		switch v := segment.(type) {
-		case int:
-			capacity += len(strconv.Itoa(v)) + 2 // "[" + number + "]"
-		case string:
-			if i == 0 {
-				capacity += len(v)
-			} else {
-				if needsBracketNotation(v) {
-					capacity += len(v) + 4 // `["` + string + `"]`
-				} else {
-					capacity += len(v) + 1 // "." + string
-				}
-			}
-		default:
-			capacity += 10 // Estimate for "[%v]" format
-		}
-	}
-
 	var result strings.Builder
-	result.Grow(capacity)
+	// Estimate capacity: average ~8 chars per segment
+	result.Grow(len(path) * 8)
 
 	for i, segment := range path {
 		switch v := segment.(type) {
 		case int:
-			result.WriteString("[")
+			result.WriteByte('[')
 			result.WriteString(strconv.Itoa(v))
-			result.WriteString("]")
+			result.WriteByte(']')
 		case string:
-			if i == 0 {
+			switch {
+			case i == 0:
 				result.WriteString(v)
-			} else {
-				if needsBracketNotation(v) {
-					result.WriteString(`["`)
-					result.WriteString(v)
-					result.WriteString(`"]`)
-				} else {
-					result.WriteString(".")
-					result.WriteString(v)
-				}
+			case needsBracketNotation(v):
+				result.WriteString(`["`)
+				result.WriteString(v)
+				result.WriteString(`"]`)
+			default:
+				result.WriteByte('.')
+				result.WriteString(v)
 			}
 		default:
-			result.WriteString(fmt.Sprintf("[%v]", v))
+			fmt.Fprintf(&result, "[%v]", v)
 		}
 	}
 
 	return result.String()
 }
 
-// needsBracketNotation checks if a string needs bracket notation in path formatting
+// needsBracketNotation checks if a string key needs bracket notation.
 func needsBracketNotation(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
-
-	// If string starts with a digit, it needs bracket notation
 	if s[0] >= '0' && s[0] <= '9' {
 		return true
 	}
-
-	// Check for spaces, hyphens, dots, or non-alphanumeric characters
-	for _, char := range s {
-		if char == ' ' || char == '-' || char == '.' || (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '_' {
+	for _, c := range s {
+		if !isIdentChar(c) {
 			return true
 		}
 	}
 	return false
 }
 
-// =============================================================================
-// ERROR FORMATTING UTILITIES
-// =============================================================================
-
-// FormatErrorPath formats an error path for display
-func FormatErrorPath(path []any, style string) string {
-	switch style {
-	case "dot":
-		return ToDotPath(path)
-	case "bracket":
-		return formatBracketPath(path)
-	default:
-		return ToDotPath(path) // Default to dot notation
-	}
+// isIdentChar reports whether c is a valid identifier character.
+func isIdentChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') || c == '_'
 }
 
-// formatBracketPath formats path using bracket notation only
+// FormatErrorPath formats an error path for display.
+func FormatErrorPath(path []any, style string) string {
+	if style == "bracket" {
+		return formatBracketPath(path)
+	}
+	return ToDotPath(path)
+}
+
+// formatBracketPath formats path using bracket notation only.
 func formatBracketPath(path []any) string {
 	if len(path) == 0 {
 		return ""
 	}
 
-	var parts []string
+	var result strings.Builder
+	result.Grow(len(path) * 8)
+
 	for _, segment := range path {
 		switch v := segment.(type) {
 		case int:
-			parts = append(parts, fmt.Sprintf("[%d]", v))
+			fmt.Fprintf(&result, "[%d]", v)
 		case string:
-			parts = append(parts, fmt.Sprintf(`["%s"]`, v))
+			fmt.Fprintf(&result, `["%s"]`, v)
 		default:
-			parts = append(parts, fmt.Sprintf("[%v]", v))
+			fmt.Fprintf(&result, "[%v]", v)
 		}
 	}
 
-	return strings.Join(parts, "")
-}
-
-// =============================================================================
-// VALIDATION CONTEXT UTILITIES
-// =============================================================================
-
-// CreateErrorContext creates error context for formatting
-func CreateErrorContext(code core.IssueCode, path []any, input any) map[string]any {
-	return map[string]any{
-		"code":  code,
-		"path":  path,
-		"input": input,
-	}
-}
-
-// ExtractErrorInfo extracts error information from a raw issue
-func ExtractErrorInfo(issue core.ZodRawIssue) map[string]any {
-	return map[string]any{
-		"code":       issue.Code,
-		"path":       issue.Path,
-		"input":      issue.Input,
-		"message":    issue.Message,
-		"properties": issue.Properties,
-	}
-}
-
-// =============================================================================
-// SLICE UTILITIES (SIMPLE GO 1.22+ IMPLEMENTATION)
-// =============================================================================
-
-// MergeStringSlices efficiently merges multiple string slices
-func MergeStringSlices(slicesInput ...[]string) []string {
-	if len(slicesInput) == 0 {
-		return nil
-	}
-	if len(slicesInput) == 1 {
-		return slices.Clone(slicesInput[0])
-	}
-	return slices.Concat(slicesInput...)
-}
-
-// UniqueStrings returns unique string values
-func UniqueStrings(input []string) []string {
-	if len(input) <= 1 {
-		return slices.Clone(input)
-	}
-
-	seen := make(map[string]bool, len(input))
-	result := make([]string, 0, len(input))
-	for _, item := range input {
-		if !seen[item] {
-			seen[item] = true
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
-// ContainsString checks if a string slice contains a specific value
-func ContainsString(slice []string, value string) bool {
-	return slices.Contains(slice, value)
-}
-
-// IndexOfString finds the index of a string in a slice, returns -1 if not found
-func IndexOfString(slice []string, value string) int {
-	return slices.Index(slice, value)
-}
-
-// =============================================================================
-// TYPE DETECTION (DELEGATING TO PKG/REFLECTX)
-// =============================================================================
-
-// GetParsedType performs type detection by delegating to pkg/reflectx.ParsedType
-// This ensures consistency across the codebase and avoids duplication
-func GetParsedType(value any) core.ParsedType {
-	return reflectx.ParsedType(value)
-}
-
-// IsPrimitiveValue checks if a value is of a primitive type for fast-path optimization
-// Uses pkg/reflectx functions for consistent type checking
-func IsPrimitiveValue(value any) bool {
-	if value == nil {
-		return true
-	}
-
-	return reflectx.IsString(value) ||
-		reflectx.IsBool(value) ||
-		reflectx.IsNumeric(value)
-}
-
-// TypeDescription returns a human-readable type description for error messages.
-// Delegates to pkg/reflectx.ParsedCategory for consistent behavior.
-func TypeDescription(value any) string {
-	if value == nil {
-		return "nil"
-	}
-	return reflectx.ParsedCategory(value)
+	return result.String()
 }

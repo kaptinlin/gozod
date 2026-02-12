@@ -147,7 +147,7 @@ schema := gozod.String().Min(5, "Username must be at least 5 characters")
 // Dynamic error message with custom error function
 dynamicSchema := gozod.String().Min(5, func(issue gozod.ZodRawIssue) string {
     return fmt.Sprintf("String must be at least %d characters, got %d",
-        issue.GetMinimum(), len(issue.Input.(string)))
+        issue.Minimum(), len(issue.Input.(string)))
 })
 ```
 

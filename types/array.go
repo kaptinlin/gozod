@@ -284,7 +284,7 @@ func (z *ZodArray[T, R]) Describe(description string) *ZodArray[T, R] {
 
 // Min sets minimum number of elements
 func (z *ZodArray[T, R]) Min(minLen int, args ...any) *ZodArray[T, R] {
-	check := checks.MinLength(minLen, utils.GetFirstParam(args...))
+	check := checks.MinLength(minLen, utils.FirstParam(args...))
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -292,7 +292,7 @@ func (z *ZodArray[T, R]) Min(minLen int, args ...any) *ZodArray[T, R] {
 
 // Max sets maximum number of elements
 func (z *ZodArray[T, R]) Max(maxLen int, args ...any) *ZodArray[T, R] {
-	check := checks.MaxLength(maxLen, utils.GetFirstParam(args...))
+	check := checks.MaxLength(maxLen, utils.FirstParam(args...))
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -300,7 +300,7 @@ func (z *ZodArray[T, R]) Max(maxLen int, args ...any) *ZodArray[T, R] {
 
 // Length sets exact number of elements
 func (z *ZodArray[T, R]) Length(exactLen int, args ...any) *ZodArray[T, R] {
-	check := checks.Length(exactLen, utils.GetFirstParam(args...))
+	check := checks.Length(exactLen, utils.FirstParam(args...))
 	newInternals := z.internals.Clone()
 	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
@@ -308,7 +308,7 @@ func (z *ZodArray[T, R]) Length(exactLen int, args ...any) *ZodArray[T, R] {
 
 // NonEmpty requires at least one element
 func (z *ZodArray[T, R]) NonEmpty(args ...any) *ZodArray[T, R] {
-	return z.Min(1, utils.GetFirstParam(args...))
+	return z.Min(1, utils.FirstParam(args...))
 }
 
 // =============================================================================

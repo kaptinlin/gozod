@@ -274,7 +274,7 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 	}
 
 	// Use unified parameter handling with CustomParams
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 
 	check := checks.NewCustom[any](wrapper, customParams)
@@ -287,7 +287,7 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 // RefineAny adds flexible custom validation logic
 func (z *ZodTime[T]) RefineAny(fn func(any) bool, params ...any) *ZodTime[T] {
 	// Use unified parameter handling with CustomParams
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 
 	check := checks.NewCustom[any](fn, customParams)

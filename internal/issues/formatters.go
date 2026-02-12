@@ -56,8 +56,8 @@ var Sizable = map[string]SizingInfo{
 	"map":    {Unit: "keys", Verb: "to have"},
 }
 
-// GetSizing returns the appropriate sizing information for a given type
-func GetSizing(origin string) *SizingInfo {
+// Sizing returns the appropriate sizing information for a given type.
+func Sizing(origin string) *SizingInfo {
 	if info, exists := Sizable[origin]; exists {
 		return &info
 	}
@@ -227,8 +227,8 @@ func FormatThreshold(threshold any) string {
 	}
 }
 
-// GetComparisonOperator returns the comparison operator string based on inclusivity
-func GetComparisonOperator(isInclusive bool, isGreaterThan bool) string {
+// ComparisonOperator returns the comparison operator string based on inclusivity.
+func ComparisonOperator(isInclusive bool, isGreaterThan bool) string {
 	if isGreaterThan {
 		if isInclusive {
 			return ">="
@@ -242,8 +242,8 @@ func GetComparisonOperator(isInclusive bool, isGreaterThan bool) string {
 	}
 }
 
-// GetFriendlyComparisonText returns user-friendly comparison text instead of mathematical operators
-func GetFriendlyComparisonText(isInclusive bool, isTooSmall bool) string {
+// FriendlyComparisonText returns user-friendly comparison text.
+func FriendlyComparisonText(isInclusive bool, isTooSmall bool) string {
 	if isTooSmall {
 		if isInclusive {
 			return "at least "
@@ -311,9 +311,8 @@ var FormatNouns = map[string]string{
 	"complex128": "128-bit complex number",
 }
 
-// GetFormatNoun returns the human-readable noun for a format name
-// Enhanced with mapx for safer access
-func GetFormatNoun(format string) string {
+// FormatNoun returns the human-readable noun for a format name.
+func FormatNoun(format string) string {
 	if noun, exists := FormatNouns[format]; exists {
 		return noun
 	}
@@ -522,7 +521,7 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 	}
 
 	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := GetSizing(origin)
+	sizing := Sizing(origin)
 	thresholdStr := FormatThreshold(threshold)
 
 	// Special handling for file size validation to match expected format
@@ -537,7 +536,7 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 	// Use consistent "Too small/Too big: expected X to be/have Y" format for other types
 	if sizing != nil {
 		// For sized types (strings, arrays, etc.), use "have" with sizing info
-		adj := GetFriendlyComparisonText(inclusive, isTooSmall)
+		adj := FriendlyComparisonText(inclusive, isTooSmall)
 		if isTooSmall {
 			return fmt.Sprintf("Too small: expected %s to have %s%s %s", origin, adj, thresholdStr, sizing.Unit)
 		} else {
@@ -545,7 +544,7 @@ func (f *DefaultMessageFormatter) formatSizeConstraint(raw core.ZodRawIssue, isT
 		}
 	} else {
 		// For numeric and other types, use "be" format
-		adj := GetFriendlyComparisonText(inclusive, isTooSmall)
+		adj := FriendlyComparisonText(inclusive, isTooSmall)
 		if isTooSmall {
 			return fmt.Sprintf("Too small: expected %s to be %s%s", origin, adj, thresholdStr)
 		} else {
@@ -582,26 +581,12 @@ func (f *DefaultMessageFormatter) formatStringValidation(raw core.ZodRawIssue, f
 		}
 		return fmt.Sprintf("Invalid string: must match pattern %s", pattern)
 	default:
-		noun := GetFormatNoun(format)
+		noun := FormatNoun(format)
 		return fmt.Sprintf("Invalid %s", noun)
 	}
 }
 
-// =============================================================================
-// CONVENIENCE FUNCTIONS - Enhanced with all utilities
-// =============================================================================
-
-// GenerateDefaultMessage generates a default error message for an issue using enhanced utilities
+// GenerateDefaultMessage generates a default error message for an issue.
 func GenerateDefaultMessage(raw core.ZodRawIssue) string {
 	return defaultFormatter.FormatMessage(raw)
-}
-
-// FormatMessage formats a single issue using the default formatter
-func FormatMessage(raw core.ZodRawIssue) string {
-	return GenerateDefaultMessage(raw)
-}
-
-// FormatMessageWithFormatter formats a message using a custom formatter
-func FormatMessageWithFormatter(raw core.ZodRawIssue, formatter MessageFormatter) string {
-	return formatter.FormatMessage(raw)
 }

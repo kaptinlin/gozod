@@ -524,7 +524,7 @@ func EnumMap[T comparable](entries map[string]T, params ...any) *ZodEnum[T, T] {
 
 // EnumMapTyped is the generic constructor for enum schemas from mapping
 func EnumMapTyped[T comparable, R any](entries map[string]T, args ...any) *ZodEnum[T, R] {
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodEnumDef[T]{

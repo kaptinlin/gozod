@@ -830,7 +830,7 @@ func MapPtr(keySchema, valueSchema any, paramArgs ...any) *ZodMap[map[any]any, *
 
 // MapTyped creates typed map schema with generic constraints
 func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMap[T, R] {
-	param := utils.GetFirstParam(paramArgs...)
+	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodMapDef{

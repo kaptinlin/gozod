@@ -70,7 +70,7 @@ schema := gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
         return "Password is required"
     }
     current := len(fmt.Sprintf("%v", issue.Input))
-    minimum := issue.GetMinimum()
+    minimum := issue.Minimum()
     return fmt.Sprintf("Password too short (%d/%v characters)", current, minimum)
 })
 ```
@@ -102,11 +102,11 @@ gozod.Config(&gozod.ZodConfig{
         switch issue.Code {
         case "invalid_type":
             return fmt.Sprintf("Expected %s, received %s", 
-                              issue.GetExpected(), issue.GetReceived())
+                              issue.Expected(), issue.Received())
         case "too_small":
-            return fmt.Sprintf("Value too small (minimum: %v)", issue.GetMinimum())
+            return fmt.Sprintf("Value too small (minimum: %v)", issue.Minimum())
         case "too_big":
-            return fmt.Sprintf("Value too large (maximum: %v)", issue.GetMaximum())
+            return fmt.Sprintf("Value too large (maximum: %v)", issue.Maximum())
         default:
             return fmt.Sprintf("Validation failed: %s", issue.Code)
         }
@@ -144,7 +144,7 @@ userSchema := gozod.Object(gozod.ObjectSchema{
         case "invalid_type":
             return "Username must be text"
         case "too_small":
-            return fmt.Sprintf("Username must be at least %v characters", issue.GetMinimum())
+            return fmt.Sprintf("Username must be at least %v characters", issue.Minimum())
         default:
             return "Invalid username"
         }
@@ -164,33 +164,33 @@ The `ZodRawIssue` provides validation context through getter methods:
 
 ```go
 // Type validation
-if expected := issue.GetExpected(); expected != "" {
+if expected := issue.Expected(); expected != "" {
     fmt.Printf("Expected: %s\n", expected)
 }
-if received := issue.GetReceived(); received != "" {
+if received := issue.Received(); received != "" {
     fmt.Printf("Received: %s\n", received)
 }
 
 // Size constraints
-if minimum := issue.GetMinimum(); minimum != nil {
+if minimum := issue.Minimum(); minimum != nil {
     fmt.Printf("Minimum: %v\n", minimum)
 }
-if maximum := issue.GetMaximum(); maximum != nil {
+if maximum := issue.Maximum(); maximum != nil {
     fmt.Printf("Maximum: %v\n", maximum)
 }
 
 // Format validation
-if format := issue.GetFormat(); format != "" {
+if format := issue.Format(); format != "" {
     fmt.Printf("Format: %s\n", format) // "email", "url", etc.
 }
 
 // Pattern validation
-if pattern := issue.GetPattern(); pattern != "" {
+if pattern := issue.Pattern(); pattern != "" {
     fmt.Printf("Pattern: %s\n", pattern)
 }
 
 // Object validation
-if keys := issue.GetKeys(); len(keys) > 0 {
+if keys := issue.Keys(); len(keys) > 0 {
     fmt.Printf("Unrecognized keys: %v\n", keys)
 }
 ```
@@ -201,14 +201,14 @@ GoZod uses standardized error codes compatible with TypeScript Zod v4:
 
 | Code | Description | Available Properties |
 |------|-------------|---------------------|
-| `invalid_type` | Wrong data type | `GetExpected()`, `GetReceived()` |
-| `too_small` | Below minimum constraint | `GetMinimum()`, `GetInclusive()` |
-| `too_big` | Above maximum constraint | `GetMaximum()`, `GetInclusive()` |
-| `invalid_format` | Format validation failed | `GetFormat()` |
-| `not_multiple_of` | Not a multiple of required value | `GetDivisor()` |
-| `unrecognized_keys` | Object contains unknown keys | `GetKeys()` |
+| `invalid_type` | Wrong data type | `Expected()`, `Received()` |
+| `too_small` | Below minimum constraint | `Minimum()`, `Inclusive()` |
+| `too_big` | Above maximum constraint | `Maximum()`, `Inclusive()` |
+| `invalid_format` | Format validation failed | `Format()` |
+| `not_multiple_of` | Not a multiple of required value | `Divisor()` |
+| `unrecognized_keys` | Object contains unknown keys | `Keys()` |
 | `invalid_union` | No union member matched | - |
-| `invalid_value` | Value not in allowed set | `GetValues()` |
+| `invalid_value` | Value not in allowed set | `Values()` |
 | `custom` | Custom validation failed | - |
 
 ## Error Message Precedence
@@ -257,7 +257,7 @@ Include helpful context in error messages:
 ```go
 gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
     current := len(fmt.Sprintf("%v", issue.Input))
-    required := issue.GetMinimum()
+    required := issue.Minimum()
     return fmt.Sprintf("Password must be at least %v characters (got %d)", 
                       required, current)
 })
@@ -291,9 +291,9 @@ func createFieldError(fieldName string) func(gozod.ZodRawIssue) string {
             if issue.Input == nil {
                 return fmt.Sprintf("%s is required", fieldName)
             }
-            return fmt.Sprintf("%s must be %s", fieldName, issue.GetExpected())
+            return fmt.Sprintf("%s must be %s", fieldName, issue.Expected())
         case "too_small":
-            return fmt.Sprintf("%s must be at least %v characters", fieldName, issue.GetMinimum())
+            return fmt.Sprintf("%s must be at least %v characters", fieldName, issue.Minimum())
         case "invalid_format":
             return fmt.Sprintf("%s has invalid format", fieldName)
         default:
@@ -336,7 +336,7 @@ ageSchema := gozod.Int(func(issue gozod.ZodRawIssue) string {
         }
         return "Age must be a number"
     case "too_small":
-        minimum := issue.GetMinimum()
+        minimum := issue.Minimum()
         if minimum != nil && minimum.(int) == 18 {
             return "You must be at least 18 years old to register"
         }
@@ -355,7 +355,7 @@ func validateUserForm(data map[string]any) error {
         "username": gozod.String().Min(3, "Username must be at least 3 characters"),
         "email": gozod.String().Email("Please enter a valid email address"),
         "password": gozod.String().Min(8, func(issue gozod.ZodRawIssue) string {
-            return fmt.Sprintf("Password must be at least %v characters", issue.GetMinimum())
+            return fmt.Sprintf("Password must be at least %v characters", issue.Minimum())
         }),
         "age": gozod.Int().Min(18, "You must be at least 18 years old"),
     })

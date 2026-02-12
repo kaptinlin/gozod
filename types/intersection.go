@@ -821,7 +821,7 @@ func IntersectionPtr(left, right any, args ...any) *ZodIntersection[any, *any] {
 
 // IntersectionTyped creates typed intersection schema with generic constraints
 func IntersectionTyped[T any, R any](left, right any, args ...any) *ZodIntersection[T, R] {
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	// Convert inputs to core.ZodSchema using direct type assertion

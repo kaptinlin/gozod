@@ -1,9 +1,5 @@
 package core
 
-// =============================================================================
-// ISSUE CODE CONSTANTS
-// =============================================================================
-
 // IssueCode represents validation issue types
 // These codes categorize different types of validation failures
 type IssueCode string
@@ -43,10 +39,6 @@ const (
 	NilPointer      IssueCode = "nil_pointer"      // Nil pointer encountered
 
 )
-
-// =============================================================================
-// ZOD TYPE CONSTANTS
-// =============================================================================
 
 // ZodTypeCode represents a type-safe wrapper for schema type identifiers
 // This provides compile-time type safety and better IDE support
@@ -154,10 +146,6 @@ const (
 	ZodTypeComplex128  ZodTypeCode = "complex128"  // 128-bit complex number
 	ZodTypeNonOptional ZodTypeCode = "nonoptional" // Special type identifier for non-optional fields
 )
-
-// =============================================================================
-// PARSED TYPE CONSTANTS
-// =============================================================================
 
 // ParsedType represents the type of parsed data values at runtime
 // This corresponds to Zod v4's ParsedTypes

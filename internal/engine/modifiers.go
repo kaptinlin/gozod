@@ -9,66 +9,53 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// =============================================================================
-// MODIFIER PROCESSING
-// =============================================================================
-
-// processModifiers handles modifier processing for nil input with performance optimization
-// Returns early for non-nil input to avoid unnecessary processing overhead
+// processModifiers handles modifier processing for nil input.
+// Returns early for non-nil input.
 func processModifiers[T any](
 	input any,
 	internals *core.ZodTypeInternals,
 	expectedType core.ZodTypeCode,
-	parseCore func(any) (any, error),
+	_ func(any) (any, error),
 	ctx *core.ParseContext,
 ) (result any, handled bool, err error) {
-	return processModifiersInternal[T](input, internals, expectedType, parseCore, ctx, false)
+	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
-// processModifiersStrict is used for strict parsing where default values should not go through parseCore
+// processModifiersStrict is the strict variant where default values
+// skip parseCore.
 func processModifiersStrict[T any](
 	input any,
 	internals *core.ZodTypeInternals,
 	expectedType core.ZodTypeCode,
-	parseCore func(any) (any, error),
+	_ func(any) (any, error),
 	ctx *core.ParseContext,
 ) (result any, handled bool, err error) {
-	return processModifiersInternal[T](input, internals, expectedType, parseCore, ctx, true)
+	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
-// processModifiersInternal contains the actual implementation
-func processModifiersInternal[T any](
+// processModifiersCore contains the shared modifier logic.
+// Priority order: Default > Prefault > NonOptional > Optional/Nilable > Pointer > Unknown.
+func processModifiersCore[T any](
 	input any,
 	internals *core.ZodTypeInternals,
 	expectedType core.ZodTypeCode,
-	parseCore func(any) (any, error),
 	ctx *core.ParseContext,
-	isStrict bool,
 ) (result any, handled bool, err error) {
-	// Fast path: non-nil input doesn't need modifier processing
 	if !isNilInput(input) {
 		return nil, false, nil
 	}
 
-	// NonOptional flag moved to lower priority - allow Prefault to work first
-
-	// Original logic: Default/DefaultFunc always has highest priority (short-circuit)
-	// 1. Default/DefaultFunc - short-circuit mechanism, highest priority
+	// 1. Default/DefaultFunc — short-circuit, highest priority
 	if internals.DefaultValue != nil {
-		// Clone default value to prevent shared state issues
 		clonedValue := cloneDefaultValue(internals.DefaultValue)
-
-		// Default is a short-circuit mechanism, returns value directly without any parsing process (including Transform)
 		if hasOverwriteCheck(internals.Checks) {
 			result, err := ApplyChecks(clonedValue, internals.Checks, ctx)
 			return result, true, err
 		}
 		return clonedValue, true, nil
 	}
-
 	if internals.DefaultFunc != nil {
 		defaultValue := internals.DefaultFunc()
-		// DefaultFunc is also a short-circuit mechanism, returns value directly without any parsing process (including Transform)
 		if hasOverwriteCheck(internals.Checks) {
 			result, err := ApplyChecks(defaultValue, internals.Checks, ctx)
 			return result, true, err
@@ -76,31 +63,24 @@ func processModifiersInternal[T any](
 		return defaultValue, true, nil
 	}
 
-	// 2. Prefault/PrefaultFunc - preprocessing mechanism, higher priority than Optional/Nilable
+	// 2. Prefault/PrefaultFunc — preprocessing, continues normal parsing
 	if internals.PrefaultValue != nil {
-		// Prefault is a preprocessing mechanism, replaces input value and continues normal parsing process (including Transform)
-		return internals.PrefaultValue, false, nil // handled=false means continue normal parsing
+		return internals.PrefaultValue, false, nil
 	}
-
 	if internals.PrefaultFunc != nil {
-		// PrefaultFunc is also a preprocessing mechanism, replaces input value and continues normal parsing process (including Transform)
-		prefaultValue := internals.PrefaultFunc()
-		return prefaultValue, false, nil // handled=false means continue normal parsing
+		return internals.PrefaultFunc(), false, nil
 	}
 
-	// 3. NonOptional flag - higher priority than Optional/Nilable
-	// Check type first - pointer types should naturally allow nil
+	// 3. NonOptional — higher priority than Optional/Nilable
 	tType := reflect.TypeOf((*T)(nil)).Elem()
 	isPointerType := tType.Kind() == reflect.Ptr
 
 	if internals.NonOptional && !isPointerType {
-		// NonOptional only applies to non-pointer types and takes precedence over Optional/Nilable
 		return nil, true, issues.CreateNonOptionalError(ctx)
 	}
 
-	// 4. Optional/Nilable - allows nil values, lowest priority
+	// 4. Optional/Nilable — allows nil values
 	if internals.Optional || internals.Nilable {
-		// Apply only overwrite and refine checks to nil input, not format checks
 		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
 			result, err := ApplyChecks[any](nil, nilChecks, ctx)
 			return result, true, err
@@ -108,9 +88,8 @@ func processModifiersInternal[T any](
 		return nil, true, nil
 	}
 
-	// 5. Special handling for pointer types - pointer types naturally allow nil
+	// 5. Pointer types naturally allow nil
 	if isPointerType {
-		// This is a pointer type, nil should be allowed
 		if nilChecks := filterNilApplicableChecks(internals.Checks); len(nilChecks) > 0 {
 			result, err := ApplyChecks[any](nil, nilChecks, ctx)
 			return result, true, err
@@ -118,74 +97,60 @@ func processModifiersInternal[T any](
 		return nil, true, nil
 	}
 
-	// 6. Special handling for Unknown type
+	// 6. Unknown type allows nil
 	if expectedType == core.ZodTypeUnknown {
 		return nil, true, nil
 	}
 
-	// No fallback mechanism available
 	return nil, true, issues.CreateInvalidTypeError(expectedType, input, ctx)
 }
 
-// applyTransformIfPresent applies transformation if configured, with performance optimization
-// Uses fast path when no transformation is needed to minimize overhead
+// applyTransformIfPresent applies the transform function if configured.
 func applyTransformIfPresent(result any, internals *core.ZodTypeInternals, ctx *core.ParseContext) (any, error) {
 	if internals.Transform == nil {
-		return result, nil // Fast path: no transform
+		return result, nil
 	}
-
 	refCtx := &core.RefinementContext{ParseContext: ctx}
 	return internals.Transform(result, refCtx)
 }
 
-// =============================================================================
-// HELPERS
-// =============================================================================
-
-// filterNilApplicableChecks filters checks to only include those that should be applied to nil values
-// Only overwrite, refine, and custom checks should be applied to nil values, not format checks
+// filterNilApplicableChecks returns only checks applicable to nil values
+// (overwrite, refine, and custom checks).
 func filterNilApplicableChecks(checks []core.ZodCheck) []core.ZodCheck {
-	var nilApplicableChecks []core.ZodCheck
+	var result []core.ZodCheck
 	for _, check := range checks {
 		if check == nil {
 			continue
 		}
-		checkInternals := check.GetZod()
-		if checkInternals == nil || checkInternals.Def == nil {
+		ci := check.GetZod()
+		if ci == nil || ci.Def == nil {
 			continue
 		}
-
-		// Check if this is an overwrite, refine, or custom check
-		checkType := checkInternals.Def.Check
-		if checkType == "overwrite" || checkType == "refine" || checkType == "custom" {
-			nilApplicableChecks = append(nilApplicableChecks, check)
+		switch ci.Def.Check {
+		case "overwrite", "refine", "custom":
+			result = append(result, check)
 		}
 	}
-	return nilApplicableChecks
+	return result
 }
 
-// cloneDefaultValue creates a shallow copy of map/slice default values
+// cloneDefaultValue creates a shallow copy of map/slice default values.
 func cloneDefaultValue(v any) any {
 	if v == nil {
 		return nil
 	}
 
-	// Try slice cloning
 	if reflectx.IsSlice(v) {
 		rv := reflect.ValueOf(v)
-		// Create new slice with same type, length and capacity
 		newSlice := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
-		// Copy elements
 		reflect.Copy(newSlice, rv)
 		return newSlice.Interface()
 	}
 
-	// Try map cloning
 	if reflectx.IsMap(v) {
 		if m, ok := v.(map[string]any); ok {
 			return mapx.Copy(m)
 		}
-		// Basic copy for generic maps using reflection (fallback)
 		rv := reflect.ValueOf(v)
 		if rv.Kind() == reflect.Map {
 			newMap := reflect.MakeMap(rv.Type())

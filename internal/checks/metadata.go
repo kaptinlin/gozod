@@ -4,11 +4,6 @@ import (
 	"github.com/kaptinlin/gozod/core"
 )
 
-// =============================================================================
-// METADATA CHECKS
-// TypeScript Zod v4 compatible check factories for schema metadata
-// =============================================================================
-
 // ZodCheckDescribe is a no-op check that attaches a description to the schema's
 // metadata in the global registry when the check is attached.
 //

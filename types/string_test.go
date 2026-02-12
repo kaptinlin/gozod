@@ -2019,7 +2019,7 @@ func TestString_RefineParameters(t *testing.T) {
 	t.Run("when predicate controls execution", func(t *testing.T) {
 		// Only run validation when payload has no existing issues
 		whenFn := func(p *core.ParsePayload) bool {
-			return p.GetIssueCount() == 0
+			return p.IssueCount() == 0
 		}
 
 		schema := String().

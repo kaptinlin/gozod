@@ -51,11 +51,11 @@ func TestConfigConcurrent(t *testing.T) {
 	iterations := 100
 
 	// Concurrent readers
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				cfg := GetConfig()
 				_ = cfg // Use the config
 			}
@@ -66,11 +66,11 @@ func TestConfigConcurrent(t *testing.T) {
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 	localeErr := func(issue ZodRawIssue) string { return "locale" }
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				Config(&ZodConfig{
 					CustomError: customErr,
 					LocaleError: localeErr,
@@ -80,11 +80,11 @@ func TestConfigConcurrent(t *testing.T) {
 	}
 
 	// Mixed readers and writers
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for j := range iterations {
 				if j%2 == 0 {
 					GetConfig()
 				} else {

@@ -233,7 +233,7 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 	}
 
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	var errorMessage any
@@ -250,7 +250,7 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, args ...any) *ZodUnknown[T, R
 // RefineAny provides flexible validation without type conversion
 func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodUnknown[T, R] {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	var errorMessage any
@@ -428,7 +428,7 @@ func UnknownPtr(params ...any) *ZodUnknown[any, *any] {
 
 // UnknownTyped creates typed unknown schema with generic constraints
 func UnknownTyped[T any, R any](params ...any) *ZodUnknown[T, R] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodUnknownDef{

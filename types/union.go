@@ -600,7 +600,7 @@ func UnionOfPtr(schemas ...any) *ZodUnion[any, *any] {
 
 // UnionTyped creates typed union schema with generic constraints
 func UnionTyped[T any, R any](options []any, args ...any) *ZodUnion[T, R] {
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	// Convert all options to ZodSchema using direct type assertion, skip nils gracefully

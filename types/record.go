@@ -1267,7 +1267,7 @@ func PartialRecordPtr(keySchema, valueSchema any, paramArgs ...any) *ZodRecord[m
 
 // RecordTyped creates typed record schema with generic constraints
 func RecordTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodRecord[T, R] {
-	param := utils.GetFirstParam(paramArgs...)
+	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodRecordDef{

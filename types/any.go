@@ -220,7 +220,7 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
 	}
 
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	var errorMessage any
@@ -237,7 +237,7 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, args ...any) *ZodAny[T, R] {
 // RefineAny provides flexible validation without type conversion
 func (z *ZodAny[T, R]) RefineAny(fn func(any) bool, args ...any) *ZodAny[T, R] {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	var errorMessage any
@@ -417,7 +417,7 @@ func AnyPtr(params ...any) *ZodAny[any, *any] {
 
 // AnyTyped creates typed any schema with generic constraints
 func AnyTyped[T any, R any](params ...any) *ZodAny[T, R] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodAnyDef{

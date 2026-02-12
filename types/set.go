@@ -323,7 +323,7 @@ func (z *ZodSet[T, R]) Refine(fn func(R) bool, params ...any) *ZodSet[T, R] {
 		return fn(constraintValue)
 	}
 
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.Clone()
@@ -333,7 +333,7 @@ func (z *ZodSet[T, R]) Refine(fn func(R) bool, params ...any) *ZodSet[T, R] {
 
 // RefineAny provides flexible validation without type conversion
 func (z *ZodSet[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSet[T, R] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.Clone()
@@ -666,7 +666,7 @@ func SetPtr[T comparable](valueSchema any, paramArgs ...any) *ZodSet[T, *map[T]s
 
 // SetTyped creates set schema with explicit constraint type (universal constructor)
 func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T, R] {
-	param := utils.GetFirstParam(paramArgs...)
+	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodSetDef{

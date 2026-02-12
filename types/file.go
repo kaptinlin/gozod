@@ -277,7 +277,7 @@ func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 	}
 
 	// Use unified parameter handling
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.Clone()
@@ -288,7 +288,7 @@ func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 // RefineAny adds custom validation logic with any type
 func (z *ZodFile[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFile[T, R] {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.Clone()
@@ -514,7 +514,7 @@ func newZodFileFromDef[T any, R any](def *ZodFileDef) *ZodFile[T, R] {
 
 // File creates a new file schema
 func File(params ...any) *ZodFile[any, any] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodFileDef{
@@ -534,7 +534,7 @@ func File(params ...any) *ZodFile[any, any] {
 
 // FilePtr creates a new file schema with pointer constraint
 func FilePtr(params ...any) *ZodFile[any, *any] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodFileDef{
@@ -554,7 +554,7 @@ func FilePtr(params ...any) *ZodFile[any, *any] {
 
 // FileTyped creates a new file schema with specific constraint types
 func FileTyped[T any, R any](params ...any) *ZodFile[T, R] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodFileDef{

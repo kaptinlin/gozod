@@ -14,110 +14,60 @@ import (
 // implement the ZodSchema interface.
 var ErrSchemaNotZodSchema = errors.New("schema does not implement ZodSchema interface")
 
-// =============================================================================
-// CORE SCHEMA INTERFACE & INTERNALS
-// =============================================================================
-
 // Global priority counter for modifier application order tracking.
-// This counter monotonically increases and is never reset.
-// Note: In extremely long-running applications with billions of schema modifications,
-// this could theoretically overflow. In practice, this is not a concern as:
-// 1. Schemas are typically created during initialization, not runtime
-// 2. At 1M schemas/second, overflow would occur after 292,471 years
-// 3. Only relative priority matters, not absolute values
+// Only relative priority matters, not absolute values.
 var modifierPriorityCounter int64
 
-//
-// This file defines the **public contract** for every schema in the `gozod`
-// ecosystem. It establishes a minimal, universal interface that ensures all
-// schema types, whether built-in or custom, behave consistently.
-//
-// Key Abstractions:
-//
-//	1. ZodType[T] - The primary, generic interface for compile-time type safety.
-//	   All schemas implement this.
-//
-//	2. ZodSchema - A non-generic counterpart for runtime-only scenarios where
-//	   the static type is unknown (e.g., validating fields of a map[string]any).
-//
-//	3. ZodTypeInternals - The internal state backing every schema. While it is
-//	   "internal," it is exposed via the `GetInternals()` method to enable
-//	   advanced composition and introspection.
-
-// -----------------------------------------------------------------------------
-// PUBLIC SCHEMA INTERFACES
-// -----------------------------------------------------------------------------
-
-// ZodType is the universal interface for all validation schemas. It is the
-// cornerstone of `gozod`, providing a consistent API for any data type.
+// ZodType is the universal interface for all validation schemas.
 //
 // Generic Parameter:
 //   - T: The output type that this schema validates and returns.
 type ZodType[T any] interface {
-	// Parse validates the input against this schema and returns the typed result.
-	// This is the core validation method.
+	// Parse validates the input and returns the typed result.
 	Parse(input any, ctx ...*ParseContext) (T, error)
 
-	// MustParse is a convenience method that validates input and panics on error.
-	// It simplifies code where validation is expected to succeed.
+	// MustParse validates input and panics on error.
 	MustParse(input any, ctx ...*ParseContext) T
 
-	// GetInternals provides access to the internal state of this schema,
-	// allowing for advanced composition and framework integration.
+	// GetInternals provides access to the internal state of this schema.
 	GetInternals() *ZodTypeInternals
 
-	// IsOptional returns true if this schema accepts undefined/missing values.
-	// This is a convenience method equivalent to GetInternals().IsOptional().
+	// IsOptional reports whether this schema accepts missing values.
 	IsOptional() bool
 
-	// IsNilable returns true if this schema accepts nil values.
-	// This is a convenience method equivalent to GetInternals().IsNilable().
+	// IsNilable reports whether this schema accepts nil values.
 	IsNilable() bool
 }
 
 // ZodSchema is a non-generic version of the schema interface, used for
-// dynamic validation at runtime when the specific type `T` is not known.
+// dynamic validation when the specific type T is not known.
 type ZodSchema interface {
-	// ParseAny validates input and returns an untyped `any` result. This is
-	// crucial for dynamic structures like maps or objects.
+	// ParseAny validates input and returns an untyped result.
 	ParseAny(input any, ctx ...*ParseContext) (any, error)
 
 	// GetInternals provides access to the internal state of this schema.
 	GetInternals() *ZodTypeInternals
 }
 
-// -----------------------------------------------------------------------------
-// CLONEABLE INTERFACE
-// -----------------------------------------------------------------------------
-
-// Cloneable is an optional interface for schemas that need to support
-// deep-copying of their internal state. This is essential for modifiers
-// like `.Optional()` or `.Transform()` that create new schema instances
-// without modifying the original.
+// Cloneable is an optional interface for schemas that support deep-copying.
+// This is essential for copy-on-write modifiers like .Optional() or .Transform().
 type Cloneable interface {
-	// CloneFrom copies configuration and state from a source schema instance.
-	// The source should be of the same concrete type.
+	// CloneFrom copies configuration from a source schema instance.
 	CloneFrom(source any)
 }
 
-// -----------------------------------------------------------------------------
-// INTERNAL SCHEMA STATE
-// -----------------------------------------------------------------------------
-
 // ZodTypeInternals holds the complete configuration and state for any schema.
-// It acts as the backbone, storing everything from validation checks to default
-// values and custom error maps.
 type ZodTypeInternals struct {
-	Type   ZodTypeCode                                                  // Type identifier using type-safe constants
-	Checks []ZodCheck                                                   // List of validation checks to apply
-	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload // The core parsing function for the type
+	Type   ZodTypeCode                                                  // Type identifier
+	Checks []ZodCheck                                                   // Validation checks to apply
+	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload // Core parsing function
 
 	// Core validation flags
 	Coerce        bool // Whether to enable type coercion
 	Optional      bool // Whether the field is optional
 	Nilable       bool // Whether nil values are allowed
-	NonOptional   bool // True if .NonOptional() was applied, for error reporting
-	ExactOptional bool // True if .ExactOptional() was applied - accepts absent keys but rejects explicit nil
+	NonOptional   bool // True if .NonOptional() was applied
+	ExactOptional bool // True if .ExactOptional() was applied
 
 	// Default/Prefault values
 	DefaultValue  any
@@ -125,88 +75,69 @@ type ZodTypeInternals struct {
 	PrefaultValue any
 	PrefaultFunc  func() any
 
-	// Modifier priority tracking (higher number = applied later = higher priority)
-	OptionalPriority int // Priority when Optional/Nilable was applied
-	PrefaultPriority int // Priority when Prefault was applied
-	DefaultPriority  int // Priority when Default was applied
+	// Modifier priority tracking (higher = applied later)
+	OptionalPriority int
+	PrefaultPriority int
+	DefaultPriority  int
 
 	// Transform function
 	Transform func(any, *RefinementContext) (any, error)
 
 	// Optionality configuration
-	OptIn  string // Optionality mode input
-	OptOut string // Optionality mode output
+	OptIn  string
+	OptOut string
 
 	// Constructor and configuration
-	Constructor func(def *ZodTypeDef) ZodType[any] // Factory function
-	Values      map[any]struct{}                   // Valid values for literal types
-	Pattern     *regexp.Regexp                     // Regex pattern for string validation
-	Error       *ZodErrorMap                       // Custom error mapping
-	Bag         map[string]any                     // Additional configuration storage
+	Constructor func(def *ZodTypeDef) ZodType[any]
+	Values      map[any]struct{}
+	Pattern     *regexp.Regexp
+	Error       *ZodErrorMap
+	Bag         map[string]any
 }
 
-// =============================================================================
-// ZODTYPEINTERNALS CONVENIENCE METHODS
-// =============================================================================
-
-// Clone creates a deep copy of the internals for immutable modifications.
+// Clone creates a deep copy of the internals for copy-on-write modifications.
 //
-// Cloning behavior:
-//   - Deep copied: Checks slice, Values map, Bag map
-//   - Shallow copied: Function pointers (Parse, Constructor, Transform, DefaultFunc, PrefaultFunc)
-//   - Shallow copied: Immutable pointers (Pattern, Error)
-//
-// Function pointers and regex patterns are shared between clones because they
-// are effectively immutable. This clone is safe for the copy-on-write modifier
-// pattern used throughout the schema system.
+// Deep copied: Checks slice, Values map, Bag map.
+// Shared (immutable): function pointers, Pattern, Error.
 func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 	if z == nil {
 		return nil
 	}
-
-	cp := *z // Shallow copy the struct
-
-	// Deep copy Checks slice
+	cp := *z
 	if len(z.Checks) > 0 {
 		cp.Checks = make([]ZodCheck, len(z.Checks))
 		copy(cp.Checks, z.Checks)
 	}
-
-	// Deep copy Values map using maps.Clone (Go 1.21+)
 	if len(z.Values) > 0 {
 		cp.Values = maps.Clone(z.Values)
 	}
-
-	// Deep copy Bag map using maps.Clone (Go 1.21+)
 	if len(z.Bag) > 0 {
 		cp.Bag = maps.Clone(z.Bag)
 	}
-
 	return &cp
 }
 
-// IsOptional returns true if the field is optional.
+// IsOptional reports whether the field is optional.
 func (z *ZodTypeInternals) IsOptional() bool {
 	return z.Optional
 }
 
-// IsNilable returns true if nil values are allowed.
+// IsNilable reports whether nil values are allowed.
 func (z *ZodTypeInternals) IsNilable() bool {
 	return z.Nilable
 }
 
-// IsCoerce returns true if type coercion is enabled.
+// IsCoerce reports whether type coercion is enabled.
 func (z *ZodTypeInternals) IsCoerce() bool {
 	return z.Coerce
 }
 
-// IsNonOptional returns true if the field is non-optional.
+// IsNonOptional reports whether the field is non-optional.
 func (z *ZodTypeInternals) IsNonOptional() bool {
 	return z.NonOptional
 }
 
-// IsExactOptional returns true if exact optional mode is enabled.
-// ExactOptional accepts absent keys but rejects explicit nil values.
+// IsExactOptional reports whether exact optional mode is enabled.
 func (z *ZodTypeInternals) IsExactOptional() bool {
 	return z.ExactOptional
 }
@@ -227,27 +158,23 @@ func (z *ZodTypeInternals) SetNilable(value bool) {
 	}
 }
 
-// SetNonOptional marks the field as nonoptional (disallow nil with custom expected tag).
+// SetNonOptional marks the field as nonoptional.
 func (z *ZodTypeInternals) SetNonOptional(value bool) {
 	z.NonOptional = value
 }
 
 // SetExactOptional enables exact optional mode.
-// ExactOptional accepts absent keys but rejects explicit nil values.
-//
-// Note: This also sets Optional=true because ExactOptional implies Optional
-// semantics for absent key handling. The difference between ExactOptional and
-// Optional is only in nil rejection - ExactOptional rejects explicit nil values
-// while Optional accepts them.
+// Also sets Optional=true because ExactOptional implies Optional
+// for absent key handling.
 func (z *ZodTypeInternals) SetExactOptional(value bool) {
 	z.ExactOptional = value
 	if value {
-		z.Optional = true // ExactOptional implies Optional for absent key handling
+		z.Optional = true
 		z.OptionalPriority = int(atomic.AddInt64(&modifierPriorityCounter, 1))
 	}
 }
 
-// SetCoerce enables type coercion for this field.
+// SetCoerce enables type coercion.
 func (z *ZodTypeInternals) SetCoerce(value bool) {
 	z.Coerce = value
 }
@@ -281,16 +208,12 @@ func (z *ZodTypeInternals) SetTransform(fn func(any, *RefinementContext) (any, e
 	z.Transform = fn
 }
 
-// AddCheck adds a validation check to the internals.
+// AddCheck adds a validation check.
 func (z *ZodTypeInternals) AddCheck(check ZodCheck) {
 	z.Checks = append(z.Checks, check)
 }
 
-// =============================================================================
-// SCHEMA CONVERSION UTILITIES
-// =============================================================================
-
-// ConvertToZodSchema converts a value to the ZodSchema interface, returning
+// ConvertToZodSchema converts a value to ZodSchema, returning
 // an error if the type does not implement the interface.
 func ConvertToZodSchema(schema any) (ZodSchema, error) {
 	if zodSchema, ok := schema.(ZodSchema); ok {

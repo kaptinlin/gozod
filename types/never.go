@@ -421,7 +421,7 @@ func NeverPtr(paramArgs ...any) *ZodNever[any, *any] {
 
 // NeverTyped creates typed never schema with generic constraints
 func NeverTyped[T any, R any](paramArgs ...any) *ZodNever[T, R] {
-	param := utils.GetFirstParam(paramArgs...)
+	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodNeverDef{

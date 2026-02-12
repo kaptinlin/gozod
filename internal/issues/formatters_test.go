@@ -299,7 +299,7 @@ func TestSizeConstraintFormatting(t *testing.T) {
 //////////   Format Noun Tests ///
 //////////////////////////////////////////
 
-func TestGetFormatNoun(t *testing.T) {
+func TestFormatNoun(t *testing.T) {
 	t.Run("returns standard format nouns", func(t *testing.T) {
 		testCases := []struct {
 			format   string
@@ -316,7 +316,7 @@ func TestGetFormatNoun(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.format, func(t *testing.T) {
-				result := GetFormatNoun(tc.format)
+				result := FormatNoun(tc.format)
 				assert.Equal(t, tc.expected, result)
 			})
 		}
@@ -336,14 +336,14 @@ func TestGetFormatNoun(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.format, func(t *testing.T) {
-				result := GetFormatNoun(tc.format)
+				result := FormatNoun(tc.format)
 				assert.Equal(t, tc.expected, result)
 			})
 		}
 	})
 
 	t.Run("returns format name for unknown formats", func(t *testing.T) {
-		result := GetFormatNoun("unknown_format")
+		result := FormatNoun("unknown_format")
 		assert.Equal(t, "unknown_format", result)
 	})
 }

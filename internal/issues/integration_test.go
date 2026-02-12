@@ -24,8 +24,8 @@ func TestIssueLifecycleIntegration(t *testing.T) {
 
 		// Verify raw issue properties
 		require.Equal(t, core.InvalidType, rawIssue.Code)
-		require.Equal(t, core.ZodTypeString, rawIssue.GetExpected())
-		require.Equal(t, core.ZodTypeNumber, rawIssue.GetReceived())
+		require.Equal(t, core.ZodTypeString, rawIssue.Expected())
+		require.Equal(t, core.ZodTypeNumber, rawIssue.Received())
 
 		// Finalize issue
 		ctx := &core.ParseContext{ReportInput: true}
@@ -414,9 +414,9 @@ func TestEdgeCasesIntegration(t *testing.T) {
 
 		// Should not panic
 		assert.NotPanics(t, func() {
-			_ = issue.GetExpected()
-			_ = issue.GetMinimum()
-			_ = issue.GetInclusive()
+			_ = issue.Expected()
+			_ = issue.Minimum()
+			_ = issue.Inclusive()
 		})
 	})
 
@@ -431,9 +431,9 @@ func TestEdgeCasesIntegration(t *testing.T) {
 		}
 
 		// Should return empty/default values for wrong types
-		assert.Empty(t, issue.GetExpected())
-		assert.Equal(t, "hello", issue.GetMinimum()) // Returns any, so preserves wrong type
-		assert.False(t, issue.GetInclusive())        // Wrong type returns false
+		assert.Empty(t, issue.Expected())
+		assert.Equal(t, "hello", issue.Minimum()) // Returns any, so preserves wrong type
+		assert.False(t, issue.Inclusive())        // Wrong type returns false
 	})
 
 	t.Run("finalization with nil config", func(t *testing.T) {

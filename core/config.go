@@ -2,29 +2,13 @@ package core
 
 import "sync/atomic"
 
-// ZodConfig represents global configuration for validation and error handling
+// ZodConfig represents global configuration for validation and error handling.
 type ZodConfig struct {
 	CustomError ZodErrorMap
 	LocaleError ZodErrorMap
 }
 
-// GetCustomError returns the custom error map from ZodConfig
-func (c *ZodConfig) GetCustomError() ZodErrorMap {
-	if c == nil {
-		return nil
-	}
-	return c.CustomError
-}
-
-// GetLocaleError returns the locale error map from ZodConfig
-func (c *ZodConfig) GetLocaleError() ZodErrorMap {
-	if c == nil {
-		return nil
-	}
-	return c.LocaleError
-}
-
-// clone creates a copy of the ZodConfig
+// clone creates a copy of the ZodConfig.
 func (c *ZodConfig) clone() *ZodConfig {
 	if c == nil {
 		return &ZodConfig{}

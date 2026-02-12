@@ -719,7 +719,7 @@ func DiscriminatedUnionPtr(discriminator string, options []any, args ...any) *Zo
 
 // DiscriminatedUnionTyped creates typed discriminated union schema with generic constraints
 func DiscriminatedUnionTyped[T any, R any](discriminator string, options []any, args ...any) *ZodDiscriminatedUnion[T, R] {
-	param := utils.GetFirstParam(args...)
+	param := utils.FirstParam(args...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	// Convert all options to core.ZodSchema using direct type assertion

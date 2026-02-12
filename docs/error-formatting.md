@@ -270,7 +270,7 @@ func main() {
         customMapper := func(issue core.ZodRawIssue) string {
             switch issue.Code {
             case "too_small":
-                minimum := issue.GetMinimum()
+                minimum := issue.Minimum()
                 return fmt.Sprintf("Must be at least %v characters", minimum)
             case "invalid_format":
                 return "Please enter a valid email address"
@@ -441,22 +441,22 @@ func customErrorFormatter(zodErr *gozod.ZodError) map[string]any {
         // Add type-specific information
         switch issue.Code {
         case "invalid_type":
-            if expected := issue.GetExpected(); expected != "" {
+            if expected := issue.Expected(); expected != "" {
                 errorInfo["expected"] = expected
             }
-            if received := issue.GetReceived(); received != "" {
+            if received := issue.Received(); received != "" {
                 errorInfo["received"] = received
             }
         case "too_small":
-            if minimum := issue.GetMinimum(); minimum != nil {
+            if minimum := issue.Minimum(); minimum != nil {
                 errorInfo["minimum"] = minimum
             }
         case "too_big":
-            if maximum := issue.GetMaximum(); maximum != nil {
+            if maximum := issue.Maximum(); maximum != nil {
                 errorInfo["maximum"] = maximum
             }
         case "unrecognized_keys":
-            if keys := issue.GetKeys(); len(keys) > 0 {
+            if keys := issue.Keys(); len(keys) > 0 {
                 errorInfo["unrecognizedKeys"] = keys
             }
         }

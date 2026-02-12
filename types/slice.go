@@ -346,7 +346,7 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 		return fn(constraintValue)
 	}
 
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.Clone()
@@ -356,7 +356,7 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 
 // RefineAny provides flexible validation without type conversion
 func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T, R] {
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.Clone()
@@ -719,7 +719,7 @@ func SlicePtr[T any](elementSchema any, paramArgs ...any) *ZodSlice[T, *[]T] {
 
 // SliceTyped creates slice schema with explicit constraint type (universal constructor)
 func SliceTyped[T any, R any](elementSchema any, paramArgs ...any) *ZodSlice[T, R] {
-	param := utils.GetFirstParam(paramArgs...)
+	param := utils.FirstParam(paramArgs...)
 	normalizedParams := utils.NormalizeParams(param)
 
 	def := &ZodSliceDef{

@@ -1,114 +1,72 @@
 package transform
 
-import (
-	"testing"
-)
+import "testing"
 
-// BenchmarkSlugify tests the performance of the Slugify function
+func TestSlugify(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		// Zod v4 reference test cases
+		{name: "basic words", input: "Hello World", want: "hello-world"},
+		{name: "padded spaces", input: "  Hello   World  ", want: "hello-world"},
+		{name: "special chars removed", input: "Hello@World#123", want: "helloworld123"},
+		{name: "preserves hyphens", input: "Hello-World", want: "hello-world"},
+		{name: "underscores to hyphens", input: "Hello_World", want: "hello-world"},
+		{name: "collapses hyphens", input: "---Hello---World---", want: "hello-world"},
+		{name: "collapses spaces", input: "Hello  World", want: "hello-world"},
+		{name: "strips all special", input: "Hello!@#$%^&*()World", want: "helloworld"},
+
+		// Additional edge cases
+		{name: "empty", input: "", want: ""},
+		{name: "only special chars", input: "!@#$%^&*()", want: ""},
+		{name: "only spaces", input: "   ", want: ""},
+		{name: "mixed delimiters", input: "a_b-c d", want: "a-b-c-d"},
+		{name: "numbers only", input: "123", want: "123"},
+		{name: "leading trailing hyphens", input: "-Leading-Trailing-", want: "leading-trailing"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Slugify(tt.input); got != tt.want {
+				t.Errorf("Slugify(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func BenchmarkSlugify(b *testing.B) {
-	testCases := []string{
+	inputs := []string{
 		"Hello World",
 		"Special!@#$%^&*()Characters",
 		"Multiple   Spaces   Here",
 		"Under_Score_And-Hyphens",
 		"ThisIsAVeryLongStringWithManyCharactersThatNeedsToBeSlugified",
 	}
-
-	b.ResetTimer()
 	for b.Loop() {
-		for _, tc := range testCases {
-			_ = Slugify(tc)
+		for _, s := range inputs {
+			_ = Slugify(s)
 		}
 	}
 }
 
-// BenchmarkSlugifyShort benchmarks short strings
 func BenchmarkSlugifyShort(b *testing.B) {
-	input := "Hello World"
-	b.ResetTimer()
 	for b.Loop() {
-		_ = Slugify(input)
+		_ = Slugify("Hello World")
 	}
 }
 
-// BenchmarkSlugifyLong benchmarks long strings
 func BenchmarkSlugifyLong(b *testing.B) {
-	input := "This Is A Very Long String With Many Words That Needs To Be Slugified For URL Usage"
-	b.ResetTimer()
+	s := "This Is A Very Long String With Many Words That Needs To Be Slugified For URL Usage"
 	for b.Loop() {
-		_ = Slugify(input)
+		_ = Slugify(s)
 	}
 }
 
-// BenchmarkSlugifyComplex benchmarks strings with special characters
 func BenchmarkSlugifyComplex(b *testing.B) {
-	input := "Special!@#$%^&*()Characters___And---Multiple---Delimiters"
-	b.ResetTimer()
+	s := "Special!@#$%^&*()Characters___And---Multiple---Delimiters"
 	for b.Loop() {
-		_ = Slugify(input)
-	}
-}
-
-// TestSlugifyCorrectness ensures optimization doesn't break functionality
-func TestSlugifyCorrectness(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "Basic",
-			input:    "Hello World",
-			expected: "hello-world",
-		},
-		{
-			name:     "Trim spaces",
-			input:    "  Trim  Me  ",
-			expected: "trim-me",
-		},
-		{
-			name:     "Special chars",
-			input:    "Special!@#$%Chars",
-			expected: "specialchars",
-		},
-		{
-			name:     "Underscores",
-			input:    "Under_Score",
-			expected: "under-score",
-		},
-		{
-			name:     "Multiple hyphens",
-			input:    "Multiple---Hyphens",
-			expected: "multiple-hyphens",
-		},
-		{
-			name:     "Mixed",
-			input:    "Mix123Numbers",
-			expected: "mix123numbers",
-		},
-		{
-			name:     "Leading trailing hyphens",
-			input:    "-Leading-Trailing-",
-			expected: "leading-trailing",
-		},
-		{
-			name:     "Empty",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "Only special chars",
-			input:    "!@#$%^&*()",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := Slugify(tt.input)
-			if result != tt.expected {
-				t.Errorf("Slugify(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
+		_ = Slugify(s)
 	}
 }

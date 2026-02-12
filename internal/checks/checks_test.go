@@ -62,7 +62,7 @@ func TestCheckExecution(t *testing.T) {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			if !validate.MaxLength(payload.GetValue(), 5) {
-				origin := utils.GetOriginFromValue(payload.GetValue())
+				origin := utils.OriginFromValue(payload.GetValue())
 				payload.AddIssue(issues.CreateTooBigIssue(5, true, origin, payload.GetValue()))
 			}
 		},

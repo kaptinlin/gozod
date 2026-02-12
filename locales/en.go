@@ -174,8 +174,8 @@ func formatSizeConstraintEn(raw core.ZodRawIssue, isTooSmall bool) string {
 	}
 
 	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	adj := issues.GetFriendlyComparisonText(inclusive, isTooSmall)
-	sizing := issues.GetSizing(origin)
+	adj := issues.FriendlyComparisonText(inclusive, isTooSmall)
+	sizing := issues.Sizing(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Special handling for file size validation to match expected format
@@ -234,7 +234,7 @@ func formatStringValidationEn(raw core.ZodRawIssue, format string) string {
 		}
 		return fmt.Sprintf("Invalid string: must match pattern %s", pattern)
 	default:
-		noun := issues.GetFormatNoun(format)
+		noun := issues.FormatNoun(format)
 		return fmt.Sprintf("Invalid %s", noun)
 	}
 }

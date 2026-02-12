@@ -6,83 +6,78 @@ import (
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-// =============================================================================
-// SIMPLE PROPERTY ACCESSORS FOR ZodRawIssue
-// =============================================================================
-
-// GetRawIssueExpected returns the expected value
-func GetRawIssueExpected(r core.ZodRawIssue) string {
+// RawIssueExpected returns the expected value from a raw issue.
+func RawIssueExpected(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "expected", "")
 }
 
-// GetRawIssueReceived returns the received value
-func GetRawIssueReceived(r core.ZodRawIssue) string {
+// RawIssueReceived returns the received value from a raw issue.
+func RawIssueReceived(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "received", "")
 }
 
-// GetRawIssueOrigin returns the origin value
-func GetRawIssueOrigin(r core.ZodRawIssue) string {
+// RawIssueOrigin returns the origin value from a raw issue.
+func RawIssueOrigin(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "origin", "")
 }
 
-// GetRawIssueFormat returns the format value
-func GetRawIssueFormat(r core.ZodRawIssue) string {
+// RawIssueFormat returns the format value from a raw issue.
+func RawIssueFormat(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "format", "")
 }
 
-// GetRawIssuePattern returns the pattern value
-func GetRawIssuePattern(r core.ZodRawIssue) string {
+// RawIssuePattern returns the pattern value from a raw issue.
+func RawIssuePattern(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "pattern", "")
 }
 
-// GetRawIssuePrefix returns the prefix value
-func GetRawIssuePrefix(r core.ZodRawIssue) string {
+// RawIssuePrefix returns the prefix value from a raw issue.
+func RawIssuePrefix(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "prefix", "")
 }
 
-// GetRawIssueSuffix returns the suffix value
-func GetRawIssueSuffix(r core.ZodRawIssue) string {
+// RawIssueSuffix returns the suffix value from a raw issue.
+func RawIssueSuffix(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "suffix", "")
 }
 
-// GetRawIssueIncludes returns the includes value
-func GetRawIssueIncludes(r core.ZodRawIssue) string {
+// RawIssueIncludes returns the includes value from a raw issue.
+func RawIssueIncludes(r core.ZodRawIssue) string {
 	return mapx.GetStringDefault(r.Properties, "includes", "")
 }
 
-// GetRawIssueMinimum returns the minimum value
-func GetRawIssueMinimum(r core.ZodRawIssue) any {
+// RawIssueMinimum returns the minimum value from a raw issue.
+func RawIssueMinimum(r core.ZodRawIssue) any {
 	return mapx.GetAnyDefault(r.Properties, "minimum", nil)
 }
 
-// GetRawIssueMaximum returns the maximum value
-func GetRawIssueMaximum(r core.ZodRawIssue) any {
+// RawIssueMaximum returns the maximum value from a raw issue.
+func RawIssueMaximum(r core.ZodRawIssue) any {
 	return mapx.GetAnyDefault(r.Properties, "maximum", nil)
 }
 
-// GetRawIssueInclusive returns the inclusive value
-func GetRawIssueInclusive(r core.ZodRawIssue) bool {
+// RawIssueInclusive returns the inclusive value from a raw issue.
+func RawIssueInclusive(r core.ZodRawIssue) bool {
 	return mapx.GetBoolDefault(r.Properties, "inclusive", false)
 }
 
-// GetRawIssueDivisor returns the divisor value
-func GetRawIssueDivisor(r core.ZodRawIssue) any {
+// RawIssueDivisor returns the divisor value from a raw issue.
+func RawIssueDivisor(r core.ZodRawIssue) any {
 	return mapx.GetAnyDefault(r.Properties, "divisor", nil)
 }
 
-// GetRawIssueKeys returns the keys value
-func GetRawIssueKeys(r core.ZodRawIssue) []string {
+// RawIssueKeys returns the keys value from a raw issue.
+func RawIssueKeys(r core.ZodRawIssue) []string {
 	return mapx.GetStringsDefault(r.Properties, "keys", nil)
 }
 
-// GetRawIssueValues returns the values from properties map
-func GetRawIssueValues(r core.ZodRawIssue) []any {
+// RawIssueValues returns the values from a raw issue's properties map.
+func RawIssueValues(r core.ZodRawIssue) []any {
 	values := mapx.GetAnySliceDefault(r.Properties, "values", nil)
 	if values != nil {
 		return values
 	}
 
-	// Try to convert using slicex if direct access failed
 	if val, ok := mapx.Get(r.Properties, "values"); ok {
 		if converted, err := slicex.ToAny(val); err == nil {
 			return converted
@@ -92,78 +87,70 @@ func GetRawIssueValues(r core.ZodRawIssue) []any {
 	return nil
 }
 
-// =============================================================================
-// ISSUE-SPECIFIC ACCESSORS
-// =============================================================================
-
-// GetIssueExpected returns the expected type for invalid_type issues
-func GetIssueExpected(i core.ZodIssue) (core.ZodTypeCode, bool) {
+// IssueExpected returns the expected type for invalid_type issues.
+func IssueExpected(i core.ZodIssue) (core.ZodTypeCode, bool) {
 	if i.Code != core.InvalidType {
 		return "", false
 	}
 	return i.Expected, i.Expected != ""
 }
 
-// GetIssueReceived returns the received type for invalid_type issues
-func GetIssueReceived(i core.ZodIssue) (core.ZodTypeCode, bool) {
+// IssueReceived returns the received type for invalid_type issues.
+func IssueReceived(i core.ZodIssue) (core.ZodTypeCode, bool) {
 	if i.Code != core.InvalidType {
 		return "", false
 	}
 	return i.Received, i.Received != ""
 }
 
-// GetIssueMinimum returns the minimum value for too_small issues
-func GetIssueMinimum(i core.ZodIssue) (any, bool) {
+// IssueMinimum returns the minimum value for too_small issues.
+func IssueMinimum(i core.ZodIssue) (any, bool) {
 	if i.Code != core.TooSmall {
 		return nil, false
 	}
 	return i.Minimum, i.Minimum != nil
 }
 
-// GetIssueMaximum returns the maximum value for too_big issues
-func GetIssueMaximum(i core.ZodIssue) (any, bool) {
+// IssueMaximum returns the maximum value for too_big issues.
+func IssueMaximum(i core.ZodIssue) (any, bool) {
 	if i.Code != core.TooBig {
 		return nil, false
 	}
 	return i.Maximum, i.Maximum != nil
 }
 
-// GetIssueFormat returns the format for invalid_format issues
-func GetIssueFormat(i core.ZodIssue) (string, bool) {
+// IssueFormat returns the format for invalid_format issues.
+func IssueFormat(i core.ZodIssue) (string, bool) {
 	if i.Code != core.InvalidFormat {
 		return "", false
 	}
 	return i.Format, i.Format != ""
 }
 
-// GetIssueDivisor returns the divisor for not_multiple_of issues
-func GetIssueDivisor(i core.ZodIssue) (any, bool) {
+// IssueDivisor returns the divisor for not_multiple_of issues.
+func IssueDivisor(i core.ZodIssue) (any, bool) {
 	if i.Code != core.NotMultipleOf {
 		return nil, false
 	}
 	return i.Divisor, i.Divisor != nil
 }
 
-// =============================================================================
-// GENERIC PROPERTY ACCESSORS
-// =============================================================================
-
-// GetRawIssueProperty returns any property value
-func GetRawIssueProperty(r core.ZodRawIssue, key string) any {
+// RawIssueProperty returns any property value by key.
+func RawIssueProperty(r core.ZodRawIssue, key string) any {
 	return mapx.GetAnyDefault(r.Properties, key, nil)
 }
 
-// GetRawIssueStringProperty returns a string property
-func GetRawIssueStringProperty(r core.ZodRawIssue, key string) string {
+// RawIssueStringProperty returns a string property by key.
+func RawIssueStringProperty(r core.ZodRawIssue, key string) string {
 	return mapx.GetStringDefault(r.Properties, key, "")
 }
 
-// GetRawIssueBoolProperty returns a bool property
-func GetRawIssueBoolProperty(r core.ZodRawIssue, key string) bool {
+// RawIssueBoolProperty returns a bool property by key.
+func RawIssueBoolProperty(r core.ZodRawIssue, key string) bool {
 	return mapx.GetBoolDefault(r.Properties, key, false)
 }
 
-// HasRawIssueProperty checks if a property exists
+// HasRawIssueProperty checks if a property exists.
 func HasRawIssueProperty(r core.ZodRawIssue, key string) bool {
 	return mapx.Has(r.Properties, key)
 }

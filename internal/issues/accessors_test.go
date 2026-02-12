@@ -13,89 +13,89 @@ import (
 //////////////////////////////////////////
 
 func TestZodRawIssueAccessors(t *testing.T) {
-	t.Run("GetRawIssueExpected", func(t *testing.T) {
+	t.Run("RawIssueExpected", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidType, "test", WithExpected("string"))
-		expected := GetRawIssueExpected(issue)
+		expected := RawIssueExpected(issue)
 		assert.Equal(t, "string", expected)
 	})
 
-	t.Run("GetRawIssueReceived", func(t *testing.T) {
+	t.Run("RawIssueReceived", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidType, "test", WithReceived("number"))
-		received := GetRawIssueReceived(issue)
+		received := RawIssueReceived(issue)
 		assert.Equal(t, "number", received)
 	})
 
-	t.Run("GetRawIssueOrigin", func(t *testing.T) {
+	t.Run("RawIssueOrigin", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithOrigin("string"))
-		origin := GetRawIssueOrigin(issue)
+		origin := RawIssueOrigin(issue)
 		assert.Equal(t, "string", origin)
 	})
 
-	t.Run("GetRawIssueFormat", func(t *testing.T) {
+	t.Run("RawIssueFormat", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithFormat("email"))
-		format := GetRawIssueFormat(issue)
+		format := RawIssueFormat(issue)
 		assert.Equal(t, "email", format)
 	})
 
-	t.Run("GetRawIssuePattern", func(t *testing.T) {
+	t.Run("RawIssuePattern", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithPattern("^.*$"))
-		pattern := GetRawIssuePattern(issue)
+		pattern := RawIssuePattern(issue)
 		assert.Equal(t, "^.*$", pattern)
 	})
 
-	t.Run("GetRawIssuePrefix", func(t *testing.T) {
+	t.Run("RawIssuePrefix", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithPrefix("start_"))
-		prefix := GetRawIssuePrefix(issue)
+		prefix := RawIssuePrefix(issue)
 		assert.Equal(t, "start_", prefix)
 	})
 
-	t.Run("GetRawIssueSuffix", func(t *testing.T) {
+	t.Run("RawIssueSuffix", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithSuffix("_end"))
-		suffix := GetRawIssueSuffix(issue)
+		suffix := RawIssueSuffix(issue)
 		assert.Equal(t, "_end", suffix)
 	})
 
-	t.Run("GetRawIssueIncludes", func(t *testing.T) {
+	t.Run("RawIssueIncludes", func(t *testing.T) {
 		issue := NewRawIssue(core.InvalidFormat, "test", WithIncludes("substring"))
-		includes := GetRawIssueIncludes(issue)
+		includes := RawIssueIncludes(issue)
 		assert.Equal(t, "substring", includes)
 	})
 
-	t.Run("GetRawIssueMinimum", func(t *testing.T) {
+	t.Run("RawIssueMinimum", func(t *testing.T) {
 		issue := NewRawIssue(core.TooSmall, "test", WithMinimum(5))
-		minimum := GetRawIssueMinimum(issue)
+		minimum := RawIssueMinimum(issue)
 		assert.Equal(t, 5, minimum)
 	})
 
-	t.Run("GetRawIssueMaximum", func(t *testing.T) {
+	t.Run("RawIssueMaximum", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithMaximum(100))
-		maximum := GetRawIssueMaximum(issue)
+		maximum := RawIssueMaximum(issue)
 		assert.Equal(t, 100, maximum)
 	})
 
-	t.Run("GetRawIssueInclusive", func(t *testing.T) {
+	t.Run("RawIssueInclusive", func(t *testing.T) {
 		issue := NewRawIssue(core.TooBig, "test", WithInclusive(true))
-		inclusive := GetRawIssueInclusive(issue)
+		inclusive := RawIssueInclusive(issue)
 		assert.True(t, inclusive)
 	})
 
-	t.Run("GetRawIssueDivisor", func(t *testing.T) {
+	t.Run("RawIssueDivisor", func(t *testing.T) {
 		issue := NewRawIssue(core.NotMultipleOf, "test", WithDivisor(3))
-		divisor := GetRawIssueDivisor(issue)
+		divisor := RawIssueDivisor(issue)
 		assert.Equal(t, 3, divisor)
 	})
 
-	t.Run("GetRawIssueKeys", func(t *testing.T) {
+	t.Run("RawIssueKeys", func(t *testing.T) {
 		keys := []string{"key1", "key2"}
 		issue := NewRawIssue(core.UnrecognizedKeys, "test", WithKeys(keys))
-		result := GetRawIssueKeys(issue)
+		result := RawIssueKeys(issue)
 		assert.Equal(t, keys, result)
 	})
 
-	t.Run("GetRawIssueValues", func(t *testing.T) {
+	t.Run("RawIssueValues", func(t *testing.T) {
 		values := []any{"val1", "val2", 123}
 		issue := NewRawIssue(core.InvalidValue, "test", WithValues(values))
-		result := GetRawIssueValues(issue)
+		result := RawIssueValues(issue)
 		assert.Equal(t, values, result)
 	})
 
@@ -105,14 +105,14 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			Properties: make(map[string]any),
 		}
 
-		assert.Empty(t, GetRawIssueExpected(issue))
-		assert.Empty(t, GetRawIssueReceived(issue))
-		assert.Empty(t, GetRawIssueOrigin(issue))
-		assert.Nil(t, GetRawIssueMinimum(issue))
-		assert.Nil(t, GetRawIssueMaximum(issue))
-		assert.False(t, GetRawIssueInclusive(issue))
-		assert.Nil(t, GetRawIssueKeys(issue))
-		assert.Nil(t, GetRawIssueValues(issue))
+		assert.Empty(t, RawIssueExpected(issue))
+		assert.Empty(t, RawIssueReceived(issue))
+		assert.Empty(t, RawIssueOrigin(issue))
+		assert.Nil(t, RawIssueMinimum(issue))
+		assert.Nil(t, RawIssueMaximum(issue))
+		assert.False(t, RawIssueInclusive(issue))
+		assert.Nil(t, RawIssueKeys(issue))
+		assert.Nil(t, RawIssueValues(issue))
 	})
 
 	t.Run("nil properties map", func(t *testing.T) {
@@ -121,10 +121,10 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			Properties: nil,
 		}
 
-		assert.Empty(t, GetRawIssueExpected(issue))
-		assert.Empty(t, GetRawIssueReceived(issue))
-		assert.Nil(t, GetRawIssueMinimum(issue))
-		assert.False(t, GetRawIssueInclusive(issue))
+		assert.Empty(t, RawIssueExpected(issue))
+		assert.Empty(t, RawIssueReceived(issue))
+		assert.Nil(t, RawIssueMinimum(issue))
+		assert.False(t, RawIssueInclusive(issue))
 	})
 
 	t.Run("wrong type values return defaults", func(t *testing.T) {
@@ -137,9 +137,9 @@ func TestZodRawIssueAccessors(t *testing.T) {
 			},
 		}
 
-		assert.Empty(t, GetRawIssueExpected(issue))
-		assert.Equal(t, "string", GetRawIssueMinimum(issue))
-		assert.False(t, GetRawIssueInclusive(issue))
+		assert.Empty(t, RawIssueExpected(issue))
+		assert.Equal(t, "string", RawIssueMinimum(issue))
+		assert.False(t, RawIssueInclusive(issue))
 	})
 }
 
@@ -148,90 +148,90 @@ func TestZodRawIssueAccessors(t *testing.T) {
 //////////////////////////////////////////
 
 func TestZodIssueTypeSpecificAccessors(t *testing.T) {
-	t.Run("GetIssueExpected for InvalidType", func(t *testing.T) {
+	t.Run("IssueExpected for InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.InvalidType},
 			Expected:     core.ZodTypeString,
 		}
 
-		expected, ok := GetIssueExpected(issue)
+		expected, ok := IssueExpected(issue)
 		require.True(t, ok)
 		assert.Equal(t, core.ZodTypeString, expected)
 	})
 
-	t.Run("GetIssueExpected for non-InvalidType", func(t *testing.T) {
+	t.Run("IssueExpected for non-InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.TooBig},
 			Expected:     core.ZodTypeString,
 		}
 
-		expected, ok := GetIssueExpected(issue)
+		expected, ok := IssueExpected(issue)
 		assert.False(t, ok)
 		assert.Empty(t, expected)
 	})
 
-	t.Run("GetIssueReceived for InvalidType", func(t *testing.T) {
+	t.Run("IssueReceived for InvalidType", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.InvalidType},
 			Received:     core.ZodTypeNumber,
 		}
 
-		received, ok := GetIssueReceived(issue)
+		received, ok := IssueReceived(issue)
 		require.True(t, ok)
 		assert.Equal(t, core.ZodTypeNumber, received)
 	})
 
-	t.Run("GetIssueMinimum for TooSmall", func(t *testing.T) {
+	t.Run("IssueMinimum for TooSmall", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.TooSmall},
 			Minimum:      5,
 		}
 
-		minimum, ok := GetIssueMinimum(issue)
+		minimum, ok := IssueMinimum(issue)
 		require.True(t, ok)
 		assert.Equal(t, 5, minimum)
 	})
 
-	t.Run("GetIssueMinimum for non-TooSmall", func(t *testing.T) {
+	t.Run("IssueMinimum for non-TooSmall", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.TooBig},
 			Minimum:      5,
 		}
 
-		minimum, ok := GetIssueMinimum(issue)
+		minimum, ok := IssueMinimum(issue)
 		assert.False(t, ok)
 		assert.Nil(t, minimum)
 	})
 
-	t.Run("GetIssueMaximum for TooBig", func(t *testing.T) {
+	t.Run("IssueMaximum for TooBig", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.TooBig},
 			Maximum:      100,
 		}
 
-		maximum, ok := GetIssueMaximum(issue)
+		maximum, ok := IssueMaximum(issue)
 		require.True(t, ok)
 		assert.Equal(t, 100, maximum)
 	})
 
-	t.Run("GetIssueFormat for InvalidFormat", func(t *testing.T) {
+	t.Run("IssueFormat for InvalidFormat", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.InvalidFormat},
 			Format:       "email",
 		}
 
-		format, ok := GetIssueFormat(issue)
+		format, ok := IssueFormat(issue)
 		require.True(t, ok)
 		assert.Equal(t, "email", format)
 	})
 
-	t.Run("GetIssueDivisor for NotMultipleOf", func(t *testing.T) {
+	t.Run("IssueDivisor for NotMultipleOf", func(t *testing.T) {
 		issue := core.ZodIssue{
 			ZodIssueBase: core.ZodIssueBase{Code: core.NotMultipleOf},
 			Divisor:      3,
 		}
 
-		divisor, ok := GetIssueDivisor(issue)
+		divisor, ok := IssueDivisor(issue)
 		require.True(t, ok)
 		assert.Equal(t, 3, divisor)
 	})
@@ -243,11 +243,11 @@ func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 			Received:     "",
 		}
 
-		expected, ok := GetIssueExpected(issue)
+		expected, ok := IssueExpected(issue)
 		assert.False(t, ok)
 		assert.Empty(t, expected)
 
-		received, ok := GetIssueReceived(issue)
+		received, ok := IssueReceived(issue)
 		assert.False(t, ok)
 		assert.Empty(t, received)
 	})
@@ -258,7 +258,7 @@ func TestZodIssueTypeSpecificAccessors(t *testing.T) {
 			Minimum:      nil,
 		}
 
-		minimum, ok := GetIssueMinimum(issue)
+		minimum, ok := IssueMinimum(issue)
 		assert.False(t, ok)
 		assert.Nil(t, minimum)
 	})
@@ -282,7 +282,7 @@ func TestAccessorEdgeCases(t *testing.T) {
 
 	t.Run("handles false boolean values in accessors", func(t *testing.T) {
 		rawIssue := NewRawIssue("test", nil, WithInclusive(false))
-		assert.False(t, rawIssue.GetInclusive()) // False should be preserved
+		assert.False(t, rawIssue.Inclusive()) // False should be preserved
 	})
 
 	t.Run("handles nil any values", func(t *testing.T) {
@@ -312,7 +312,7 @@ func TestAccessorEdgeCases(t *testing.T) {
 		largeNumber := int64(9223372036854775807) // max int64
 
 		issue := NewRawIssue("too_big", largeNumber, WithMaximum(largeNumber))
-		assert.Equal(t, largeNumber, issue.GetMaximum())
+		assert.Equal(t, largeNumber, issue.Maximum())
 	})
 
 	t.Run("handles unicode strings", func(t *testing.T) {
@@ -323,8 +323,8 @@ func TestAccessorEdgeCases(t *testing.T) {
 			WithOrigin(unicodeString),
 		)
 
-		assert.Equal(t, core.ZodTypeCode(unicodeString), issue.GetExpected())
-		assert.Equal(t, unicodeString, issue.GetOrigin())
+		assert.Equal(t, core.ZodTypeCode(unicodeString), issue.Expected())
+		assert.Equal(t, unicodeString, issue.Origin())
 	})
 }
 
@@ -355,20 +355,20 @@ func TestAccessorPerformance(t *testing.T) {
 
 		// Test that repeated access is efficient
 		for i := 0; i < 1000; i++ {
-			_ = issue.GetExpected()
-			_ = issue.GetReceived()
-			_ = issue.GetMinimum()
-			_ = issue.GetMaximum()
-			_ = issue.GetInclusive()
-			_ = issue.GetOrigin()
-			_ = issue.GetFormat()
-			_ = issue.GetPattern()
-			_ = issue.GetPrefix()
-			_ = issue.GetSuffix()
-			_ = issue.GetIncludes()
-			_ = issue.GetDivisor()
-			_ = issue.GetKeys()
-			_ = issue.GetValues()
+			_ = issue.Expected()
+			_ = issue.Received()
+			_ = issue.Minimum()
+			_ = issue.Maximum()
+			_ = issue.Inclusive()
+			_ = issue.Origin()
+			_ = issue.Format()
+			_ = issue.Pattern()
+			_ = issue.Prefix()
+			_ = issue.Suffix()
+			_ = issue.Includes()
+			_ = issue.Divisor()
+			_ = issue.Keys()
+			_ = issue.Values()
 		}
 	})
 
@@ -409,19 +409,19 @@ func TestAccessorIntegration(t *testing.T) {
 		finalizedIssue := FinalizeIssue(rawIssue, nil, nil)
 
 		// Check that properties are preserved correctly
-		assert.Equal(t, core.ZodTypeCode(GetRawIssueExpected(rawIssue)), finalizedIssue.Expected)
-		assert.Equal(t, core.ZodTypeCode(GetRawIssueReceived(rawIssue)), finalizedIssue.Received)
-		assert.Equal(t, GetRawIssueMinimum(rawIssue), finalizedIssue.Minimum)
-		assert.Equal(t, GetRawIssueMaximum(rawIssue), finalizedIssue.Maximum)
-		assert.Equal(t, GetRawIssueInclusive(rawIssue), finalizedIssue.Inclusive)
-		assert.Equal(t, GetRawIssueOrigin(rawIssue), finalizedIssue.Origin)
+		assert.Equal(t, core.ZodTypeCode(RawIssueExpected(rawIssue)), finalizedIssue.Expected)
+		assert.Equal(t, core.ZodTypeCode(RawIssueReceived(rawIssue)), finalizedIssue.Received)
+		assert.Equal(t, RawIssueMinimum(rawIssue), finalizedIssue.Minimum)
+		assert.Equal(t, RawIssueMaximum(rawIssue), finalizedIssue.Maximum)
+		assert.Equal(t, RawIssueInclusive(rawIssue), finalizedIssue.Inclusive)
+		assert.Equal(t, RawIssueOrigin(rawIssue), finalizedIssue.Origin)
 
 		// Check type-specific accessors work on finalized issue
-		expected, ok := GetIssueExpected(finalizedIssue)
+		expected, ok := IssueExpected(finalizedIssue)
 		require.True(t, ok)
 		assert.Equal(t, core.ZodTypeString, expected)
 
-		received, ok := GetIssueReceived(finalizedIssue)
+		received, ok := IssueReceived(finalizedIssue)
 		require.True(t, ok)
 		assert.Equal(t, core.ZodTypeNumber, received)
 	})
@@ -433,12 +433,12 @@ func TestAccessorIntegration(t *testing.T) {
 		formatIssue := NewRawIssue(core.InvalidFormat, "invalid@", WithFormat("email"))
 
 		// Verify accessors work correctly
-		assert.Equal(t, "string", GetRawIssueExpected(invalidTypeIssue))
+		assert.Equal(t, "string", RawIssueExpected(invalidTypeIssue))
 
-		assert.Equal(t, "number", GetRawIssueOrigin(tooBigIssue))
-		assert.Equal(t, 100, GetRawIssueMaximum(tooBigIssue))
-		assert.True(t, GetRawIssueInclusive(tooBigIssue))
+		assert.Equal(t, "number", RawIssueOrigin(tooBigIssue))
+		assert.Equal(t, 100, RawIssueMaximum(tooBigIssue))
+		assert.True(t, RawIssueInclusive(tooBigIssue))
 
-		assert.Equal(t, "email", GetRawIssueFormat(formatIssue))
+		assert.Equal(t, "email", RawIssueFormat(formatIssue))
 	})
 }

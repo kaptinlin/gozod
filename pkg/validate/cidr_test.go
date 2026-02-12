@@ -1,10 +1,12 @@
-package validate
+package validate_test
 
 import (
 	"testing"
+
+	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-func TestCIDRValidation(t *testing.T) {
+func TestCIDR(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
@@ -25,8 +27,8 @@ func TestCIDRValidation(t *testing.T) {
 		{"no slash", "192.168.1.0", 0, false},
 		{"empty string", "", 0, false},
 		{"invalid ip", "300.168.1.0/24", 0, false},
-		{"invalid prefix", "192.168.1.0/33", 4, false},  // IPv4 max prefix is 32
-		{"invalid prefix ipv6", "fe80::/129", 6, false}, // IPv6 max prefix is 128
+		{"invalid prefix", "192.168.1.0/33", 4, false},
+		{"invalid prefix ipv6", "fe80::/129", 6, false},
 
 		// Version mismatch
 		{"ipv4 as ipv6", "192.168.1.0/24", 6, false},
@@ -39,28 +41,26 @@ func TestCIDRValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidateCIDR(tt.input, tt.version)
+			got := validate.CIDR(tt.input, tt.version)
 			if got != tt.want {
-				t.Errorf("ValidateCIDR(%q, %d) = %v, want %v", tt.input, tt.version, got, tt.want)
+				t.Errorf("CIDR(%q, %d) = %v, want %v", tt.input, tt.version, got, tt.want)
 			}
 		})
 	}
 }
 
 func TestCIDRv4v6Wrappers(t *testing.T) {
-	// Test CIDRv4 wrapper
-	if !CIDRv4("192.168.1.0/24") {
+	if !validate.CIDRv4("192.168.1.0/24") {
 		t.Error("CIDRv4 should return true for valid IPv4 CIDR")
 	}
-	if CIDRv4("fe80::/64") {
+	if validate.CIDRv4("fe80::/64") {
 		t.Error("CIDRv4 should return false for IPv6 CIDR")
 	}
 
-	// Test CIDRv6 wrapper
-	if !CIDRv6("fe80::/64") {
+	if !validate.CIDRv6("fe80::/64") {
 		t.Error("CIDRv6 should return true for valid IPv6 CIDR")
 	}
-	if CIDRv6("192.168.1.0/24") {
+	if validate.CIDRv6("192.168.1.0/24") {
 		t.Error("CIDRv6 should return false for IPv4 CIDR")
 	}
 }

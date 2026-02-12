@@ -617,7 +617,7 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 	}
 
 	// Use unified parameter handling
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](wrapper, customParams)
 	newInternals := z.internals.Clone()
@@ -631,7 +631,7 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 // Schemas with refinements cannot use Pick/Omit (Zod v4 compatible).
 func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject[T, R] {
 	// Use unified parameter handling
-	param := utils.GetFirstParam(params...)
+	param := utils.FirstParam(params...)
 	customParams := utils.NormalizeCustomParams(param)
 	check := checks.NewCustom[any](fn, customParams)
 	newInternals := z.internals.Clone()
