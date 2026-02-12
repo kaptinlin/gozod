@@ -7,31 +7,21 @@ import (
 	"github.com/kaptinlin/gozod/internal/checks"
 )
 
-// =============================================================================
-// TYPE CONSTRAINTS
-// =============================================================================
-
 // EmailConstraint restricts values to string or *string.
 type EmailConstraint interface {
 	string | *string
 }
 
-// =============================================================================
-// TYPE DEFINITION
-// =============================================================================
-
 // ZodEmail validates strings as email addresses.
 // String modifiers (Min, Max, Regex, etc.) and Pipe/Transform are promoted
 // from the embedded *ZodString[T].
-type ZodEmail[T EmailConstraint] struct{ *ZodString[T] }
+type ZodEmail[T EmailConstraint] struct {
+	*ZodString[T]
+}
 
 func newEmail[T EmailConstraint](s *ZodString[T]) *ZodEmail[T] {
 	return &ZodEmail[T]{s}
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // StrictParse validates input with compile-time type safety.
 func (z *ZodEmail[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
@@ -40,16 +30,12 @@ func (z *ZodEmail[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error)
 
 // MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodEmail[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	r, err := z.StrictParse(input, ctx...)
+	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return r
+	return result
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional returns a new schema that accepts nil values.
 func (z *ZodEmail[T]) Optional() *ZodEmail[*string] {
@@ -65,10 +51,6 @@ func (z *ZodEmail[T]) Nilable() *ZodEmail[*string] {
 func (z *ZodEmail[T]) Nullish() *ZodEmail[*string] {
 	return newEmail(z.ZodString.Nullish())
 }
-
-// =============================================================================
-// PATTERN METHODS
-// =============================================================================
 
 // HTML5 switches to the HTML5 email pattern.
 func (z *ZodEmail[T]) HTML5(params ...any) *ZodEmail[T] {
@@ -90,10 +72,6 @@ func (z *ZodEmail[T]) Browser(params ...any) *ZodEmail[T] {
 	return z.withEmailPattern(checks.BrowserEmail(params...))
 }
 
-// =============================================================================
-// CONSTRUCTORS
-// =============================================================================
-
 // Email creates a string email validation schema.
 func Email(params ...any) *ZodEmail[string] {
 	return EmailTyped[string](params...)
@@ -104,8 +82,7 @@ func EmailPtr(params ...any) *ZodEmail[*string] {
 	return EmailTyped[*string](params...)
 }
 
-// EmailTyped creates an email validation schema with the given
-// type constraint.
+// EmailTyped creates an email validation schema with the given type constraint.
 func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 	base := StringTyped[T](params...)
 
@@ -119,14 +96,10 @@ func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 		check = checks.Email(params...)
 	}
 
-	in := base.Internals().Clone()
-	in.AddCheck(check)
-	return newEmail(base.withInternals(in))
+	internals := base.Internals().Clone()
+	internals.AddCheck(check)
+	return newEmail(base.withInternals(internals))
 }
-
-// =============================================================================
-// INTERNAL HELPERS
-// =============================================================================
 
 // removeEmailChecks returns cs with all "email" checks filtered out.
 func removeEmailChecks(cs []core.ZodCheck) []core.ZodCheck {
@@ -142,8 +115,8 @@ func removeEmailChecks(cs []core.ZodCheck) []core.ZodCheck {
 
 // withEmailPattern replaces existing email checks with check.
 func (z *ZodEmail[T]) withEmailPattern(check core.ZodCheck) *ZodEmail[T] {
-	in := z.Internals().Clone()
-	in.Checks = removeEmailChecks(in.Checks)
-	in.AddCheck(check)
-	return newEmail(z.withInternals(in))
+	internals := z.Internals().Clone()
+	internals.Checks = removeEmailChecks(internals.Checks)
+	internals.AddCheck(check)
+	return newEmail(z.withInternals(internals))
 }

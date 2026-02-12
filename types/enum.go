@@ -21,7 +21,7 @@ type ZodEnumDef[T comparable] struct {
 	Entries map[string]T
 }
 
-// ZodEnumInternals contains enum validator internal state.
+// ZodEnumInternals contains the internal state for enum validators.
 type ZodEnumInternals[T comparable] struct {
 	core.ZodTypeInternals
 	Def     *ZodEnumDef[T]
@@ -30,7 +30,8 @@ type ZodEnumInternals[T comparable] struct {
 }
 
 // ZodEnum represents a type-safe enum validation schema.
-// T is the base comparable type, R is the constraint type (T or *T).
+// The type parameter T is the base comparable type, and R is the constraint
+// type (either T or *T).
 type ZodEnum[T comparable, R any] struct {
 	internals *ZodEnumInternals[T]
 }
@@ -115,8 +116,9 @@ func (z *ZodEnum[T, R]) Optional() *ZodEnum[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// ExactOptional accepts absent keys but rejects explicit nil values.
-// Unlike Optional, ExactOptional only accepts absent keys in object fields.
+// ExactOptional returns a schema that accepts absent keys but rejects explicit
+// nil values. Unlike Optional, ExactOptional only accepts absent keys in object
+// fields.
 func (z *ZodEnum[T, R]) ExactOptional() *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	in.SetExactOptional(true)
@@ -138,14 +140,16 @@ func (z *ZodEnum[T, R]) Nullish() *ZodEnum[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a fallback value returned when input is nil (short-circuits validation).
+// Default sets a fallback value returned when input is nil. This short-circuits
+// validation and returns the default value immediately.
 func (z *ZodEnum[T, R]) Default(v T) *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
+// DefaultFunc sets a fallback function called when input is nil. This
+// short-circuits validation and returns the default value immediately.
 func (z *ZodEnum[T, R]) DefaultFunc(fn func() T) *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -154,7 +158,8 @@ func (z *ZodEnum[T, R]) DefaultFunc(fn func() T) *ZodEnum[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault sets a fallback value that goes through the full validation pipeline.
+// Prefault sets a fallback value that goes through the full validation
+// pipeline when input is nil.
 func (z *ZodEnum[T, R]) Prefault(v T) *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	var zero R
@@ -167,7 +172,8 @@ func (z *ZodEnum[T, R]) Prefault(v T) *ZodEnum[T, R] {
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
+// PrefaultFunc sets a fallback function that goes through the full validation
+// pipeline when input is nil.
 func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -222,8 +228,8 @@ func (z *ZodEnum[T, R]) Options() []T {
 	return values
 }
 
-// Extract creates a sub-enum containing only the specified keys.
-// Non-existent keys are silently ignored.
+// Extract creates a sub-enum containing only the specified keys. Non-existent
+// keys are silently ignored.
 func (z *ZodEnum[T, R]) Extract(keys []string, params ...any) *ZodEnum[T, R] {
 	newEntries := make(map[string]T)
 	for _, key := range keys {
@@ -234,8 +240,8 @@ func (z *ZodEnum[T, R]) Extract(keys []string, params ...any) *ZodEnum[T, R] {
 	return EnumMapTyped[T, R](newEntries, params...)
 }
 
-// Exclude creates a sub-enum without the specified keys.
-// Non-existent keys are silently ignored.
+// Exclude creates a sub-enum without the specified keys. Non-existent keys
+// are silently ignored.
 func (z *ZodEnum[T, R]) Exclude(keys []string, params ...any) *ZodEnum[T, R] {
 	excludeSet := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
@@ -275,8 +281,8 @@ func (z *ZodEnum[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies type-safe validation matching the schema's output type R.
-// The callback receives nil for *T schemas when the value is nil (Zod v4 semantics).
+// Refine applies type-safe validation matching the schema's output type R. The
+// callback receives nil for *T schemas when the value is nil (Zod v4 semantics).
 func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 	wrapper := func(v any) bool {
 		var zero R
@@ -351,8 +357,13 @@ func (z *ZodEnum[T, R]) With(fn func(value R, payload *core.ParsePayload), param
 // VALIDATION METHODS
 // =============================================================================
 
-// validateEnum validates the enum value and applies checks, collecting all issues.
-func (z *ZodEnum[T, R]) validateEnum(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
+// validateEnum validates the enum value and applies checks, collecting all
+// issues encountered during validation.
+func (z *ZodEnum[T, R]) validateEnum(
+	value T,
+	chks []core.ZodCheck,
+	ctx *core.ParseContext,
+) (T, error) {
 	var collected []core.ZodRawIssue
 
 	if _, ok := z.internals.Values[value]; !ok {
@@ -361,10 +372,14 @@ func (z *ZodEnum[T, R]) validateEnum(value T, chks []core.ZodCheck, ctx *core.Pa
 			opts = append(opts, v)
 		}
 		collected = append(collected, issues.CreateIssue(
-			core.InvalidValue, "Invalid enum value", map[string]any{
+			core.InvalidValue,
+			"Invalid enum value",
+			map[string]any{
 				"received": fmt.Sprintf("%v", value),
 				"options":  opts,
-			}, value))
+			},
+			value,
+		))
 	}
 
 	if len(chks) > 0 {
@@ -445,7 +460,8 @@ func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] 
 	}}
 }
 
-// CloneFrom copies configuration from another schema, preserving original checks.
+// CloneFrom copies configuration from another schema while preserving the
+// original checks.
 func (z *ZodEnum[T, R]) CloneFrom(source any) {
 	if src, ok := source.(*ZodEnum[T, R]); ok {
 		orig := z.internals.Checks
@@ -510,7 +526,8 @@ func newZodEnumFromDef[T comparable, R any](def *ZodEnumDef[T]) *ZodEnum[T, R] {
 // CONSTRUCTORS AND FACTORY FUNCTIONS
 // =============================================================================
 
-// Enum creates an enum schema from values with type inference.
+// Enum creates an enum schema from the provided values with automatic type
+// inference.
 func Enum[T comparable](values ...T) *ZodEnum[T, T] {
 	return EnumSlice(values)
 }

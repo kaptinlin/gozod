@@ -26,8 +26,8 @@ type ZodFileInternals struct {
 	Def *ZodFileDef
 }
 
-// ZodFile validates file inputs (*os.File, *multipart.FileHeader, multipart.File)
-// with constraint types T (base) and R (output).
+// ZodFile validates file inputs with constraint types T (base) and R (output).
+// Supported types: *os.File, *multipart.FileHeader, multipart.File.
 type ZodFile[T any, R any] struct {
 	internals *ZodFileInternals
 }
@@ -51,7 +51,7 @@ func (z *ZodFile[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// Parse validates input and returns a value matching the generic type R.
+// Parse validates input and returns a value of type R.
 func (z *ZodFile[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	result, err := engine.ParseComplex(
 		input,
@@ -116,7 +116,7 @@ func (z *ZodFile[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, err
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional returns a new schema that accepts nil, with pointer constraint.
+// Optional returns a new schema that accepts nil with pointer constraint.
 func (z *ZodFile[T, R]) Optional() *ZodFile[T, *T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -145,7 +145,7 @@ func (z *ZodFile[T, R]) Nullish() *ZodFile[T, *T] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a fallback value returned when input is nil (short-circuits validation).
+// Default sets a fallback value when input is nil (short-circuits validation).
 func (z *ZodFile[T, R]) Default(v T) *ZodFile[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
@@ -224,7 +224,7 @@ func (z *ZodFile[T, R]) Mime(mimeTypes []string, params ...any) *ZodFile[T, R] {
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine applies a custom validation function matching the schema's output type R.
+// Refine applies a custom validation function for output type R.
 func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 	wrapper := func(v any) bool {
 		if v == nil {
@@ -246,7 +246,7 @@ func (z *ZodFile[T, R]) Refine(fn func(R) bool, params ...any) *ZodFile[T, R] {
 	return z.withCheck(check)
 }
 
-// RefineAny applies a custom validation function that receives the raw value.
+// RefineAny applies a custom validation function receiving the raw value.
 func (z *ZodFile[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodFile[T, R] {
 	sp := utils.NormalizeParams(params...)
 	var msg any
@@ -368,8 +368,8 @@ func (z *ZodFile[T, R]) CloneFrom(source any) {
 // TYPE CONVERSION HELPERS
 // =============================================================================
 
-// convertFileResult converts engine output to the constraint type R,
-// handling pointer wrapping for optional/nilable schemas.
+// convertFileResult converts engine output to constraint type R.
+// It handles pointer wrapping for optional/nilable schemas.
 func convertFileResult[T any, R any](result any) (R, error) {
 	switch v := result.(type) {
 	case *any:
@@ -439,7 +439,8 @@ func extractFileValue[T any, R any](value R) T {
 	return zero
 }
 
-// convertToFileType converts any value to constraint type R with success flag.
+// convertToFileType converts any value to constraint type R.
+// Returns the converted value and a success flag.
 func convertToFileType[T any, R any](v any) (R, bool) {
 	if typedValue, ok := v.(R); ok {
 		return typedValue, true
@@ -470,6 +471,7 @@ func convertToFileType[T any, R any](v any) (R, bool) {
 // =============================================================================
 
 // extractFile recognizes supported file types from input.
+// Supported types: *os.File, *multipart.FileHeader, multipart.File.
 func extractFile(v any) (any, bool) {
 	switch file := v.(type) {
 	case *os.File:
@@ -503,7 +505,7 @@ func (z *ZodFile[T, R]) extractFilePtrForEngine(input any) (*any, bool) {
 
 // validateFileForEngine validates a file value against checks.
 func (z *ZodFile[T, R]) validateFileForEngine(value any, cs []core.ZodCheck, ctx *core.ParseContext) (any, error) {
-	return engine.ApplyChecks[any](value, cs, ctx)
+	return engine.ApplyChecks(value, cs, ctx)
 }
 
 // =============================================================================
@@ -535,7 +537,7 @@ func newZodFileFromDef[T any, R any](def *ZodFileDef) *ZodFile[T, R] {
 	return schema
 }
 
-// newFileDef creates a ZodFileDef from optional params.
+// newFileDef creates a ZodFileDef from optional parameters.
 func newFileDef(params ...any) *ZodFileDef {
 	sp := utils.NormalizeParams(utils.FirstParam(params...))
 

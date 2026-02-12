@@ -12,17 +12,20 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
+// Package-level errors for array validation.
 var (
 	errNilArrayPtr = errors.New("nil pointer to array")
 	errNilPtr      = errors.New("nil pointer")
 	errNotArray    = errors.New("expected array or slice")
 )
 
+// Type definitions
+
 // ZodArrayDef holds the schema definition for fixed-length array validation.
 type ZodArrayDef struct {
 	core.ZodTypeDef
-	Items []any // element schemas per position
-	Rest  any   // rest schema for variadic elements (nil if none)
+	Items []any // Element schemas per position.
+	Rest  any   // Rest schema for variadic elements (nil if none).
 }
 
 // ZodArrayInternals contains the internal state for an array schema.
@@ -39,6 +42,8 @@ type ZodArray[T any, R any] struct {
 	internals *ZodArrayInternals
 }
 
+// Core interface methods
+
 // Internals returns the internal state for framework usage.
 func (z *ZodArray[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
@@ -53,6 +58,8 @@ func (z *ZodArray[T, R]) IsOptional() bool {
 func (z *ZodArray[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
+
+// Parsing methods
 
 // Parse validates input and returns the parsed array value.
 func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
@@ -95,7 +102,7 @@ func (z *ZodArray[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 	}
 }
 
-// MustParse validates the input value and panics on failure
+// MustParse validates the input value and panics on failure.
 func (z *ZodArray[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 	result, err := z.Parse(input, ctx...)
 	if err != nil {
@@ -144,6 +151,8 @@ func (z *ZodArray[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R {
 func (z *ZodArray[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
+
+// Modifier methods
 
 // Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodArray[T, R]) Optional() *ZodArray[T, *T] {
@@ -224,6 +233,8 @@ func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
 	return z.withInternals(in)
 }
 
+// Metadata methods
+
 // Meta stores metadata for this array schema in the global registry.
 func (z *ZodArray[T, R]) Meta(meta core.GlobalMeta) *ZodArray[T, R] {
 	core.GlobalRegistry.Add(z, meta)
@@ -245,6 +256,8 @@ func (z *ZodArray[T, R]) Describe(description string) *ZodArray[T, R] {
 
 	return clone
 }
+
+// Validation constraint methods
 
 // Min adds a minimum element count constraint.
 func (z *ZodArray[T, R]) Min(n int, args ...any) *ZodArray[T, R] {
@@ -272,6 +285,8 @@ func (z *ZodArray[T, R]) NonEmpty(args ...any) *ZodArray[T, R] {
 	return z.Min(1, utils.FirstParam(args...))
 }
 
+// Schema accessor methods
+
 // Element returns the schema at the given index, or nil if out of range.
 func (z *ZodArray[T, R]) Element(index int) any {
 	if index >= 0 && index < len(z.internals.Items) {
@@ -291,6 +306,8 @@ func (z *ZodArray[T, R]) ElementSchemas() []any {
 func (z *ZodArray[T, R]) RestSchema() any {
 	return z.internals.Rest
 }
+
+// Transformation and composition methods
 
 // Transform applies a transformation function to the parsed value.
 func (z *ZodArray[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
@@ -382,24 +399,30 @@ func (z *ZodArray[T, R]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
 
+// Internal helper methods
+
 // withPtrInternals creates a new ZodArray with pointer constraint *T.
 func (z *ZodArray[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodArray[T, *T] {
-	return &ZodArray[T, *T]{internals: &ZodArrayInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Items:            z.internals.Items,
-		Rest:             z.internals.Rest,
-	}}
+	return &ZodArray[T, *T]{
+		internals: &ZodArrayInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Items:            z.internals.Items,
+			Rest:             z.internals.Rest,
+		},
+	}
 }
 
 // withInternals creates a new ZodArray keeping the constraint type R.
 func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R] {
-	return &ZodArray[T, R]{internals: &ZodArrayInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		Items:            z.internals.Items,
-		Rest:             z.internals.Rest,
-	}}
+	return &ZodArray[T, R]{
+		internals: &ZodArrayInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+			Items:            z.internals.Items,
+			Rest:             z.internals.Rest,
+		},
+	}
 }
 
 // CloneFrom copies configuration from another schema.
@@ -411,14 +434,16 @@ func (z *ZodArray[T, R]) CloneFrom(source any) {
 	}
 }
 
+// Type conversion helpers
+
 // toConstraint converts []any to the constraint type R.
 func toConstraint[T any, R any](v []any) R {
 	if r, ok := any(v).(R); ok {
 		return r
 	}
 
-	// Pointer types (e.g. *[]any): wrap in pointer.
 	var zero R
+	// Pointer types (e.g., *[]any): wrap in pointer.
 	if reflect.TypeFor[R]().Kind() == reflect.Pointer {
 		if r, ok := any(&v).(R); ok {
 			return r
@@ -460,8 +485,8 @@ func toArrayType[T any, R any](value any) (R, bool) {
 		}
 	}
 
-	// Convert to target constraint type R.
 	rt := reflect.TypeFor[R]()
+	// Convert to target constraint type R.
 	//nolint:exhaustive
 	switch rt.Kind() {
 	case reflect.Slice:
@@ -484,6 +509,8 @@ func baseValue[T any, R any](value R) T {
 	}
 	return any(value).(T)
 }
+
+// Extraction and validation methods
 
 // extract converts input to []any.
 func (z *ZodArray[T, R]) extract(value any) ([]any, error) {
@@ -597,6 +624,8 @@ func parseElement(value, schema any) error {
 
 	return nil
 }
+
+// Constructor functions
 
 // newZodArrayFromDef constructs a new ZodArray from a definition.
 func newZodArrayFromDef[T any, R any](def *ZodArrayDef) *ZodArray[T, R] {

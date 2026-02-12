@@ -12,7 +12,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Sentinel errors for discriminated union construction and validation.
 var (
 	ErrSchemaIsNil                = errors.New("schema is nil")
 	ErrSchemaInternalsIsNil       = errors.New("schema internals is nil")
@@ -78,22 +77,21 @@ func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext
 		return zero, nil
 	}
 
-	if input == nil && (z.internals.DefaultValue != nil || z.internals.DefaultFunc != nil) {
+	if input == nil {
 		if z.internals.DefaultFunc != nil {
 			input = z.internals.DefaultFunc()
-		} else {
+		} else if z.internals.DefaultValue != nil {
 			input = z.internals.DefaultValue
 		}
 	}
 
 	m, ok := input.(map[string]any)
 	if !ok {
-		if z.internals.PrefaultValue != nil || z.internals.PrefaultFunc != nil {
-			pv := z.internals.PrefaultValue
-			if z.internals.PrefaultFunc != nil {
-				pv = z.internals.PrefaultFunc()
-			}
-			return z.Parse(pv, pctx)
+		if z.internals.PrefaultFunc != nil {
+			return z.Parse(z.internals.PrefaultFunc(), pctx)
+		}
+		if z.internals.PrefaultValue != nil {
+			return z.Parse(z.internals.PrefaultValue, pctx)
 		}
 		return zero, issues.CreateInvalidTypeError(core.ZodTypeObject, input, pctx)
 	}
@@ -124,16 +122,16 @@ func (z *ZodDiscriminatedUnion[T, R]) parseVariant(m map[string]any, dv any, pct
 		return target.ParseAny(m, pctx)
 	}
 
-	var errs []error
+	errs := make([]error, 0, len(z.internals.Options))
 	for _, opt := range z.internals.Options {
 		if opt == nil {
 			continue
 		}
-		if r, e := opt.ParseAny(m, pctx); e == nil {
+		r, e := opt.ParseAny(m, pctx)
+		if e == nil {
 			return r, nil
-		} else {
-			errs = append(errs, e)
 		}
+		errs = append(errs, e)
 	}
 	return nil, issues.CreateInvalidUnionError(errs, m, pctx)
 }
@@ -152,10 +150,11 @@ func (z *ZodDiscriminatedUnion[T, R]) StrictParse(input T, ctx ...*core.ParseCon
 	cv, ok := convertToDiscriminatedUnionConstraintValue[T, R](input)
 	if !ok {
 		var zero R
-		if len(ctx) == 0 {
-			ctx = []*core.ParseContext{core.NewParseContext()}
+		pctx := core.NewParseContext()
+		if len(ctx) > 0 && ctx[0] != nil {
+			pctx = ctx[0]
 		}
-		return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", input), "discriminated union constraint type", any(input), ctx[0])
+		return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", input), "discriminated union constraint type", any(input), pctx)
 	}
 	return z.Parse(cv, ctx...)
 }
@@ -334,30 +333,26 @@ func (z *ZodDiscriminatedUnion[T, R]) CloneFrom(source any) {
 // convertToDiscriminatedUnionConstraintType converts a value to constraint type R.
 func convertToDiscriminatedUnionConstraintType[T any, R any](v any) R {
 	var zero R
-	switch any(zero).(type) {
-	case *any:
+	if _, ok := any(zero).(*any); ok {
 		if v != nil {
 			cp := v
 			return any(&cp).(R)
 		}
 		return any((*any)(nil)).(R)
-	default:
-		return any(v).(R) //nolint:unconvert // Required for generic type constraint conversion
 	}
+	return any(v).(R) //nolint:unconvert // Required for generic type constraint conversion
 }
 
 // extractDiscriminatedUnionValue extracts base type T from constraint type R.
 func extractDiscriminatedUnionValue[T any, R any](val R) T {
-	switch v := any(val).(type) {
-	case *any:
+	if v, ok := any(val).(*any); ok {
 		if v != nil {
 			return any(*v).(T) //nolint:unconvert // Required for generic type constraint conversion
 		}
 		var zero T
 		return zero
-	default:
-		return any(val).(T)
 	}
+	return any(val).(T)
 }
 
 // convertToDiscriminatedUnionConstraintValue converts any value to constraint type R.
@@ -381,13 +376,16 @@ func discValues(schema core.ZodSchema, field string) ([]any, error) {
 	if schema == nil {
 		return nil, ErrSchemaIsNil
 	}
+
 	in := schema.Internals()
 	if in == nil {
 		return nil, ErrSchemaInternalsIsNil
 	}
+
 	if vals := extractDiscVals(in); len(vals) > 0 {
 		return vals, nil
 	}
+
 	return discValuesFromAny(schema, field)
 }
 
@@ -460,23 +458,25 @@ func extractDiscVals(in *core.ZodTypeInternals) []any {
 		}
 	}
 
-	var vals []any
-	//nolint:exhaustive // Only interested in Literal and Enum types here
+	// Only interested in Literal and Enum types here
+	//nolint:exhaustive
 	switch in.Type {
 	case core.ZodTypeLiteral:
 		if lv, exists := in.Bag["literal"]; exists {
-			vals = append(vals, lv)
+			return []any{lv}
 		}
 	case core.ZodTypeEnum:
 		if ev, exists := in.Bag["enum"]; exists {
 			if em, ok := ev.(map[any]struct{}); ok {
+				enumVals := make([]any, 0, len(em))
 				for v := range em {
-					vals = append(vals, v)
+					enumVals = append(enumVals, v)
 				}
+				return enumVals
 			}
 		}
 	}
-	return vals
+	return nil
 }
 
 // buildDiscriminatorMap builds the discriminator-to-schema mapping.

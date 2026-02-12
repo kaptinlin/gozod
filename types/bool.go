@@ -29,6 +29,46 @@ type ZodBool[T BoolConstraint] struct {
 	internals *ZodBoolInternals
 }
 
+// Bool creates a bool validation schema.
+func Bool(params ...any) *ZodBool[bool] {
+	return BoolTyped[bool](params...)
+}
+
+// BoolPtr creates a *bool validation schema.
+func BoolPtr(params ...any) *ZodBool[*bool] {
+	return BoolTyped[*bool](params...)
+}
+
+// BoolTyped is the generic constructor for boolean schemas.
+func BoolTyped[T BoolConstraint](params ...any) *ZodBool[T] {
+	sp := utils.NormalizeParams(params...)
+
+	def := &ZodBoolDef{
+		ZodTypeDef: core.ZodTypeDef{
+			Type:   core.ZodTypeBool,
+			Checks: []core.ZodCheck{},
+		},
+	}
+
+	utils.ApplySchemaParams(&def.ZodTypeDef, sp)
+
+	return newZodBoolFromDef[T](def)
+}
+
+// CoercedBool creates a coerced bool schema that converts input.
+func CoercedBool(args ...any) *ZodBool[bool] {
+	s := Bool(args...)
+	s.internals.SetCoerce(true)
+	return s
+}
+
+// CoercedBoolPtr creates a coerced *bool schema that converts input.
+func CoercedBoolPtr(args ...any) *ZodBool[*bool] {
+	s := BoolPtr(args...)
+	s.internals.SetCoerce(true)
+	return s
+}
+
 // Internals returns the internal state of the schema.
 func (z *ZodBool[T]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
@@ -157,6 +197,19 @@ func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
 	return z.withInternals(in)
 }
 
+// NonOptional removes the optional flag, returning a bool constraint.
+func (z *ZodBool[T]) NonOptional() *ZodBool[bool] {
+	in := z.internals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+	return &ZodBool[bool]{
+		internals: &ZodBoolInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
+}
+
 // Meta stores metadata in the global registry.
 func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
 	core.GlobalRegistry.Add(z, meta)
@@ -205,47 +258,6 @@ func (z *ZodBool[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	return core.NewZodPipe[T, any](z, target, fn)
 }
 
-// convertToBoolType converts only bool values to the target bool type T.
-func convertToBoolType[T BoolConstraint](v any) (T, bool) {
-	var zero T
-
-	if v == nil {
-		switch any(zero).(type) {
-		case *bool:
-			return zero, true
-		default:
-			return zero, false
-		}
-	}
-
-	var boolValue bool
-	var isValid bool
-
-	switch val := v.(type) {
-	case bool:
-		boolValue, isValid = val, true
-	case *bool:
-		if val != nil {
-			boolValue, isValid = *val, true
-		}
-	default:
-		return zero, false
-	}
-
-	if !isValid {
-		return zero, false
-	}
-
-	switch any(zero).(type) {
-	case bool:
-		return any(boolValue).(T), true
-	case *bool:
-		return any(&boolValue).(T), true
-	default:
-		return zero, false
-	}
-}
-
 // Refine applies a custom validation function matching the schema's output type T.
 func (z *ZodBool[T]) Refine(fn func(T) bool, params ...any) *ZodBool[T] {
 	wrapper := func(v any) bool {
@@ -292,6 +304,31 @@ func (z *ZodBool[T]) RefineAny(fn func(any) bool, params ...any) *ZodBool[T] {
 	}
 	check := checks.NewCustom[any](fn, msg)
 	return z.withCheck(check)
+}
+
+// Check adds a custom validation function that can push multiple issues.
+func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodBool[T] {
+	wrapper := func(payload *core.ParsePayload) {
+		if val, ok := payload.Value().(T); ok {
+			fn(val, payload)
+			return
+		}
+
+		var zero T
+		if _, ok := any(zero).(*bool); ok {
+			if b, ok := payload.Value().(bool); ok {
+				bCopy := b
+				fn(any(&bCopy).(T), payload)
+			}
+		}
+	}
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
+	return z.withCheck(check)
+}
+
+// With is an alias for Check (Zod v4 API compatibility).
+func (z *ZodBool[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodBool[T] {
+	return z.Check(fn, params...)
 }
 
 // And creates an intersection with another schema.
@@ -352,6 +389,47 @@ func extractBool[T BoolConstraint](value T) bool {
 	return any(value).(bool)
 }
 
+// convertToBoolType converts only bool values to the target bool type T.
+func convertToBoolType[T BoolConstraint](v any) (T, bool) {
+	var zero T
+
+	if v == nil {
+		switch any(zero).(type) {
+		case *bool:
+			return zero, true
+		default:
+			return zero, false
+		}
+	}
+
+	var boolValue bool
+	var isValid bool
+
+	switch val := v.(type) {
+	case bool:
+		boolValue, isValid = val, true
+	case *bool:
+		if val != nil {
+			boolValue, isValid = *val, true
+		}
+	default:
+		return zero, false
+	}
+
+	if !isValid {
+		return zero, false
+	}
+
+	switch any(zero).(type) {
+	case bool:
+		return any(boolValue).(T), true
+	case *bool:
+		return any(&boolValue).(T), true
+	default:
+		return zero, false
+	}
+}
+
 // newZodBoolFromDef constructs a new ZodBool from a definition.
 func newZodBoolFromDef[T BoolConstraint](def *ZodBoolDef) *ZodBool[T] {
 	in := &ZodBoolInternals{
@@ -374,82 +452,4 @@ func newZodBoolFromDef[T BoolConstraint](def *ZodBoolDef) *ZodBool[T] {
 	}
 
 	return &ZodBool[T]{internals: in}
-}
-
-// Bool creates a bool validation schema.
-func Bool(params ...any) *ZodBool[bool] {
-	return BoolTyped[bool](params...)
-}
-
-// BoolPtr creates a *bool validation schema.
-func BoolPtr(params ...any) *ZodBool[*bool] {
-	return BoolTyped[*bool](params...)
-}
-
-// BoolTyped is the generic constructor for boolean schemas.
-func BoolTyped[T BoolConstraint](params ...any) *ZodBool[T] {
-	sp := utils.NormalizeParams(params...)
-
-	def := &ZodBoolDef{
-		ZodTypeDef: core.ZodTypeDef{
-			Type:   core.ZodTypeBool,
-			Checks: []core.ZodCheck{},
-		},
-	}
-
-	utils.ApplySchemaParams(&def.ZodTypeDef, sp)
-
-	return newZodBoolFromDef[T](def)
-}
-
-// CoercedBool creates a coerced bool schema that converts input.
-func CoercedBool(args ...any) *ZodBool[bool] {
-	s := Bool(args...)
-	s.internals.SetCoerce(true)
-	return s
-}
-
-// CoercedBoolPtr creates a coerced *bool schema that converts input.
-func CoercedBoolPtr(args ...any) *ZodBool[*bool] {
-	s := BoolPtr(args...)
-	s.internals.SetCoerce(true)
-	return s
-}
-
-// Check adds a custom validation function that can push multiple issues.
-func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodBool[T] {
-	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.Value().(T); ok {
-			fn(val, payload)
-			return
-		}
-
-		var zero T
-		if _, ok := any(zero).(*bool); ok {
-			if b, ok := payload.Value().(bool); ok {
-				bCopy := b
-				fn(any(&bCopy).(T), payload)
-			}
-		}
-	}
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	return z.withCheck(check)
-}
-
-// With is an alias for Check (Zod v4 API compatibility).
-func (z *ZodBool[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodBool[T] {
-	return z.Check(fn, params...)
-}
-
-// NonOptional removes the optional flag, returning a bool constraint.
-func (z *ZodBool[T]) NonOptional() *ZodBool[bool] {
-	in := z.internals.Clone()
-	in.SetOptional(false)
-	in.SetNonOptional(true)
-	return &ZodBool[bool]{
-		internals: &ZodBoolInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-		},
-	}
 }
