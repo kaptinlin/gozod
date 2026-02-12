@@ -1296,3 +1296,90 @@ func TestTime_Overwrite(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestTime_Check(t *testing.T) {
+	t.Run("check with payload access", func(t *testing.T) {
+		schema := Time().Check(func(v time.Time, payload *core.ParsePayload) {
+			if v.Year() < 2023 {
+				payload.AddIssue(core.ZodRawIssue{Message: "year must be >= 2023"})
+			}
+		})
+
+		valid := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.True(t, result.Equal(valid))
+
+		invalid := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+		_, err = schema.Parse(invalid)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "year must be >= 2023")
+	})
+
+	t.Run("check pointer type", func(t *testing.T) {
+		schema := TimePtr().Check(func(v *time.Time, payload *core.ParsePayload) {
+			if v != nil && v.Weekday() == time.Sunday {
+				payload.AddIssue(core.ZodRawIssue{Message: "no sundays"})
+			}
+		})
+
+		monday := time.Date(2023, 6, 12, 12, 0, 0, 0, time.UTC)
+		result, err := schema.Parse(monday)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.Equal(monday))
+
+		sunday := time.Date(2023, 6, 18, 12, 0, 0, 0, time.UTC)
+		_, err = schema.Parse(sunday)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no sundays")
+	})
+}
+
+func TestTime_With(t *testing.T) {
+	t.Run("with is alias for check", func(t *testing.T) {
+		schema := Time().With(func(v time.Time, payload *core.ParsePayload) {
+			if v.Hour() < 9 || v.Hour() >= 18 {
+				payload.AddIssue(core.ZodRawIssue{Message: "business hours only"})
+			}
+		})
+
+		valid := time.Date(2023, 6, 15, 10, 0, 0, 0, time.UTC)
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.True(t, result.Equal(valid))
+
+		invalid := time.Date(2023, 6, 15, 20, 0, 0, 0, time.UTC)
+		_, err = schema.Parse(invalid)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "business hours only")
+	})
+}
+
+func TestTime_NonOptional(t *testing.T) {
+	t.Run("removes optional flag", func(t *testing.T) {
+		optional := Time().Optional()
+		assert.True(t, optional.IsOptional())
+
+		required := optional.NonOptional()
+		assert.False(t, required.IsOptional())
+
+		valid := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
+		result, err := required.Parse(valid)
+		require.NoError(t, err)
+		assert.True(t, result.Equal(valid))
+
+		_, err = required.Parse(nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("returns time.Time constraint", func(t *testing.T) {
+		schema := TimePtr().Optional().NonOptional()
+
+		valid := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.IsType(t, time.Time{}, result)
+		assert.True(t, result.Equal(valid))
+	})
+}

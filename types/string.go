@@ -14,38 +14,26 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// =============================================================================
-// TYPE CONSTRAINTS
-// =============================================================================
-
 // StringConstraint restricts values to string or *string.
 type StringConstraint interface {
 	~string | ~*string
 }
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodStringDef defines the configuration for a string schema.
+// ZodStringDef holds the configuration for a string schema.
 type ZodStringDef struct {
 	core.ZodTypeDef
 }
 
-// ZodStringInternals contains string validator internal state.
+// ZodStringInternals holds string validator internal state.
 type ZodStringInternals struct {
 	core.ZodTypeInternals
 	Def *ZodStringDef
 }
 
-// ZodString represents a type-safe string validation schema.
+// ZodString is a type-safe string validation schema.
 type ZodString[T StringConstraint] struct {
 	internals *ZodStringInternals
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodString[T]) Internals() *core.ZodTypeInternals {
@@ -58,13 +46,13 @@ func (z *ZodString[T]) IsOptional() bool { return z.internals.IsOptional() }
 // IsNilable reports whether this schema accepts nil values.
 func (z *ZodString[T]) IsNilable() bool { return z.internals.IsNilable() }
 
-// Coerce converts input to string, implementing the Coercible interface.
+// Coerce converts input to string.
 func (z *ZodString[T]) Coerce(input any) (any, bool) {
 	result, err := coerce.ToString(input)
 	return result, err == nil
 }
 
-// Parse validates input and returns a value matching the generic type T.
+// Parse validates input and returns a value of type T.
 func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	return engine.ParsePrimitive[string, T](
 		input,
@@ -85,7 +73,7 @@ func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type T.
+// StrictParse requires exact type T for compile-time type safety.
 func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return engine.ParsePrimitiveStrict[string, T](
 		input,
@@ -96,7 +84,7 @@ func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error
 	)
 }
 
-// MustStrictParse provides compile-time type safety and panics on failure.
+// MustStrictParse requires exact type T and panics on failure.
 func (z *ZodString[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -114,24 +102,20 @@ func (z *ZodString[T]) MustParseAny(input any, ctx ...*core.ParseContext) any {
 	return result
 }
 
-// ParseAny validates input and returns any type for runtime interface usage.
+// ParseAny validates input and returns any for runtime interface usage.
 func (z *ZodString[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
 
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
-
-// Optional returns a new schema that accepts nil, with *string constraint.
+// Optional returns a new schema that accepts nil, with *string output.
 func (z *ZodString[T]) Optional() *ZodString[*string] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// ExactOptional accepts absent keys but rejects explicit nil values.
-// Unlike Optional, ExactOptional only accepts absent keys in object fields.
+// ExactOptional returns a new schema that accepts absent keys but rejects explicit nil.
+// Unlike Optional, it only accepts absent keys in object fields.
 func (z *ZodString[T]) ExactOptional() *ZodString[T] {
 	in := z.internals.Clone()
 	in.SetExactOptional(true)
@@ -145,7 +129,7 @@ func (z *ZodString[T]) Nilable() *ZodString[*string] {
 	return z.withPtrInternals(in)
 }
 
-// Nullish returns a new schema combining optional and nilable modifiers.
+// Nullish returns a new schema that combines optional and nilable modifiers.
 func (z *ZodString[T]) Nullish() *ZodString[*string] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
@@ -185,14 +169,10 @@ func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this schema in the global registry.
+// Meta attaches metadata to this schema via the global registry.
 func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
 	return z.withMeta(meta)
 }
-
-// =============================================================================
-// VALIDATION METHODS
-// =============================================================================
 
 // Min adds minimum length validation.
 func (z *ZodString[T]) Min(minLen int, params ...any) *ZodString[T] {
@@ -249,124 +229,87 @@ func (z *ZodString[T]) Email(params ...any) *ZodString[T] {
 	return z.withCheck(checks.Email(params...))
 }
 
-// MAC adds MAC address format validation with flexible parameter support.
-// Aligns with Zod TypeScript implementation using case-sensitive matching.
+// MAC adds MAC address format validation.
 //
-// Usage forms:
+// Accepts an optional delimiter string (":", "-", ".") or [validate.MACOptions].
+// Without arguments, defaults to colon delimiter.
 //
-//	MAC() - uses default colon delimiter ":"
-//	MAC("-") - uses specified delimiter
-//	MAC(validate.MACOptions{Delimiter: "."}) - full options
-//	MAC("invalid MAC address") - custom error message
-//
-// Examples:
-//
-//	z.String().MAC().Parse("00:1A:2B:3C:4D:5E") // valid with default ":"
-//	z.String().MAC("-").Parse("00-1a-2b-3c-4d-5e") // valid with "-"
-//	z.String().MAC(".").Parse("00.1A.2B.3C.4D.5E") // valid with "."
+//	MAC()                                     // default ":"
+//	MAC("-")                                  // dash delimiter
+//	MAC(validate.MACOptions{Delimiter: "."})  // full options
 func (z *ZodString[T]) MAC(params ...any) *ZodString[T] {
-	var check core.ZodCheck
-
-	// Parse parameters to support multiple forms
-	switch len(params) {
-	case 0:
-		// MAC() - use default
-		check = checks.MAC()
-	case 1:
-		// Check if first param is a delimiter string or MACOptions
-		switch v := params[0].(type) {
-		case string:
-			// Could be delimiter or error message
-			// If it's a single character or common delimiter, treat as delimiter
-			if len(v) == 1 || v == ":" || v == "-" || v == "." {
-				check = checks.MACWithDelimiter(v)
-			} else {
-				// Otherwise treat as error message with default delimiter
-				check = checks.MAC(v)
-			}
-		case validate.MACOptions:
-			// MAC(MACOptions{...})
-			check = checks.MACWithOptions(v)
-		default:
-			// Pass through to checks (for CheckParams, etc.)
-			check = checks.MAC(params...)
-		}
-	default:
-		// Multiple params - check if first is delimiter
-		if delim, ok := params[0].(string); ok && (len(delim) == 1 || delim == ":" || delim == "-" || delim == ".") {
-			// MAC("-", "error message") or MAC("-", CheckParams{...})
-			check = checks.MACWithDelimiter(delim, params[1:]...)
-		} else {
-			// Pass all params to checks
-			check = checks.MAC(params...)
-		}
+	if len(params) == 0 {
+		return z.withCheck(checks.MAC())
 	}
 
-	return z.withCheck(check)
+	// Single param: check for delimiter or MACOptions.
+	if len(params) == 1 {
+		switch v := params[0].(type) {
+		case string:
+			if isDelimiter(v) {
+				return z.withCheck(checks.MACWithDelimiter(v))
+			}
+			return z.withCheck(checks.MAC(v))
+		case validate.MACOptions:
+			return z.withCheck(checks.MACWithOptions(v))
+		}
+		return z.withCheck(checks.MAC(params...))
+	}
+
+	// Multiple params: first may be a delimiter followed by error/options.
+	if delim, ok := params[0].(string); ok && isDelimiter(delim) {
+		return z.withCheck(checks.MACWithDelimiter(delim, params[1:]...))
+	}
+	return z.withCheck(checks.MAC(params...))
 }
 
 // JWT adds JWT token format validation.
-// Supports validating the JWT structure and optionally checking the "alg" header.
 //
-// Usage forms:
+// Accepts an optional algorithm string ("HS256", "RS256", etc.) or [validate.JWTOptions].
 //
-//	JWT() - validates standard JWT format
-//	JWT("HS256") - validates format and requires "alg": "HS256" header
-//	JWT(validate.JWTOptions{Algorithm: "RS256"}) - full options
-//	JWT("invalid token") - custom error message
+//	JWT()                                        // standard format
+//	JWT("HS256")                                 // require specific algorithm
+//	JWT(validate.JWTOptions{Algorithm: "RS256"}) // full options
 func (z *ZodString[T]) JWT(params ...any) *ZodString[T] {
-	var check core.ZodCheck
-
-	switch len(params) {
-	case 0:
-		check = checks.JWT()
-	case 1:
-		switch v := params[0].(type) {
-		case string:
-			// Determine if it's an algorithm or an error message
-			// Common JWT algorithms are uppercase and start with HS, RS, ES, PS, Ed
-			// E.g. HS256, RS512, EdDSA. Usually 5-6 chars.
-			// Error messages are likely longer sentences or lower case.
-			// Simplistic heuristic: if it looks like an algorithm, treat as alg.
-			// Zod v4 uses object { alg: "..." } so there is no ambiguity.
-			// Here we support convenience shortcuts.
-			if isLikelyAlg(v) {
-				check = checks.JWTWithAlgorithm(v)
-			} else {
-				check = checks.JWT(v)
-			}
-		case validate.JWTOptions:
-			check = checks.JWTWithOptions(v)
-		default:
-			check = checks.JWT(params...)
-		}
-	default:
-		if alg, ok := params[0].(string); ok && isLikelyAlg(alg) {
-			// JWT("HS256", "error message")
-			check = checks.JWTWithAlgorithm(alg, params[1:]...)
-		} else {
-			check = checks.JWT(params...)
-		}
+	if len(params) == 0 {
+		return z.withCheck(checks.JWT())
 	}
 
-	return z.withCheck(check)
+	if len(params) == 1 {
+		switch v := params[0].(type) {
+		case string:
+			if isJWTAlgorithm(v) {
+				return z.withCheck(checks.JWTWithAlgorithm(v))
+			}
+			return z.withCheck(checks.JWT(v))
+		case validate.JWTOptions:
+			return z.withCheck(checks.JWTWithOptions(v))
+		}
+		return z.withCheck(checks.JWT(params...))
+	}
+
+	if alg, ok := params[0].(string); ok && isJWTAlgorithm(alg) {
+		return z.withCheck(checks.JWTWithAlgorithm(alg, params[1:]...))
+	}
+	return z.withCheck(checks.JWT(params...))
 }
 
-func isLikelyAlg(s string) bool {
-	// Common JWA algorithms
+// isDelimiter reports whether s is a recognized MAC address delimiter.
+func isDelimiter(s string) bool {
+	return len(s) == 1 || s == ":" || s == "-" || s == "."
+}
+
+// isJWTAlgorithm reports whether s looks like a JWA algorithm identifier.
+func isJWTAlgorithm(s string) bool {
 	return len(s) > 0 && len(s) <= 10 && (strings.HasPrefix(s, "HS") || strings.HasPrefix(s, "RS") ||
 		strings.HasPrefix(s, "ES") || strings.HasPrefix(s, "PS") ||
 		strings.HasPrefix(s, "Ed") || s == "none")
 }
 
-// Describe registers a description in the global registry.
+// Describe attaches a description to this schema via the global registry.
 func (z *ZodString[T]) Describe(description string) *ZodString[T] {
 	return z.withMeta(core.GlobalMeta{Description: description})
 }
-
-// =============================================================================
-// TRANSFORMATION METHODS
-// =============================================================================
 
 // Transform applies a transformation function to the validated string.
 func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
@@ -376,16 +319,16 @@ func (z *ZodString[T]) Transform(fn func(string, *core.RefinementContext) (any, 
 	})
 }
 
-// Overwrite applies a transformation that returns the same type T.
-func (z *ZodString[T]) Overwrite(transform func(T) T, params ...any) *ZodString[T] {
-	transformAny := func(input any) any {
+// Overwrite applies a same-type transformation to the validated string.
+func (z *ZodString[T]) Overwrite(fn func(T) T, params ...any) *ZodString[T] {
+	wrapped := func(input any) any {
 		converted, ok := convertToStringType[T](input)
 		if !ok {
 			return input
 		}
-		return transform(converted)
+		return fn(converted)
 	}
-	return z.withCheck(checks.NewZodCheckOverwrite(transformAny, params...))
+	return z.withCheck(checks.NewZodCheckOverwrite(wrapped, params...))
 }
 
 // Pipe creates a pipeline with another schema.
@@ -403,17 +346,13 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 			fn(val, payload)
 			return
 		}
-
 		// Handle pointer type: T is *string but value is string.
 		var zero T
-		switch any(zero).(type) {
-		case *string:
+		if _, ok := any(zero).(*string); ok {
 			if strVal, ok := payload.Value().(string); ok {
 				strCopy := strVal
 				fn(any(&strCopy).(T), payload)
 			}
-		default:
-			// No convertible path found.
 		}
 	}
 	return z.withCheck(checks.NewCustom[T](wrapped, utils.NormalizeCustomParams(params...)))
@@ -423,10 +362,6 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 func (z *ZodString[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodString[T] {
 	return z.Check(fn, params...)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine applies a custom validation function matching the schema's output type T.
 func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
@@ -457,14 +392,10 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
-// RefineAny adds flexible custom validation logic.
+// RefineAny adds custom validation that receives the raw value as any.
 func (z *ZodString[T]) RefineAny(fn func(any) bool, params ...any) *ZodString[T] {
 	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
-
-// =============================================================================
-// COMPOSITION METHODS (Zod v4 Compatibility)
-// =============================================================================
 
 // And creates an intersection with another schema.
 //
@@ -483,10 +414,6 @@ func (z *ZodString[T]) And(other any) *ZodIntersection[any, any] {
 func (z *ZodString[T]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
-
-// =============================================================================
-// INTERNAL HELPER METHODS
-// =============================================================================
 
 // expectedType returns the schema's type code, defaulting to ZodTypeString.
 func (z *ZodString[T]) expectedType() core.ZodTypeCode {
@@ -565,11 +492,7 @@ func (z *ZodString[T]) CloneFrom(source any) {
 	}
 }
 
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
-// applyStringTransform applies a string transformation function to either string or *string values.
+// applyStringTransform applies fn to the underlying string value of val.
 func applyStringTransform[T StringConstraint](val T, fn func(string) string) T {
 	switch v := any(val).(type) {
 	case string:
@@ -585,7 +508,7 @@ func applyStringTransform[T StringConstraint](val T, fn func(string) string) T {
 	}
 }
 
-// convertToStringType converts any value to the constrained string type T
+// convertToStringType converts v to the constrained string type T.
 func convertToStringType[T StringConstraint](v any) (T, bool) {
 	var zero T
 
@@ -610,7 +533,7 @@ func convertToStringType[T StringConstraint](v any) (T, bool) {
 	return zero, false
 }
 
-// extractString extracts the string value from a StringConstraint type.
+// extractString returns the underlying string from a StringConstraint value.
 func extractString[T StringConstraint](value T) string {
 	switch v := any(value).(type) {
 	case string:
@@ -654,10 +577,6 @@ func newZodStringFromDef[T StringConstraint](def *ZodStringDef) *ZodString[T] {
 	}
 }
 
-// =============================================================================
-// CONSTRUCTOR FUNCTIONS
-// =============================================================================
-
 // String creates a new string schema.
 func String(params ...any) *ZodString[string] {
 	return StringTyped[string](params...)
@@ -679,7 +598,6 @@ func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
 		},
 	}
 
-	// Parse parameters for custom configuration
 	if schemaParams != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
@@ -701,10 +619,6 @@ func CoercedStringPtr(params ...any) *ZodString[*string] {
 	return schema
 }
 
-// =============================================================================
-// CASE VALIDATION METHODS
-// =============================================================================
-
 // Lowercase validates that the string contains no uppercase letters.
 // Matches Zod v4's regex: /^[^A-Z]*$/
 func (z *ZodString[T]) Lowercase(params ...any) *ZodString[T] {
@@ -716,10 +630,6 @@ func (z *ZodString[T]) Lowercase(params ...any) *ZodString[T] {
 func (z *ZodString[T]) Uppercase(params ...any) *ZodString[T] {
 	return z.withCheck(checks.Uppercase(params...))
 }
-
-// =============================================================================
-// STRING TRANSFORMATION METHODS
-// =============================================================================
 
 // ToLowerCase transforms the string to lower case.
 func (z *ZodString[T]) ToLowerCase(params ...any) *ZodString[T] {

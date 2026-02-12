@@ -10,38 +10,26 @@ import (
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
 
-// =============================================================================
-// TYPE CONSTRAINTS
-// =============================================================================
-
 // TimeConstraint restricts values to time.Time or *time.Time.
 type TimeConstraint interface {
 	time.Time | *time.Time
 }
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodTimeDef defines the configuration for time validation.
+// ZodTimeDef holds the configuration for a time schema.
 type ZodTimeDef struct {
 	core.ZodTypeDef
 }
 
-// ZodTimeInternals contains time validator internal state.
+// ZodTimeInternals holds time validator internal state.
 type ZodTimeInternals struct {
 	core.ZodTypeInternals
 	Def *ZodTimeDef
 }
 
-// ZodTime represents a time validation schema with type safety.
+// ZodTime is a type-safe time validation schema.
 type ZodTime[T TimeConstraint] struct {
 	internals *ZodTimeInternals
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodTime[T]) Internals() *core.ZodTypeInternals {
@@ -49,22 +37,18 @@ func (z *ZodTime[T]) Internals() *core.ZodTypeInternals {
 }
 
 // IsOptional reports whether this schema accepts undefined/missing values.
-func (z *ZodTime[T]) IsOptional() bool {
-	return z.internals.IsOptional()
-}
+func (z *ZodTime[T]) IsOptional() bool { return z.internals.IsOptional() }
 
 // IsNilable reports whether this schema accepts nil values.
-func (z *ZodTime[T]) IsNilable() bool {
-	return z.internals.IsNilable()
-}
+func (z *ZodTime[T]) IsNilable() bool { return z.internals.IsNilable() }
 
-// Coerce converts input to time.Time, implementing the Coercible interface.
+// Coerce converts input to time.Time.
 func (z *ZodTime[T]) Coerce(input any) (any, bool) {
 	result, err := coerce.ToTime(input)
 	return result, err == nil
 }
 
-// Parse validates input and returns a value matching the generic type T.
+// Parse validates input and returns a value of type T.
 func (z *ZodTime[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	return engine.ParsePrimitive[time.Time, T](
 		input,
@@ -85,7 +69,7 @@ func (z *ZodTime[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 	return result
 }
 
-// StrictParse provides compile-time type safety by requiring exact type T.
+// StrictParse requires exact type T for compile-time type safety.
 func (z *ZodTime[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return engine.ParsePrimitiveStrict[time.Time, T](
 		input,
@@ -96,7 +80,7 @@ func (z *ZodTime[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 	)
 }
 
-// MustStrictParse provides compile-time type safety and panics on failure.
+// MustStrictParse requires exact type T and panics on failure.
 func (z *ZodTime[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 	result, err := z.StrictParse(input, ctx...)
 	if err != nil {
@@ -109,10 +93,6 @@ func (z *ZodTime[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
 func (z *ZodTime[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional returns a new schema that accepts nil, with *time.Time constraint.
 func (z *ZodTime[T]) Optional() *ZodTime[*time.Time] {
@@ -183,24 +163,17 @@ func (z *ZodTime[T]) Meta(meta core.GlobalMeta) *ZodTime[T] {
 }
 
 // Describe registers a description in the global registry.
-func (z *ZodTime[T]) Describe(description string) *ZodTime[T] {
-	newInternals := z.internals.Clone()
-
+func (z *ZodTime[T]) Describe(desc string) *ZodTime[T] {
+	in := z.internals.Clone()
 	existing, ok := core.GlobalRegistry.Get(z)
 	if !ok {
 		existing = core.GlobalMeta{}
 	}
-	existing.Description = description
-
-	clone := z.withInternals(newInternals)
+	existing.Description = desc
+	clone := z.withInternals(in)
 	core.GlobalRegistry.Add(clone, existing)
-
 	return clone
 }
-
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
 
 // Transform applies a transformation function to the parsed value.
 func (z *ZodTime[T]) Transform(fn func(time.Time, *core.RefinementContext) (any, error)) *core.ZodTransform[T, any] {
@@ -230,10 +203,6 @@ func (z *ZodTime[T]) Pipe(target core.ZodType[any]) *core.ZodPipe[T, any] {
 	}
 	return core.NewZodPipe[T, any](z, target, targetFn)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine applies a custom validation function matching the schema's output type T.
 func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
@@ -283,9 +252,43 @@ func (z *ZodTime[T]) RefineAny(fn func(any) bool, params ...any) *ZodTime[T] {
 	return z.withCheck(check)
 }
 
-// =============================================================================
-// COMPOSITION METHODS (Zod v4 Compatibility)
-// =============================================================================
+// Check applies a custom validation function with full payload access (Zod v4 API).
+func (z *ZodTime[T]) Check(fn func(value T, payload *core.ParsePayload), params ...any) *ZodTime[T] {
+	wrapper := func(payload *core.ParsePayload) {
+		if val, ok := payload.Value().(T); ok {
+			fn(val, payload)
+			return
+		}
+
+		var zero T
+		if _, ok := any(zero).(*time.Time); ok {
+			if t, ok := payload.Value().(time.Time); ok {
+				tCopy := t
+				fn(any(&tCopy).(T), payload)
+			}
+		}
+	}
+	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
+	return z.withCheck(check)
+}
+
+// With is an alias for Check (Zod v4 API compatibility).
+func (z *ZodTime[T]) With(fn func(value T, payload *core.ParsePayload), params ...any) *ZodTime[T] {
+	return z.Check(fn, params...)
+}
+
+// NonOptional removes the optional flag, returning a time.Time constraint.
+func (z *ZodTime[T]) NonOptional() *ZodTime[time.Time] {
+	in := z.internals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+	return &ZodTime[time.Time]{
+		internals: &ZodTimeInternals{
+			ZodTypeInternals: *in,
+			Def:              z.internals.Def,
+		},
+	}
+}
 
 // And creates an intersection with another schema.
 func (z *ZodTime[T]) And(other any) *ZodIntersection[any, any] {
@@ -296,10 +299,6 @@ func (z *ZodTime[T]) And(other any) *ZodIntersection[any, any] {
 func (z *ZodTime[T]) Or(other any) *ZodUnion[any, any] {
 	return Union([]any{z, other})
 }
-
-// =============================================================================
-// TYPE CONVERSION HELPERS
-// =============================================================================
 
 // convertToTimeType converts only time values to the target time type T.
 func convertToTimeType[T TimeConstraint](v any) (T, bool) {
@@ -341,10 +340,6 @@ func convertToTimeType[T TimeConstraint](v any) (T, bool) {
 		return zero, false
 	}
 }
-
-// =============================================================================
-// HELPER AND PRIVATE METHODS
-// =============================================================================
 
 // expectedType returns the schema's type code, defaulting to ZodTypeTime.
 func (z *ZodTime[T]) expectedType() core.ZodTypeCode {
@@ -428,10 +423,6 @@ func newZodTimeFromDef[T TimeConstraint](def *ZodTimeDef) *ZodTime[T] {
 
 	return &ZodTime[T]{internals: internals}
 }
-
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
 
 // Time creates a time.Time validation schema.
 //

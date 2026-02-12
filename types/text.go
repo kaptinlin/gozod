@@ -6,12 +6,7 @@ import (
 	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
-// =============================================================================
-// INTERNAL HELPERS (DRY)
-// =============================================================================
-
-// newTextSchema creates a text schema by adding a check to a base string schema.
-// This eliminates repeated clone-addCheck-wrap boilerplate across all text types.
+// newTextSchema adds a check to a base string schema (clone-addCheck-wrap).
 func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
 	in := base.Internals().Clone()
 	in.AddCheck(check)
@@ -23,22 +18,24 @@ func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) 
 // =============================================================================
 
 // ZodEmoji validates strings containing only emoji characters.
+// String modifiers (Min, Max, Regex, etc.) are promoted from the
+// embedded *ZodString[T].
 type ZodEmoji[T StringConstraint] struct{ *ZodString[T] }
 
 func newEmoji[T StringConstraint](s *ZodString[T]) *ZodEmoji[T] { return &ZodEmoji[T]{s} }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodEmoji[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodEmoji[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // Optional returns a new schema that accepts nil values.
@@ -72,22 +69,24 @@ type JWTOptions struct {
 }
 
 // ZodJWT validates strings in JWT (JSON Web Token) format.
+// String modifiers (Min, Max, StartsWith, etc.) are promoted from the
+// embedded *ZodString[T].
 type ZodJWT[T StringConstraint] struct{ *ZodString[T] }
 
 func newJWT[T StringConstraint](s *ZodString[T]) *ZodJWT[T] { return &ZodJWT[T]{s} }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodJWT[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodJWT[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // Optional returns a new schema that accepts nil values.
@@ -101,10 +100,10 @@ func (z *ZodJWT[T]) Nullish() *ZodJWT[*string] { return newJWT(z.ZodString.Nulli
 
 // JWT creates a JWT token validation schema.
 //
-//	JWT()                                                    - basic structure validation
-//	JWT("error message")                                     - with custom error message
-//	JWT(JWTOptions{Algorithm: "HS256"})                      - with algorithm constraint
-//	JWT(JWTOptions{Algorithm: "HS256"}, "error message")     - options with error message
+//	JWT()                                                - basic structure validation
+//	JWT("error message")                                 - with custom error message
+//	JWT(JWTOptions{Algorithm: "HS256"})                  - with algorithm constraint
+//	JWT(JWTOptions{Algorithm: "HS256"}, "error message") - options with error message
 func JWT(params ...any) *ZodJWT[string] {
 	return JWTTyped[string](params...)
 }
@@ -116,33 +115,33 @@ func JWTPtr(params ...any) *ZodJWT[*string] {
 
 // JWTTyped creates a JWT token validation schema for a specific type.
 func JWTTyped[T StringConstraint](params ...any) *ZodJWT[T] {
-	options, forwarded := extractJWTOptions(params)
-	base := StringTyped[T](forwarded...)
+	opts, rest := splitJWTOpts(params)
+	base := StringTyped[T](rest...)
 
-	var jwtCheck core.ZodCheck
-	if options != nil && options.Algorithm != "" {
-		jwtCheck = checks.JWTWithAlgorithm(options.Algorithm, forwarded...)
+	var check core.ZodCheck
+	if opts != nil && opts.Algorithm != "" {
+		check = checks.JWTWithAlgorithm(opts.Algorithm, rest...)
 	} else {
-		jwtCheck = checks.JWT(forwarded...)
+		check = checks.JWT(rest...)
 	}
 
-	return newJWT(newTextSchema(base, jwtCheck))
+	return newJWT(newTextSchema(base, check))
 }
 
-// extractJWTOptions separates JWTOptions from other parameters.
-func extractJWTOptions(params []any) (*JWTOptions, []any) {
-	var options *JWTOptions
-	forwarded := make([]any, 0, len(params))
+// splitJWTOpts separates JWTOptions from other parameters.
+func splitJWTOpts(params []any) (*JWTOptions, []any) {
+	var opts *JWTOptions
+	rest := make([]any, 0, len(params))
 
 	for _, p := range params {
-		if opt, ok := p.(JWTOptions); ok {
-			options = &opt
+		if o, ok := p.(JWTOptions); ok {
+			opts = &o
 		} else {
-			forwarded = append(forwarded, p)
+			rest = append(rest, p)
 		}
 	}
 
-	return options, forwarded
+	return opts, rest
 }
 
 // =============================================================================
@@ -150,22 +149,23 @@ func extractJWTOptions(params []any) (*JWTOptions, []any) {
 // =============================================================================
 
 // ZodBase64 validates Base64 encoded strings.
+// String modifiers (Min, Max, etc.) are promoted from the embedded *ZodString[T].
 type ZodBase64[T StringConstraint] struct{ *ZodString[T] }
 
 func newBase64[T StringConstraint](s *ZodString[T]) *ZodBase64[T] { return &ZodBase64[T]{s} }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodBase64[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodBase64[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // Optional returns a new schema that accepts nil values.
@@ -192,24 +192,23 @@ func Base64Ptr(params ...any) *ZodBase64[*string] {
 // =============================================================================
 
 // ZodBase64URL validates Base64URL encoded strings.
+// String modifiers (Min, Max, etc.) are promoted from the embedded *ZodString[T].
 type ZodBase64URL[T StringConstraint] struct{ *ZodString[T] }
 
-func newBase64URL[T StringConstraint](s *ZodString[T]) *ZodBase64URL[T] {
-	return &ZodBase64URL[T]{s}
-}
+func newBase64URL[T StringConstraint](s *ZodString[T]) *ZodBase64URL[T] { return &ZodBase64URL[T]{s} }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodBase64URL[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodBase64URL[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // Optional returns a new schema that accepts nil values.
@@ -242,22 +241,23 @@ func Base64URLPtr(params ...any) *ZodBase64URL[*string] {
 // =============================================================================
 
 // ZodHex validates hexadecimal strings.
+// String modifiers (Min, Max, etc.) are promoted from the embedded *ZodString[T].
 type ZodHex[T StringConstraint] struct{ *ZodString[T] }
 
 func newHex[T StringConstraint](s *ZodString[T]) *ZodHex[T] { return &ZodHex[T]{s} }
 
-// StrictParse validates the input with compile-time type safety.
+// StrictParse validates input with compile-time type safety.
 func (z *ZodHex[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
 	return z.ZodString.StrictParse(input, ctx...)
 }
 
-// MustStrictParse validates the input with compile-time type safety and panics on error.
+// MustStrictParse validates input with compile-time type safety and panics on error.
 func (z *ZodHex[T]) MustStrictParse(input T, ctx ...*core.ParseContext) T {
-	result, err := z.StrictParse(input, ctx...)
+	r, err := z.StrictParse(input, ctx...)
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return r
 }
 
 // Optional returns a new schema that accepts nil values.
@@ -270,7 +270,6 @@ func (z *ZodHex[T]) Nilable() *ZodHex[*string] { return newHex(z.ZodString.Nilab
 func (z *ZodHex[T]) Nullish() *ZodHex[*string] { return newHex(z.ZodString.Nullish()) }
 
 // Hex creates a hexadecimal string validation schema.
-// Zod v4 equivalent: z.hex()
 func Hex(params ...any) *ZodHex[string] {
 	return newHex(newTextSchema(StringTyped[string](params...), checks.Hex(params...)))
 }

@@ -32,10 +32,8 @@ var anyType = reflect.TypeFor[any]()
 
 // jsonTagName extracts the field name from a JSON struct tag, ignoring options like omitempty.
 func jsonTagName(tag string) string {
-	if name, _, ok := strings.Cut(tag, ","); ok {
-		return name
-	}
-	return tag
+	name, _, _ := strings.Cut(tag, ",")
+	return name
 }
 
 // =============================================================================
@@ -108,7 +106,7 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 	}
 
 	// Check if constraint type R is a pointer type
-	isPointerConstraint := reflect.TypeOf(zero).Kind() == reflect.Ptr
+	isPointerConstraint := reflect.TypeFor[R]().Kind() == reflect.Pointer
 
 	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParseComplex
 	// But only if no other modifiers (Optional, Nilable, Prefault) are set
@@ -516,7 +514,7 @@ func extractStructValue[T any, R any](value R) T {
 	}
 
 	// Handle pointer dereferencing
-	if ptrValue := reflect.ValueOf(value); ptrValue.Kind() == reflect.Ptr && !ptrValue.IsNil() {
+	if ptrValue := reflect.ValueOf(value); ptrValue.Kind() == reflect.Pointer && !ptrValue.IsNil() {
 		if derefValue, ok := ptrValue.Elem().Interface().(T); ok {
 			return derefValue
 		}
@@ -563,8 +561,8 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 
 	if v == nil {
 		// Handle nil values for pointer types
-		zeroType := reflect.TypeOf((*R)(nil)).Elem()
-		if zeroType.Kind() == reflect.Ptr {
+		zeroType := reflect.TypeFor[R]()
+		if zeroType.Kind() == reflect.Pointer {
 			return zero, true // zero value for pointer types is nil
 		}
 		return zero, false // nil not allowed for value types
@@ -576,8 +574,8 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 	}
 
 	// Handle pointer conversion for different types
-	zeroType := reflect.TypeOf((*R)(nil)).Elem()
-	if zeroType.Kind() == reflect.Ptr {
+	zeroType := reflect.TypeFor[R]()
+	if zeroType.Kind() == reflect.Pointer {
 		// R is a pointer type
 		elemType := zeroType.Elem()
 
@@ -626,7 +624,7 @@ func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
 	}
 
 	// Handle pointer to T
-	if val := reflect.ValueOf(input); val.Kind() == reflect.Ptr && !val.IsNil() {
+	if val := reflect.ValueOf(input); val.Kind() == reflect.Pointer && !val.IsNil() {
 		if structVal, ok := val.Elem().Interface().(T); ok {
 			return structVal, true
 		}
@@ -694,7 +692,7 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 	}
 
 	// Handle pointer to T via reflection
-	if val := reflect.ValueOf(input); val.Kind() == reflect.Ptr && !val.IsNil() {
+	if val := reflect.ValueOf(input); val.Kind() == reflect.Pointer && !val.IsNil() {
 		if structVal, ok := val.Elem().Interface().(T); ok {
 			structCopy := structVal
 			return &structCopy, true
@@ -765,7 +763,7 @@ func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseCont
 
 	// Use reflection to access struct fields
 	val := reflect.ValueOf(input)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return nil, issues.CreateInvalidTypeError(core.ZodTypeStruct, input, ctx)
 		}
@@ -891,7 +889,7 @@ func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structTyp
 	}
 
 	// Then try to find by json tag
-	for i := 0; i < structType.NumField(); i++ {
+	for i := range structType.NumField() {
 		field := structType.Field(i)
 		if !field.IsExported() {
 			continue
@@ -936,7 +934,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 	}
 
 	// Handle pointer type conversions
-	if fieldVal.Type().Kind() == reflect.Ptr && valueVal.Type().Kind() != reflect.Ptr {
+	if fieldVal.Type().Kind() == reflect.Pointer && valueVal.Type().Kind() != reflect.Pointer {
 		// Field is pointer, value is not - create pointer to value
 		if valueVal.Type().AssignableTo(fieldVal.Type().Elem()) {
 			ptrVal := reflect.New(fieldVal.Type().Elem())
@@ -960,7 +958,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 			fieldVal.Set(ptrVal)
 			return nil
 		}
-	} else if fieldVal.Type().Kind() != reflect.Ptr && valueVal.Type().Kind() == reflect.Ptr {
+	} else if fieldVal.Type().Kind() != reflect.Pointer && valueVal.Type().Kind() == reflect.Pointer {
 		// Field is not pointer, value is pointer - dereference value
 		if !valueVal.IsNil() && valueVal.Elem().Type().AssignableTo(fieldVal.Type()) {
 			fieldVal.Set(valueVal.Elem())
@@ -992,7 +990,7 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 }
 
 // convertMapTypes converts between different map types (e.g., map[any]any to map[string]string)
-func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue any, targetType reflect.Type) any {
+func (z *ZodStruct[T, R]) convertMapTypes(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Map {
 		return nil
@@ -1028,7 +1026,7 @@ func (z *ZodStruct[Input, Output]) convertMapTypes(sourceValue any, targetType r
 }
 
 // convertValue attempts to convert a value to the target type
-func (z *ZodStruct[Input, Output]) convertValue(value any, targetType reflect.Type) any {
+func (z *ZodStruct[T, R]) convertValue(value any, targetType reflect.Type) any {
 	if value == nil {
 		return reflect.Zero(targetType).Interface()
 	}
@@ -1122,7 +1120,7 @@ func (z *ZodStruct[Input, Output]) convertValue(value any, targetType reflect.Ty
 }
 
 // convertSliceTypes converts between different slice types (e.g., []any to []SpecificType)
-func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue any, targetType reflect.Type) any {
+func (z *ZodStruct[T, R]) convertSliceTypes(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Slice || targetType.Kind() != reflect.Slice {
 		return nil
@@ -1131,7 +1129,7 @@ func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue any, targetType
 	targetElemType := targetType.Elem()
 	newSlice := reflect.MakeSlice(targetType, sourceVal.Len(), sourceVal.Len())
 
-	for i := 0; i < sourceVal.Len(); i++ {
+	for i := range sourceVal.Len() {
 		sourceElem := sourceVal.Index(i).Interface()
 		convertedElem := z.convertValue(sourceElem, targetElemType)
 		if convertedElem == nil {
@@ -1144,7 +1142,7 @@ func (z *ZodStruct[Input, Output]) convertSliceTypes(sourceValue any, targetType
 }
 
 // convertMapToStruct converts a map to a struct using field matching
-func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue any, targetType reflect.Type) any {
+func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect.Type) any {
 	sourceVal := reflect.ValueOf(sourceValue)
 	if sourceVal.Kind() != reflect.Map || targetType.Kind() != reflect.Struct {
 		return nil
@@ -1154,7 +1152,7 @@ func (z *ZodStruct[Input, Output]) convertMapToStruct(sourceValue any, targetTyp
 	newStruct := reflect.New(targetType).Elem()
 
 	// Convert map to struct by matching field names
-	for i := 0; i < targetType.NumField(); i++ {
+	for i := range targetType.NumField() {
 		field := targetType.Field(i)
 		if !field.IsExported() {
 			continue
@@ -1207,7 +1205,7 @@ func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType refl
 	}
 
 	// Then, try to find by json tag
-	for i := 0; i < val.NumField(); i++ {
+	for i := range val.NumField() {
 		field := structType.Field(i)
 		if !field.IsExported() {
 			continue
@@ -1263,7 +1261,7 @@ func isZeroValue(v any) bool {
 		return !val.Bool()
 	case reflect.Slice, reflect.Map, reflect.Array:
 		return val.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return val.IsNil()
 	case reflect.Struct:
 		// For structs, compare with zero value of the same type
@@ -1439,9 +1437,8 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 		}
 
 		// Handle pointer/value mismatch scenarios.
-		var zero R
-		zeroTyp := reflect.TypeOf(zero)
-		if zeroTyp != nil && zeroTyp.Kind() == reflect.Ptr {
+		zeroTyp := reflect.TypeFor[R]()
+		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
 			// zeroTyp is *T, so elemTyp should be T
 			elemTyp := zeroTyp.Elem()
 			valRV := reflect.ValueOf(payload.Value())
@@ -1482,7 +1479,7 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 
 	v := reflect.New(t).Elem()
 
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		if !field.IsExported() {
 			continue
@@ -1490,7 +1487,7 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 
 		key := field.Name
 		if tag := field.Tag.Get("json"); tag != "" {
-			tagName := strings.Split(tag, ",")[0]
+			tagName, _, _ := strings.Cut(tag, ",")
 			if tagName != "" && tagName != "-" {
 				key = tagName
 			}
@@ -1498,7 +1495,6 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 
 		val, ok := data[key]
 		if !ok {
-			// missing field
 			return zero, false
 		}
 
@@ -1566,7 +1562,7 @@ func FromStructPtr[T any]() *ZodStruct[T, *T] {
 
 // hasGozodTags checks if a struct type has any gozod tags
 func hasGozodTags(structType reflect.Type) bool {
-	if structType.Kind() == reflect.Ptr {
+	if structType.Kind() == reflect.Pointer {
 		structType = structType.Elem()
 	}
 
@@ -1574,7 +1570,7 @@ func hasGozodTags(structType reflect.Type) bool {
 		return false
 	}
 
-	for i := 0; i < structType.NumField(); i++ {
+	for i := range structType.NumField() {
 		field := structType.Field(i)
 		if _, exists := field.Tag.Lookup("gozod"); exists {
 			return true
@@ -1633,7 +1629,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited
 func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, visited map[reflect.Type]bool) core.ZodSchema {
 	// Check for circular reference
 	actualType := fieldType
-	isPointer := actualType.Kind() == reflect.Ptr
+	isPointer := actualType.Kind() == reflect.Pointer
 	if isPointer {
 		actualType = actualType.Elem()
 	}
@@ -1641,7 +1637,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 	isSlice := actualType.Kind() == reflect.Slice || actualType.Kind() == reflect.Array
 	if isSlice {
 		actualType = actualType.Elem()
-		if actualType.Kind() == reflect.Ptr {
+		if actualType.Kind() == reflect.Pointer {
 			actualType = actualType.Elem()
 		}
 	}
@@ -1653,7 +1649,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 	}
 
 	// For nested structs (not circular), create schema with cycle detection
-	if actualType.Kind() == reflect.Struct && actualType != reflect.TypeOf(time.Time{}) {
+	if actualType.Kind() == reflect.Struct && actualType != reflect.TypeFor[time.Time]() {
 		// Check if coercion is enabled
 		hasCoerce := false
 		for _, rule := range fieldInfo.Rules {
@@ -1663,7 +1659,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 			}
 		}
 
-		if hasCoerce && actualType == reflect.TypeOf(time.Time{}) {
+		if hasCoerce && actualType == reflect.TypeFor[time.Time]() {
 			// Handle time.Time with coercion
 			if isPointer {
 				return CoercedTimePtr()
@@ -1717,7 +1713,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 
 	// Check if this is a slice/array of circular types
 	actualType := capturedType
-	isPointer := actualType.Kind() == reflect.Ptr
+	isPointer := actualType.Kind() == reflect.Pointer
 	if isPointer {
 		actualType = actualType.Elem()
 	}
@@ -1726,7 +1722,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 	if isSlice {
 		// For slices, we need to create a slice of lazy schemas
 		elementType := actualType.Elem()
-		isElementPointer := elementType.Kind() == reflect.Ptr
+		isElementPointer := elementType.Kind() == reflect.Pointer
 		if isElementPointer {
 			elementType = elementType.Elem()
 		}
@@ -1808,7 +1804,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 	}
 
 	// Handle pointer types
-	isPointer := fieldType.Kind() == reflect.Ptr
+	isPointer := fieldType.Kind() == reflect.Pointer
 	if isPointer {
 		fieldType = fieldType.Elem()
 	}
@@ -2048,7 +2044,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 		}
 	case reflect.Struct:
 		// Handle nested structs (including time.Time)
-		if fieldType == reflect.TypeOf(time.Time{}) {
+		if fieldType == reflect.TypeFor[time.Time]() {
 			if hasCoerce {
 				if isPointer {
 					schema = CoercedTimePtr()
@@ -2279,7 +2275,7 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 	}
 
 	// Apply optional/required for pointer fields AFTER all other rules
-	if fieldInfo.Type.Kind() == reflect.Ptr {
+	if fieldInfo.Type.Kind() == reflect.Pointer {
 		if !fieldInfo.Required {
 			// Make pointer fields optional (accept nil) unless marked as required
 			// Use type switch to handle each schema type's Optional() method
@@ -2781,7 +2777,7 @@ func applyDefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
 				return s.Default(stringMap)
 			}
 		}
-	case *ZodMap[map[string]interface{}, map[string]interface{}]:
+	case *ZodMap[map[string]any, map[string]any]:
 		// Parse map with any values: {"key":"val", "count":42}
 		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
 			return s.Default(defaultMap)
@@ -2869,13 +2865,13 @@ func applyDefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
 				return s.Default(stringMap)
 			}
 		}
-	case *ZodMap[map[string]interface{}, *map[string]interface{}]:
+	case *ZodMap[map[string]any, *map[string]any]:
 		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
 			return s.Default(defaultMap)
 		}
 
-	// Record types for map[string]interface{} fields
-	case *ZodRecord[map[string]interface{}, *map[string]interface{}]:
+	// Record types for map[string]any fields
+	case *ZodRecord[map[string]any, *map[string]any]:
 		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
 			return s.Default(defaultMap)
 		}
@@ -2884,7 +2880,7 @@ func applyDefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
 }
 
 // Helper function to parse array-like default values
-func parseArrayDefault(value string) []interface{} {
+func parseArrayDefault(value string) []any {
 	// Handle both ['val1','val2'] and JSON array format
 	value = strings.TrimSpace(value)
 	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
@@ -2892,7 +2888,7 @@ func parseArrayDefault(value string) []interface{} {
 	}
 
 	// Try JSON parsing first for complex arrays
-	var jsonResult []interface{}
+	var jsonResult []any
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
 		return jsonResult
 	}
@@ -2900,11 +2896,11 @@ func parseArrayDefault(value string) []interface{} {
 	// Fallback to simple parsing for backward compatibility
 	value = value[1 : len(value)-1] // Remove brackets
 	if value == "" {
-		return []interface{}{}
+		return []any{}
 	}
 
 	// Parse comma-separated values
-	var result []interface{}
+	var result []any
 	var current strings.Builder
 	inQuote := false
 	quoteChar := rune(0)
@@ -2943,7 +2939,7 @@ func parseArrayDefault(value string) []interface{} {
 }
 
 // Helper function to parse map-like default values
-func parseMapDefault(value string) map[string]interface{} {
+func parseMapDefault(value string) map[string]any {
 	// Handle JSON object format: {"key":"value","count":42}
 	value = strings.TrimSpace(value)
 	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
@@ -2951,10 +2947,9 @@ func parseMapDefault(value string) map[string]interface{} {
 	}
 
 	// Try to parse as JSON
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(value), &result); err != nil {
-		// If JSON parsing fails, return empty map
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 
 	return result
@@ -3037,9 +3032,9 @@ func createMapPtrSchema(valueSchema core.ZodSchema, valueType reflect.Type) core
 	case reflect.Int:
 		return MapPtr(String(), valueSchema)
 	case reflect.Interface:
-		// For interface{} values, use Record instead of Map for better type compatibility
-		// Record uses map[string]any internally which matches Go's map[string]interface{}
-		return RecordTyped[map[string]interface{}, *map[string]interface{}](String(), Any())
+		// For any values, use Record instead of Map for better type compatibility
+		// Record uses map[string]any internally which matches Go's map[string]any
+		return RecordTyped[map[string]any, *map[string]any](String(), Any())
 	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,

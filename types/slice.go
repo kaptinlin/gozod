@@ -13,9 +13,7 @@ import (
 	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
-var (
-	ErrParseComplexUnexpectedType = errors.New("internal error: ParseComplex returned unexpected type")
-)
+var errUnexpectedSliceType = errors.New("unexpected result type from slice parser")
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -27,14 +25,14 @@ type ZodSliceDef struct {
 	Element any
 }
 
-// ZodSliceInternals contains slice validator internal state.
+// ZodSliceInternals contains the internal state for a slice schema.
 type ZodSliceInternals[T any] struct {
 	core.ZodTypeInternals
 	Def     *ZodSliceDef
 	Element any
 }
 
-// ZodSlice represents a type-safe slice validation schema.
+// ZodSlice is a type-safe slice validation schema.
 // T is the element type, R is the constraint type (value or pointer).
 type ZodSlice[T any, R any] struct {
 	internals *ZodSliceInternals[T]
@@ -44,7 +42,7 @@ type ZodSlice[T any, R any] struct {
 // CORE METHODS
 // =============================================================================
 
-// Internals returns the internal state of the schema.
+// Internals returns the internal state for framework usage.
 func (z *ZodSlice[T, R]) Internals() *core.ZodTypeInternals {
 	return &z.internals.ZodTypeInternals
 }
@@ -55,7 +53,7 @@ func (z *ZodSlice[T, R]) IsOptional() bool { return z.internals.IsOptional() }
 // IsNilable reports whether this schema accepts nil values.
 func (z *ZodSlice[T, R]) IsNilable() bool { return z.internals.IsNilable() }
 
-// Parse validates input using slice-specific parsing logic.
+// Parse validates input and returns the parsed slice value.
 func (z *ZodSlice[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
@@ -63,9 +61,9 @@ func (z *ZodSlice[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeSlice,
-		z.extractSlice,
-		z.extractSlicePtr,
-		z.validateSlice,
+		z.extractForEngine,
+		z.extractPtrForEngine,
+		z.validateForEngine,
 		ctx...,
 	)
 	if err != nil {
@@ -74,21 +72,21 @@ func (z *ZodSlice[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) 
 
 	switch v := result.(type) {
 	case []T:
-		return convertToSliceConstraintType[T, R](v), nil
+		return toSliceConstraint[T, R](v), nil
 	case *[]T:
-		return convertToSliceConstraintType[T, R](v), nil
+		return toSliceConstraint[T, R](v), nil
 	case **[]T:
 		if v != nil {
-			return convertToSliceConstraintType[T, R](*v), nil
+			return toSliceConstraint[T, R](*v), nil
 		}
-		return convertToSliceConstraintType[T, R](nil), nil
+		return toSliceConstraint[T, R](nil), nil
 	case nil:
-		return convertToSliceConstraintType[T, R](nil), nil
+		return toSliceConstraint[T, R](nil), nil
 	default:
-		if typedResult, ok := result.(R); ok {
-			return typedResult, nil
+		if typed, ok := result.(R); ok {
+			return typed, nil
 		}
-		return zero, fmt.Errorf("%w %T", ErrParseComplexUnexpectedType, result)
+		return zero, fmt.Errorf("%w: %T", errUnexpectedSliceType, result)
 	}
 }
 
@@ -107,9 +105,9 @@ func (z *ZodSlice[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, err
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeSlice,
-		z.extractSlice,
-		z.extractSlicePtr,
-		z.validateSlice,
+		z.extractForEngine,
+		z.extractPtrForEngine,
+		z.validateForEngine,
 		ctx...,
 	)
 }
@@ -132,14 +130,21 @@ func (z *ZodSlice[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, er
 // MODIFIER METHODS
 // =============================================================================
 
-// Optional creates an optional slice schema that returns a pointer constraint.
+// Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodSlice[T, R]) Optional() *ZodSlice[T, *[]T] {
 	in := z.internals.Clone()
 	in.SetOptional(true)
 	return z.withPtrInternals(in)
 }
 
-// Nilable allows nil values and returns a pointer constraint.
+// ExactOptional accepts absent keys but rejects explicit nil values.
+func (z *ZodSlice[T, R]) ExactOptional() *ZodSlice[T, R] {
+	in := z.internals.Clone()
+	in.SetExactOptional(true)
+	return z.withInternals(in)
+}
+
+// Nilable returns a schema that accepts nil values with pointer constraint.
 func (z *ZodSlice[T, R]) Nilable() *ZodSlice[T, *[]T] {
 	in := z.internals.Clone()
 	in.SetNilable(true)
@@ -154,7 +159,7 @@ func (z *ZodSlice[T, R]) Nullish() *ZodSlice[T, *[]T] {
 	return z.withPtrInternals(in)
 }
 
-// NonOptional removes the Optional flag and enforces a non-nil slice constraint.
+// NonOptional enforces non-nil value constraint.
 func (z *ZodSlice[T, R]) NonOptional() *ZodSlice[T, []T] {
 	in := z.internals.Clone()
 	in.SetOptional(false)
@@ -169,35 +174,31 @@ func (z *ZodSlice[T, R]) NonOptional() *ZodSlice[T, []T] {
 	}
 }
 
-// Default sets a default value when input is nil (short-circuit, bypasses validation).
+// Default sets a default value used when input is nil (short-circuit, bypasses validation).
 func (z *ZodSlice[T, R]) Default(v []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a dynamic default value using a function.
+// DefaultFunc sets a function that provides the default value.
 func (z *ZodSlice[T, R]) DefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
-	in.SetDefaultFunc(func() any {
-		return fn()
-	})
+	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides a fallback value that goes through full validation.
+// Prefault sets a fallback value used through the full parsing pipeline.
 func (z *ZodSlice[T, R]) Prefault(v []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides a dynamic fallback value using a function.
+// PrefaultFunc sets a function that provides the fallback value.
 func (z *ZodSlice[T, R]) PrefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
-	in.SetPrefaultFunc(func() any {
-		return fn()
-	})
+	in.SetPrefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
@@ -207,18 +208,18 @@ func (z *ZodSlice[T, R]) Meta(meta core.GlobalMeta) *ZodSlice[T, R] {
 	return z
 }
 
-// Describe registers a description in the global registry.
+// Describe sets a description for this schema in the global registry.
 func (z *ZodSlice[T, R]) Describe(description string) *ZodSlice[T, R] {
-	newInternals := z.internals.Clone()
+	in := z.internals.Clone()
 
-	existing, ok := core.GlobalRegistry.Get(z)
+	meta, ok := core.GlobalRegistry.Get(z)
 	if !ok {
-		existing = core.GlobalMeta{}
+		meta = core.GlobalMeta{}
 	}
-	existing.Description = description
+	meta.Description = description
 
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
+	clone := z.withInternals(in)
+	core.GlobalRegistry.Add(clone, meta)
 
 	return clone
 }
@@ -227,24 +228,30 @@ func (z *ZodSlice[T, R]) Describe(description string) *ZodSlice[T, R] {
 // VALIDATION METHODS
 // =============================================================================
 
-// Min sets the minimum number of elements.
-func (z *ZodSlice[T, R]) Min(minLen int, params ...any) *ZodSlice[T, R] {
-	return z.withCheck(checks.MinSize(minLen, params...))
+// Min adds a minimum element count constraint.
+func (z *ZodSlice[T, R]) Min(n int, params ...any) *ZodSlice[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(checks.MinSize(n, params...))
+	return z.withInternals(in)
 }
 
-// Max sets the maximum number of elements.
-func (z *ZodSlice[T, R]) Max(maxLen int, params ...any) *ZodSlice[T, R] {
-	return z.withCheck(checks.MaxSize(maxLen, params...))
+// Max adds a maximum element count constraint.
+func (z *ZodSlice[T, R]) Max(n int, params ...any) *ZodSlice[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(checks.MaxSize(n, params...))
+	return z.withInternals(in)
 }
 
-// Length sets the exact number of elements.
-func (z *ZodSlice[T, R]) Length(exactLen int, params ...any) *ZodSlice[T, R] {
-	return z.withCheck(checks.Size(exactLen, params...))
+// Length adds an exact element count constraint.
+func (z *ZodSlice[T, R]) Length(n int, params ...any) *ZodSlice[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(checks.Size(n, params...))
+	return z.withInternals(in)
 }
 
-// NonEmpty ensures the slice has at least one element.
+// NonEmpty requires at least one element.
 func (z *ZodSlice[T, R]) NonEmpty(params ...any) *ZodSlice[T, R] {
-	return z.withCheck(checks.MinSize(1, params...))
+	return z.Min(1, params...)
 }
 
 // =============================================================================
@@ -260,48 +267,57 @@ func (z *ZodSlice[T, R]) Element() any { return z.internals.Element }
 
 // Transform applies a transformation function to the parsed slice value.
 func (z *ZodSlice[T, R]) Transform(fn func(R, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
-	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
+	wrapper := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(input, ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform[R, any](z, wrapper)
 }
 
-// Overwrite transforms the slice value while keeping the same type.
-func (z *ZodSlice[T, R]) Overwrite(transform func(R) R, params ...any) *ZodSlice[T, R] {
-	transformAny := func(input any) any {
-		if converted, ok := convertToSliceType[T, R](input); ok {
-			return transform(converted)
+// Overwrite transforms the slice value while preserving the original type.
+func (z *ZodSlice[T, R]) Overwrite(fn func(R) R, params ...any) *ZodSlice[T, R] {
+	wrap := func(input any) any {
+		if converted, ok := toSliceType[T, R](input); ok {
+			return fn(converted)
 		}
 		return input
 	}
-	return z.withCheck(checks.NewZodCheckOverwrite(transformAny, params...))
+
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewZodCheckOverwrite(wrap, params...))
+	return z.withInternals(in)
 }
 
-// Pipe creates a validation pipeline with a target schema.
+// Pipe passes the parsed value to a target schema.
 func (z *ZodSlice[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
-	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
+	wrapper := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(input, ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, targetFn)
+	return core.NewZodPipe[R, any](z, target, wrapper)
 }
 
 // =============================================================================
 // REFINEMENT METHODS
 // =============================================================================
 
-// Refine adds a type-safe custom validation function.
+// Refine adds type-safe custom validation.
 func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] {
-	wrapper := func(value any) bool {
-		return fn(convertToSliceConstraintType[T, R](value))
+	wrapper := func(v any) bool {
+		return fn(toSliceConstraint[T, R](v))
 	}
 	param := utils.FirstParam(params...)
-	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param)))
+
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param)))
+	return z.withInternals(in)
 }
 
-// RefineAny adds a custom validation function without type conversion.
+// RefineAny adds custom validation without type conversion.
 func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T, R] {
 	param := utils.FirstParam(params...)
-	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(param)))
+
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(param)))
+	return z.withInternals(in)
 }
 
 // =============================================================================
@@ -319,17 +335,47 @@ func (z *ZodSlice[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 // =============================================================================
-// HELPER AND PRIVATE METHODS
+// CHECK METHOD
 // =============================================================================
 
-// withCheck clones internals, adds a check, and returns a new instance.
-func (z *ZodSlice[T, R]) withCheck(check core.ZodCheck) *ZodSlice[T, R] {
+// Check adds a custom validation function that can report multiple issues.
+func (z *ZodSlice[T, R]) Check(fn func(R, *core.ParsePayload), params ...any) *ZodSlice[T, R] {
+	wrapper := func(p *core.ParsePayload) {
+		if val, ok := p.Value().(R); ok {
+			fn(val, p)
+			return
+		}
+
+		// Pointer type adaptation: wrap value type in pointer for R = *T.
+		rt := reflect.TypeFor[R]()
+		if rt.Kind() == reflect.Pointer {
+			elem := rt.Elem()
+			rv := reflect.ValueOf(p.Value())
+			if rv.IsValid() && rv.Type() == elem {
+				ptr := reflect.New(elem)
+				ptr.Elem().Set(rv)
+				if v, ok := ptr.Interface().(R); ok {
+					fn(v, p)
+				}
+			}
+		}
+	}
+
 	in := z.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 
-// withInternals creates a new instance preserving the current constraint type.
+// With is an alias for Check.
+func (z *ZodSlice[T, R]) With(fn func(R, *core.ParsePayload), params ...any) *ZodSlice[T, R] {
+	return z.Check(fn, params...)
+}
+
+// =============================================================================
+// PRIVATE METHODS
+// =============================================================================
+
+// withInternals creates a new ZodSlice keeping the constraint type R.
 func (z *ZodSlice[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSlice[T, R] {
 	return &ZodSlice[T, R]{internals: &ZodSliceInternals[T]{
 		ZodTypeInternals: *in,
@@ -338,7 +384,7 @@ func (z *ZodSlice[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSlice[T, R
 	}}
 }
 
-// withPtrInternals creates a new instance with pointer constraint type.
+// withPtrInternals creates a new ZodSlice with pointer constraint *[]T.
 func (z *ZodSlice[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSlice[T, *[]T] {
 	return &ZodSlice[T, *[]T]{internals: &ZodSliceInternals[T]{
 		ZodTypeInternals: *in,
@@ -356,22 +402,22 @@ func (z *ZodSlice[T, R]) CloneFrom(source any) {
 	}
 }
 
-// extractSlice extracts []T from the input value.
-func (z *ZodSlice[T, R]) extractSlice(value any) ([]T, bool) {
-	if sliceVal, ok := value.([]T); ok {
-		return sliceVal, true
+// extractForEngine extracts []T from input for engine.ParseComplex.
+func (z *ZodSlice[T, R]) extractForEngine(value any) ([]T, bool) {
+	if s, ok := value.([]T); ok {
+		return s, true
 	}
 
-	if anySlice, ok := value.([]any); ok {
-		converted := make([]T, len(anySlice))
-		for i, elem := range anySlice {
-			typedElem, ok := elem.(T)
+	if items, ok := value.([]any); ok {
+		result := make([]T, len(items))
+		for i, elem := range items {
+			typed, ok := elem.(T)
 			if !ok {
 				return nil, false
 			}
-			converted[i] = typedElem
+			result[i] = typed
 		}
-		return converted, true
+		return result, true
 	}
 
 	if value == nil {
@@ -382,162 +428,120 @@ func (z *ZodSlice[T, R]) extractSlice(value any) ([]T, bool) {
 	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Slice {
 		if converted, err := slicex.ToAny(value); err == nil && converted != nil {
-			typedSlice := make([]T, len(converted))
+			result := make([]T, len(converted))
 			for i, elem := range converted {
-				typedElem, ok := elem.(T)
+				typed, ok := elem.(T)
 				if !ok {
 					return nil, false
 				}
-				typedSlice[i] = typedElem
+				result[i] = typed
 			}
-			return typedSlice, true
+			return result, true
 		}
 	}
 
 	return nil, false
 }
 
-// extractSlicePtr extracts *[]T from the input value.
-func (z *ZodSlice[T, R]) extractSlicePtr(value any) (*[]T, bool) {
-	// Preserve original pointer identity when possible.
-	if sliceVal, ok := value.(*[]T); ok {
-		return sliceVal, true
+// extractPtrForEngine extracts *[]T from input for engine.ParseComplex.
+func (z *ZodSlice[T, R]) extractPtrForEngine(value any) (*[]T, bool) {
+	if ptr, ok := value.(*[]T); ok {
+		return ptr, true
 	}
-
-	if sliceVal, ok := value.([]T); ok {
-		return &sliceVal, true
+	if s, ok := value.([]T); ok {
+		return &s, true
 	}
-
 	return nil, false
 }
 
-// validateSlice validates slice elements using the element schema.
-func (z *ZodSlice[T, R]) validateSlice(value []T, checks []core.ZodCheck, ctx *core.ParseContext) ([]T, error) {
-	var collectedIssues []core.ZodRawIssue
-
+// validateForEngine validates slice elements using the element schema.
+func (z *ZodSlice[T, R]) validateForEngine(value []T, chks []core.ZodCheck, ctx *core.ParseContext) ([]T, error) {
 	payload := core.NewParsePayload(value)
-	result := engine.RunChecksOnValue(value, checks, payload, ctx)
+	result := engine.RunChecksOnValue(value, chks, payload, ctx)
 
+	var errs []core.ZodRawIssue
 	if result.HasIssues() {
-		collectedIssues = append(collectedIssues, result.Issues()...)
+		errs = append(errs, result.Issues()...)
 	}
 
 	// Use the potentially transformed value for element validation.
-	validatedValue := value
+	validated := value
 	if result.Value() != nil {
 		if converted, ok := result.Value().([]T); ok {
-			validatedValue = converted
+			validated = converted
 		}
 	}
 
 	if z.internals.Element != nil {
-		for i, element := range validatedValue {
-			if err := z.validateElement(element, z.internals.Element, ctx); err != nil {
+		for i, elem := range validated {
+			if err := parseElement(elem, z.internals.Element); err != nil {
 				var zodErr *issues.ZodError
 				if errors.As(err, &zodErr) {
-					for _, elementIssue := range zodErr.Issues {
-						collectedIssues = append(collectedIssues, issues.ConvertZodIssueToRawWithProperties(elementIssue, []any{i}))
+					for _, issue := range zodErr.Issues {
+						errs = append(errs, issues.ConvertZodIssueToRawWithProperties(issue, []any{i}))
 					}
 				} else {
-					rawIssue := issues.CreateIssue(core.Custom, err.Error(), nil, element)
-					rawIssue.Path = []any{i}
-					collectedIssues = append(collectedIssues, rawIssue)
+					raw := issues.CreateIssue(core.Custom, err.Error(), nil, elem)
+					raw.Path = []any{i}
+					errs = append(errs, raw)
 				}
 			}
 		}
 	}
 
-	if len(collectedIssues) > 0 {
-		var zero []T
-		return zero, issues.CreateArrayValidationIssues(collectedIssues)
+	if len(errs) > 0 {
+		return nil, issues.CreateArrayValidationIssues(errs)
 	}
 
-	return validatedValue, nil
+	return validated, nil
 }
 
-// validateElement validates a single element using the provided schema.
-func (z *ZodSlice[T, R]) validateElement(element T, schema any, ctx *core.ParseContext) error {
-	if schema == nil {
-		return nil
-	}
+// =============================================================================
+// TYPE CONVERSION HELPERS
+// =============================================================================
 
-	// Use reflection to call Parse method; handles all schema types including Lazy.
-	schemaValue := reflect.ValueOf(schema)
-	if !schemaValue.IsValid() || schemaValue.IsNil() {
-		return nil
-	}
-
-	parseMethod := schemaValue.MethodByName("Parse")
-	if !parseMethod.IsValid() {
-		return nil
-	}
-
-	methodType := parseMethod.Type()
-	if methodType.NumIn() < 1 {
-		return nil
-	}
-
-	args := []reflect.Value{reflect.ValueOf(element)}
-	if methodType.NumIn() > 1 && methodType.In(1).String() == "*core.ParseContext" {
-		args = append(args, reflect.ValueOf(ctx))
-	}
-
-	results := parseMethod.Call(args)
-	if len(results) >= 2 {
-		if errInterface := results[1].Interface(); errInterface != nil {
-			if err, ok := errInterface.(error); ok {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// convertToSliceType converts any value to the specified slice constraint type.
-func convertToSliceType[T any, R any](v any) (R, bool) {
+// toSliceType converts any value to the slice constraint type R.
+func toSliceType[T any, R any](v any) (R, bool) {
 	var zero R
 
-	if slice, ok := v.([]T); ok {
-		return convertToSliceConstraintType[T, R](slice), true
+	if s, ok := v.([]T); ok {
+		return toSliceConstraint[T, R](s), true
 	}
-
-	if ptrSlice, ok := v.(*[]T); ok {
-		return convertToSliceConstraintType[T, R](ptrSlice), true
+	if ptr, ok := v.(*[]T); ok {
+		return toSliceConstraint[T, R](ptr), true
 	}
 
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Slice {
-		elemType := reflect.TypeOf((*T)(nil)).Elem()
-		slice := make([]T, rv.Len())
+		elemType := reflect.TypeFor[T]()
+		s := make([]T, rv.Len())
 		for i := range rv.Len() {
 			elem := rv.Index(i).Interface()
 			if reflect.TypeOf(elem).ConvertibleTo(elemType) {
-				slice[i] = reflect.ValueOf(elem).Convert(elemType).Interface().(T)
+				s[i] = reflect.ValueOf(elem).Convert(elemType).Interface().(T)
 			} else {
 				return zero, false
 			}
 		}
-		return convertToSliceConstraintType[T, R](slice), true
+		return toSliceConstraint[T, R](s), true
 	}
 
 	return zero, false
 }
 
-// convertToSliceConstraintType converts a value to the constraint type R.
-func convertToSliceConstraintType[T any, R any](value any) R {
+// toSliceConstraint converts a value to the constraint type R.
+func toSliceConstraint[T any, R any](value any) R {
 	var zero R
-	zeroType := reflect.TypeOf(zero)
 
 	if value == nil {
 		return zero
 	}
 
-	if zeroType != nil && zeroType.Kind() == reflect.Pointer {
+	rt := reflect.TypeFor[R]()
+	if rt != nil && rt.Kind() == reflect.Pointer {
 		switch v := value.(type) {
 		case []T:
-			ptr := &v
-			return any(ptr).(R)
+			return any(&v).(R)
 		case *[]T:
 			return any(v).(R)
 		}
@@ -559,6 +563,10 @@ func convertToSliceConstraintType[T any, R any](value any) R {
 	return zero
 }
 
+// =============================================================================
+// CONSTRUCTORS
+// =============================================================================
+
 // newZodSliceFromDef constructs a new ZodSlice from a definition.
 func newZodSliceFromDef[T any, R any](def *ZodSliceDef) *ZodSlice[T, R] {
 	internals := &ZodSliceInternals[T]{
@@ -568,46 +576,38 @@ func newZodSliceFromDef[T any, R any](def *ZodSliceDef) *ZodSlice[T, R] {
 	}
 
 	internals.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
-		sliceDef := &ZodSliceDef{
+		d := &ZodSliceDef{
 			ZodTypeDef: *newDef,
 			Element:    def.Element,
 		}
-		return any(newZodSliceFromDef[T, R](sliceDef)).(core.ZodType[any])
+		return any(newZodSliceFromDef[T, R](d)).(core.ZodType[any])
 	}
-
-	schema := &ZodSlice[T, R]{internals: internals}
 
 	if def.Error != nil {
 		internals.Error = def.Error
 	}
 
-	if len(def.Checks) > 0 {
-		for _, check := range def.Checks {
-			internals.AddCheck(check)
-		}
+	for _, check := range def.Checks {
+		internals.AddCheck(check)
 	}
 
-	return schema
+	return &ZodSlice[T, R]{internals: internals}
 }
 
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
-
 // Slice creates a slice schema with element validation.
-func Slice[T any](elementSchema any, paramArgs ...any) *ZodSlice[T, []T] {
-	return SliceTyped[T, []T](elementSchema, paramArgs...)
+func Slice[T any](elementSchema any, args ...any) *ZodSlice[T, []T] {
+	return SliceTyped[T, []T](elementSchema, args...)
 }
 
 // SlicePtr creates a slice schema with pointer constraint.
-func SlicePtr[T any](elementSchema any, paramArgs ...any) *ZodSlice[T, *[]T] {
-	return SliceTyped[T, *[]T](elementSchema, paramArgs...)
+func SlicePtr[T any](elementSchema any, args ...any) *ZodSlice[T, *[]T] {
+	return SliceTyped[T, *[]T](elementSchema, args...)
 }
 
 // SliceTyped creates a slice schema with an explicit constraint type.
-func SliceTyped[T any, R any](elementSchema any, paramArgs ...any) *ZodSlice[T, R] {
-	param := utils.FirstParam(paramArgs...)
-	normalizedParams := utils.NormalizeParams(param)
+func SliceTyped[T any, R any](elementSchema any, args ...any) *ZodSlice[T, R] {
+	param := utils.FirstParam(args...)
+	sp := utils.NormalizeParams(param)
 
 	def := &ZodSliceDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -617,48 +617,16 @@ func SliceTyped[T any, R any](elementSchema any, paramArgs ...any) *ZodSlice[T, 
 		Element: elementSchema,
 	}
 
-	if normalizedParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
-	sliceSchema := newZodSliceFromDef[T, R](def)
+	schema := newZodSliceFromDef[T, R](def)
 
 	// Add a minimal check to trigger element validation when element schema exists.
 	if elementSchema != nil {
-		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		sliceSchema.internals.AddCheck(alwaysPassCheck)
+		schema.internals.AddCheck(checks.NewCustom[any](func(any) bool { return true }, core.SchemaParams{}))
 	}
 
-	return sliceSchema
-}
-
-// Check adds a custom validation function that can push multiple issues.
-func (z *ZodSlice[T, R]) Check(fn func(value R, payload *core.ParsePayload), params ...any) *ZodSlice[T, R] {
-	wrapper := func(payload *core.ParsePayload) {
-		if val, ok := payload.Value().(R); ok {
-			fn(val, payload)
-			return
-		}
-
-		// Handle pointer/value mismatch via reflection.
-		var zero R
-		zeroTyp := reflect.TypeOf(zero)
-		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
-			elemTyp := zeroTyp.Elem()
-			valRV := reflect.ValueOf(payload.Value())
-			if valRV.IsValid() && valRV.Type() == elemTyp {
-				ptr := reflect.New(elemTyp)
-				ptr.Elem().Set(valRV)
-				if casted, ok := ptr.Interface().(R); ok {
-					fn(casted, payload)
-				}
-			}
-		}
-	}
-	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
-}
-
-// With is an alias for Check.
-func (z *ZodSlice[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodSlice[T, R] {
-	return z.Check(fn, params...)
+	return schema
 }
