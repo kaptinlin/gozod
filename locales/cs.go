@@ -104,14 +104,14 @@ func formatCs(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameCs(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameCs(received)
 		return fmt.Sprintf("Neplatný vstup: očekáváno %s, obdrženo %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Neplatná hodnota"
 		}
@@ -128,21 +128,21 @@ func formatCs(raw core.ZodRawIssue) string {
 		return formatSizeConstraintCs(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Neplatný formát"
 		}
 		return formatStringValidationCs(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Neplatné číslo: musí být násobkem"
 		}
 		return fmt.Sprintf("Neplatné číslo: musí být násobkem %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Neznámý klíč"
 		}
@@ -157,7 +157,7 @@ func formatCs(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Neplatný klíč"
 		}
@@ -167,45 +167,45 @@ func formatCs(raw core.ZodRawIssue) string {
 		return "Neplatný vstup"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Neplatný prvek"
 		}
 		return fmt.Sprintf("Neplatná hodnota v %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "pole")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "pole")
 		if fieldName == "" {
 			return fmt.Sprintf("Chybí povinné %s", fieldType)
 		}
 		return fmt.Sprintf("Chybí povinné %s: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "neznámý")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "neznámý")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "neznámý")
+		toType := mapx.StringOr(raw.Properties, "to_type", "neznámý")
 		return fmt.Sprintf("Převod typu selhal: nelze převést %s na %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Neplatné schéma: %s", reason)
 		}
 		return "Neplatná definice schématu"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "diskriminátor")
+		field := mapx.StringOr(raw.Properties, "field", "diskriminátor")
 		return fmt.Sprintf("Neplatné nebo chybějící pole diskriminátoru: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "hodnoty")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "hodnoty")
 		return fmt.Sprintf("Nelze sloučit %s: nekompatibilní typy", conflictType)
 
 	case core.NilPointer:
 		return "Zjištěn nulový ukazatel"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -218,16 +218,16 @@ func formatCs(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintCs formats size constraint messages in Czech
 func formatSizeConstraintCs(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "hodnota"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -237,8 +237,8 @@ func formatSizeConstraintCs(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Hodnota je příliš velká"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingCs(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingCs(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Czech comparison operators
@@ -274,25 +274,25 @@ func formatSizeConstraintCs(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationCs(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Neplatný řetězec: musí začínat zadaným prefixem"
 		}
 		return fmt.Sprintf("Neplatný řetězec: musí začínat na \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Neplatný řetězec: musí končit zadaným sufixem"
 		}
 		return fmt.Sprintf("Neplatný řetězec: musí končit na \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Neplatný řetězec: musí obsahovat zadaný podřetězec"
 		}
 		return fmt.Sprintf("Neplatný řetězec: musí obsahovat \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Neplatný řetězec: musí odpovídat vzoru"
 		}

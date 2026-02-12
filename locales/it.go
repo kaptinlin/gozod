@@ -105,14 +105,14 @@ func formatIt(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameIt(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameIt(received)
 		return fmt.Sprintf("Input non valido: atteso %s, ricevuto %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Valore non valido"
 		}
@@ -129,21 +129,21 @@ func formatIt(raw core.ZodRawIssue) string {
 		return formatSizeConstraintIt(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Formato non valido"
 		}
 		return formatStringValidationIt(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Numero non valido: deve essere un multiplo"
 		}
 		return fmt.Sprintf("Numero non valido: deve essere un multiplo di %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Chiave non riconosciuta"
 		}
@@ -158,7 +158,7 @@ func formatIt(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Chiave non valida"
 		}
@@ -168,45 +168,45 @@ func formatIt(raw core.ZodRawIssue) string {
 		return "Input non valido"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Elemento non valido"
 		}
 		return fmt.Sprintf("Valore non valido in %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "campo")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "campo")
 		if fieldName == "" {
 			return fmt.Sprintf("Manca %s obbligatorio", fieldType)
 		}
 		return fmt.Sprintf("Manca %s obbligatorio: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "sconosciuto")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "sconosciuto")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "sconosciuto")
+		toType := mapx.StringOr(raw.Properties, "to_type", "sconosciuto")
 		return fmt.Sprintf("Conversione di tipo fallita: impossibile convertire %s in %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Schema non valido: %s", reason)
 		}
 		return "Definizione dello schema non valida"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "discriminatore")
+		field := mapx.StringOr(raw.Properties, "field", "discriminatore")
 		return fmt.Sprintf("Campo discriminatore non valido o mancante: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "valori")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "valori")
 		return fmt.Sprintf("Impossibile unire %s: tipi incompatibili", conflictType)
 
 	case core.NilPointer:
 		return "Puntatore nullo rilevato"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -219,16 +219,16 @@ func formatIt(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintIt formats size constraint messages in Italian
 func formatSizeConstraintIt(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "valore"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -238,8 +238,8 @@ func formatSizeConstraintIt(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Troppo grande"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingIt(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingIt(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Italian comparison operators
@@ -275,25 +275,25 @@ func formatSizeConstraintIt(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationIt(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Stringa non valida: deve iniziare con il prefisso specificato"
 		}
 		return fmt.Sprintf("Stringa non valida: deve iniziare con \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Stringa non valida: deve terminare con il suffisso specificato"
 		}
 		return fmt.Sprintf("Stringa non valida: deve terminare con \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Stringa non valida: deve includere la sottostringa specificata"
 		}
 		return fmt.Sprintf("Stringa non valida: deve includere \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Stringa non valida: deve corrispondere al pattern"
 		}

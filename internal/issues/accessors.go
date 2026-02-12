@@ -8,72 +8,72 @@ import (
 
 // RawIssueExpected returns the expected value from a raw issue.
 func RawIssueExpected(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "expected", "")
+	return mapx.StringOr(r.Properties, "expected", "")
 }
 
 // RawIssueReceived returns the received value from a raw issue.
 func RawIssueReceived(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "received", "")
+	return mapx.StringOr(r.Properties, "received", "")
 }
 
 // RawIssueOrigin returns the origin value from a raw issue.
 func RawIssueOrigin(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "origin", "")
+	return mapx.StringOr(r.Properties, "origin", "")
 }
 
 // RawIssueFormat returns the format value from a raw issue.
 func RawIssueFormat(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "format", "")
+	return mapx.StringOr(r.Properties, "format", "")
 }
 
 // RawIssuePattern returns the pattern value from a raw issue.
 func RawIssuePattern(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "pattern", "")
+	return mapx.StringOr(r.Properties, "pattern", "")
 }
 
 // RawIssuePrefix returns the prefix value from a raw issue.
 func RawIssuePrefix(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "prefix", "")
+	return mapx.StringOr(r.Properties, "prefix", "")
 }
 
 // RawIssueSuffix returns the suffix value from a raw issue.
 func RawIssueSuffix(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "suffix", "")
+	return mapx.StringOr(r.Properties, "suffix", "")
 }
 
 // RawIssueIncludes returns the includes value from a raw issue.
 func RawIssueIncludes(r core.ZodRawIssue) string {
-	return mapx.GetStringDefault(r.Properties, "includes", "")
+	return mapx.StringOr(r.Properties, "includes", "")
 }
 
 // RawIssueMinimum returns the minimum value from a raw issue.
 func RawIssueMinimum(r core.ZodRawIssue) any {
-	return mapx.GetAnyDefault(r.Properties, "minimum", nil)
+	return mapx.AnyOr(r.Properties, "minimum", nil)
 }
 
 // RawIssueMaximum returns the maximum value from a raw issue.
 func RawIssueMaximum(r core.ZodRawIssue) any {
-	return mapx.GetAnyDefault(r.Properties, "maximum", nil)
+	return mapx.AnyOr(r.Properties, "maximum", nil)
 }
 
 // RawIssueInclusive returns the inclusive value from a raw issue.
 func RawIssueInclusive(r core.ZodRawIssue) bool {
-	return mapx.GetBoolDefault(r.Properties, "inclusive", false)
+	return mapx.BoolOr(r.Properties, "inclusive", false)
 }
 
 // RawIssueDivisor returns the divisor value from a raw issue.
 func RawIssueDivisor(r core.ZodRawIssue) any {
-	return mapx.GetAnyDefault(r.Properties, "divisor", nil)
+	return mapx.AnyOr(r.Properties, "divisor", nil)
 }
 
 // RawIssueKeys returns the keys value from a raw issue.
 func RawIssueKeys(r core.ZodRawIssue) []string {
-	return mapx.GetStringsDefault(r.Properties, "keys", nil)
+	return mapx.StringsOr(r.Properties, "keys", nil)
 }
 
 // RawIssueValues returns the values from a raw issue's properties map.
 func RawIssueValues(r core.ZodRawIssue) []any {
-	values := mapx.GetAnySliceDefault(r.Properties, "values", nil)
+	values := mapx.AnySliceOr(r.Properties, "values", nil)
 	if values != nil {
 		return values
 	}
@@ -137,17 +137,17 @@ func IssueDivisor(i core.ZodIssue) (any, bool) {
 
 // RawIssueProperty returns any property value by key.
 func RawIssueProperty(r core.ZodRawIssue, key string) any {
-	return mapx.GetAnyDefault(r.Properties, key, nil)
+	return mapx.AnyOr(r.Properties, key, nil)
 }
 
 // RawIssueStringProperty returns a string property by key.
 func RawIssueStringProperty(r core.ZodRawIssue, key string) string {
-	return mapx.GetStringDefault(r.Properties, key, "")
+	return mapx.StringOr(r.Properties, key, "")
 }
 
 // RawIssueBoolProperty returns a bool property by key.
 func RawIssueBoolProperty(r core.ZodRawIssue, key string) bool {
-	return mapx.GetBoolDefault(r.Properties, key, false)
+	return mapx.BoolOr(r.Properties, key, false)
 }
 
 // HasRawIssueProperty checks if a property exists.

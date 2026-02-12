@@ -135,14 +135,14 @@ func formatRu(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameRu(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameRu(received)
 		return fmt.Sprintf("Неверный ввод: ожидалось %s, получено %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Неверное значение"
 		}
@@ -159,21 +159,21 @@ func formatRu(raw core.ZodRawIssue) string {
 		return formatSizeConstraintRu(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Неверный формат"
 		}
 		return formatStringValidationRu(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Неверное число: должно быть кратным"
 		}
 		return fmt.Sprintf("Неверное число: должно быть кратным %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Нераспознанный ключ"
 		}
@@ -188,7 +188,7 @@ func formatRu(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Неверный ключ"
 		}
@@ -198,45 +198,45 @@ func formatRu(raw core.ZodRawIssue) string {
 		return "Неверные входные данные"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Неверный элемент"
 		}
 		return fmt.Sprintf("Неверное значение в %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "поле")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "поле")
 		if fieldName == "" {
 			return fmt.Sprintf("Отсутствует обязательное %s", fieldType)
 		}
 		return fmt.Sprintf("Отсутствует обязательное %s: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "неизвестный")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "неизвестный")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "неизвестный")
+		toType := mapx.StringOr(raw.Properties, "to_type", "неизвестный")
 		return fmt.Sprintf("Ошибка преобразования типа: невозможно преобразовать %s в %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Неверная схема: %s", reason)
 		}
 		return "Неверное определение схемы"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "дискриминатор")
+		field := mapx.StringOr(raw.Properties, "field", "дискриминатор")
 		return fmt.Sprintf("Неверное или отсутствующее поле дискриминатора: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "значения")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "значения")
 		return fmt.Sprintf("Невозможно объединить %s: несовместимые типы", conflictType)
 
 	case core.NilPointer:
 		return "Обнаружен нулевой указатель"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -249,16 +249,16 @@ func formatRu(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintRu formats size constraint messages in Russian with proper pluralization
 func formatSizeConstraintRu(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "значение"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -268,7 +268,7 @@ func formatSizeConstraintRu(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Слишком большое значение"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
 	sizing := getSizingRu(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 
@@ -317,25 +317,25 @@ func formatSizeConstraintRu(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationRu(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Неверная строка: должна начинаться с указанного префикса"
 		}
 		return fmt.Sprintf("Неверная строка: должна начинаться с \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Неверная строка: должна заканчиваться указанным суффиксом"
 		}
 		return fmt.Sprintf("Неверная строка: должна заканчиваться на \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Неверная строка: должна содержать указанную подстроку"
 		}
 		return fmt.Sprintf("Неверная строка: должна содержать \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Неверная строка: должна соответствовать шаблону"
 		}

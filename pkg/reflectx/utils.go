@@ -6,39 +6,41 @@ import (
 	"reflect"
 )
 
-// Sentinel errors returned by [ConvertToGeneric].
+// Sentinel errors returned by [Convert].
 var (
-	// ErrNilValue indicates a nil value was passed to ConvertToGeneric.
-	ErrNilValue = errors.New("cannot convert nil")
-	// ErrUnsupportedConversion indicates the source type cannot be converted
-	// to the target type via assignment or reflect.Convert.
-	ErrUnsupportedConversion = errors.New("unsupported conversion")
+	// ErrNil indicates a nil value was passed to [Convert].
+	ErrNil = errors.New("cannot convert nil")
+	// ErrUnsupported indicates the source type cannot be converted
+	// to the target type via assignment or [reflect.Value.Convert].
+	ErrUnsupported = errors.New("unsupported conversion")
 )
 
-// ConvertToGeneric converts v to type T. It tries direct assignment first,
-// then falls back to [reflect.Value.Convert] for safe numeric/string casts.
-// Returns the zero value of T and a wrapped sentinel error ([ErrNilValue] or
-// [ErrUnsupportedConversion]) when conversion is impossible.
-func ConvertToGeneric[T any](v any) (T, error) {
+// Convert converts v to type T. It tries direct assignment first,
+// then falls back to [reflect.Value.Convert] for safe numeric/string
+// casts. Returns the zero value of T and a wrapped sentinel error
+// ([ErrNil] or [ErrUnsupported]) when conversion is impossible.
+func Convert[T any](v any) (T, error) {
 	var zero T
 	target := reflect.TypeOf(zero)
 
 	if v == nil {
-		return zero, fmt.Errorf("cannot convert nil to %v: %w", target, ErrNilValue)
+		return zero, fmt.Errorf(
+			"cannot convert nil to %v: %w", target, ErrNil)
 	}
 
-	srcVal := reflect.ValueOf(v)
-	srcType := srcVal.Type()
+	src := reflect.ValueOf(v)
 
 	// Fast path: direct assignment (no allocation).
-	if srcType.AssignableTo(target) {
+	if src.Type().AssignableTo(target) {
 		return v.(T), nil
 	}
 
-	// Slow path: reflect.Convert handles safe numeric/string casts.
-	if srcType.ConvertibleTo(target) {
-		return srcVal.Convert(target).Interface().(T), nil
+	// Slow path: reflect.Convert for safe numeric/string casts.
+	if src.Type().ConvertibleTo(target) {
+		return src.Convert(target).Interface().(T), nil
 	}
 
-	return zero, fmt.Errorf("unsupported conversion from %T to %v: %w", v, target, ErrUnsupportedConversion)
+	return zero, fmt.Errorf(
+		"unsupported conversion from %T to %v: %w",
+		v, target, ErrUnsupported)
 }

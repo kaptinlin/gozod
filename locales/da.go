@@ -105,14 +105,14 @@ func formatDa(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameDa(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameDa(received)
 		return fmt.Sprintf("Ugyldigt input: forventede %s, fik %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Ugyldig værdi"
 		}
@@ -129,21 +129,21 @@ func formatDa(raw core.ZodRawIssue) string {
 		return formatSizeConstraintDa(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Ugyldigt format"
 		}
 		return formatStringValidationDa(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Ugyldigt tal: skal være deleligt"
 		}
 		return fmt.Sprintf("Ugyldigt tal: skal være deleligt med %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Ukendt nøgle"
 		}
@@ -158,7 +158,7 @@ func formatDa(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Ugyldig nøgle"
 		}
@@ -168,45 +168,45 @@ func formatDa(raw core.ZodRawIssue) string {
 		return "Ugyldigt input: matcher ingen af de tilladte typer"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Ugyldigt element"
 		}
 		return fmt.Sprintf("Ugyldig værdi i %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "felt")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "felt")
 		if fieldName == "" {
 			return fmt.Sprintf("Påkrævet %s mangler", fieldType)
 		}
 		return fmt.Sprintf("Påkrævet %s mangler: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "ukendt")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "ukendt")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "ukendt")
+		toType := mapx.StringOr(raw.Properties, "to_type", "ukendt")
 		return fmt.Sprintf("Typekonvertering mislykkedes: kan ikke konvertere %s til %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Ugyldigt skema: %s", reason)
 		}
 		return "Ugyldig skemadefinition"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "diskriminator")
+		field := mapx.StringOr(raw.Properties, "field", "diskriminator")
 		return fmt.Sprintf("Ugyldigt eller manglende diskriminatorfelt: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "værdier")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "værdier")
 		return fmt.Sprintf("Kan ikke flette %s: inkompatible typer", conflictType)
 
 	case core.NilPointer:
 		return "Null-pointer opdaget"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -219,16 +219,16 @@ func formatDa(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintDa formats size constraint messages in Danish
 func formatSizeConstraintDa(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "værdi"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -238,8 +238,8 @@ func formatSizeConstraintDa(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "For stor"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingDa(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingDa(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Danish comparison operators
@@ -275,25 +275,25 @@ func formatSizeConstraintDa(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationDa(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Ugyldig streng: skal starte med angivet præfiks"
 		}
 		return fmt.Sprintf("Ugyldig streng: skal starte med \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Ugyldig streng: skal ende med angivet suffiks"
 		}
 		return fmt.Sprintf("Ugyldig streng: skal ende med \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Ugyldig streng: skal indeholde angivet delstreng"
 		}
 		return fmt.Sprintf("Ugyldig streng: skal indeholde \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Ugyldig streng: skal matche mønsteret"
 		}

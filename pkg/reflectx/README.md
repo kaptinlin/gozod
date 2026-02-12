@@ -22,7 +22,7 @@ func main() {
     }
 
     // Value extraction
-    if str, ok := reflectx.ExtractString(value); ok {
+    if str, ok := reflectx.StringVal(value); ok {
         fmt.Printf("String value: %s\n", str)
     }
 
@@ -40,8 +40,8 @@ func main() {
     }
 
     // Generic type conversion
-    if result, err := reflectx.ConvertToGeneric[string](123); err == nil {
-        fmt.Printf("Generic conversion: %s\n", result)
+    if result, err := reflectx.Convert[string](123); err == nil {
+        fmt.Printf("Converted: %s\n", result)
     }
 
     // Integration with coerce for conversions
@@ -73,15 +73,15 @@ reflectx.HasLength(val)     // true if has length property
 length, _ := reflectx.Length(val)
 
 // Value extraction
-reflectx.ExtractString(val) // (string, ok)
+reflectx.StringVal(val)     // (string, ok)
 
 // Size helpers
 size, _ := reflectx.Size(val)
 
 // Pointer operations
 reflectx.Deref(ptr)         // (value, ok)
-reflectx.DerefAll(ptr)      // (value, ok)
-reflectx.ToPointer(val)     // pointer to value
+reflectx.DerefAll(ptr)      // fully dereferenced value
 
 // Conversion
-reflectx.ConvertToGeneric[T](val) // (T, error)
+reflectx.Convert[T](val)    // (T, error)
+```

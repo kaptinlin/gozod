@@ -127,14 +127,14 @@ func formatNl(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameNl(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameNl(received)
 		return fmt.Sprintf("Ongeldige invoer: verwacht %s, ontving %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Ongeldige waarde"
 		}
@@ -151,21 +151,21 @@ func formatNl(raw core.ZodRawIssue) string {
 		return formatSizeConstraintNl(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Ongeldig formaat"
 		}
 		return formatStringValidationNl(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Ongeldig getal: moet een veelvoud zijn"
 		}
 		return fmt.Sprintf("Ongeldig getal: moet een veelvoud van %v zijn", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Onbekende key"
 		}
@@ -180,7 +180,7 @@ func formatNl(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Ongeldige key"
 		}
@@ -190,45 +190,45 @@ func formatNl(raw core.ZodRawIssue) string {
 		return "Ongeldige invoer"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Ongeldig element"
 		}
 		return fmt.Sprintf("Ongeldige waarde in %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "veld")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "veld")
 		if fieldName == "" {
 			return fmt.Sprintf("Verplicht %s ontbreekt", fieldType)
 		}
 		return fmt.Sprintf("Verplicht %s ontbreekt: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "onbekend")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "onbekend")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "onbekend")
+		toType := mapx.StringOr(raw.Properties, "to_type", "onbekend")
 		return fmt.Sprintf("Typeconversie mislukt: kan %s niet naar %s converteren", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Ongeldig schema: %s", reason)
 		}
 		return "Ongeldige schemadefinitie"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "discriminator")
+		field := mapx.StringOr(raw.Properties, "field", "discriminator")
 		return fmt.Sprintf("Ongeldig of ontbrekend discriminatorveld: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "waarden")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "waarden")
 		return fmt.Sprintf("Kan %s niet samenvoegen: incompatibele types", conflictType)
 
 	case core.NilPointer:
 		return "Null pointer aangetroffen"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -241,16 +241,16 @@ func formatNl(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintNl formats size constraint messages in Dutch
 func formatSizeConstraintNl(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "waarde"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -258,8 +258,8 @@ func formatSizeConstraintNl(raw core.ZodRawIssue, isTooSmall bool) string {
 		return fmt.Sprintf("Te %s", sizeAdj)
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingNl(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingNl(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 	sizeAdj := getDutchSizeAdjective(origin, isTooSmall)
 
@@ -290,25 +290,25 @@ func formatSizeConstraintNl(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationNl(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Ongeldige tekst: moet met het opgegeven voorvoegsel beginnen"
 		}
 		return fmt.Sprintf("Ongeldige tekst: moet met \"%s\" beginnen", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Ongeldige tekst: moet op het opgegeven achtervoegsel eindigen"
 		}
 		return fmt.Sprintf("Ongeldige tekst: moet op \"%s\" eindigen", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Ongeldige tekst: moet de opgegeven substring bevatten"
 		}
 		return fmt.Sprintf("Ongeldige tekst: moet \"%s\" bevatten", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Ongeldige tekst: moet overeenkomen met patroon"
 		}

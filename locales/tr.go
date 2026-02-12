@@ -104,14 +104,14 @@ func formatTr(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameTr(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameTr(received)
 		return fmt.Sprintf("Geçersiz değer: beklenen %s, alınan %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Geçersiz değer"
 		}
@@ -128,21 +128,21 @@ func formatTr(raw core.ZodRawIssue) string {
 		return formatSizeConstraintTr(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Geçersiz format"
 		}
 		return formatStringValidationTr(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Geçersiz sayı: tam bölünebilmeli"
 		}
 		return fmt.Sprintf("Geçersiz sayı: %v ile tam bölünebilmeli", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Tanınmayan anahtar"
 		}
@@ -157,7 +157,7 @@ func formatTr(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Geçersiz anahtar"
 		}
@@ -167,45 +167,45 @@ func formatTr(raw core.ZodRawIssue) string {
 		return "Geçersiz değer"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Geçersiz öğe"
 		}
 		return fmt.Sprintf("%s içinde geçersiz değer", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "alan")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "alan")
 		if fieldName == "" {
 			return fmt.Sprintf("Zorunlu %s eksik", fieldType)
 		}
 		return fmt.Sprintf("Zorunlu %s eksik: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "bilinmeyen")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "bilinmeyen")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "bilinmeyen")
+		toType := mapx.StringOr(raw.Properties, "to_type", "bilinmeyen")
 		return fmt.Sprintf("Tür dönüştürme başarısız: %s türü %s türüne dönüştürülemiyor", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Geçersiz şema: %s", reason)
 		}
 		return "Geçersiz şema tanımı"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "ayrımcı")
+		field := mapx.StringOr(raw.Properties, "field", "ayrımcı")
 		return fmt.Sprintf("Geçersiz veya eksik ayrımcı alan: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "değerler")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "değerler")
 		return fmt.Sprintf("%s birleştirilemiyor: uyumsuz türler", conflictType)
 
 	case core.NilPointer:
 		return "Boş işaretçi algılandı"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -218,16 +218,16 @@ func formatTr(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintTr formats size constraint messages in Turkish
 func formatSizeConstraintTr(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "değer"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -237,8 +237,8 @@ func formatSizeConstraintTr(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Çok büyük"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingTr(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingTr(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Turkish comparison operators
@@ -274,25 +274,25 @@ func formatSizeConstraintTr(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationTr(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Geçersiz metin: belirtilen önek ile başlamalı"
 		}
 		return fmt.Sprintf("Geçersiz metin: \"%s\" ile başlamalı", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Geçersiz metin: belirtilen sonek ile bitmeli"
 		}
 		return fmt.Sprintf("Geçersiz metin: \"%s\" ile bitmeli", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Geçersiz metin: belirtilen alt dizeyi içermeli"
 		}
 		return fmt.Sprintf("Geçersiz metin: \"%s\" içermeli", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Geçersiz metin: desene uymalı"
 		}

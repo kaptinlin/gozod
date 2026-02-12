@@ -138,14 +138,14 @@ func formatHe(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeLabelHe(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeLabelHe(received)
 		return fmt.Sprintf("קלט לא תקין: צריך להיות %s, התקבל %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "ערך לא תקין"
 		}
@@ -168,21 +168,21 @@ func formatHe(raw core.ZodRawIssue) string {
 		return formatSizeConstraintHe(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "פורמט לא תקין"
 		}
 		return formatStringValidationHe(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "מספר לא תקין: חייב להיות מכפלה"
 		}
 		return fmt.Sprintf("מספר לא תקין: חייב להיות מכפלה של %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "מפתח לא מזוהה"
 		}
@@ -203,45 +203,45 @@ func formatHe(raw core.ZodRawIssue) string {
 		return "קלט לא תקין"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "ערך לא תקין"
 		}
 		return fmt.Sprintf("ערך לא תקין ב%s", withDefiniteHe(origin))
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "שדה")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "שדה")
 		if fieldName == "" {
 			return fmt.Sprintf("%s נדרש חסר", fieldType)
 		}
 		return fmt.Sprintf("%s נדרש חסר: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "לא ידוע")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "לא ידוע")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "לא ידוע")
+		toType := mapx.StringOr(raw.Properties, "to_type", "לא ידוע")
 		return fmt.Sprintf("המרת סוג נכשלה: לא ניתן להמיר %s ל-%s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("סכמה לא תקינה: %s", reason)
 		}
 		return "הגדרת סכמה לא תקינה"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "מפריד")
+		field := mapx.StringOr(raw.Properties, "field", "מפריד")
 		return fmt.Sprintf("שדה מפריד לא תקין או חסר: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "ערכים")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "ערכים")
 		return fmt.Sprintf("לא ניתן למזג %s: סוגים לא תואמים", conflictType)
 
 	case core.NilPointer:
 		return "זוהה מצביע ריק"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -254,16 +254,16 @@ func formatHe(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintHe formats size constraint messages in Hebrew
 func formatSizeConstraintHe(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "value"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -273,7 +273,7 @@ func formatSizeConstraintHe(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "גדול מדי"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
 	sizing := getSizingHe(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 	subject := withDefiniteHe(origin)
@@ -383,25 +383,25 @@ func formatSizeConstraintHe(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationHe(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "המחרוזת חייבת להתחיל בקידומת מסוימת"
 		}
 		return fmt.Sprintf("המחרוזת חייבת להתחיל ב \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "המחרוזת חייבת להסתיים בסיומת מסוימת"
 		}
 		return fmt.Sprintf("המחרוזת חייבת להסתיים ב \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "המחרוזת חייבת לכלול מחרוזת מסוימת"
 		}
 		return fmt.Sprintf("המחרוזת חייבת לכלול \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "המחרוזת חייבת להתאים לתבנית"
 		}

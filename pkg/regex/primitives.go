@@ -1,72 +1,69 @@
 package regex
 
 import (
-	"fmt"
 	"regexp"
+	"strconv"
+	"sync"
 )
 
-// StringRegex returns a regex matching strings with optional min/max length limits
-func StringRegex(minimum, maximum int) *regexp.Regexp {
-	var pattern string
-	if maximum > 0 {
-		pattern = fmt.Sprintf(`^[\s\S]{%d,%d}$`, minimum, maximum)
-	} else {
-		pattern = fmt.Sprintf(`^[\s\S]{%d,}$`, minimum)
+// stringLengthKey identifies a cached string-length regex by its bounds.
+type stringLengthKey struct{ min, max int }
+
+var (
+	stringMu    sync.Mutex
+	stringCache = make(map[stringLengthKey]*regexp.Regexp)
+)
+
+// StringRegex returns a cached regex matching strings with length in [min, max].
+// A non-positive max means no upper bound.
+func StringRegex(min, max int) *regexp.Regexp {
+	k := stringLengthKey{min, max}
+
+	stringMu.Lock()
+	defer stringMu.Unlock()
+
+	if re, ok := stringCache[k]; ok {
+		return re
 	}
-	return regexp.MustCompile(pattern)
+
+	var pattern string
+	if max > 0 {
+		pattern = `^[\s\S]{` + strconv.Itoa(min) + `,` + strconv.Itoa(max) + `}$`
+	} else {
+		pattern = `^[\s\S]{` + strconv.Itoa(min) + `,}$`
+	}
+
+	re := regexp.MustCompile(pattern)
+	stringCache[k] = re
+	return re
 }
 
-// String matches any string with no length restrictions
-// TypeScript original code:
-//
-//	export const string = (params?: { minimum?: number | undefined; maximum?: number | undefined }): RegExp => {
-//	  const regex = params ? `[\\s\\S]{${params?.minimum ?? 0},${params?.maximum ?? ""}}` : `[\\s\\S]*`;
-//	  return new RegExp(`^${regex}$`);
-//	};
+// String matches any string with no length restrictions.
 var String = regexp.MustCompile(`^[\s\S]*$`)
 
-// Bigint matches big integers (supports negative numbers)
-// TypeScript original code (v4.1.11 fixed):
-// export const bigint: RegExp = /^-?\d+n?$/;
+// Bigint matches big integers with optional trailing 'n' (e.g., "123n").
 var Bigint = regexp.MustCompile(`^-?\d+n?$`)
 
-// Integer matches integers (supports negative numbers)
-// TypeScript original code (v4.1.11 fixed):
-// export const integer: RegExp = /^-?\d+$/;
+// Integer matches integers including negative numbers.
 var Integer = regexp.MustCompile(`^-?\d+$`)
 
-// Number matches numbers including decimals and negative numbers
-// TypeScript original code (v4.1.11 fixed):
-// export const number: RegExp = /^-?\d+(?:\.\d+)?$/;
+// Number matches numbers including decimals and negative numbers.
 var Number = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
 
-// Boolean matches boolean values (true/false)
-// TypeScript original code:
-// export const boolean: RegExp = /true|false/i;
+// Boolean matches boolean values (case-insensitive).
 var Boolean = regexp.MustCompile(`(?i)^(true|false)$`)
 
-// Null matches null values
-// TypeScript original code:
-// const _null: RegExp = /null/i;
-// export { _null as null };
+// Null matches "null" (case-insensitive).
 var Null = regexp.MustCompile(`(?i)^null$`)
 
-// Undefined matches undefined values
-// TypeScript original code:
-// const _undefined: RegExp = /undefined/i;
-// export { _undefined as undefined };
+// Undefined matches "undefined" (case-insensitive).
 var Undefined = regexp.MustCompile(`(?i)^undefined$`)
 
-// Lowercase matches strings with no uppercase letters
-// TypeScript original code:
-// export const lowercase: RegExp = /^[^A-Z]*$/;
+// Lowercase matches strings containing no uppercase letters.
 var Lowercase = regexp.MustCompile(`^[^A-Z]*$`)
 
-// Uppercase matches strings with no lowercase letters
-// TypeScript original code:
-// export const uppercase: RegExp = /^[^a-z]*$/;
+// Uppercase matches strings containing no lowercase letters.
 var Uppercase = regexp.MustCompile(`^[^a-z]*$`)
 
-// JSONString matches any valid JSON string format
-// Note: This is a simplistic pattern; actual validation should be done at runtime
+// JSONString matches any string (simplistic; actual validation should be done at runtime).
 var JSONString = regexp.MustCompile(`^[\s\S]*$`)

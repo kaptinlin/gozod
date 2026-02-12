@@ -162,30 +162,30 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 		return
 	}
 
-	expectedStr := mapx.GetStringDefault(properties, "expected", "")
+	expectedStr := mapx.StringOr(properties, "expected", "")
 	issue.Expected = core.ZodTypeCode(expectedStr)
-	receivedStr := mapx.GetStringDefault(properties, "received", "")
+	receivedStr := mapx.StringOr(properties, "received", "")
 	issue.Received = core.ZodTypeCode(receivedStr)
 
-	issue.Origin = mapx.GetStringDefault(properties, "origin", "")
-	issue.Format = mapx.GetStringDefault(properties, "format", "")
-	issue.Pattern = mapx.GetStringDefault(properties, "pattern", "")
-	issue.Prefix = mapx.GetStringDefault(properties, "prefix", "")
-	issue.Suffix = mapx.GetStringDefault(properties, "suffix", "")
-	issue.Includes = mapx.GetStringDefault(properties, "includes", "")
-	issue.Algorithm = mapx.GetStringDefault(properties, "algorithm", "")
+	issue.Origin = mapx.StringOr(properties, "origin", "")
+	issue.Format = mapx.StringOr(properties, "format", "")
+	issue.Pattern = mapx.StringOr(properties, "pattern", "")
+	issue.Prefix = mapx.StringOr(properties, "prefix", "")
+	issue.Suffix = mapx.StringOr(properties, "suffix", "")
+	issue.Includes = mapx.StringOr(properties, "includes", "")
+	issue.Algorithm = mapx.StringOr(properties, "algorithm", "")
 
-	issue.Minimum = mapx.GetAnyDefault(properties, "minimum", nil)
-	issue.Maximum = mapx.GetAnyDefault(properties, "maximum", nil)
-	issue.Divisor = mapx.GetAnyDefault(properties, "divisor", nil)
-	issue.Key = mapx.GetAnyDefault(properties, "key", nil)
+	issue.Minimum = mapx.AnyOr(properties, "minimum", nil)
+	issue.Maximum = mapx.AnyOr(properties, "maximum", nil)
+	issue.Divisor = mapx.AnyOr(properties, "divisor", nil)
+	issue.Key = mapx.AnyOr(properties, "key", nil)
 
-	issue.Inclusive = mapx.GetBoolDefault(properties, "inclusive", false)
+	issue.Inclusive = mapx.BoolOr(properties, "inclusive", false)
 
-	issue.Keys = mapx.GetStringsDefault(properties, "keys", nil)
-	issue.Values = mapx.GetAnySliceDefault(properties, "values", nil)
+	issue.Keys = mapx.StringsOr(properties, "keys", nil)
+	issue.Values = mapx.AnySliceOr(properties, "values", nil)
 
-	issue.Params = mapx.GetMapDefault(properties, "params", nil)
+	issue.Params = mapx.MapOr(properties, "params", nil)
 
 	if elementError, exists := properties["element_error"]; exists && elementError != nil {
 		if rawIssue, ok := elementError.(core.ZodRawIssue); ok {

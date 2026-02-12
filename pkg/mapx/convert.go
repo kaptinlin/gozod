@@ -1,7 +1,6 @@
 package mapx
 
 import (
-	"iter"
 	"maps"
 	"reflect"
 	"slices"
@@ -11,47 +10,47 @@ import (
 
 // Keys returns the string keys of an object (map or struct).
 // For map[any]any, only string keys are included.
-func Keys(input any) []string {
-	if input == nil {
+func Keys(v any) []string {
+	if v == nil {
 		return nil
 	}
 
-	switch v := input.(type) {
+	switch x := v.(type) {
 	case map[string]any:
-		return slices.Collect(mapStringKeys(v))
+		return slices.Collect(maps.Keys(x))
 	case map[any]any:
-		keys := make([]string, 0, len(v))
-		for k := range v {
+		keys := make([]string, 0, len(x))
+		for k := range x {
 			if s, ok := k.(string); ok {
 				keys = append(keys, s)
 			}
 		}
 		return keys
 	default:
-		return structKeys(input)
+		return structKeys(v)
 	}
 }
 
 // ToGeneric converts any map type to map[any]any.
 // It returns ErrInputNotMap for non-map inputs.
-func ToGeneric(input any) (map[any]any, error) {
-	if input == nil {
+func ToGeneric(v any) (map[any]any, error) {
+	if v == nil {
 		return nil, nil
 	}
 
-	switch v := input.(type) {
+	switch x := v.(type) {
 	case map[any]any:
-		return v, nil
+		return x, nil
 	case map[string]any:
-		return convertMap(v), nil
+		return convertMap(x), nil
 	case map[string]string:
-		return convertMap(v), nil
+		return convertMap(x), nil
 	case map[string]int:
-		return convertMap(v), nil
+		return convertMap(x), nil
 	case map[int]any:
-		return convertMap(v), nil
+		return convertMap(x), nil
 	default:
-		return toGenericReflect(input)
+		return toGenericReflect(v)
 	}
 }
 
@@ -65,22 +64,17 @@ func convertMap[K comparable, V any](m map[K]V) map[any]any {
 }
 
 // structKeys extracts exported field names from a struct.
-func structKeys(input any) []string {
-	m := structx.Marshal(input)
+func structKeys(v any) []string {
+	m := structx.Marshal(v)
 	if m == nil {
 		return nil
 	}
-	return slices.Collect(mapStringKeys(m))
-}
-
-// mapStringKeys returns an iterator over the keys of a map[string]any.
-func mapStringKeys(m map[string]any) iter.Seq[string] {
-	return maps.Keys(m)
+	return slices.Collect(maps.Keys(m))
 }
 
 // toGenericReflect converts an arbitrary map to map[any]any via reflection.
-func toGenericReflect(input any) (map[any]any, error) {
-	rv := reflect.ValueOf(input)
+func toGenericReflect(v any) (map[any]any, error) {
+	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Map {
 		return nil, ErrInputNotMap
 	}

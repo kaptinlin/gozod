@@ -8,24 +8,25 @@ import (
 
 // Sentinel errors for structx operations.
 var (
-	// ErrInvalidStructInput is returned when the input is not a struct or is nil.
+	// ErrInvalidStructInput indicates the input is not a struct or is nil.
 	ErrInvalidStructInput = errors.New("input is not a struct or is nil")
-	// ErrTargetTypeMustBeStruct is returned when the target type is not a struct.
+	// ErrTargetTypeMustBeStruct indicates the target type is not a struct.
 	ErrTargetTypeMustBeStruct = errors.New("target type must be struct")
 )
 
 // ToMap converts a struct to map[string]any.
-// It returns ErrInvalidStructInput if input is nil, a nil pointer, or not a struct.
+// It returns [ErrInvalidStructInput] if input is nil, a nil pointer,
+// or not a struct.
 func ToMap(input any) (map[string]any, error) {
-	result := Marshal(input)
-	if result == nil {
+	m := Marshal(input)
+	if m == nil {
 		return nil, ErrInvalidStructInput
 	}
-	return result, nil
+	return m, nil
 }
 
 // FromMap converts map[string]any to a struct of the given type.
-// It returns ErrTargetTypeMustBeStruct if target is not a struct type.
+// It returns [ErrTargetTypeMustBeStruct] if target is not a struct type.
 func FromMap(data map[string]any, target reflect.Type) (any, error) {
 	return Unmarshal(data, target)
 }
@@ -50,62 +51,62 @@ func Marshal(input any) map[string]any {
 	}
 
 	t := v.Type()
-	result := make(map[string]any, t.NumField())
+	m := make(map[string]any, t.NumField())
 
 	for i := range t.NumField() {
-		field := t.Field(i)
-		if !field.IsExported() {
+		f := t.Field(i)
+		if !f.IsExported() {
 			continue
 		}
 
-		name := fieldName(field)
+		name := fieldName(f)
 		if name == "" {
 			continue
 		}
 
-		result[name] = v.Field(i).Interface()
+		m[name] = v.Field(i).Interface()
 	}
 
-	return result
+	return m
 }
 
 // Unmarshal converts map[string]any to a struct of the given type.
-// It returns ErrTargetTypeMustBeStruct if structType is not a struct type.
+// It returns [ErrTargetTypeMustBeStruct] if typ is not a struct type.
 // Fields are matched by json tag name, falling back to the Go field name.
-func Unmarshal(data map[string]any, structType reflect.Type) (any, error) {
-	if structType.Kind() == reflect.Ptr {
-		structType = structType.Elem()
+func Unmarshal(data map[string]any, typ reflect.Type) (any, error) {
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
 	}
 
-	if structType.Kind() != reflect.Struct {
+	if typ.Kind() != reflect.Struct {
 		return nil, ErrTargetTypeMustBeStruct
 	}
 
-	result := reflect.New(structType).Elem()
+	result := reflect.New(typ).Elem()
 
-	for i := range structType.NumField() {
-		field := structType.Field(i)
-		if !field.IsExported() {
+	for i := range typ.NumField() {
+		f := typ.Field(i)
+		if !f.IsExported() {
 			continue
 		}
 
-		name := fieldName(field)
+		name := fieldName(f)
 		if name == "" {
 			continue
 		}
 
-		value, exists := data[name]
-		if !exists || value == nil {
+		val, ok := data[name]
+		if !ok || val == nil {
 			continue
 		}
 
-		fieldValue := reflect.ValueOf(value)
-		targetField := result.Field(i)
+		rv := reflect.ValueOf(val)
+		dst := result.Field(i)
 
-		if fieldValue.Type().ConvertibleTo(field.Type) {
-			targetField.Set(fieldValue.Convert(field.Type))
-		} else if fieldValue.Type().AssignableTo(field.Type) {
-			targetField.Set(fieldValue)
+		if rv.Type().ConvertibleTo(f.Type) {
+			dst.Set(rv.Convert(f.Type))
+		} else if rv.Type().AssignableTo(f.Type) {
+			dst.Set(rv)
 		}
 	}
 

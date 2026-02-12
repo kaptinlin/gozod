@@ -26,7 +26,7 @@ var (
 
 // matchString extracts a string from value and checks it against pattern.
 func matchString(value any, pattern *regexp.Regexp) bool {
-	str, ok := reflectx.ExtractString(value)
+	str, ok := reflectx.StringVal(value)
 	if !ok {
 		return false
 	}
@@ -201,7 +201,7 @@ func Uppercase(value any) bool {
 
 // Includes validates if string contains the substring
 func Includes(value any, substring string) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		return strings.Contains(str, substring)
 	}
 	return false
@@ -209,7 +209,7 @@ func Includes(value any, substring string) bool {
 
 // StartsWith validates if string starts with the prefix
 func StartsWith(value any, prefix string) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		return strings.HasPrefix(str, prefix)
 	}
 	return false
@@ -217,7 +217,7 @@ func StartsWith(value any, prefix string) bool {
 
 // EndsWith validates if string ends with the suffix
 func EndsWith(value any, suffix string) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		return strings.HasSuffix(str, suffix)
 	}
 	return false
@@ -237,7 +237,7 @@ func URL(value any) bool {
 
 // Hostname validates if string is a valid DNS hostname (RFC 1123, max 253 chars).
 func Hostname(value any) bool {
-	str, ok := reflectx.ExtractString(value)
+	str, ok := reflectx.StringVal(value)
 	if !ok || len(str) == 0 || len(str) > 253 {
 		return false
 	}
@@ -277,7 +277,7 @@ func IPv6(value any) bool { return matchString(value, regex.IPv6) }
 // CIDR validates CIDR notation with strict format checking.
 // version: 0=both, 4=IPv4 only, 6=IPv6 only
 func CIDR(value any, version int) bool {
-	str, ok := reflectx.ExtractString(value)
+	str, ok := reflectx.StringVal(value)
 	if !ok {
 		return false
 	}
@@ -388,7 +388,7 @@ func MAC(value any) bool {
 //	MACWithOptions("00-1A-2B-3C-4D-5E", MACOptions{Delimiter: "-"})  -> true
 //	MACWithOptions("00.1a.2b.3c.4d.5e", MACOptions{Delimiter: "."})  -> true
 func MACWithOptions(value any, opts MACOptions) bool {
-	str, ok := reflectx.ExtractString(value)
+	str, ok := reflectx.StringVal(value)
 	if !ok {
 		return false
 	}
@@ -413,7 +413,7 @@ type JWTOptions struct {
 // JWT validates JWT format only (structure and basic claims).
 // WARNING: Does NOT verify signatures.
 func JWT(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		return isValidJWT(str, nil)
 	}
 	return false
@@ -422,7 +422,7 @@ func JWT(value any) bool {
 // JWTWithOptions validates JWT format with algorithm constraint.
 // WARNING: Does NOT verify signatures.
 func JWTWithOptions(value any, options JWTOptions) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		return isValidJWT(str, options.Algorithm)
 	}
 	return false
@@ -494,7 +494,7 @@ type ISODateTimeOptions struct {
 
 // ISODateTimeWithOptions validates if string is a valid ISO datetime format with options
 func ISODateTimeWithOptions(value any, options ISODateTimeOptions) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		datetimeRegex := regex.Datetime(regex.DatetimeOptions{
 			Precision: options.Precision,
 			Offset:    options.Offset,
@@ -507,7 +507,7 @@ func ISODateTimeWithOptions(value any, options ISODateTimeOptions) bool {
 
 // ISODateTime validates if string is a valid ISO datetime format
 func ISODateTime(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		_, err := time.Parse(time.RFC3339, str)
 		return err == nil
 	}
@@ -516,7 +516,7 @@ func ISODateTime(value any) bool {
 
 // ISODate validates if string is a valid ISO date format
 func ISODate(value any) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		_, err := time.Parse("2006-01-02", str)
 		return err == nil
 	}
@@ -534,7 +534,7 @@ type ISOTimeOptions struct {
 
 // ISOTimeWithOptions validates if string is a valid ISO time format with options
 func ISOTimeWithOptions(value any, options ISOTimeOptions) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		timeRegex := regex.Time(regex.TimeOptions{
 			Precision: options.Precision,
 		})
@@ -550,7 +550,7 @@ func ISOTime(value any) bool {
 
 // ISODuration validates if string is a valid ISO 8601 duration format.
 func ISODuration(value any) bool {
-	duration, ok := reflectx.ExtractString(value)
+	duration, ok := reflectx.StringVal(value)
 	if !ok {
 		return false
 	}
@@ -608,7 +608,7 @@ func Property(obj any, key string, validator func(any) bool) bool {
 
 // Mime validates if value has allowed MIME types.
 func Mime(value any, allowedTypes []string) bool {
-	if str, ok := reflectx.ExtractString(value); ok {
+	if str, ok := reflectx.StringVal(value); ok {
 		// Basic MIME type format check (type/subtype)
 		parts := strings.Split(str, "/")
 		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
@@ -640,7 +640,7 @@ type URLOptions struct {
 
 // URLWithOptions validates if string is a valid URL format with optional constraints
 func URLWithOptions(value any, options URLOptions) bool {
-	str, ok := reflectx.ExtractString(value)
+	str, ok := reflectx.StringVal(value)
 	if !ok {
 		return false
 	}

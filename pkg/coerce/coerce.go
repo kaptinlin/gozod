@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/cmplx"
 	"reflect"
 	"strconv"
 	"strings"
@@ -14,21 +13,15 @@ import (
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 )
 
-// Coercion errors.
-
+// Sentinel errors for coercion failures.
 var (
-	// Type compatibility errors
 	ErrUnsupported = errors.New("conversion not supported")
 	ErrNilPointer  = errors.New("nil pointer")
-
-	// Format and parsing errors
-	ErrInvalidFormat = errors.New("invalid format")
-	ErrEmptyInput    = errors.New("empty input")
-
-	// Numeric conversion errors
-	ErrOverflow     = errors.New("value overflow")
-	ErrNegativeUint = errors.New("negative to unsigned")
-	ErrNotWhole     = errors.New("not whole number")
+	ErrInvalidFmt  = errors.New("invalid format")
+	ErrEmptyInput  = errors.New("empty input")
+	ErrOverflow    = errors.New("value overflow")
+	ErrNegative    = errors.New("negative to unsigned")
+	ErrNotWhole    = errors.New("not whole number")
 )
 
 // NewUnsupportedError creates a detailed unsupported conversion error.
@@ -37,23 +30,23 @@ func NewUnsupportedError(from, to string) error {
 }
 
 // NewFormatError creates a detailed format error with the problematic value.
-func NewFormatError(value, targetType string) error {
-	return fmt.Errorf("cannot parse %q as %s: %w", value, targetType, ErrInvalidFormat)
+func NewFormatError(value, target string) error {
+	return fmt.Errorf("cannot parse %q as %s: %w", value, target, ErrInvalidFmt)
 }
 
 // NewOverflowError creates a detailed overflow error with the problematic value.
-func NewOverflowError(value any, targetType string) error {
-	return fmt.Errorf("value %v overflows %s: %w", value, targetType, ErrOverflow)
+func NewOverflowError(value any, target string) error {
+	return fmt.Errorf("value %v overflows %s: %w", value, target, ErrOverflow)
 }
 
-// NewEmptyInputError creates a detailed empty input error for specific type.
-func NewEmptyInputError(targetType string) error {
-	return fmt.Errorf("empty input cannot convert to %s: %w", targetType, ErrEmptyInput)
+// NewEmptyInputError creates a detailed empty input error for a target type.
+func NewEmptyInputError(target string) error {
+	return fmt.Errorf("empty input cannot convert to %s: %w", target, ErrEmptyInput)
 }
 
-// NewNegativeUintError creates a detailed negative to unsigned conversion error.
-func NewNegativeUintError(value any, targetType string) error {
-	return fmt.Errorf("negative value %v cannot convert to %s: %w", value, targetType, ErrNegativeUint)
+// NewNegativeError creates a detailed negative to unsigned conversion error.
+func NewNegativeError(value any, target string) error {
+	return fmt.Errorf("negative value %v cannot convert to %s: %w", value, target, ErrNegative)
 }
 
 // NewNotWholeError creates a detailed non-whole number error.
@@ -62,18 +55,18 @@ func NewNotWholeError(value any) error {
 }
 
 // NewNilPointerError creates a detailed nil pointer conversion error.
-func NewNilPointerError(targetType string) error {
-	return fmt.Errorf("cannot convert nil pointer to %s: %w", targetType, ErrNilPointer)
+func NewNilPointerError(target string) error {
+	return fmt.Errorf("cannot convert nil pointer to %s: %w", target, ErrNilPointer)
 }
 
-// ToBool converts any value to boolean with fast-path optimizations.
+// ToBool converts any value to boolean.
 func ToBool(v any) (bool, error) {
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return false, NewNilPointerError("bool")
 	}
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case bool:
 		return x, nil
 	case string:
@@ -103,7 +96,7 @@ func ToBool(v any) (bool, error) {
 	case float64:
 		return x != 0, nil
 	default:
-		return false, NewUnsupportedError(fmt.Sprintf("%T", derefed), "bool")
+		return false, NewUnsupportedError(fmt.Sprintf("%T", d), "bool")
 	}
 }
 
@@ -119,14 +112,14 @@ func stringToBool(s string) (bool, error) {
 	}
 }
 
-// ToString converts any value to string with fast-path optimizations.
+// ToString converts any value to its string representation.
 func ToString(v any) (string, error) {
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return "", NewNilPointerError("string")
 	}
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case string:
 		return x, nil
 	case int:
@@ -171,7 +164,7 @@ func ToString(v any) (string, error) {
 	case time.Time:
 		return x.Format(time.RFC3339), nil
 	default:
-		return "", NewUnsupportedError(fmt.Sprintf("%T", derefed), "string")
+		return "", NewUnsupportedError(fmt.Sprintf("%T", d), "string")
 	}
 }
 
@@ -188,55 +181,64 @@ var timeLayouts = []string{
 }
 
 // ToTime converts various inputs to time.Time.
-func ToTime(value any) (time.Time, error) {
-	derefed, ok := reflectx.Deref(value)
+func ToTime(v any) (time.Time, error) {
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return time.Time{}, NewNilPointerError("time")
 	}
 
-	switch v := derefed.(type) {
+	switch x := d.(type) {
 	case time.Time:
-		return v, nil
+		return x, nil
 	case string:
 		for _, layout := range timeLayouts {
-			if t, err := time.Parse(layout, v); err == nil {
+			if t, err := time.Parse(layout, x); err == nil {
 				return t, nil
 			}
 		}
-		return time.Time{}, NewFormatError(v, "time")
+		return time.Time{}, NewFormatError(x, "time")
 	case int64:
-		return time.Unix(v, 0), nil
+		return time.Unix(x, 0), nil
 	case int:
-		return time.Unix(int64(v), 0), nil
+		return time.Unix(int64(x), 0), nil
 	case float64:
-		return time.Unix(int64(v), 0), nil
+		return time.Unix(int64(x), 0), nil
 	case float32:
-		return time.Unix(int64(v), 0), nil
+		return time.Unix(int64(x), 0), nil
 	default:
-		return time.Time{}, NewUnsupportedError(fmt.Sprintf("%T", derefed), "time")
+		return time.Time{}, NewUnsupportedError(fmt.Sprintf("%T", d), "time")
 	}
 }
 
-// ToInt64 converts any value to int64 with overflow detection and type validation.
-// It supports integers, unsigned integers, floats (whole numbers only), strings,
-// and booleans as input.
+// ToInt64 converts any value to int64 with overflow detection.
 func ToInt64(v any) (int64, error) {
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return 0, NewNilPointerError("int64")
 	}
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case int64:
 		return x, nil
-	case int, int8, int16, int32:
-		return reflect.ValueOf(x).Int(), nil
-	case uint, uint8, uint16, uint32:
-		val := reflect.ValueOf(x).Uint()
-		if val > math.MaxInt64 {
+	case int:
+		return int64(x), nil
+	case int8:
+		return int64(x), nil
+	case int16:
+		return int64(x), nil
+	case int32:
+		return int64(x), nil
+	case uint:
+		if uint64(x) > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
 		}
-		return int64(val), nil
+		return int64(x), nil //nolint:gosec // overflow checked above
+	case uint8:
+		return int64(x), nil
+	case uint16:
+		return int64(x), nil
+	case uint32:
+		return int64(x), nil
 	case uint64:
 		if x > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
@@ -263,7 +265,7 @@ func ToInt64(v any) (int64, error) {
 		}
 		return 0, nil
 	default:
-		return 0, NewUnsupportedError(fmt.Sprintf("%T", derefed), "int64")
+		return 0, NewUnsupportedError(fmt.Sprintf("%T", d), "int64")
 	}
 }
 
@@ -280,15 +282,13 @@ func stringToInt64(s string) (int64, error) {
 }
 
 // ToFloat64 converts any value to float64 with NaN detection.
-// It supports floats, integers, unsigned integers, big.Int, complex numbers,
-// strings, and booleans as input.
 func ToFloat64(v any) (float64, error) {
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return 0, NewNilPointerError("float64")
 	}
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case float64:
 		if math.IsNaN(x) {
 			return 0, NewFormatError("NaN", "float64")
@@ -299,10 +299,26 @@ func ToFloat64(v any) (float64, error) {
 			return 0, NewFormatError("NaN", "float64")
 		}
 		return float64(x), nil
-	case int, int8, int16, int32, int64:
-		return float64(reflect.ValueOf(x).Int()), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return float64(reflect.ValueOf(x).Uint()), nil
+	case int:
+		return float64(x), nil
+	case int8:
+		return float64(x), nil
+	case int16:
+		return float64(x), nil
+	case int32:
+		return float64(x), nil
+	case int64:
+		return float64(x), nil
+	case uint:
+		return float64(x), nil
+	case uint8:
+		return float64(x), nil
+	case uint16:
+		return float64(x), nil
+	case uint32:
+		return float64(x), nil
+	case uint64:
+		return float64(x), nil
 	case *big.Int:
 		// Precision loss is acceptable when converting big.Int to float64.
 		f, _ := x.Float64()
@@ -312,9 +328,10 @@ func ToFloat64(v any) (float64, error) {
 		f, _ := x.Float64()
 		return f, nil
 	case complex64:
-		return cmplx.Abs(complex128(x)), nil
+		c := complex128(x)
+		return math.Sqrt(real(c)*real(c) + imag(c)*imag(c)), nil
 	case complex128:
-		return cmplx.Abs(x), nil
+		return math.Sqrt(real(x)*real(x) + imag(x)*imag(x)), nil
 	case string:
 		return stringToFloat64(x)
 	case bool:
@@ -323,7 +340,7 @@ func ToFloat64(v any) (float64, error) {
 		}
 		return 0.0, nil
 	default:
-		return 0, NewUnsupportedError(fmt.Sprintf("%T", derefed), "float64")
+		return 0, NewUnsupportedError(fmt.Sprintf("%T", d), "float64")
 	}
 }
 
@@ -339,25 +356,39 @@ func stringToFloat64(s string) (float64, error) {
 	return f, nil
 }
 
-// ToBigInt converts any value to *big.Int with support for hex string parsing.
-// It supports integers, unsigned integers, floats (whole numbers only), strings
-// (decimal and 0x-prefixed hex), and booleans as input.
+// ToBigInt converts any value to *big.Int with hex string support.
 func ToBigInt(v any) (*big.Int, error) {
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return nil, NewNilPointerError("*big.Int")
 	}
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case *big.Int:
 		if x == nil {
 			return nil, fmt.Errorf("cannot convert nil *big.Int: %w", ErrNilPointer)
 		}
 		return new(big.Int).Set(x), nil
-	case int, int8, int16, int32, int64:
-		return big.NewInt(reflect.ValueOf(x).Int()), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return new(big.Int).SetUint64(reflect.ValueOf(x).Uint()), nil
+	case int:
+		return big.NewInt(int64(x)), nil
+	case int8:
+		return big.NewInt(int64(x)), nil
+	case int16:
+		return big.NewInt(int64(x)), nil
+	case int32:
+		return big.NewInt(int64(x)), nil
+	case int64:
+		return big.NewInt(x), nil
+	case uint:
+		return new(big.Int).SetUint64(uint64(x)), nil
+	case uint8:
+		return new(big.Int).SetUint64(uint64(x)), nil
+	case uint16:
+		return new(big.Int).SetUint64(uint64(x)), nil
+	case uint32:
+		return new(big.Int).SetUint64(uint64(x)), nil
+	case uint64:
+		return new(big.Int).SetUint64(x), nil
 	case float32:
 		if float32(int64(x)) != x {
 			return nil, NewNotWholeError(x)
@@ -376,7 +407,7 @@ func ToBigInt(v any) (*big.Int, error) {
 		}
 		return big.NewInt(0), nil
 	default:
-		return nil, NewUnsupportedError(fmt.Sprintf("%T", derefed), "*big.Int")
+		return nil, NewUnsupportedError(fmt.Sprintf("%T", d), "*big.Int")
 	}
 }
 
@@ -386,53 +417,62 @@ func stringToBigInt(s string) (*big.Int, error) {
 		return big.NewInt(0), nil
 	}
 
-	bigInt := new(big.Int)
-	if _, ok := bigInt.SetString(trimmed, 10); ok {
-		return bigInt, nil
+	n := new(big.Int)
+	if _, ok := n.SetString(trimmed, 10); ok {
+		return n, nil
 	}
 	if strings.HasPrefix(trimmed, "0x") || strings.HasPrefix(trimmed, "0X") {
-		if _, ok := bigInt.SetString(trimmed[2:], 16); ok {
-			return bigInt, nil
+		if _, ok := n.SetString(trimmed[2:], 16); ok {
+			return n, nil
 		}
 	}
 	return nil, NewFormatError(s, "big integer")
 }
 
 // ToInteger converts any value to the specified integer type T with bounds checking.
-// It handles all Go integer types (signed and unsigned) and validates that the
-// converted value fits within the target type's range.
 func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64](v any) (T, error) {
 	var zero T
 
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return zero, NewNilPointerError("integer type")
 	}
 
-	var int64Val int64
+	var val int64
 	var err error
 
-	switch x := derefed.(type) {
+	switch x := d.(type) {
 	case int64:
-		int64Val = x
-	case int, int8, int16, int32:
-		int64Val = reflect.ValueOf(x).Int()
-	case uint, uint8, uint16, uint32:
-		uintVal := reflect.ValueOf(x).Uint()
-		if uintVal > math.MaxInt64 {
+		val = x
+	case int:
+		val = int64(x)
+	case int8:
+		val = int64(x)
+	case int16:
+		val = int64(x)
+	case int32:
+		val = int64(x)
+	case uint:
+		if uint64(x) > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
 		}
-		int64Val = int64(uintVal)
+		val = int64(x) //nolint:gosec // overflow checked above
+	case uint8:
+		val = int64(x)
+	case uint16:
+		val = int64(x)
+	case uint32:
+		val = int64(x)
 	case uint64:
 		if x > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
 		}
-		int64Val = int64(x)
+		val = int64(x)
 	case float32:
 		if float64(x) > math.MaxInt64 || float64(x) < math.MinInt64 {
 			return zero, NewOverflowError(x, "int64")
 		}
-		int64Val = int64(x)
+		val = int64(x)
 	case float64:
 		if math.Trunc(x) != x {
 			return zero, NewNotWholeError(x)
@@ -440,9 +480,9 @@ func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uin
 		if x > math.MaxInt64 || x < math.MinInt64 {
 			return zero, NewOverflowError(x, "int64")
 		}
-		int64Val = int64(x)
+		val = int64(x)
 	case string:
-		int64Val, err = stringToInt64(x)
+		val, err = stringToInt64(x)
 		if err != nil {
 			return zero, err
 		}
@@ -452,237 +492,239 @@ func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uin
 		}
 		return 0, nil
 	default:
-		return zero, NewUnsupportedError(fmt.Sprintf("%T", derefed), fmt.Sprintf("%T", zero))
+		return zero, NewUnsupportedError(fmt.Sprintf("%T", d), fmt.Sprintf("%T", zero))
 	}
 
-	if err := checkIntegerTypeBounds(int64Val, zero); err != nil {
+	if err := checkIntegerTypeBounds(val, zero); err != nil {
 		return zero, err
 	}
 
-	return T(int64Val), nil
+	return T(val), nil
 }
 
 // ToFloat converts any value to the specified float type T with overflow checking.
-// For float32 targets, it validates the value fits within float32 range.
 func ToFloat[T ~float32 | ~float64](v any) (T, error) {
 	var zero T
 
-	derefed, ok := reflectx.Deref(v)
+	d, ok := reflectx.Deref(v)
 	if !ok {
 		return zero, NewNilPointerError(fmt.Sprintf("%T", zero))
 	}
 
-	if result, ok := derefed.(T); ok {
+	if result, ok := d.(T); ok {
 		return result, nil
 	}
 
-	float64Val, err := ToFloat64(derefed)
+	fval, err := ToFloat64(d)
 	if err != nil {
 		return zero, err
 	}
 
 	if _, ok := any(zero).(float32); ok {
-		if math.Abs(float64Val) > math.MaxFloat32 {
-			return zero, NewOverflowError(float64Val, "float32")
+		if math.Abs(fval) > math.MaxFloat32 {
+			return zero, NewOverflowError(fval, "float32")
 		}
 	}
-	return T(float64Val), nil
+	return T(fval), nil
 }
 
-func checkIntegerTypeBounds[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64](value int64, target T) error {
+func checkIntegerTypeBounds[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64](v int64, target T) error {
 	switch any(target).(type) {
 	case int8:
-		if value < math.MinInt8 || value > math.MaxInt8 {
-			return NewOverflowError(value, "int8")
+		if v < math.MinInt8 || v > math.MaxInt8 {
+			return NewOverflowError(v, "int8")
 		}
 	case int16:
-		if value < math.MinInt16 || value > math.MaxInt16 {
-			return NewOverflowError(value, "int16")
+		if v < math.MinInt16 || v > math.MaxInt16 {
+			return NewOverflowError(v, "int16")
 		}
 	case int32:
-		if value < math.MinInt32 || value > math.MaxInt32 {
-			return NewOverflowError(value, "int32")
+		if v < math.MinInt32 || v > math.MaxInt32 {
+			return NewOverflowError(v, "int32")
 		}
 	case int:
 		maxInt := int64(^uint(0) >> 1)
 		minInt := -maxInt - 1
-		if value < minInt || value > maxInt {
-			return NewOverflowError(value, fmt.Sprintf("int (%d-bit)", strconv.IntSize))
+		if v < minInt || v > maxInt {
+			return NewOverflowError(v, fmt.Sprintf("int (%d-bit)", strconv.IntSize))
 		}
 	case uint8:
-		if value < 0 {
-			return NewNegativeUintError(value, "uint8")
+		if v < 0 {
+			return NewNegativeError(v, "uint8")
 		}
-		if value > math.MaxUint8 {
-			return NewOverflowError(value, "uint8")
+		if v > math.MaxUint8 {
+			return NewOverflowError(v, "uint8")
 		}
 	case uint16:
-		if value < 0 {
-			return NewNegativeUintError(value, "uint16")
+		if v < 0 {
+			return NewNegativeError(v, "uint16")
 		}
-		if value > math.MaxUint16 {
-			return NewOverflowError(value, "uint16")
+		if v > math.MaxUint16 {
+			return NewOverflowError(v, "uint16")
 		}
 	case uint32:
-		if value < 0 {
-			return NewNegativeUintError(value, "uint32")
+		if v < 0 {
+			return NewNegativeError(v, "uint32")
 		}
-		if value > math.MaxUint32 {
-			return NewOverflowError(value, "uint32")
+		if v > math.MaxUint32 {
+			return NewOverflowError(v, "uint32")
 		}
 	case uint:
-		if value < 0 {
-			return NewNegativeUintError(value, "uint")
+		if v < 0 {
+			return NewNegativeError(v, "uint")
 		}
 		maxUint := uint64(^uint(0))
-		if uint64(value) > maxUint {
-			return NewOverflowError(value, fmt.Sprintf("uint (%d-bit)", strconv.IntSize))
+		if uint64(v) > maxUint {
+			return NewOverflowError(v, fmt.Sprintf("uint (%d-bit)", strconv.IntSize))
 		}
 	case uint64:
-		if value < 0 {
-			return NewNegativeUintError(value, "uint64")
+		if v < 0 {
+			return NewNegativeError(v, "uint64")
 		}
 	}
 	return nil
 }
 
 // ToComplex64 converts any value to complex64.
-// It supports complex64, complex128, integers, unsigned integers, floats,
-// and string representations of complex numbers.
 func ToComplex64(v any) (complex64, error) {
-	derefed, ok := reflectx.Deref(v)
-	if !ok {
-		return 0, NewNilPointerError("complex64")
+	c, err := toComplex128(v, "complex64")
+	if err != nil {
+		return 0, err
 	}
-
-	if result, ok := derefed.(complex64); ok {
-		return result, nil
-	}
-	if c128, ok := derefed.(complex128); ok {
-		return complex64(c128), nil
-	}
-
-	switch val := derefed.(type) {
-	case int, int8, int16, int32, int64:
-		return complex(float32(reflect.ValueOf(val).Int()), 0), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return complex(float32(reflect.ValueOf(val).Uint()), 0), nil
-	case float32:
-		return complex(val, 0), nil
-	case float64:
-		return complex(float32(val), 0), nil
-	case string:
-		res, err := ToComplexFromString(val)
-		if err != nil {
-			return 0, err
-		}
-		return complex64(res), nil
-	default:
-		return 0, NewUnsupportedError(fmt.Sprintf("%T", derefed), "complex64")
-	}
+	return complex64(c), nil
 }
 
 // ToComplex128 converts any value to complex128.
-// It supports complex128, complex64, integers, unsigned integers, floats,
-// and string representations of complex numbers.
 func ToComplex128(v any) (complex128, error) {
-	derefed, ok := reflectx.Deref(v)
+	return toComplex128(v, "complex128")
+}
+
+// toComplex128 is the shared implementation for complex conversions.
+func toComplex128(v any, target string) (complex128, error) {
+	d, ok := reflectx.Deref(v)
 	if !ok {
-		return 0, NewNilPointerError("complex128")
+		return 0, NewNilPointerError(target)
 	}
 
-	if result, ok := derefed.(complex128); ok {
-		return result, nil
-	}
-	if c64, ok := derefed.(complex64); ok {
-		return complex128(c64), nil
-	}
-
-	switch val := derefed.(type) {
-	case int, int8, int16, int32, int64:
-		return complex(float64(reflect.ValueOf(val).Int()), 0), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return complex(float64(reflect.ValueOf(val).Uint()), 0), nil
+	switch x := d.(type) {
+	case complex128:
+		return x, nil
+	case complex64:
+		return complex128(x), nil
+	case int:
+		return complex(float64(x), 0), nil
+	case int8:
+		return complex(float64(x), 0), nil
+	case int16:
+		return complex(float64(x), 0), nil
+	case int32:
+		return complex(float64(x), 0), nil
+	case int64:
+		return complex(float64(x), 0), nil
+	case uint:
+		return complex(float64(x), 0), nil
+	case uint8:
+		return complex(float64(x), 0), nil
+	case uint16:
+		return complex(float64(x), 0), nil
+	case uint32:
+		return complex(float64(x), 0), nil
+	case uint64:
+		return complex(float64(x), 0), nil
 	case float32:
-		return complex(float64(val), 0), nil
+		return complex(float64(x), 0), nil
 	case float64:
-		return complex(val, 0), nil
+		return complex(x, 0), nil
 	case string:
-		return ToComplexFromString(val)
+		return ToComplexFromString(x)
 	default:
-		return 0, NewUnsupportedError(fmt.Sprintf("%T", derefed), "complex128")
+		return 0, NewUnsupportedError(fmt.Sprintf("%T", d), target)
 	}
 }
 
 // ToComplexFromString parses a complex number from its string representation.
-// It supports formats like "3+4i", "3+4j", "5i", "-2i", and pure real numbers.
 func ToComplexFromString(s string) (complex128, error) {
 	s = strings.ReplaceAll(s, " ", "")
 	if s == "" {
 		return 0, NewEmptyInputError("complex")
 	}
 
+	// Try pure real number (no imaginary markers).
 	if !strings.ContainsAny(s, "ij+") {
-		if real, err := strconv.ParseFloat(s, 64); err == nil {
-			return complex(real, 0), nil
+		if re, err := strconv.ParseFloat(s, 64); err == nil {
+			return complex(re, 0), nil
 		}
 	}
 
+	// Try pure imaginary number.
 	if strings.HasSuffix(s, "i") || strings.HasSuffix(s, "j") {
-		imagStr := s[:len(s)-1]
-		if imagStr == "" || imagStr == "+" {
+		raw := s[:len(s)-1]
+		if raw == "" || raw == "+" {
 			return complex(0, 1), nil
 		}
-		if imagStr == "-" {
+		if raw == "-" {
 			return complex(0, -1), nil
 		}
-		if imag, err := strconv.ParseFloat(imagStr, 64); err == nil {
-			return complex(0, imag), nil
+		if im, err := strconv.ParseFloat(raw, 64); err == nil {
+			return complex(0, im), nil
 		}
 	}
 
-	var real, imag float64
-	var err error
-	splitPos := -1
-	for i := 1; i < len(s); i++ {
-		if (s[i] == '+' || s[i] == '-') && s[i-1] != 'e' && s[i-1] != 'E' {
-			splitPos = i
-		}
-	}
-	if splitPos > 0 {
-		realStr := s[:splitPos]
-		imagStr := s[splitPos:]
-		if real, err = strconv.ParseFloat(realStr, 64); err != nil {
-			return 0, NewFormatError(realStr, "real part")
-		}
-		if strings.HasSuffix(imagStr, "i") || strings.HasSuffix(imagStr, "j") {
-			imagStr = imagStr[:len(imagStr)-1]
-			switch imagStr {
-			case "+":
-				imag = 1
-			case "-":
-				imag = -1
-			default:
-				if imag, err = strconv.ParseFloat(imagStr, 64); err != nil {
-					return 0, NewFormatError(imagStr, "imaginary part")
-				}
-			}
-		} else {
-			return 0, NewFormatError(imagStr, "imaginary part (must end with 'i' or 'j')")
-		}
-		return complex(real, imag), nil
+	// Try complex number with real and imaginary parts (e.g. "3+4i").
+	pos := findComplexSplit(s)
+	if pos > 0 {
+		return parseComplexParts(s, pos)
 	}
 	return 0, NewFormatError(s, "complex number")
 }
 
-// To converts any value to the specified target type T using the appropriate
-// type-specific conversion function. It dispatches to ToBool, ToString, ToTime,
-// ToInteger, ToFloat, ToInt64, ToFloat64, ToBigInt, ToComplex64, or ToComplex128
-// based on the target type.
+// findComplexSplit returns the index of the +/- separator between real and
+// imaginary parts, skipping scientific notation exponents. Returns -1 if not found.
+func findComplexSplit(s string) int {
+	pos := -1
+	for i := 1; i < len(s); i++ {
+		if (s[i] == '+' || s[i] == '-') && s[i-1] != 'e' && s[i-1] != 'E' {
+			pos = i
+		}
+	}
+	return pos
+}
+
+// parseComplexParts parses a complex string split at pos into real and imaginary components.
+func parseComplexParts(s string, pos int) (complex128, error) {
+	reStr := s[:pos]
+	imStr := s[pos:]
+
+	re, err := strconv.ParseFloat(reStr, 64)
+	if err != nil {
+		return 0, NewFormatError(reStr, "real part")
+	}
+
+	if !strings.HasSuffix(imStr, "i") && !strings.HasSuffix(imStr, "j") {
+		return 0, NewFormatError(imStr, "imaginary part (must end with 'i' or 'j')")
+	}
+
+	imStr = imStr[:len(imStr)-1]
+	var im float64
+	switch imStr {
+	case "+":
+		im = 1
+	case "-":
+		im = -1
+	default:
+		im, err = strconv.ParseFloat(imStr, 64)
+		if err != nil {
+			return 0, NewFormatError(imStr, "imaginary part")
+		}
+	}
+	return complex(re, im), nil
+}
+
+// To converts any value to the specified type T using the appropriate converter.
 func To[T any](v any) (T, error) {
 	var zero T
-	targetType := reflect.TypeOf(zero)
-	if targetType == nil {
+	target := reflect.TypeOf(zero)
+	if target == nil {
 		return zero, NewUnsupportedError("unknown", "unknown")
 	}
 
@@ -796,23 +838,21 @@ func To[T any](v any) (T, error) {
 		}
 		return any(r).(T), nil
 	default:
-		return reflectx.ConvertToGeneric[T](v)
+		return reflectx.Convert[T](v)
 	}
 }
 
 // ToLiteral converts a value to its most natural Go literal representation.
-// Strings are parsed to detect embedded booleans, integers, or floats.
-// Numeric types are converted to bool (for 0/1) or int (for whole numbers).
 // The error return is reserved for future use and is currently always nil.
-func ToLiteral(value any) (any, error) {
-	if value == nil {
+func ToLiteral(v any) (any, error) {
+	if v == nil {
 		return nil, nil
 	}
 
-	if s, ok := value.(string); ok {
+	if s, ok := v.(string); ok {
 		trimmed := strings.TrimSpace(s)
 		if trimmed == "" {
-			return value, nil
+			return v, nil
 		}
 		if b, err := strconv.ParseBool(trimmed); err == nil {
 			return b, nil
@@ -840,50 +880,61 @@ func ToLiteral(value any) (any, error) {
 		return s, nil
 	}
 
-	switch n := value.(type) {
+	switch n := v.(type) {
 	case float32:
 		if math.Mod(float64(n), 1) == 0 {
-			if n == 1.0 {
-				return true, nil
-			}
-			if n == 0.0 {
-				return false, nil
-			}
-			return int(n), nil
+			return intLiteralFromInt64(int64(n)), nil
 		}
 	case float64:
 		if math.Mod(n, 1) == 0 {
-			if n == 1.0 {
-				return true, nil
-			}
-			if n == 0.0 {
-				return false, nil
-			}
-			return int(n), nil
+			return intLiteralFromInt64(int64(n)), nil
 		}
 	case int:
-		if n == 1 {
-			return true, nil
-		}
-		if n == 0 {
-			return false, nil
-		}
-	case int8, int16, int32, int64:
-		iv := reflect.ValueOf(n).Int()
-		if iv == 1 {
-			return true, nil
-		}
-		if iv == 0 {
-			return false, nil
-		}
-	case uint, uint8, uint16, uint32, uint64:
-		uv := reflect.ValueOf(n).Uint()
-		if uv == 1 {
-			return true, nil
-		}
-		if uv == 0 {
-			return false, nil
-		}
+		return intLiteralFromInt64(int64(n)), nil
+	case int8:
+		return intLiteralFromInt64(int64(n)), nil
+	case int16:
+		return intLiteralFromInt64(int64(n)), nil
+	case int32:
+		return intLiteralFromInt64(int64(n)), nil
+	case int64:
+		return intLiteralFromInt64(n), nil
+	case uint:
+		return uintLiteralFromUint64(uint64(n)), nil
+	case uint8:
+		return uintLiteralFromUint64(uint64(n)), nil
+	case uint16:
+		return uintLiteralFromUint64(uint64(n)), nil
+	case uint32:
+		return uintLiteralFromUint64(uint64(n)), nil
+	case uint64:
+		return uintLiteralFromUint64(n), nil
 	}
-	return value, nil
+	return v, nil
+}
+
+// intLiteralFromInt64 converts an int64 to its most natural literal:
+// 0 -> false, 1 -> true, otherwise -> int.
+func intLiteralFromInt64(v int64) any {
+	switch v {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		return v
+	}
+}
+
+// uintLiteralFromUint64 converts a uint64 to its most natural literal:
+// 0 -> false, 1 -> true, otherwise the original value is returned unchanged.
+func uintLiteralFromUint64(v uint64) any {
+	switch v {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		return v
+	}
 }

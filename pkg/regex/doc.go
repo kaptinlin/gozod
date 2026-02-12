@@ -1,7 +1,7 @@
 // Package regex provides pre-compiled regular expressions for common data formats.
 //
 // Key features:
-//   - Email patterns (Email, Html5Email, Rfc5322Email, UnicodeEmail)
+//   - Email patterns (Email, HTML5Email, RFC5322Email, UnicodeEmail)
 //   - URL patterns (URL)
 //   - Network patterns (IPv4, IPv6, CIDR, MAC)
 //   - Date/time patterns (Date, Time, Datetime, Duration)

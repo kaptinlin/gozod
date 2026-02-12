@@ -269,10 +269,10 @@ func TestParsedCategory(t *testing.T) {
 func TestDeref(t *testing.T) {
 	x := 42
 	tests := []struct {
-		name    string
-		v       any
-		wantVal any
-		wantOK  bool
+		name string
+		v    any
+		want any
+		ok   bool
 	}{
 		{"nil", nil, nil, false},
 		{"concrete int", 42, 42, true},
@@ -282,11 +282,11 @@ func TestDeref(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			val, ok := Deref(tt.v)
-			if ok != tt.wantOK {
-				t.Errorf("Deref() ok = %v, want %v", ok, tt.wantOK)
+			if ok != tt.ok {
+				t.Errorf("Deref() ok = %v, want %v", ok, tt.ok)
 			}
-			if val != tt.wantVal {
-				t.Errorf("Deref() val = %v, want %v", val, tt.wantVal)
+			if val != tt.want {
+				t.Errorf("Deref() val = %v, want %v", val, tt.want)
 			}
 		})
 	}
@@ -314,18 +314,19 @@ func TestDerefAll(t *testing.T) {
 			}
 		})
 	}
+	_ = ppx
 }
 
 // ---------------------------------------------------------------------------
 // Value extraction
 // ---------------------------------------------------------------------------
 
-func TestExtractString(t *testing.T) {
+func TestStringVal(t *testing.T) {
 	tests := []struct {
-		name    string
-		v       any
-		wantStr string
-		wantOK  bool
+		name string
+		v    any
+		want string
+		ok   bool
 	}{
 		{"string", "hello", "hello", true},
 		{"empty string", "", "", true},
@@ -334,9 +335,9 @@ func TestExtractString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, ok := ExtractString(tt.v)
-			if ok != tt.wantOK || s != tt.wantStr {
-				t.Errorf("ExtractString() = (%q, %v), want (%q, %v)", s, ok, tt.wantStr, tt.wantOK)
+			s, ok := StringVal(tt.v)
+			if ok != tt.ok || s != tt.want {
+				t.Errorf("StringVal() = (%q, %v), want (%q, %v)", s, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -389,10 +390,10 @@ func TestHasSize(t *testing.T) {
 
 func TestLength(t *testing.T) {
 	tests := []struct {
-		name    string
-		v       any
-		wantLen int
-		wantOK  bool
+		name string
+		v    any
+		want int
+		ok   bool
 	}{
 		{"string", "hello", 5, true},
 		{"slice", []int{1, 2, 3}, 3, true},
@@ -403,9 +404,9 @@ func TestLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l, ok := Length(tt.v)
-			if ok != tt.wantOK || l != tt.wantLen {
-				t.Errorf("Length() = (%d, %v), want (%d, %v)", l, ok, tt.wantLen, tt.wantOK)
+			n, ok := Length(tt.v)
+			if ok != tt.ok || n != tt.want {
+				t.Errorf("Length() = (%d, %v), want (%d, %v)", n, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -413,10 +414,10 @@ func TestLength(t *testing.T) {
 
 func TestSize(t *testing.T) {
 	tests := []struct {
-		name     string
-		v        any
-		wantSize int
-		wantOK   bool
+		name string
+		v    any
+		want int
+		ok   bool
 	}{
 		{"map", map[string]int{"a": 1, "b": 2}, 2, true},
 		{"slice", []int{1, 2}, 2, true},
@@ -426,9 +427,9 @@ func TestSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, ok := Size(tt.v)
-			if ok != tt.wantOK || s != tt.wantSize {
-				t.Errorf("Size() = (%d, %v), want (%d, %v)", s, ok, tt.wantSize, tt.wantOK)
+			n, ok := Size(tt.v)
+			if ok != tt.ok || n != tt.want {
+				t.Errorf("Size() = (%d, %v), want (%d, %v)", n, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -438,32 +439,32 @@ func TestSize(t *testing.T) {
 // Generic conversion
 // ---------------------------------------------------------------------------
 
-func TestConvertToGeneric(t *testing.T) {
+func TestConvert(t *testing.T) {
 	t.Run("same type", func(t *testing.T) {
-		got, err := ConvertToGeneric[int](42)
+		got, err := Convert[int](42)
 		if err != nil || got != 42 {
-			t.Errorf("ConvertToGeneric[int](42) = (%v, %v), want (42, nil)", got, err)
+			t.Errorf("Convert[int](42) = (%v, %v), want (42, nil)", got, err)
 		}
 	})
 
 	t.Run("numeric conversion", func(t *testing.T) {
-		got, err := ConvertToGeneric[float64](42)
+		got, err := Convert[float64](42)
 		if err != nil || got != 42.0 {
-			t.Errorf("ConvertToGeneric[float64](42) = (%v, %v), want (42.0, nil)", got, err)
+			t.Errorf("Convert[float64](42) = (%v, %v), want (42.0, nil)", got, err)
 		}
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		_, err := ConvertToGeneric[int](nil)
-		if !errors.Is(err, ErrNilValue) {
-			t.Errorf("ConvertToGeneric[int](nil) error = %v, want ErrNilValue", err)
+		_, err := Convert[int](nil)
+		if !errors.Is(err, ErrNil) {
+			t.Errorf("Convert[int](nil) error = %v, want ErrNil", err)
 		}
 	})
 
-	t.Run("unsupported conversion", func(t *testing.T) {
-		_, err := ConvertToGeneric[int]("hello")
-		if !errors.Is(err, ErrUnsupportedConversion) {
-			t.Errorf("ConvertToGeneric[int](string) error = %v, want ErrUnsupportedConversion", err)
+	t.Run("unsupported", func(t *testing.T) {
+		_, err := Convert[int]("hello")
+		if !errors.Is(err, ErrUnsupported) {
+			t.Errorf("Convert[int](string) error = %v, want ErrUnsupported", err)
 		}
 	})
 }

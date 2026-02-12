@@ -7,14 +7,6 @@ import (
 	"github.com/kaptinlin/gozod/core"
 )
 
-// kindOf returns the reflect.Kind of v, or reflect.Invalid for nil.
-func kindOf(v any) reflect.Kind {
-	if v == nil {
-		return reflect.Invalid
-	}
-	return reflect.TypeOf(v).Kind()
-}
-
 // IsNil reports whether v is nil, including typed nils (nil pointers,
 // nil slices, nil maps, nil channels, nil functions, and nil interfaces).
 func IsNil(v any) bool {
@@ -59,16 +51,16 @@ func IsNumeric(v any) bool {
 }
 
 // IsArray reports whether v is an array.
-func IsArray(v any) bool { return kindOf(v) == reflect.Array }
+func IsArray(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Array }
 
 // IsSlice reports whether v is a slice.
-func IsSlice(v any) bool { return kindOf(v) == reflect.Slice }
+func IsSlice(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Slice }
 
 // IsMap reports whether v is a map.
-func IsMap(v any) bool { return kindOf(v) == reflect.Map }
+func IsMap(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Map }
 
 // IsStruct reports whether v is a struct.
-func IsStruct(v any) bool { return kindOf(v) == reflect.Struct }
+func IsStruct(v any) bool { return v != nil && reflect.TypeOf(v).Kind() == reflect.Struct }
 
 // ParsedType returns the [core.ParsedType] for runtime type detection.
 // It corresponds to Zod v4's getParsedType() function.
@@ -107,7 +99,7 @@ func ParsedType(v any) core.ParsedType {
 // parsedTypeByKind resolves composite and pointer kinds via reflection.
 func parsedTypeByKind(v any) core.ParsedType {
 	//nolint:exhaustive // default handles all other cases
-	switch kindOf(v) {
+	switch reflect.TypeOf(v).Kind() {
 	case reflect.Array:
 		return core.ParsedTypeArray
 	case reflect.Slice:
@@ -151,7 +143,7 @@ func ParsedCategory(v any) string {
 
 	// Slow path: reflection for composite types.
 	//nolint:exhaustive // default handles all other cases
-	switch kindOf(v) {
+	switch reflect.TypeOf(v).Kind() {
 	case reflect.Array, reflect.Slice:
 		return "array"
 	case reflect.Map, reflect.Struct:

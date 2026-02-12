@@ -104,14 +104,14 @@ func formatKo(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameKo(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameKo(received)
 		return fmt.Sprintf("잘못된 입력: 예상 타입은 %s, 받은 타입은 %s입니다", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "잘못된 값"
 		}
@@ -128,21 +128,21 @@ func formatKo(raw core.ZodRawIssue) string {
 		return formatSizeConstraintKo(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "잘못된 형식"
 		}
 		return formatStringValidationKo(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "잘못된 숫자: 배수여야 합니다"
 		}
 		return fmt.Sprintf("잘못된 숫자: %v의 배수여야 합니다", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "인식할 수 없는 키"
 		}
@@ -153,7 +153,7 @@ func formatKo(raw core.ZodRawIssue) string {
 		return "인식할 수 없는 키"
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "잘못된 키"
 		}
@@ -163,45 +163,45 @@ func formatKo(raw core.ZodRawIssue) string {
 		return "잘못된 입력"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "잘못된 요소"
 		}
 		return fmt.Sprintf("잘못된 값: %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "필드")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "필드")
 		if fieldName == "" {
 			return fmt.Sprintf("필수 %s이(가) 없습니다", fieldType)
 		}
 		return fmt.Sprintf("필수 %s: %s이(가) 없습니다", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "알 수 없음")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "알 수 없음")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "알 수 없음")
+		toType := mapx.StringOr(raw.Properties, "to_type", "알 수 없음")
 		return fmt.Sprintf("타입 변환 실패: %s을(를) %s(으)로 변환할 수 없습니다", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("잘못된 스키마: %s", reason)
 		}
 		return "잘못된 스키마 정의"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "판별자")
+		field := mapx.StringOr(raw.Properties, "field", "판별자")
 		return fmt.Sprintf("잘못되거나 누락된 판별자 필드: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "값")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "값")
 		return fmt.Sprintf("%s을(를) 병합할 수 없습니다: 호환되지 않는 타입", conflictType)
 
 	case core.NilPointer:
 		return "nil 포인터가 발견되었습니다"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -214,16 +214,16 @@ func formatKo(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintKo formats size constraint messages in Korean
 func formatSizeConstraintKo(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "값"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -233,7 +233,7 @@ func formatSizeConstraintKo(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "너무 큽니다"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
 	sizing := getSizingKo(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 
@@ -274,25 +274,25 @@ func formatSizeConstraintKo(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationKo(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "잘못된 문자열: 지정된 접두사로 시작해야 합니다"
 		}
 		return fmt.Sprintf("잘못된 문자열: \"%s\"(으)로 시작해야 합니다", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "잘못된 문자열: 지정된 접미사로 끝나야 합니다"
 		}
 		return fmt.Sprintf("잘못된 문자열: \"%s\"(으)로 끝나야 합니다", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "잘못된 문자열: 지정된 문자열을 포함해야 합니다"
 		}
 		return fmt.Sprintf("잘못된 문자열: \"%s\"을(를) 포함해야 합니다", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "잘못된 문자열: 패턴과 일치해야 합니다"
 		}

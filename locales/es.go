@@ -118,14 +118,14 @@ func formatEs(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameEs(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameEs(received)
 		return fmt.Sprintf("Entrada inválida: se esperaba %s, recibido %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Valor inválido"
 		}
@@ -142,21 +142,21 @@ func formatEs(raw core.ZodRawIssue) string {
 		return formatSizeConstraintEs(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Formato inválido"
 		}
 		return formatStringValidationEs(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Número inválido: debe ser múltiplo"
 		}
 		return fmt.Sprintf("Número inválido: debe ser múltiplo de %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Llave desconocida"
 		}
@@ -171,7 +171,7 @@ func formatEs(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		origin = getTypeNameEs(origin)
 		if origin == "" {
 			return "Llave inválida"
@@ -182,7 +182,7 @@ func formatEs(raw core.ZodRawIssue) string {
 		return "Entrada inválida"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		origin = getTypeNameEs(origin)
 		if origin == "" {
 			return "Elemento inválido"
@@ -190,38 +190,38 @@ func formatEs(raw core.ZodRawIssue) string {
 		return fmt.Sprintf("Valor inválido en %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "campo")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "campo")
 		if fieldName == "" {
 			return fmt.Sprintf("Falta %s requerido", fieldType)
 		}
 		return fmt.Sprintf("Falta %s requerido: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "desconocido")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "desconocido")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "desconocido")
+		toType := mapx.StringOr(raw.Properties, "to_type", "desconocido")
 		return fmt.Sprintf("Error de conversión de tipo: no se puede convertir %s a %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Esquema inválido: %s", reason)
 		}
 		return "Definición de esquema inválida"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "discriminador")
+		field := mapx.StringOr(raw.Properties, "field", "discriminador")
 		return fmt.Sprintf("Campo discriminador inválido o faltante: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "valores")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "valores")
 		return fmt.Sprintf("No se pueden fusionar %s: tipos incompatibles", conflictType)
 
 	case core.NilPointer:
 		return "Se encontró un puntero nulo"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -234,7 +234,7 @@ func formatEs(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintEs formats size constraint messages in Spanish
 func formatSizeConstraintEs(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	origin = getTypeNameEs(origin)
 	if origin == "" {
 		origin = "valor"
@@ -242,9 +242,9 @@ func formatSizeConstraintEs(raw core.ZodRawIssue, isTooSmall bool) string {
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -254,8 +254,8 @@ func formatSizeConstraintEs(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Demasiado grande"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingEs(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingEs(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Spanish comparison operators
@@ -291,25 +291,25 @@ func formatSizeConstraintEs(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationEs(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Cadena inválida: debe comenzar con el prefijo especificado"
 		}
 		return fmt.Sprintf("Cadena inválida: debe comenzar con \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Cadena inválida: debe terminar con el sufijo especificado"
 		}
 		return fmt.Sprintf("Cadena inválida: debe terminar en \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Cadena inválida: debe incluir la subcadena especificada"
 		}
 		return fmt.Sprintf("Cadena inválida: debe incluir \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Cadena inválida: debe coincidir con el patrón"
 		}

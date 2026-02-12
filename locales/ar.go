@@ -104,14 +104,14 @@ func formatAr(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameAr(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameAr(received)
 		return fmt.Sprintf("مدخلات غير مقبولة: يفترض إدخال %s، ولكن تم إدخال %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "قيمة غير مقبولة"
 		}
@@ -128,21 +128,21 @@ func formatAr(raw core.ZodRawIssue) string {
 		return formatSizeConstraintAr(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "صيغة غير مقبولة"
 		}
 		return formatStringValidationAr(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "رقم غير مقبول: يجب أن يكون من المضاعفات"
 		}
 		return fmt.Sprintf("رقم غير مقبول: يجب أن يكون من مضاعفات %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "معرف غريب"
 		}
@@ -157,7 +157,7 @@ func formatAr(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "معرف غير مقبول"
 		}
@@ -167,45 +167,45 @@ func formatAr(raw core.ZodRawIssue) string {
 		return "مدخل غير مقبول"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "عنصر غير مقبول"
 		}
 		return fmt.Sprintf("مدخل غير مقبول في %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "حقل")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "حقل")
 		if fieldName == "" {
 			return fmt.Sprintf("%s مطلوب مفقود", fieldType)
 		}
 		return fmt.Sprintf("%s مطلوب مفقود: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "غير معروف")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "غير معروف")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "غير معروف")
+		toType := mapx.StringOr(raw.Properties, "to_type", "غير معروف")
 		return fmt.Sprintf("فشل تحويل النوع: لا يمكن تحويل %s إلى %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("مخطط غير مقبول: %s", reason)
 		}
 		return "تعريف مخطط غير مقبول"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "المميز")
+		field := mapx.StringOr(raw.Properties, "field", "المميز")
 		return fmt.Sprintf("حقل مميز غير مقبول أو مفقود: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "القيم")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "القيم")
 		return fmt.Sprintf("لا يمكن دمج %s: أنواع غير متوافقة", conflictType)
 
 	case core.NilPointer:
 		return "تم اكتشاف مؤشر فارغ"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -218,16 +218,16 @@ func formatAr(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintAr formats size constraint messages in Arabic
 func formatSizeConstraintAr(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "القيمة"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -237,8 +237,8 @@ func formatSizeConstraintAr(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "أكبر من اللازم"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingAr(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingAr(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Arabic comparison operators
@@ -274,25 +274,25 @@ func formatSizeConstraintAr(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationAr(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "نَص غير مقبول: يجب أن يبدأ بالبادئة المحددة"
 		}
 		return fmt.Sprintf("نَص غير مقبول: يجب أن يبدأ بـ \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "نَص غير مقبول: يجب أن ينتهي باللاحقة المحددة"
 		}
 		return fmt.Sprintf("نَص غير مقبول: يجب أن ينتهي بـ \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "نَص غير مقبول: يجب أن يتضمَّن السلسلة الفرعية المحددة"
 		}
 		return fmt.Sprintf("نَص غير مقبول: يجب أن يتضمَّن \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "نَص غير مقبول: يجب أن يطابق النمط"
 		}

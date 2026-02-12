@@ -10,10 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// =============================================================================
-// BOOLEAN CONVERSION TESTS
-// =============================================================================
-
 func TestToBool(t *testing.T) {
 	t.Run("direct bool values", func(t *testing.T) {
 		result, err := ToBool(true)
@@ -86,10 +82,6 @@ func TestToBool(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// STRING CONVERSION TESTS
-// =============================================================================
-
 func TestToString(t *testing.T) {
 	t.Run("string passthrough", func(t *testing.T) {
 		result, err := ToString("hello")
@@ -150,10 +142,6 @@ func TestToString(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// TIME CONVERSION TESTS
-// =============================================================================
-
 func TestToTime(t *testing.T) {
 	t.Run("time.Time passthrough", func(t *testing.T) {
 		input := time.Now()
@@ -187,10 +175,6 @@ func TestToTime(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-// =============================================================================
-// NUMERIC CONVERSION TESTS
-// =============================================================================
 
 func TestToInt64(t *testing.T) {
 	t.Run("direct int64", func(t *testing.T) {
@@ -316,10 +300,6 @@ func TestToBigInt(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// GENERIC CONVERSION TESTS
-// =============================================================================
-
 func TestToInteger(t *testing.T) {
 	t.Run("to int", func(t *testing.T) {
 		result, err := ToInteger[int](42)
@@ -357,10 +337,6 @@ func TestToFloat(t *testing.T) {
 		assert.Equal(t, 3.14, result)
 	})
 }
-
-// =============================================================================
-// COMPLEX CONVERSION TESTS
-// =============================================================================
 
 func TestToComplex64(t *testing.T) {
 	t.Run("from complex64", func(t *testing.T) {
@@ -430,10 +406,6 @@ func TestToComplexFromString(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// GENERIC TO FUNCTION TESTS
-// =============================================================================
-
 func TestTo(t *testing.T) {
 	t.Run("to string", func(t *testing.T) {
 		result, err := To[string](42)
@@ -459,10 +431,6 @@ func TestTo(t *testing.T) {
 		assert.Equal(t, 3.14, result)
 	})
 }
-
-// =============================================================================
-// LITERAL CONVERSION TESTS
-// =============================================================================
 
 func TestToLiteral(t *testing.T) {
 	t.Run("nil returns nil", func(t *testing.T) {

@@ -104,14 +104,14 @@ func formatHu(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameHu(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameHu(received)
 		return fmt.Sprintf("Érvénytelen bemenet: a várt érték %s, a kapott érték %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Érvénytelen érték"
 		}
@@ -128,21 +128,21 @@ func formatHu(raw core.ZodRawIssue) string {
 		return formatSizeConstraintHu(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Érvénytelen formátum"
 		}
 		return formatStringValidationHu(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Érvénytelen szám: többszörösének kell lennie"
 		}
 		return fmt.Sprintf("Érvénytelen szám: %v többszörösének kell lennie", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Ismeretlen kulcs"
 		}
@@ -157,7 +157,7 @@ func formatHu(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Érvénytelen kulcs"
 		}
@@ -167,45 +167,45 @@ func formatHu(raw core.ZodRawIssue) string {
 		return "Érvénytelen bemenet"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Érvénytelen elem"
 		}
 		return fmt.Sprintf("Érvénytelen érték: %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "mező")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "mező")
 		if fieldName == "" {
 			return fmt.Sprintf("Kötelező %s hiányzik", fieldType)
 		}
 		return fmt.Sprintf("Kötelező %s hiányzik: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "ismeretlen")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "ismeretlen")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "ismeretlen")
+		toType := mapx.StringOr(raw.Properties, "to_type", "ismeretlen")
 		return fmt.Sprintf("Típuskonverzió sikertelen: %s nem konvertálható %s típusra", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Érvénytelen séma: %s", reason)
 		}
 		return "Érvénytelen sémadefiníció"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "diszkriminátor")
+		field := mapx.StringOr(raw.Properties, "field", "diszkriminátor")
 		return fmt.Sprintf("Érvénytelen vagy hiányzó diszkriminátor mező: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "értékek")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "értékek")
 		return fmt.Sprintf("Nem lehet egyesíteni %s: inkompatibilis típusok", conflictType)
 
 	case core.NilPointer:
 		return "Null mutató észlelve"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -218,16 +218,16 @@ func formatHu(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintHu formats size constraint messages in Hungarian
 func formatSizeConstraintHu(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "érték"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -237,8 +237,8 @@ func formatSizeConstraintHu(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Túl nagy"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingHu(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingHu(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Hungarian comparison operators
@@ -274,25 +274,25 @@ func formatSizeConstraintHu(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationHu(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Érvénytelen string: megadott értékkel kell kezdődnie"
 		}
 		return fmt.Sprintf("Érvénytelen string: \"%s\" értékkel kell kezdődnie", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Érvénytelen string: megadott értékkel kell végződnie"
 		}
 		return fmt.Sprintf("Érvénytelen string: \"%s\" értékkel kell végződnie", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Érvénytelen string: megadott értéket kell tartalmaznia"
 		}
 		return fmt.Sprintf("Érvénytelen string: \"%s\" értéket kell tartalmaznia", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Érvénytelen string: mintának kell megfelelnie"
 		}

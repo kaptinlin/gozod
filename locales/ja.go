@@ -104,14 +104,14 @@ func formatJa(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameJa(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameJa(received)
 		return fmt.Sprintf("無効な入力: %sが期待されましたが、%sが入力されました", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "無効な値"
 		}
@@ -128,21 +128,21 @@ func formatJa(raw core.ZodRawIssue) string {
 		return formatSizeConstraintJa(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "無効な形式"
 		}
 		return formatStringValidationJa(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "無効な数値: 倍数である必要があります"
 		}
 		return fmt.Sprintf("無効な数値: %vの倍数である必要があります", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "認識されていないキー"
 		}
@@ -157,7 +157,7 @@ func formatJa(raw core.ZodRawIssue) string {
 		return "認識されていないキー"
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "無効なキー"
 		}
@@ -167,45 +167,45 @@ func formatJa(raw core.ZodRawIssue) string {
 		return "無効な入力"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "無効な要素"
 		}
 		return fmt.Sprintf("%s内の無効な値", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "フィールド")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "フィールド")
 		if fieldName == "" {
 			return fmt.Sprintf("必須の%sがありません", fieldType)
 		}
 		return fmt.Sprintf("必須の%s: %sがありません", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "不明")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "不明")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "不明")
+		toType := mapx.StringOr(raw.Properties, "to_type", "不明")
 		return fmt.Sprintf("型変換エラー: %sを%sに変換できません", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("無効なスキーマ: %s", reason)
 		}
 		return "無効なスキーマ定義"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "判別フィールド")
+		field := mapx.StringOr(raw.Properties, "field", "判別フィールド")
 		return fmt.Sprintf("無効または欠落している判別フィールド: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "値")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "値")
 		return fmt.Sprintf("%sをマージできません: 互換性のない型", conflictType)
 
 	case core.NilPointer:
 		return "nilポインタが検出されました"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -218,16 +218,16 @@ func formatJa(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintJa formats size constraint messages in Japanese
 func formatSizeConstraintJa(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "値"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -237,7 +237,7 @@ func formatSizeConstraintJa(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "大きすぎる値"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
 	sizing := getSizingJa(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
 
@@ -274,25 +274,25 @@ func formatSizeConstraintJa(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationJa(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "無効な文字列: 指定された接頭辞で始まる必要があります"
 		}
 		return fmt.Sprintf("無効な文字列: \"%s\"で始まる必要があります", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "無効な文字列: 指定された接尾辞で終わる必要があります"
 		}
 		return fmt.Sprintf("無効な文字列: \"%s\"で終わる必要があります", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "無効な文字列: 指定された文字列を含む必要があります"
 		}
 		return fmt.Sprintf("無効な文字列: \"%s\"を含む必要があります", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "無効な文字列: パターンに一致する必要があります"
 		}

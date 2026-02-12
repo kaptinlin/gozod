@@ -104,14 +104,14 @@ func formatVi(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameVi(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameVi(received)
 		return fmt.Sprintf("Đầu vào không hợp lệ: mong đợi %s, nhận được %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Giá trị không hợp lệ"
 		}
@@ -128,21 +128,21 @@ func formatVi(raw core.ZodRawIssue) string {
 		return formatSizeConstraintVi(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Định dạng không hợp lệ"
 		}
 		return formatStringValidationVi(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Số không hợp lệ: phải là bội số"
 		}
 		return fmt.Sprintf("Số không hợp lệ: phải là bội số của %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Khóa không được nhận dạng"
 		}
@@ -153,7 +153,7 @@ func formatVi(raw core.ZodRawIssue) string {
 		return "Khóa không được nhận dạng"
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Khóa không hợp lệ"
 		}
@@ -163,45 +163,45 @@ func formatVi(raw core.ZodRawIssue) string {
 		return "Đầu vào không hợp lệ"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Phần tử không hợp lệ"
 		}
 		return fmt.Sprintf("Giá trị không hợp lệ trong %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "trường")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "trường")
 		if fieldName == "" {
 			return fmt.Sprintf("Thiếu %s bắt buộc", fieldType)
 		}
 		return fmt.Sprintf("Thiếu %s bắt buộc: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "không xác định")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "không xác định")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "không xác định")
+		toType := mapx.StringOr(raw.Properties, "to_type", "không xác định")
 		return fmt.Sprintf("Chuyển đổi kiểu thất bại: không thể chuyển %s sang %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Lược đồ không hợp lệ: %s", reason)
 		}
 		return "Định nghĩa lược đồ không hợp lệ"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "bộ phân biệt")
+		field := mapx.StringOr(raw.Properties, "field", "bộ phân biệt")
 		return fmt.Sprintf("Trường phân biệt không hợp lệ hoặc bị thiếu: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "giá trị")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "giá trị")
 		return fmt.Sprintf("Không thể hợp nhất %s: kiểu không tương thích", conflictType)
 
 	case core.NilPointer:
 		return "Phát hiện con trỏ null"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -214,16 +214,16 @@ func formatVi(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintVi formats size constraint messages in Vietnamese
 func formatSizeConstraintVi(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "giá trị"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -233,8 +233,8 @@ func formatSizeConstraintVi(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Quá lớn"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingVi(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingVi(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Vietnamese comparison operators
@@ -270,25 +270,25 @@ func formatSizeConstraintVi(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationVi(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Chuỗi không hợp lệ: phải bắt đầu bằng tiền tố được chỉ định"
 		}
 		return fmt.Sprintf("Chuỗi không hợp lệ: phải bắt đầu bằng \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Chuỗi không hợp lệ: phải kết thúc bằng hậu tố được chỉ định"
 		}
 		return fmt.Sprintf("Chuỗi không hợp lệ: phải kết thúc bằng \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Chuỗi không hợp lệ: phải bao gồm chuỗi con được chỉ định"
 		}
 		return fmt.Sprintf("Chuỗi không hợp lệ: phải bao gồm \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Chuỗi không hợp lệ: phải khớp với mẫu"
 		}

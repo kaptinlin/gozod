@@ -105,14 +105,14 @@ func formatTa(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameTa(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameTa(received)
 		return fmt.Sprintf("தவறான உள்ளீடு: எதிர்பார்க்கப்பட்டது %s, பெறப்பட்டது %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "தவறான மதிப்பு"
 		}
@@ -129,21 +129,21 @@ func formatTa(raw core.ZodRawIssue) string {
 		return formatSizeConstraintTa(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "தவறான வடிவம்"
 		}
 		return formatStringValidationTa(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "தவறான எண்: பலமாக இருக்க வேண்டும்"
 		}
 		return fmt.Sprintf("தவறான எண்: %v இன் பலமாக இருக்க வேண்டும்", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "அடையாளம் தெரியாத விசை"
 		}
@@ -158,7 +158,7 @@ func formatTa(raw core.ZodRawIssue) string {
 		return keyWord
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "தவறான விசை"
 		}
@@ -168,45 +168,45 @@ func formatTa(raw core.ZodRawIssue) string {
 		return "தவறான உள்ளீடு"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "தவறான உறுப்பு"
 		}
 		return fmt.Sprintf("%s இல் தவறான மதிப்பு", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "புலம்")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "புலம்")
 		if fieldName == "" {
 			return fmt.Sprintf("தேவையான %s இல்லை", fieldType)
 		}
 		return fmt.Sprintf("தேவையான %s இல்லை: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "தெரியாதது")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "தெரியாதது")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "தெரியாதது")
+		toType := mapx.StringOr(raw.Properties, "to_type", "தெரியாதது")
 		return fmt.Sprintf("வகை மாற்றம் தோல்வியடைந்தது: %s ஐ %s ஆக மாற்ற முடியவில்லை", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("தவறான திட்டம்: %s", reason)
 		}
 		return "தவறான திட்ட வரையறை"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "வேறுபாடு காட்டி")
+		field := mapx.StringOr(raw.Properties, "field", "வேறுபாடு காட்டி")
 		return fmt.Sprintf("தவறான அல்லது இல்லாத வேறுபாடு காட்டி புலம்: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "மதிப்புகள்")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "மதிப்புகள்")
 		return fmt.Sprintf("%s ஐ இணைக்க முடியவில்லை: பொருந்தாத வகைகள்", conflictType)
 
 	case core.NilPointer:
 		return "வெற்று சுட்டி கண்டறியப்பட்டது"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -219,16 +219,16 @@ func formatTa(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintTa formats size constraint messages in Tamil
 func formatSizeConstraintTa(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "மதிப்பு"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -238,8 +238,8 @@ func formatSizeConstraintTa(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "மிக பெரியது"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingTa(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingTa(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Tamil comparison operators
@@ -275,25 +275,25 @@ func formatSizeConstraintTa(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationTa(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "தவறான சரம்: குறிப்பிட்ட முன்னொட்டில் தொடங்க வேண்டும்"
 		}
 		return fmt.Sprintf("தவறான சரம்: \"%s\" இல் தொடங்க வேண்டும்", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "தவறான சரம்: குறிப்பிட்ட பின்னொட்டில் முடிவடைய வேண்டும்"
 		}
 		return fmt.Sprintf("தவறான சரம்: \"%s\" இல் முடிவடைய வேண்டும்", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "தவறான சரம்: குறிப்பிட்ட துணை சரத்தை உள்ளடக்க வேண்டும்"
 		}
 		return fmt.Sprintf("தவறான சரம்: \"%s\" ஐ உள்ளடக்க வேண்டும்", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "தவறான சரம்: முறைபாட்டுடன் பொருந்த வேண்டும்"
 		}

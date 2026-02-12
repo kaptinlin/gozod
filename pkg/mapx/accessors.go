@@ -3,40 +3,36 @@ package mapx
 import "maps"
 
 // Merge returns a new map containing all entries from both maps.
-// Entries in props2 take precedence over entries in props1.
-func Merge(props1, props2 map[string]any) map[string]any {
-	if props1 == nil && props2 == nil {
+// Entries in b take precedence over entries in a.
+func Merge(a, b map[string]any) map[string]any {
+	if a == nil && b == nil {
 		return nil
 	}
-	if props1 == nil {
-		return Copy(props2)
+	if a == nil {
+		return Copy(b)
 	}
-	if props2 == nil {
-		return Copy(props1)
+	if b == nil {
+		return Copy(a)
 	}
-	result := Copy(props1)
-	maps.Copy(result, props2)
+	result := Copy(a)
+	maps.Copy(result, b)
 	return result
 }
 
-// =============================================================================
-// TYPE-SAFE ACCESSORS (backward-compatible wrappers over ValueOf)
-// =============================================================================
-
-// GetString returns the string value for key via type assertion.
-func GetString(props map[string]any, key string) (string, bool) {
-	return ValueOf[string](props, key)
+// String returns the string value for key.
+func String(m map[string]any, key string) (string, bool) {
+	return ValueOf[string](m, key)
 }
 
-// GetBool returns the bool value for key via type assertion.
-func GetBool(props map[string]any, key string) (bool, bool) {
-	return ValueOf[bool](props, key)
+// Bool returns the bool value for key.
+func Bool(m map[string]any, key string) (bool, bool) {
+	return ValueOf[bool](m, key)
 }
 
-// GetInt returns the int value for key, with numeric type coercion
+// Int returns the int value for key, with numeric coercion
 // from int32, int64, and float64.
-func GetInt(props map[string]any, key string) (int, bool) {
-	switch v := props[key].(type) {
+func Int(m map[string]any, key string) (int, bool) {
+	switch v := m[key].(type) {
 	case int:
 		return v, true
 	case int32:
@@ -50,10 +46,10 @@ func GetInt(props map[string]any, key string) (int, bool) {
 	}
 }
 
-// GetFloat64 returns the float64 value for key, with numeric type
+// Float64 returns the float64 value for key, with numeric
 // coercion from float32, int, int32, and int64.
-func GetFloat64(props map[string]any, key string) (float64, bool) {
-	switch v := props[key].(type) {
+func Float64(m map[string]any, key string) (float64, bool) {
+	switch v := m[key].(type) {
 	case float64:
 		return v, true
 	case float32:
@@ -69,17 +65,17 @@ func GetFloat64(props map[string]any, key string) (float64, bool) {
 	}
 }
 
-// GetStrings returns the []string value for key via type assertion.
-func GetStrings(props map[string]any, key string) ([]string, bool) {
-	return ValueOf[[]string](props, key)
+// Strings returns the []string value for key.
+func Strings(m map[string]any, key string) ([]string, bool) {
+	return ValueOf[[]string](m, key)
 }
 
-// GetAnySlice returns the []any value for key via type assertion.
-func GetAnySlice(props map[string]any, key string) ([]any, bool) {
-	return ValueOf[[]any](props, key)
+// AnySlice returns the []any value for key.
+func AnySlice(m map[string]any, key string) ([]any, bool) {
+	return ValueOf[[]any](m, key)
 }
 
-// GetMap returns the map[string]any value for key via type assertion.
-func GetMap(props map[string]any, key string) (map[string]any, bool) {
-	return ValueOf[map[string]any](props, key)
+// Map returns the map[string]any value for key.
+func Map(m map[string]any, key string) (map[string]any, bool) {
+	return ValueOf[map[string]any](m, key)
 }

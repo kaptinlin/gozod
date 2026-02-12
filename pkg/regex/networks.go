@@ -2,92 +2,63 @@ package regex
 
 import (
 	"regexp"
+	"sync"
 )
 
-// IPv4 matches IPv4 addresses
-// TypeScript original code:
-// export const ipv4: RegExp =
-//
-//	/^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/;
+// IPv4 matches IPv4 addresses (0.0.0.0 to 255.255.255.255).
 var IPv4 = regexp.MustCompile(`^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$`)
 
-// IPv6 matches IPv6 addresses – comprehensive pattern covering multiple compressed forms.
-// TypeScript original code:
-// export const ipv6: RegExp =
-//
-//	/^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::|([0-9a-fA-F]{1,4})?::([0-9a-fA-F]{1,4}:?){0,6})$/;
+// IPv6 matches IPv6 addresses including compressed forms.
 var IPv6 = regexp.MustCompile(`^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$`)
 
-// CIDRv4 matches IPv4 CIDR addresses
-// TypeScript original code:
-// export const cidrv4: RegExp =
-//
-//	/^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/([0-9]|[1-2][0-9]|3[0-2])$/;
+// CIDRv4 matches IPv4 CIDR notation (e.g., "10.0.0.0/24").
 var CIDRv4 = regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/([0-9]|[1-2][0-9]|3[0-2])$`)
 
-// CIDRv6 matches IPv6 CIDR addresses
-// Updated regex to handle more IPv6 address formats with CIDR notation
+// CIDRv6 matches IPv6 CIDR notation (e.g., "2001:db8::/32").
 var CIDRv6 = regexp.MustCompile(`^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$`)
 
-// IP matches any IP address (IPv4 or IPv6)
-// TypeScript original code:
-// export const ip: RegExp = new RegExp(`(${ipv4.source})|(${ipv6.source})`);
+// IP matches any IP address (IPv4 or IPv6).
 var IP = regexp.MustCompile(`((?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]))|((?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::|(?:[0-9a-fA-F]{1,4})?::(?:[0-9a-fA-F]{1,4}:?){0,6}))`)
 
-// Hostname matches valid DNS hostnames according to RFC 1123
-// Based on Zod v4: /^(?=.{1,253}\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$/
-// Note: Go's regex doesn't support lookahead, so length check (1-253 chars) must be done in validation code
-// Rules:
-// - Labels must start and end with alphanumeric characters
-// - Labels can contain hyphens but not at start/end
-// - Each label is 1-63 characters
-// - Optional trailing dot allowed (FQDN format)
-// - IP addresses ARE valid hostnames per Zod v4 tests
+// Hostname matches valid DNS hostnames per RFC 1123.
+// Note: Go's regex lacks lookahead, so the 1-253 char length check must be done in validation code.
 var Hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$`)
 
-// Domain matches valid domain names with TLD
-// TypeScript original code:
-// export const domain: RegExp = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+// Domain matches valid domain names with a TLD (e.g., "example.com").
 var Domain = regexp.MustCompile(`^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
 
-// HTTPProtocol matches http or https protocol
-// Used by HttpURL schema to restrict to HTTP/HTTPS only
-// TypeScript Zod v4: /^https?$/
+// HTTPProtocol matches "http" or "https".
 var HTTPProtocol = regexp.MustCompile(`^https?$`)
 
-// MAC returns a regex for validating MAC addresses with the specified delimiter.
-// Matches Zod TypeScript implementation using two branches for case-sensitive matching.
-// TypeScript original code:
-//
-//	export const mac = (delimiter?: string): RegExp => {
-//	  const escapedDelim = util.escapeRegex(delimiter ?? ":");
-//	  return new RegExp(`^(?:[0-9A-F]{2}${escapedDelim}){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}${escapedDelim}){5}[0-9a-f]{2}$`);
-//	};
-//
-// The regex uses two alternatives:
-// - First branch: uppercase hex digits (0-9A-F)
-// - Second branch: lowercase hex digits (0-9a-f)
-// This approach provides case-sensitive matching while accepting both cases.
-//
-// Examples:
+var (
+	macMu    sync.Mutex
+	macCache = make(map[string]*regexp.Regexp)
+)
+
+// MAC returns a cached regex for validating MAC addresses with the given
+// delimiter. An empty delimiter defaults to ":".
 //
 //	MAC(":")  matches "00:1A:2B:3C:4D:5E" or "00:1a:2b:3c:4d:5e"
 //	MAC("-")  matches "00-1A-2B-3C-4D-5E" or "00-1a-2b-3c-4d-5e"
-//	MAC(".")  matches "00.1A.2B.3C.4D.5E" or "00.1a.2b.3c.4d.5e"
 func MAC(delimiter string) *regexp.Regexp {
 	if delimiter == "" {
 		delimiter = ":"
 	}
 
-	// Escape special regex characters in the delimiter (e.g., "." becomes "\.")
-	escaped := regexp.QuoteMeta(delimiter)
+	macMu.Lock()
+	defer macMu.Unlock()
 
-	// Build pattern with two branches for uppercase and lowercase hex
-	// Format: ^(?:[0-9A-F]{2}DELIM){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}DELIM){5}[0-9a-f]{2}$
-	pattern := "^(?:[0-9A-F]{2}" + escaped + "){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}" + escaped + "){5}[0-9a-f]{2}$"
+	if re, ok := macCache[delimiter]; ok {
+		return re
+	}
 
-	return regexp.MustCompile(pattern)
+	sep := regexp.QuoteMeta(delimiter)
+	pattern := "^(?:[0-9A-F]{2}" + sep + "){5}[0-9A-F]{2}$|^(?:[0-9a-f]{2}" + sep + "){5}[0-9a-f]{2}$"
+
+	re := regexp.MustCompile(pattern)
+	macCache[delimiter] = re
+	return re
 }
 
-// MACDefault is the default MAC address regex using colon as delimiter
+// MACDefault is the default MAC address regex using ":" as delimiter.
 var MACDefault = MAC(":")

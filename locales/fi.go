@@ -114,14 +114,14 @@ func formatFi(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameFi(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameFi(received)
 		return fmt.Sprintf("Virheellinen tyyppi: odotettiin %s, oli %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Virheellinen arvo"
 		}
@@ -138,21 +138,21 @@ func formatFi(raw core.ZodRawIssue) string {
 		return formatSizeConstraintFi(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Virheellinen muoto"
 		}
 		return formatStringValidationFi(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Virheellinen luku: täytyy olla monikerta"
 		}
 		return fmt.Sprintf("Virheellinen luku: täytyy olla luvun %v monikerta", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Tuntematon avain"
 		}
@@ -176,38 +176,38 @@ func formatFi(raw core.ZodRawIssue) string {
 		return "Virheellinen arvo joukossa"
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "kenttä")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "kenttä")
 		if fieldName == "" {
 			return fmt.Sprintf("Pakollinen %s puuttuu", fieldType)
 		}
 		return fmt.Sprintf("Pakollinen %s puuttuu: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "tuntematon")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "tuntematon")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "tuntematon")
+		toType := mapx.StringOr(raw.Properties, "to_type", "tuntematon")
 		return fmt.Sprintf("Tyyppimuunnos epäonnistui: %s ei voida muuntaa tyypiksi %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Virheellinen skeema: %s", reason)
 		}
 		return "Virheellinen skeemamäärittely"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "erottelija")
+		field := mapx.StringOr(raw.Properties, "field", "erottelija")
 		return fmt.Sprintf("Virheellinen tai puuttuva erottelukenttä: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "arvot")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "arvot")
 		return fmt.Sprintf("Ei voida yhdistää %s: yhteensopimattomat tyypit", conflictType)
 
 	case core.NilPointer:
 		return "Tyhjä osoitin havaittu"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -222,9 +222,9 @@ func formatFi(raw core.ZodRawIssue) string {
 func formatSizeConstraintFi(raw core.ZodRawIssue, isTooSmall bool) string {
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -234,8 +234,8 @@ func formatSizeConstraintFi(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Liian suuri"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingFi(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingFi(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Finnish comparison operators
@@ -278,25 +278,25 @@ func formatSizeConstraintFi(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationFi(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "Virheellinen syöte: täytyy alkaa tietyllä merkkijonolla"
 		}
 		return fmt.Sprintf("Virheellinen syöte: täytyy alkaa \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "Virheellinen syöte: täytyy loppua tiettyyn merkkijonoon"
 		}
 		return fmt.Sprintf("Virheellinen syöte: täytyy loppua \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "Virheellinen syöte: täytyy sisältää tietty merkkijono"
 		}
 		return fmt.Sprintf("Virheellinen syöte: täytyy sisältää \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "Virheellinen syöte: täytyy vastata säännöllistä lauseketta"
 		}

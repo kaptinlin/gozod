@@ -104,14 +104,14 @@ func formatId(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		expected = getTypeNameId(expected)
 		received := issues.ParsedTypeToString(raw.Input)
 		received = getTypeNameId(received)
 		return fmt.Sprintf("Input tidak valid: diharapkan %s, diterima %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "Nilai tidak valid"
 		}
@@ -128,21 +128,21 @@ func formatId(raw core.ZodRawIssue) string {
 		return formatSizeConstraintId(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Format tidak valid"
 		}
 		return formatStringValidationId(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "Angka tidak valid: harus kelipatan"
 		}
 		return fmt.Sprintf("Angka tidak valid: harus kelipatan dari %v", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "Kunci tidak dikenali"
 		}
@@ -153,7 +153,7 @@ func formatId(raw core.ZodRawIssue) string {
 		return "Kunci tidak dikenali"
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Kunci tidak valid"
 		}
@@ -163,45 +163,45 @@ func formatId(raw core.ZodRawIssue) string {
 		return "Input tidak valid"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "Elemen tidak valid"
 		}
 		return fmt.Sprintf("Nilai tidak valid di %s", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "field")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "field")
 		if fieldName == "" {
 			return fmt.Sprintf("%s wajib tidak ada", fieldType)
 		}
 		return fmt.Sprintf("%s wajib tidak ada: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "tidak diketahui")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "tidak diketahui")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "tidak diketahui")
+		toType := mapx.StringOr(raw.Properties, "to_type", "tidak diketahui")
 		return fmt.Sprintf("Konversi tipe gagal: tidak dapat mengkonversi %s ke %s", fromType, toType)
 
 	case core.InvalidSchema:
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("Skema tidak valid: %s", reason)
 		}
 		return "Definisi skema tidak valid"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "diskriminator")
+		field := mapx.StringOr(raw.Properties, "field", "diskriminator")
 		return fmt.Sprintf("Field diskriminator tidak valid atau tidak ada: %s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "nilai")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "nilai")
 		return fmt.Sprintf("Tidak dapat menggabungkan %s: tipe tidak kompatibel", conflictType)
 
 	case core.NilPointer:
 		return "Pointer null terdeteksi"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -214,16 +214,16 @@ func formatId(raw core.ZodRawIssue) string {
 
 // formatSizeConstraintId formats size constraint messages in Indonesian
 func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "value"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -233,8 +233,8 @@ func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "Terlalu besar"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
-	sizing := getSizingId(mapx.GetStringDefault(raw.Properties, "origin", ""))
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
+	sizing := getSizingId(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Indonesian comparison operators
@@ -270,25 +270,25 @@ func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationId(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "String tidak valid: harus dimulai dengan prefix yang ditentukan"
 		}
 		return fmt.Sprintf("String tidak valid: harus dimulai dengan \"%s\"", prefix)
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "String tidak valid: harus berakhir dengan suffix yang ditentukan"
 		}
 		return fmt.Sprintf("String tidak valid: harus berakhir dengan \"%s\"", suffix)
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "String tidak valid: harus menyertakan substring yang ditentukan"
 		}
 		return fmt.Sprintf("String tidak valid: harus menyertakan \"%s\"", includes)
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "String tidak valid: harus sesuai pola"
 		}

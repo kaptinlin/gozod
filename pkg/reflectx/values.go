@@ -2,9 +2,9 @@ package reflectx
 
 import "reflect"
 
-// ExtractString returns the string value if v is a string.
+// StringVal returns the string value if v is a string.
 // For nil or non-string values it returns ("", false).
-func ExtractString(v any) (string, bool) {
+func StringVal(v any) (string, bool) {
 	if v == nil {
 		return "", false
 	}
@@ -14,8 +14,11 @@ func ExtractString(v any) (string, bool) {
 
 // HasLength reports whether v supports len() (string, array, or slice).
 func HasLength(v any) bool {
+	if v == nil {
+		return false
+	}
 	//nolint:exhaustive // default handles all other cases
-	switch kindOf(v) {
+	switch reflect.TypeOf(v).Kind() {
 	case reflect.String, reflect.Array, reflect.Slice:
 		return true
 	default:
@@ -25,8 +28,11 @@ func HasLength(v any) bool {
 
 // HasSize reports whether v has size semantics (map, chan, slice, or array).
 func HasSize(v any) bool {
+	if v == nil {
+		return false
+	}
 	//nolint:exhaustive // default handles all other cases
-	switch kindOf(v) {
+	switch reflect.TypeOf(v).Kind() {
 	case reflect.Map, reflect.Chan, reflect.Slice, reflect.Array:
 		return true
 	default:

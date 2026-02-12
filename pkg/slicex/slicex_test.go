@@ -246,7 +246,7 @@ func TestLength(t *testing.T) {
 
 	t.Run("non-slice returns error", func(t *testing.T) {
 		_, err := Length(123)
-		assert.ErrorIs(t, err, ErrNotSliceArrayOrString)
+		assert.ErrorIs(t, err, ErrNotCollection)
 	})
 }
 

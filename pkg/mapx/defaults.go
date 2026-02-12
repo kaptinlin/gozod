@@ -1,56 +1,52 @@
 package mapx
 
-// =============================================================================
-// DEFAULT VALUE ACCESSORS
-// =============================================================================
-
-// GetStringDefault returns the string value for key, or defaultValue.
-func GetStringDefault(props map[string]any, key, defaultValue string) string {
-	return ValueOrDefault(props, key, defaultValue)
+// StringOr returns the string value for key, or def.
+func StringOr(m map[string]any, key, def string) string {
+	return ValueOr(m, key, def)
 }
 
-// GetBoolDefault returns the bool value for key, or defaultValue.
-func GetBoolDefault(props map[string]any, key string, defaultValue bool) bool {
-	return ValueOrDefault(props, key, defaultValue)
+// BoolOr returns the bool value for key, or def.
+func BoolOr(m map[string]any, key string, def bool) bool {
+	return ValueOr(m, key, def)
 }
 
-// GetIntDefault returns the int value for key (with numeric coercion),
-// or defaultValue.
-func GetIntDefault(props map[string]any, key string, defaultValue int) int {
-	if v, ok := GetInt(props, key); ok {
+// IntOr returns the int value for key (with numeric coercion),
+// or def.
+func IntOr(m map[string]any, key string, def int) int {
+	if v, ok := Int(m, key); ok {
 		return v
 	}
-	return defaultValue
+	return def
 }
 
-// GetFloat64Default returns the float64 value for key (with numeric
-// coercion), or defaultValue.
-func GetFloat64Default(props map[string]any, key string, defaultValue float64) float64 {
-	if v, ok := GetFloat64(props, key); ok {
+// FloatOr returns the float64 value for key (with numeric
+// coercion), or def.
+func FloatOr(m map[string]any, key string, def float64) float64 {
+	if v, ok := Float64(m, key); ok {
 		return v
 	}
-	return defaultValue
+	return def
 }
 
-// GetAnyDefault returns the value for key, or defaultValue.
-func GetAnyDefault(props map[string]any, key string, defaultValue any) any {
-	if v, ok := Get(props, key); ok {
+// AnyOr returns the value for key, or def.
+func AnyOr(m map[string]any, key string, def any) any {
+	if v, ok := Get(m, key); ok {
 		return v
 	}
-	return defaultValue
+	return def
 }
 
-// GetStringsDefault returns the []string value for key, or defaultValue.
-func GetStringsDefault(props map[string]any, key string, defaultValue []string) []string {
-	return ValueOrDefault(props, key, defaultValue)
+// StringsOr returns the []string value for key, or def.
+func StringsOr(m map[string]any, key string, def []string) []string {
+	return ValueOr(m, key, def)
 }
 
-// GetAnySliceDefault returns the []any value for key, or defaultValue.
-func GetAnySliceDefault(props map[string]any, key string, defaultValue []any) []any {
-	return ValueOrDefault(props, key, defaultValue)
+// AnySliceOr returns the []any value for key, or def.
+func AnySliceOr(m map[string]any, key string, def []any) []any {
+	return ValueOr(m, key, def)
 }
 
-// GetMapDefault returns the map[string]any value for key, or defaultValue.
-func GetMapDefault(props map[string]any, key string, defaultValue map[string]any) map[string]any {
-	return ValueOrDefault(props, key, defaultValue)
+// MapOr returns the map[string]any value for key, or def.
+func MapOr(m map[string]any, key string, def map[string]any) map[string]any {
+	return ValueOr(m, key, def)
 }

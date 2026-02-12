@@ -5,88 +5,55 @@ import (
 	"strconv"
 )
 
-// CUID matches strings in CUID format
-// TypeScript original code:
-// export const cuid: RegExp = /^[cC][^\s-]{8,}$/;
+// CUID matches strings in CUID format (starts with 'c' or 'C', 9+ chars).
 var CUID = regexp.MustCompile(`^[cC][^\s-]{8,}$`)
 
-// CUID2 matches strings in CUID2 format
-// TypeScript original code:
-// export const cuid2: RegExp = /^[0-9a-z]+$/;
+// CUID2 matches strings in CUID2 format (lowercase alphanumeric).
 var CUID2 = regexp.MustCompile(`^[0-9a-z]+$`)
 
-// ULID matches strings in ULID format
-// TypeScript original code:
-// export const ulid: RegExp = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
+// ULID matches strings in ULID format (26 Crockford Base32 chars).
 var ULID = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$`)
 
-// XID matches strings in XID format
-// TypeScript original code:
-// export const xid: RegExp = /^[0-9a-vA-V]{20}$/;
+// XID matches strings in XID format (20 base32 chars).
 var XID = regexp.MustCompile(`^[0-9a-vA-V]{20}$`)
 
-// KSUID matches strings in KSUID format
-// TypeScript original code:
-// export const ksuid: RegExp = /^[A-Za-z0-9]{27}$/;
+// KSUID matches strings in KSUID format (27 alphanumeric chars).
 var KSUID = regexp.MustCompile(`^[A-Za-z0-9]{27}$`)
 
-// NanoID matches strings in NanoID format
-// TypeScript original code:
-// export const nanoid: RegExp = /^[a-zA-Z0-9_-]{21}$/;
+// NanoID matches strings in NanoID format (21 URL-safe chars).
 var NanoID = regexp.MustCompile(`^[a-zA-Z0-9_-]{21}$`)
 
-// GUID matches any UUID-like identifier with 8-4-4-4-12 hex pattern
-// TypeScript original code:
-// export const guid: RegExp = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
-// Note: Using non-capturing group for performance (no backreferences needed)
+// GUID matches any UUID-like identifier with 8-4-4-4-12 hex pattern.
 var GUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// UUID matches RFC 4122 UUID with all versions supported when no version is specified
-// TypeScript original code:
-//
-//	export const uuid = (version?: number | undefined): RegExp => {
-//	  if (!version)
-//	    return /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$/;
-//	  return new RegExp(
-//	    `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${version}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`
-//	  );
-//	};
-//
-// Note: Using non-capturing group for performance (no backreferences needed)
+// UUID matches RFC 4122 UUID (versions 1-8) or the nil UUID.
 var UUID = regexp.MustCompile(`^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$`)
 
-// UUID4 matches version 4 UUIDs
-// TypeScript original code:
-// export const uuid4: RegExp = uuid(4);
-// Note: Removed outer capturing group for performance (no backreferences needed)
+// UUID4 matches version 4 UUIDs.
 var UUID4 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-// UUID6 matches version 6 UUIDs
-// TypeScript original code:
-// export const uuid6: RegExp = uuid(6);
-// Note: Removed outer capturing group for performance (no backreferences needed)
+// UUID6 matches version 6 UUIDs.
 var UUID6 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-// UUID7 matches version 7 UUIDs
-// TypeScript original code:
-// export const uuid7: RegExp = uuid(7);
-// Note: Removed outer capturing group for performance (no backreferences needed)
+// UUID7 matches version 7 UUIDs.
 var UUID7 = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-// UUIDForVersion returns a regex matching a specific UUID version (1-8)
-// TypeScript original code:
-//
-//	export const uuid = (version?: number | undefined): RegExp => {
-//	  if (!version)
-//	    return /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$/;
-//	  return new RegExp(
-//	    `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${version}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`
-//	  );
-//	};
+// uuidVersionCache holds pre-compiled regexes for UUID versions 1-8.
+var uuidVersionCache = func() [9]*regexp.Regexp {
+	var cache [9]*regexp.Regexp
+	for v := range 9 {
+		if v >= 1 {
+			cache[v] = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-` + strconv.Itoa(v) + `[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+		}
+	}
+	return cache
+}()
+
+// UUIDForVersion returns a regex matching a specific UUID version (1-8).
+// For out-of-range versions, it returns the general UUID regex.
 func UUIDForVersion(version int) *regexp.Regexp {
 	if version < 1 || version > 8 {
 		return UUID
 	}
-	// Note: Removed outer capturing group for performance (no backreferences needed)
-	return regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-` + strconv.Itoa(version) + `[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+	return uuidVersionCache[version]
 }

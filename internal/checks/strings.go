@@ -153,7 +153,7 @@ func StringGte(minValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if str, ok := reflectx.ExtractString(payload.GetValue()); ok {
+		if str, ok := reflectx.StringVal(payload.GetValue()); ok {
 			if str < minValue {
 				raw := issues.CreateTooSmallIssue(minValue, true, "string", payload.GetValue())
 				raw.Inst = internals
@@ -178,7 +178,7 @@ func StringLte(maxValue string, params ...any) core.ZodCheck {
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
-		if str, ok := reflectx.ExtractString(payload.GetValue()); ok {
+		if str, ok := reflectx.StringVal(payload.GetValue()); ok {
 			if str > maxValue {
 				raw := issues.CreateTooBigIssue(maxValue, true, "string", payload.GetValue())
 				raw.Inst = internals

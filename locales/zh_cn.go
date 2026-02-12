@@ -169,12 +169,12 @@ func formatZhCN(raw core.ZodRawIssue) string {
 
 	switch code {
 	case core.InvalidType:
-		expected := mapx.GetStringDefault(raw.Properties, "expected", "")
+		expected := mapx.StringOr(raw.Properties, "expected", "")
 		received := getParsedTypeZh(raw.Input)
 		return fmt.Sprintf("无效输入：期望 %s，实际接收 %s", expected, received)
 
 	case core.InvalidValue:
-		values := mapx.GetAnySliceDefault(raw.Properties, "values", nil)
+		values := mapx.AnySliceOr(raw.Properties, "values", nil)
 		if len(values) == 0 {
 			return "无效值"
 		}
@@ -190,21 +190,21 @@ func formatZhCN(raw core.ZodRawIssue) string {
 		return formatSizeConstraintZh(raw, true)
 
 	case core.InvalidFormat:
-		format := mapx.GetStringDefault(raw.Properties, "format", "")
+		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "格式无效"
 		}
 		return formatStringValidationZh(raw, format)
 
 	case core.NotMultipleOf:
-		divisor := mapx.GetAnyDefault(raw.Properties, "divisor", nil)
+		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
 		if divisor == nil {
 			return "无效数字：必须是倍数"
 		}
 		return fmt.Sprintf("无效数字：必须是 %v 的倍数", divisor)
 
 	case core.UnrecognizedKeys:
-		keys := mapx.GetStringsDefault(raw.Properties, "keys", nil)
+		keys := mapx.StringsOr(raw.Properties, "keys", nil)
 		if len(keys) == 0 {
 			return "出现未知的键(key)"
 		}
@@ -221,7 +221,7 @@ func formatZhCN(raw core.ZodRawIssue) string {
 		return "出现未知的键(key)"
 
 	case core.InvalidKey:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "键(key)无效"
 		}
@@ -231,46 +231,46 @@ func formatZhCN(raw core.ZodRawIssue) string {
 		return "无效输入"
 
 	case core.InvalidElement:
-		origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+		origin := mapx.StringOr(raw.Properties, "origin", "")
 		if origin == "" {
 			return "元素无效"
 		}
 		return fmt.Sprintf("%s 中包含无效值(value)", origin)
 
 	case core.MissingRequired:
-		fieldName := mapx.GetStringDefault(raw.Properties, "field_name", "")
-		fieldType := mapx.GetStringDefault(raw.Properties, "field_type", "字段")
+		fieldName := mapx.StringOr(raw.Properties, "field_name", "")
+		fieldType := mapx.StringOr(raw.Properties, "field_type", "字段")
 		if fieldName == "" {
 			return fmt.Sprintf("缺少必需的%s", fieldType)
 		}
 		return fmt.Sprintf("缺少必需的%s: %s", fieldType, fieldName)
 
 	case core.TypeConversion:
-		fromType := mapx.GetStringDefault(raw.Properties, "from_type", "未知类型")
-		toType := mapx.GetStringDefault(raw.Properties, "to_type", "未知类型")
+		fromType := mapx.StringOr(raw.Properties, "from_type", "未知类型")
+		toType := mapx.StringOr(raw.Properties, "to_type", "未知类型")
 		return fmt.Sprintf("类型转换失败：无法将 %s 转换为 %s", fromType, toType)
 
 	case core.InvalidSchema:
 		// Prefer reason from properties if provided
-		reason := mapx.GetStringDefault(raw.Properties, "reason", "")
+		reason := mapx.StringOr(raw.Properties, "reason", "")
 		if reason != "" {
 			return fmt.Sprintf("无效的模式定义：%s", reason)
 		}
 		return "无效的模式定义"
 
 	case core.InvalidDiscriminator:
-		field := mapx.GetStringDefault(raw.Properties, "field", "判别字段")
+		field := mapx.StringOr(raw.Properties, "field", "判别字段")
 		return fmt.Sprintf("无效或缺失的判别字段：%s", field)
 
 	case core.IncompatibleTypes:
-		conflictType := mapx.GetStringDefault(raw.Properties, "conflict_type", "值")
+		conflictType := mapx.StringOr(raw.Properties, "conflict_type", "值")
 		return fmt.Sprintf("无法合并%s：类型不兼容", conflictType)
 
 	case core.NilPointer:
 		return "遇到空指针"
 
 	case core.Custom:
-		message := mapx.GetStringDefault(raw.Properties, "message", "")
+		message := mapx.StringOr(raw.Properties, "message", "")
 		if message != "" {
 			return message
 		}
@@ -288,16 +288,16 @@ func formatZhCN(raw core.ZodRawIssue) string {
 // formatSizeConstraintZh formats size constraint messages in Chinese
 // Maintains natural Chinese grammar while matching TypeScript Zod v4 logic
 func formatSizeConstraintZh(raw core.ZodRawIssue, isTooSmall bool) string {
-	origin := mapx.GetStringDefault(raw.Properties, "origin", "")
+	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "值"
 	}
 
 	var threshold any
 	if isTooSmall {
-		threshold = mapx.GetAnyDefault(raw.Properties, "minimum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "minimum", nil)
 	} else {
-		threshold = mapx.GetAnyDefault(raw.Properties, "maximum", nil)
+		threshold = mapx.AnyOr(raw.Properties, "maximum", nil)
 	}
 
 	if threshold == nil {
@@ -307,7 +307,7 @@ func formatSizeConstraintZh(raw core.ZodRawIssue, isTooSmall bool) string {
 		return "数值过大"
 	}
 
-	inclusive := mapx.GetBoolDefault(raw.Properties, "inclusive", true)
+	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
 	adj := issues.ComparisonOperator(inclusive, isTooSmall)
 	sizing := getSizingZh(origin)
 	thresholdStr := issues.FormatThreshold(threshold)
@@ -336,25 +336,25 @@ func formatSizeConstraintZh(raw core.ZodRawIssue, isTooSmall bool) string {
 func formatStringValidationZh(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
-		prefix := mapx.GetStringDefault(raw.Properties, "prefix", "")
+		prefix := mapx.StringOr(raw.Properties, "prefix", "")
 		if prefix == "" {
 			return "无效字符串：必须以指定前缀开头"
 		}
 		return fmt.Sprintf("无效字符串：必须以 %s 开头", issues.StringifyPrimitive(prefix))
 	case "ends_with":
-		suffix := mapx.GetStringDefault(raw.Properties, "suffix", "")
+		suffix := mapx.StringOr(raw.Properties, "suffix", "")
 		if suffix == "" {
 			return "无效字符串：必须以指定后缀结尾"
 		}
 		return fmt.Sprintf("无效字符串：必须以 %s 结尾", issues.StringifyPrimitive(suffix))
 	case "includes":
-		includes := mapx.GetStringDefault(raw.Properties, "includes", "")
+		includes := mapx.StringOr(raw.Properties, "includes", "")
 		if includes == "" {
 			return "无效字符串：必须包含指定子字符串"
 		}
 		return fmt.Sprintf("无效字符串：必须包含 %s", issues.StringifyPrimitive(includes))
 	case "regex":
-		pattern := mapx.GetStringDefault(raw.Properties, "pattern", "")
+		pattern := mapx.StringOr(raw.Properties, "pattern", "")
 		if pattern == "" {
 			return "无效字符串：必须满足正则表达式"
 		}
