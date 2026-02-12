@@ -1997,6 +1997,45 @@ func TestObject_MultipleErrorCollection(t *testing.T) {
 	})
 }
 
+func TestObject_ExtendPreservesRefinements(t *testing.T) {
+	t.Run("Extend preserves refinements for non-overlapping keys", func(t *testing.T) {
+		base := Object(core.ObjectSchema{
+			"name": String(),
+		}).Refine(func(m map[string]any) bool {
+			return m["name"] != ""
+		}, core.SchemaParams{Error: "name required"})
+
+		extended, err := base.Extend(core.ObjectSchema{
+			"age": Int(),
+		})
+		require.NoError(t, err)
+
+		// Should still enforce the refinement
+		_, err = extended.Parse(map[string]any{"name": "", "age": 25})
+		require.Error(t, err, "Expected refinement to reject empty name")
+
+		// Valid input should pass
+		result, err := extended.Parse(map[string]any{"name": "John", "age": 25})
+		require.NoError(t, err)
+		assert.Equal(t, "John", result["name"])
+		assert.Equal(t, 25, result["age"])
+	})
+
+	t.Run("Extend still rejects overlapping keys with refinements", func(t *testing.T) {
+		base := Object(core.ObjectSchema{
+			"name": String(),
+		}).Refine(func(m map[string]any) bool {
+			return m["name"] != ""
+		})
+
+		_, err := base.Extend(core.ObjectSchema{
+			"name": String().Min(3), // overlapping key
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrExtendRefinements)
+	})
+}
+
 func TestObject_SafeExtend(t *testing.T) {
 	t.Run("SafeExtend allows overwriting existing keys", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{

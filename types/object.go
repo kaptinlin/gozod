@@ -343,7 +343,14 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 
 	newShape := maps.Clone(z.internals.Shape)
 	maps.Copy(newShape, augmentation)
-	return ObjectTyped[T, R](newShape, params...), nil
+	newObj := ObjectTyped[T, R](newShape, params...)
+
+	// Preserve refinements for non-overlapping key extensions (Zod v4 fix: 0fe88407).
+	if z.internals.HasUserRefinements {
+		newObj.internals.Checks = append(newObj.internals.Checks, z.internals.Checks...)
+		newObj.internals.HasUserRefinements = true
+	}
+	return newObj, nil
 }
 
 // SafeExtend creates a new object by extending without checking refinements.
