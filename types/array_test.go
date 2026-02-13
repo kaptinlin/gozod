@@ -1,7 +1,7 @@
 package types
 
 import (
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -479,7 +479,7 @@ func TestArray_Overwrite(t *testing.T) {
 						intSlice[i] = intVal
 					}
 				}
-				sort.Ints(intSlice)
+				slices.Sort(intSlice)
 
 				result := make([]any, len(intSlice))
 				for i, val := range intSlice {

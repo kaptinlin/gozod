@@ -1426,7 +1426,7 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 
 		// Handle pointer/value mismatch scenarios.
 		zeroTyp := reflect.TypeFor[R]()
-		if zeroTyp != nil && zeroTyp.Kind() == reflect.Pointer {
+		if zeroTyp.Kind() == reflect.Pointer {
 			// zeroTyp is *T, so elemTyp should be T
 			elemTyp := zeroTyp.Elem()
 			valRV := reflect.ValueOf(payload.Value())

@@ -516,7 +516,7 @@ func toSliceConstraint[T any, R any](value any) R {
 	}
 
 	rt := reflect.TypeFor[R]()
-	if rt != nil && rt.Kind() == reflect.Pointer {
+	if rt.Kind() == reflect.Pointer {
 		switch v := value.(type) {
 		case []T:
 			return any(&v).(R)

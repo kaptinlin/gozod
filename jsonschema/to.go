@@ -1215,7 +1215,7 @@ func (c *converter) convertEnum(schema core.ZodSchema) (*lib.Schema, error) {
 		if results := optionsMethod.Call(nil); len(results) == 1 {
 			slice := results[0]
 			if slice.IsValid() && slice.Kind() == reflect.Slice {
-				for i := 0; i < slice.Len(); i++ {
+				for i := range slice.Len() {
 					enumValues = append(enumValues, slice.Index(i).Interface())
 				}
 			}
@@ -1257,7 +1257,7 @@ func (c *converter) convertLiteral(schema core.ZodSchema) (*lib.Schema, error) {
 			sliceValue := results[0]
 			if sliceValue.IsValid() && sliceValue.Kind() == reflect.Slice {
 				values = make([]any, sliceValue.Len())
-				for i := 0; i < sliceValue.Len(); i++ {
+				for i := range sliceValue.Len() {
 					values[i] = sliceValue.Index(i).Interface()
 				}
 			}
@@ -1274,7 +1274,7 @@ func (c *converter) convertLiteral(schema core.ZodSchema) (*lib.Schema, error) {
 		rv := reflect.ValueOf(values[0])
 		if rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) {
 			flat := make([]any, rv.Len())
-			for i := 0; i < rv.Len(); i++ {
+			for i := range rv.Len() {
 				flat[i] = rv.Index(i).Interface()
 			}
 			values = flat

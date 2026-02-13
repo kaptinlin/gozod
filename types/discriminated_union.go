@@ -495,7 +495,7 @@ func buildDiscriminatorMap(disc string, options []core.ZodSchema) (map[any]core.
 	}
 
 	if len(dm) == 0 && len(errs) > 0 {
-		return nil, fmt.Errorf("%w: %v", ErrFailedToBuildDiscriminator, errs)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToBuildDiscriminator, errors.Join(errs...))
 	}
 	if len(dm) == 0 {
 		return nil, fmt.Errorf("%w: %s", ErrNoValidDiscriminators, disc)
