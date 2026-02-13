@@ -49,23 +49,10 @@ func (z *ZodNever[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
 }
 
-// validateNeverValue rejects all values with an invalid type error. Checks are
-// applied first to support custom refinement error messages.
-func validateNeverValue[T any](value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
-	if len(chks) > 0 {
-		validated, err := engine.ApplyChecks[T](value, chks, ctx)
-		if err != nil {
-			var zero T
-			return zero, err
-		}
-		value = validated
-	}
-	var zero T
-	return zero, issues.CreateInvalidTypeError(core.ZodTypeNever, value, ctx)
-}
-
-// newNeverValidator creates a validator that supports custom error messages from
-// schema parameters via the internals' Error field.
+// newNeverValidator creates a validator that always rejects values with an
+// invalid type error. Checks are applied first to support custom refinement
+// error messages. When internals is non-nil, custom error messages from schema
+// parameters are used.
 func newNeverValidator[T any](internals *core.ZodTypeInternals) func(T, []core.ZodCheck, *core.ParseContext) (T, error) {
 	return func(value T, chks []core.ZodCheck, ctx *core.ParseContext) (T, error) {
 		if len(chks) > 0 {
@@ -77,7 +64,10 @@ func newNeverValidator[T any](internals *core.ZodTypeInternals) func(T, []core.Z
 			value = validated
 		}
 		var zero T
-		return zero, issues.CreateInvalidTypeErrorWithInst(core.ZodTypeNever, value, ctx, internals)
+		if internals != nil {
+			return zero, issues.CreateInvalidTypeErrorWithInst(core.ZodTypeNever, value, ctx, internals)
+		}
+		return zero, issues.CreateInvalidTypeError(core.ZodTypeNever, value, ctx)
 	}
 }
 
@@ -122,7 +112,7 @@ func (z *ZodNever[T, R]) StrictParse(input R, ctx ...*core.ParseContext) (R, err
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeNever,
-		validateNeverValue[T],
+		newNeverValidator[T](nil),
 		ctx...,
 	)
 }

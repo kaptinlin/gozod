@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -107,23 +108,12 @@ func toJSONSchemaSingle(schema core.ZodSchema, opts Options) (*lib.Schema, error
 
 	if len(c.defs) > 0 {
 		if s.Defs == nil {
-			s.Defs = make(map[string]*lib.Schema)
+			s.Defs = make(map[string]*lib.Schema, len(c.defs))
 		}
-		// Sort keys to ensure deterministic output order
-		defKeys := make([]string, 0, len(c.defs))
-		for defKey := range c.defs {
-			defKeys = append(defKeys, defKey)
-		}
-		slices.Sort(defKeys)
-		for _, defKey := range defKeys {
-			s.Defs[defKey] = c.defs[defKey]
+		for _, key := range slices.Sorted(maps.Keys(c.defs)) {
+			s.Defs[key] = c.defs[key]
 		}
 	}
-
-	// NOTE: The `discriminator` property is no longer automatically added.
-	// This functionality was removed to allow returning a direct *jsonschema.Schema instance.
-	// The `oneOf` keyword will be used for discriminated unions, which is compliant
-	// with JSON Schema standards.
 
 	return s, nil
 }
@@ -135,15 +125,15 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*l
 	c := newConverter(opts)
 
 	// First pass: process all schemas to populate seen map and defs.
-	schemasInRegistry := make([]core.ZodSchema, 0)
-	reg.Range(func(schema core.ZodSchema, meta core.GlobalMeta) bool {
+	var schemasInRegistry []core.ZodSchema
+	reg.Range(func(schema core.ZodSchema, _ core.GlobalMeta) bool {
 		schemasInRegistry = append(schemasInRegistry, schema)
 		return true
 	})
 
 	for _, s := range schemasInRegistry {
 		if _, err := c.convert(s); err != nil {
-			return nil, err // Early exit on conversion error.
+			return nil, err
 		}
 	}
 
@@ -151,13 +141,7 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*l
 	rootSchema := &lib.Schema{}
 	if len(c.defs) > 0 {
 		rootSchema.Defs = make(map[string]*lib.Schema, len(c.defs))
-		// Sort keys to ensure deterministic output order
-		defKeys := make([]string, 0, len(c.defs))
-		for key := range c.defs {
-			defKeys = append(defKeys, key)
-		}
-		slices.Sort(defKeys)
-		for _, key := range defKeys {
+		for _, key := range slices.Sorted(maps.Keys(c.defs)) {
 			rootSchema.Defs[key] = c.defs[key]
 		}
 	}
@@ -302,9 +286,8 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 	// Ensure a definition is registered **before** any placeholder replacement so that future
 	// conversions (especially wrappers / lazy) can immediately resolve a $ref.
 	if c.opts.Reused == "ref" {
-		// Skip primitives – only composite schemas are worth extracting.
-		composite := internals.Type == core.ZodTypeObject || internals.Type == core.ZodTypeStruct || internals.Type == core.ZodTypeSlice || internals.Type == core.ZodTypeArray || internals.Type == core.ZodTypeRecord || internals.Type == core.ZodTypeUnion || internals.Type == core.ZodTypeIntersection
-		if composite && !internals.IsOptional() && !internals.IsNilable() {
+		// Skip primitives -- only composite schemas are worth extracting.
+		if isCompositeType(internals.Type) && !internals.IsOptional() && !internals.IsNilable() {
 			if _, exists := c.refs[baseKey]; !exists {
 				c.auto++
 				name := fmt.Sprintf("def%d", c.auto)
@@ -399,13 +382,9 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	}
 
 	switch internals.Type {
-	case core.ZodTypeString:
-		jsonSchema = &lib.Schema{Type: []string{"string"}}
-		c.applyStringBag(jsonSchema, internals)
-	case core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeHostname, core.ZodTypeMAC, core.ZodTypeE164:
-		jsonSchema = &lib.Schema{Type: []string{"string"}}
-		c.applyStringBag(jsonSchema, internals)
-	case core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeURL:
+	case core.ZodTypeString,
+		core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeHostname, core.ZodTypeMAC, core.ZodTypeE164,
+		core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeURL:
 		jsonSchema = &lib.Schema{Type: []string{"string"}}
 		c.applyStringBag(jsonSchema, internals)
 	case core.ZodTypeInt, core.ZodTypeInteger, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64,
@@ -622,6 +601,29 @@ type unwrapper interface {
 	Unwrap() core.ZodType[any]
 }
 
+// booleanSchema returns a JSON Schema boolean schema (true or false).
+func booleanSchema(value bool) *lib.Schema {
+	v := value
+	return &lib.Schema{Boolean: &v}
+}
+
+// resolveUnknownKeysMode determines if a schema uses passthrough mode for unknown keys.
+// Returns true for passthrough, false for strict/strip/default.
+func resolveUnknownKeysMode(schema core.ZodSchema) bool {
+	// Prefer the fast interface assertion path.
+	if uk, ok := schema.(unknownKeysHandler); ok {
+		modeStr := fmt.Sprint(uk.UnknownKeys())
+		return modeStr == string(types.ObjectModePassthrough) || modeStr == "passthrough"
+	}
+	// Fallback to reflection.
+	if method := reflect.ValueOf(schema).MethodByName("UnknownKeys"); method.IsValid() {
+		if results := method.Call(nil); len(results) == 1 {
+			return fmt.Sprint(results[0].Interface()) == "passthrough"
+		}
+	}
+	return false
+}
+
 func (c *converter) convertObject(schema core.ZodSchema) (*lib.Schema, error) {
 	// Try ObjectSchema first (for ZodObject)
 	if s, ok := schema.(interface{ Shape() core.ObjectSchema }); ok {
@@ -695,33 +697,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 	}
 
 	if jsonSchema.AdditionalProperties == nil {
-		// Prefer the fast interface assertion path.
-		if uk, ok := schema.(unknownKeysHandler); ok {
-			modeStr := fmt.Sprint(uk.UnknownKeys())
-			if modeStr == string(types.ObjectModePassthrough) || modeStr == "passthrough" {
-				trueValue := true
-				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &trueValue}
-			} else {
-				// "strict" and "strip" (or unknown) => additionalProperties false
-				falseValue := false
-				jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
-			}
-		} else if unknownKeysMethod := reflect.ValueOf(schema).MethodByName("UnknownKeys"); unknownKeysMethod.IsValid() {
-			if results := unknownKeysMethod.Call(nil); len(results) == 1 {
-				modeStr := fmt.Sprint(results[0].Interface())
-				if modeStr == "passthrough" {
-					trueValue := true
-					jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &trueValue}
-				} else {
-					falseValue := false
-					jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
-				}
-			}
-		} else {
-			// Default for objects without unknown keys info
-			falseValue := false
-			jsonSchema.AdditionalProperties = &lib.Schema{Boolean: &falseValue}
-		}
+		jsonSchema.AdditionalProperties = booleanSchema(resolveUnknownKeysMode(schema))
 	}
 
 	return jsonSchema, nil
@@ -822,19 +798,9 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 		jsonSchema.Items = restConverted
 		c.path = c.path[:len(c.path)-1]
 	} else {
-		// No rest element - fixed length tuple
-		// Set min/max items to enforce exact length
+		// No rest element - fixed length tuple.
+		// Find the last required (non-optional) item to set minItems.
 		itemCount := float64(len(items))
-		// Calculate required count (items that are not optional)
-		requiredCount := 0
-		for _, item := range items {
-			if !item.Internals().IsOptional() {
-				requiredCount++
-			} else {
-				break // Stop at first optional item
-			}
-		}
-		// Actually, we need to find the last required item
 		lastRequired := -1
 		for i := len(items) - 1; i >= 0; i-- {
 			if !items[i].Internals().IsOptional() {
@@ -865,17 +831,9 @@ func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 		return
 	}
 
-	meta, ok := reg.Get(schema)
+	meta, ok := c.lookupMeta(reg, schema)
 	if !ok {
-		// If no direct meta, check if the schema is a wrapper (e.g., Optional) and has meta on its inner type.
-		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
-			meta, ok = reg.Get(s.Inner())
-			if !ok {
-				return
-			}
-		} else {
-			return
-		}
+		return
 	}
 
 	if meta.Title != "" && jsonSchema.Title == nil {
@@ -903,20 +861,23 @@ func (c *converter) getID(schema core.ZodSchema) string {
 	if reg == nil {
 		return ""
 	}
-	meta, ok := reg.Get(schema)
+	meta, ok := c.lookupMeta(reg, schema)
 	if !ok {
-		// If no direct meta, check if the schema is a wrapper (e.g., Optional) and has meta on its inner type.
-		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
-			meta, ok = reg.Get(s.Inner())
-			if !ok {
-				return ""
-			}
-		} else {
-			return ""
-		}
+		return ""
 	}
 	c.idCache[schema] = meta.ID
 	return meta.ID
+}
+
+// lookupMeta retrieves metadata for a schema, falling back to inner schema for wrappers.
+func (c *converter) lookupMeta(reg *core.Registry[core.GlobalMeta], schema core.ZodSchema) (core.GlobalMeta, bool) {
+	if meta, ok := reg.Get(schema); ok {
+		return meta, true
+	}
+	if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+		return reg.Get(s.Inner())
+	}
+	return core.GlobalMeta{}, false
 }
 
 // applyBag copies well-known constraint keys from Zod internals.Bag to JSON Schema.
@@ -1162,11 +1123,9 @@ func (c *converter) convertXor(schema core.ZodSchema) (*lib.Schema, error) {
 	return &lib.Schema{OneOf: oneOf}, nil
 }
 
-// isNullSchema checks if a schema represents null/nil type
+// isNullSchema checks if a schema represents null/nil type.
 func isNullSchema(schema core.ZodSchema) bool {
-	// Check the schema type
-	internals := schema.Internals()
-	return internals.Type == core.ZodTypeNil
+	return schema.Internals().Type == core.ZodTypeNil
 }
 
 // convertIntersection handles ZodIntersection -> JSON Schema allOf (two schemas)
@@ -1404,6 +1363,23 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 	return s, nil
 }
 
+// compositeTypes lists schema types that are worth extracting into $defs for reuse.
+var compositeTypes = map[core.ZodTypeCode]struct{}{
+	core.ZodTypeObject:       {},
+	core.ZodTypeStruct:       {},
+	core.ZodTypeSlice:        {},
+	core.ZodTypeArray:        {},
+	core.ZodTypeRecord:       {},
+	core.ZodTypeUnion:        {},
+	core.ZodTypeIntersection: {},
+}
+
+// isCompositeType returns true for schema types worth extracting into $defs.
+func isCompositeType(t core.ZodTypeCode) bool {
+	_, ok := compositeTypes[t]
+	return ok
+}
+
 func ptrToString(s string) *string { return &s }
 
 // convertLazy resolves inner schema and delegates conversion.
@@ -1546,18 +1522,10 @@ func (c *converter) applyNumericRangeDefaults(zodType core.ZodTypeCode, js *lib.
 
 	// Do not override explicit constraints from bag.
 	if internals != nil && internals.Bag != nil {
-		bag := internals.Bag
-		if _, hasMin := bag["minimum"]; hasMin {
-			return
-		}
-		if _, hasMinEx := bag["exclusiveMinimum"]; hasMinEx {
-			return
-		}
-		if _, hasMax := bag["maximum"]; hasMax {
-			return
-		}
-		if _, hasMaxEx := bag["exclusiveMaximum"]; hasMaxEx {
-			return
+		for _, key := range []string{"minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum"} {
+			if _, exists := internals.Bag[key]; exists {
+				return
+			}
 		}
 	}
 

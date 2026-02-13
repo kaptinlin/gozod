@@ -353,13 +353,16 @@ func Join(s any, sep string) string {
 	if err != nil || len(items) == 0 {
 		return ""
 	}
-	strs := make([]string, len(items))
+	var b strings.Builder
 	for i, v := range items {
+		if i > 0 {
+			b.WriteString(sep)
+		}
 		if v != nil {
-			strs[i] = fmt.Sprintf("%v", v)
+			fmt.Fprintf(&b, "%v", v)
 		}
 	}
-	return strings.Join(strs, sep)
+	return b.String()
 }
 
 // --- Internal helpers ---

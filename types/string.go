@@ -47,7 +47,7 @@ func StringPtr(params ...any) *ZodString[*string] {
 
 // StringTyped creates a new string schema with a specific constraint type.
 func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
-	schemaParams := utils.NormalizeParams(params...)
+	sp := utils.NormalizeParams(params...)
 	def := &ZodStringDef{
 		ZodTypeDef: core.ZodTypeDef{
 			Type:     core.ZodTypeString,
@@ -56,8 +56,8 @@ func StringTyped[T StringConstraint](params ...any) *ZodString[T] {
 		},
 	}
 
-	if schemaParams != nil {
-		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	if sp != nil {
+		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
 	return newZodStringFromDef[T](def)

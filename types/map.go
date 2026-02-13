@@ -272,32 +272,17 @@ func (z *ZodMap[T, R]) Describe(description string) *ZodMap[T, R] {
 
 // Min sets the minimum number of entries.
 func (z *ZodMap[T, R]) Min(minLen int, params ...any) *ZodMap[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.MinSize(minLen, errMsg))
+	return z.withCheck(checks.MinSize(minLen, params...))
 }
 
 // Max sets the maximum number of entries.
 func (z *ZodMap[T, R]) Max(maxLen int, params ...any) *ZodMap[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.MaxSize(maxLen, errMsg))
+	return z.withCheck(checks.MaxSize(maxLen, params...))
 }
 
 // Length sets the exact number of entries required.
 func (z *ZodMap[T, R]) Length(exactLen int, params ...any) *ZodMap[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.Size(exactLen, errMsg))
+	return z.withCheck(checks.Size(exactLen, params...))
 }
 
 // NonEmpty ensures the map has at least one entry.
@@ -354,23 +339,12 @@ func (z *ZodMap[T, R]) Refine(fn func(R) bool, params ...any) *ZodMap[T, R] {
 			return false
 		}
 	}
-
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](wrap, errMsg))
+	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny adds a custom validation function accepting any input.
 func (z *ZodMap[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodMap[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](fn, errMsg))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // Check adds a custom validation function that can report multiple issues.
@@ -607,8 +581,6 @@ func convertFromGeneric[T any, R any](m map[any]any) R {
 			}
 		}
 		base = any(converted).(T)
-	case map[any]any:
-		base = any(m).(T)
 	default:
 		base = any(m).(T)
 	}

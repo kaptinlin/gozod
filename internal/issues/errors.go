@@ -99,18 +99,7 @@ type ZodFormattedError map[string]any
 
 // FormatError formats a ZodError into a structured error object.
 func FormatError(zodErr *ZodError) ZodFormattedError {
-	return FormatErrorWithMapper(zodErr, func(issue ZodIssue) string {
-		if issue.Message != "" {
-			return issue.Message
-		}
-
-		return zodErr.formatter.FormatMessage(core.ZodRawIssue{
-			Code:       issue.Code,
-			Path:       issue.Path,
-			Message:    issue.Message,
-			Properties: convertZodIssueToProperties(issue),
-		})
-	})
+	return FormatErrorWithMapper(zodErr, defaultIssueMapper(zodErr.formatter))
 }
 
 // FormatErrorWithMapper formats a ZodError with custom message mapping.
@@ -147,24 +136,22 @@ func FormatErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) ZodFo
 					curr := fieldErrors
 					for i, pathEl := range issue.Path {
 						key := fmt.Sprintf("%v", pathEl)
-						terminal := i == len(issue.Path)-1
 
-						if !terminal {
-							if !mapx.Has(curr, key) {
-								curr[key] = ZodFormattedError{"_errors": []string{}}
-							}
-							if currMap, ok := curr[key].(ZodFormattedError); ok {
-								curr = currMap
+						if !mapx.Has(curr, key) {
+							curr[key] = ZodFormattedError{"_errors": []string{}}
+						}
+
+						currMap, ok := curr[key].(ZodFormattedError)
+						if !ok {
+							continue
+						}
+
+						if i == len(issue.Path)-1 {
+							if errors, ok := currMap["_errors"].([]string); ok {
+								currMap["_errors"] = append(errors, mapper(issue))
 							}
 						} else {
-							if !mapx.Has(curr, key) {
-								curr[key] = ZodFormattedError{"_errors": []string{}}
-							}
-							if currMap, ok := curr[key].(ZodFormattedError); ok {
-								if errors, ok := currMap["_errors"].([]string); ok {
-									currMap["_errors"] = append(errors, mapper(issue))
-								}
-							}
+							curr = currMap
 						}
 					}
 				}
@@ -191,18 +178,7 @@ type FlattenedError struct {
 
 // TreeifyError formats a ZodError into a tree structure.
 func TreeifyError(zodErr *ZodError) *ZodErrorTree {
-	return TreeifyErrorWithMapper(zodErr, func(issue ZodIssue) string {
-		if issue.Message != "" {
-			return issue.Message
-		}
-
-		return zodErr.formatter.FormatMessage(core.ZodRawIssue{
-			Code:       issue.Code,
-			Path:       issue.Path,
-			Message:    issue.Message,
-			Properties: convertZodIssueToProperties(issue),
-		})
-	})
+	return TreeifyErrorWithMapper(zodErr, defaultIssueMapper(zodErr.formatter))
 }
 
 // TreeifyErrorWithMapper converts a ZodError into a tree structure with custom message mapping.
@@ -265,18 +241,7 @@ func processIssueInTree(issue ZodIssue, tree *ZodErrorTree, mapper func(ZodIssue
 
 // FlattenError flattens a ZodError into form and field errors.
 func FlattenError(zodErr *ZodError) *FlattenedError {
-	return FlattenErrorWithMapper(zodErr, func(issue ZodIssue) string {
-		if issue.Message != "" {
-			return issue.Message
-		}
-
-		return zodErr.formatter.FormatMessage(core.ZodRawIssue{
-			Code:       issue.Code,
-			Path:       issue.Path,
-			Message:    issue.Message,
-			Properties: convertZodIssueToProperties(issue),
-		})
-	})
+	return FlattenErrorWithMapper(zodErr, defaultIssueMapper(zodErr.formatter))
 }
 
 // FlattenErrorWithMapper flattens a ZodError into form and field errors with custom message mapping.
@@ -307,18 +272,7 @@ func FlattenErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) *Fla
 
 // FlattenErrorWithFormatter flattens a ZodError with a custom formatter.
 func FlattenErrorWithFormatter(zodErr *ZodError, formatter MessageFormatter) *FlattenedError {
-	return FlattenErrorWithMapper(zodErr, func(issue ZodIssue) string {
-		if issue.Message != "" {
-			return issue.Message
-		}
-
-		return formatter.FormatMessage(core.ZodRawIssue{
-			Code:       issue.Code,
-			Path:       issue.Path,
-			Message:    issue.Message,
-			Properties: convertZodIssueToProperties(issue),
-		})
-	})
+	return FlattenErrorWithMapper(zodErr, defaultIssueMapper(formatter))
 }
 
 // ToDotPath converts a path array to dot notation string.
@@ -366,19 +320,39 @@ func PrettifyErrorWithFormatter(zodErr *ZodError, formatter MessageFormatter) st
 	return builder.String()
 }
 
+// defaultIssueMapper returns a mapper function that formats an issue using
+// the given formatter, preferring the issue's own message when available.
+// This eliminates the repeated closure pattern across FormatError, TreeifyError,
+// FlattenError, and FlattenErrorWithFormatter.
+func defaultIssueMapper(formatter MessageFormatter) func(ZodIssue) string {
+	return func(issue ZodIssue) string {
+		if issue.Message != "" {
+			return issue.Message
+		}
+		return formatter.FormatMessage(core.ZodRawIssue{
+			Code:       issue.Code,
+			Path:       issue.Path,
+			Message:    issue.Message,
+			Properties: convertZodIssueToProperties(issue),
+		})
+	}
+}
+
+// excludedPropertyKeys contains the ZodIssue struct keys that should not
+// appear in the properties map passed to formatters.
+var excludedPropertyKeys = map[string]struct{}{
+	"Code": {}, "Path": {}, "Message": {}, "Continue": {},
+	"Inst": {}, "Issues": {}, "Errors": {},
+}
+
 // convertZodIssueToProperties converts a ZodIssue to properties map for the formatter.
 func convertZodIssueToProperties(issue ZodIssue) map[string]any {
 	if properties, err := structx.ToMap(issue); err == nil {
 		result := mapx.Copy(properties)
-
-		delete(result, "Code")
-		delete(result, "Path")
-		delete(result, "Message")
-		delete(result, "Continue")
-		delete(result, "Inst")
-		delete(result, "Issues")
-		delete(result, "Errors")
-
+		maps.DeleteFunc(result, func(k string, _ any) bool {
+			_, excluded := excludedPropertyKeys[k]
+			return excluded
+		})
 		return result
 	}
 

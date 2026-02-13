@@ -288,19 +288,15 @@ func (z *ZodSlice[T, R]) Refine(fn func(R) bool, params ...any) *ZodSlice[T, R] 
 	wrapper := func(v any) bool {
 		return fn(toSliceConstraint[T, R](v))
 	}
-	param := utils.FirstParam(params...)
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param)))
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 
 // RefineAny adds custom validation without type conversion.
 func (z *ZodSlice[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSlice[T, R] {
-	param := utils.FirstParam(params...)
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(param)))
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 

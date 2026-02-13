@@ -276,24 +276,24 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 		}
 	}
 
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](wrapper, errorMessage)
+	check := checks.NewCustom[any](wrapper, msg)
 	return z.withCheck(check)
 }
 
 // RefineAny applies a custom validation function that receives the raw value.
 func (z *ZodTime[T]) RefineAny(fn func(any) bool, params ...any) *ZodTime[T] {
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
 	}
-	check := checks.NewCustom[any](fn, errorMessage)
+	check := checks.NewCustom[any](fn, msg)
 	return z.withCheck(check)
 }
 
@@ -423,14 +423,9 @@ func (z *ZodTime[T]) withInternals(in *core.ZodTypeInternals) *ZodTime[T] {
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodTime[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodTime[T]); ok {
-		// Preserve original checks to avoid overwriting them.
-		originalChecks := z.internals.Checks
-
-		// Copy all state from source.
+		orig := z.internals.Checks
 		*z.internals = *src.internals
-
-		// Restore the original checks that were set by the constructor.
-		z.internals.Checks = originalChecks
+		z.internals.Checks = orig
 	}
 }
 
@@ -496,7 +491,7 @@ func TimePtr(params ...any) *ZodTime[*time.Time] {
 
 // TimeTyped creates a time schema with explicit type parameterization.
 func TimeTyped[T TimeConstraint](params ...any) *ZodTime[T] {
-	schemaParams := utils.NormalizeParams(params...)
+	sp := utils.NormalizeParams(params...)
 
 	def := &ZodTimeDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -505,8 +500,7 @@ func TimeTyped[T TimeConstraint](params ...any) *ZodTime[T] {
 		},
 	}
 
-	// Apply the normalized parameters to the schema definition
-	utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
+	utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 
 	return newZodTimeFromDef[T](def)
 }

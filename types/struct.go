@@ -347,29 +347,22 @@ func (z *ZodStruct[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 
 // Refine adds a custom validation function.
 func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R] {
-	// Wrapper converts the raw value to R before calling fn
 	wrapper := func(v any) bool {
-		// Convert value to constraint type R and call the refinement function
 		if constraintValue, ok := convertToConstraintValue[T, R](v); ok {
 			return fn(constraintValue)
 		}
 		return false
 	}
-
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](wrapper, checkParams)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](wrapper, checks.NormalizeCheckParams(params...)))
+	return z.withInternals(in)
 }
 
 // RefineAny adds a custom validation function for any type.
 func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct[T, R] {
-	checkParams := checks.NormalizeCheckParams(params...)
-	check := checks.NewCustom[any](fn, checkParams)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](fn, checks.NormalizeCheckParams(params...)))
+	return z.withInternals(in)
 }
 
 // =============================================================================

@@ -5,6 +5,7 @@ package tagparser
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -237,12 +238,9 @@ func jsonFieldName(f reflect.StructField) string {
 
 // hasRule reports whether a rule with the given name exists.
 func hasRule(rules []TagRule, name string) bool {
-	for _, r := range rules {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(rules, func(r TagRule) bool {
+		return r.Name == name
+	})
 }
 
 // isOptional reports whether a field should be treated as optional

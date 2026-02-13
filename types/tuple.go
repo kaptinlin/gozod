@@ -142,7 +142,7 @@ func (z *ZodTuple[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 		)
 	}
 
-	result, err := engine.ParseComplexStrict[[]any, R](
+	return engine.ParseComplexStrict[[]any, R](
 		constraintInput,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeTuple,
@@ -151,11 +151,6 @@ func (z *ZodTuple[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, err
 		z.validateTupleForEngine,
 		ctx...,
 	)
-	if err != nil {
-		return zero, err
-	}
-
-	return result, nil
 }
 
 // MustStrictParse provides compile-time type safety and panics on failure.
@@ -178,13 +173,12 @@ func (z *ZodTuple[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, er
 
 // Optional marks this tuple as optional.
 func (z *ZodTuple[T, R]) Optional() *ZodTuple[T, *[]any] {
-	newInternals := z.internals.Clone()
-	newInternals.SetOptional(true)
-	return &ZodTuple[T, *[]any]{internals: z.withClonedInternals(newInternals)}
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	return z.withPtrInternals(in)
 }
 
 // ExactOptional accepts absent keys but rejects explicit nil values.
-// Unlike Optional, ExactOptional only accepts absent keys in object fields.
 func (z *ZodTuple[T, R]) ExactOptional() *ZodTuple[T, R] {
 	in := z.internals.Clone()
 	in.SetExactOptional(true)
@@ -193,17 +187,17 @@ func (z *ZodTuple[T, R]) ExactOptional() *ZodTuple[T, R] {
 
 // Nilable marks this tuple as nilable.
 func (z *ZodTuple[T, R]) Nilable() *ZodTuple[T, *[]any] {
-	newInternals := z.internals.Clone()
-	newInternals.SetNilable(true)
-	return &ZodTuple[T, *[]any]{internals: z.withClonedInternals(newInternals)}
+	in := z.internals.Clone()
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
 // Nullish marks this tuple as nullish (both optional and nilable).
 func (z *ZodTuple[T, R]) Nullish() *ZodTuple[T, *[]any] {
-	newInternals := z.internals.Clone()
-	newInternals.SetOptional(true)
-	newInternals.SetNilable(true)
-	return &ZodTuple[T, *[]any]{internals: z.withClonedInternals(newInternals)}
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return z.withPtrInternals(in)
 }
 
 // Default sets a default value for nil input.
@@ -219,25 +213,22 @@ func (z *ZodTuple[T, R]) Default(v []any) *ZodTuple[T, R] {
 
 // Min sets the minimum tuple length validation.
 func (z *ZodTuple[T, R]) Min(minimum int, params ...any) *ZodTuple[T, R] {
-	check := checks.MinLength(minimum, params...)
 	newInternals := z.internals.Clone()
-	newInternals.Checks = append(newInternals.Checks, check)
+	newInternals.AddCheck(checks.MinLength(minimum, params...))
 	return z.withInternals(newInternals)
 }
 
 // Max sets the maximum tuple length validation.
 func (z *ZodTuple[T, R]) Max(maximum int, params ...any) *ZodTuple[T, R] {
-	check := checks.MaxLength(maximum, params...)
 	newInternals := z.internals.Clone()
-	newInternals.Checks = append(newInternals.Checks, check)
+	newInternals.AddCheck(checks.MaxLength(maximum, params...))
 	return z.withInternals(newInternals)
 }
 
 // Length sets the exact tuple length validation.
 func (z *ZodTuple[T, R]) Length(length int, params ...any) *ZodTuple[T, R] {
-	check := checks.Length(length, params...)
 	newInternals := z.internals.Clone()
-	newInternals.Checks = append(newInternals.Checks, check)
+	newInternals.AddCheck(checks.Length(length, params...))
 	return z.withInternals(newInternals)
 }
 
@@ -254,16 +245,15 @@ func (z *ZodTuple[T, R]) Refine(fn func([]any) bool, params ...any) *ZodTuple[T,
 		}
 		return false
 	}
-	check := checks.NewCustom[any](wrapper, params...)
 	newInternals := z.internals.Clone()
-	newInternals.Checks = append(newInternals.Checks, check)
+	newInternals.AddCheck(checks.NewCustom[any](wrapper, params...))
 	return z.withInternals(newInternals)
 }
 
 // Check adds a custom validation check.
 func (z *ZodTuple[T, R]) Check(check core.ZodCheck) *ZodTuple[T, R] {
 	newInternals := z.internals.Clone()
-	newInternals.Checks = append(newInternals.Checks, check)
+	newInternals.AddCheck(check)
 	return z.withInternals(newInternals)
 }
 
@@ -443,15 +433,15 @@ func (z *ZodTuple[T, R]) withInternals(in *core.ZodTypeInternals) *ZodTuple[T, R
 	}}
 }
 
-// withClonedInternals creates ZodTupleInternals from the cloned ZodTypeInternals.
-func (z *ZodTuple[T, R]) withClonedInternals(in *core.ZodTypeInternals) *ZodTupleInternals {
-	return &ZodTupleInternals{
+// withPtrInternals creates a new ZodTuple with pointer constraint *[]any.
+func (z *ZodTuple[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodTuple[T, *[]any] {
+	return &ZodTuple[T, *[]any]{internals: &ZodTupleInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Items:            z.internals.Items,
 		Rest:             z.internals.Rest,
 		RequiredCount:    z.internals.RequiredCount,
-	}
+	}}
 }
 
 // convertToTupleConstraintType converts []any to the constraint type R.

@@ -125,26 +125,20 @@ func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchem
 	}
 
 	var meta core.GlobalMeta
-	hasMeta := false
-
 	if s.ID != "" {
 		meta.ID = s.ID
-		hasMeta = true
 	}
 	if s.Title != nil && *s.Title != "" {
 		meta.Title = *s.Title
-		hasMeta = true
 	}
 	if s.Description != nil && *s.Description != "" {
 		meta.Description = *s.Description
-		hasMeta = true
 	}
 	if len(s.Examples) > 0 {
 		meta.Examples = s.Examples
-		hasMeta = true
 	}
 
-	if hasMeta {
+	if meta.ID != "" || meta.Title != "" || meta.Description != "" || len(meta.Examples) > 0 {
 		core.GlobalRegistry.Add(schema, meta)
 	}
 }
@@ -211,7 +205,7 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 
 // convertMultiType handles schemas with multiple types like ["string", "null"].
 func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchema, error) {
-	schemas := make([]core.ZodSchema, 0)
+	schemas := make([]core.ZodSchema, 0, len(s.Type))
 
 	// Check each possible type
 	typeChecks := []struct {
@@ -244,12 +238,7 @@ func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchem
 		return schemas[0], nil
 	}
 
-	// Convert to []any for Union
-	options := make([]any, len(schemas))
-	for i, s := range schemas {
-		options[i] = s
-	}
-	return types.Union(options), nil
+	return types.Union(zodSchemasToAny(schemas)), nil
 }
 
 // convertString converts a string type schema.
@@ -553,13 +542,9 @@ func (ctx *fromJSONSchemaContext) convertEnum(s *lib.Schema) (core.ZodSchema, er
 
 // convertAllOf converts allOf (intersection).
 func (ctx *fromJSONSchemaContext) convertAllOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas := make([]core.ZodSchema, 0, len(s.AllOf))
-	for _, subSchema := range s.AllOf {
-		converted, err := ctx.convert(subSchema)
-		if err != nil {
-			return nil, err
-		}
-		schemas = append(schemas, converted)
+	schemas, err := ctx.convertSchemaList(s.AllOf)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(schemas) == 0 {
@@ -579,13 +564,9 @@ func (ctx *fromJSONSchemaContext) convertAllOf(s *lib.Schema) (core.ZodSchema, e
 
 // convertAnyOf converts anyOf (union).
 func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas := make([]core.ZodSchema, 0, len(s.AnyOf))
-	for _, subSchema := range s.AnyOf {
-		converted, err := ctx.convert(subSchema)
-		if err != nil {
-			return nil, err
-		}
-		schemas = append(schemas, converted)
+	schemas, err := ctx.convertSchemaList(s.AnyOf)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(schemas) == 0 {
@@ -595,24 +576,15 @@ func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, e
 		return schemas[0], nil
 	}
 
-	// Convert to []any for Union
-	options := make([]any, len(schemas))
-	for i, s := range schemas {
-		options[i] = s
-	}
-	return types.Union(options), nil
+	return types.Union(zodSchemasToAny(schemas)), nil
 }
 
 // convertOneOf converts oneOf (exclusive union).
 // Uses Xor for proper exclusive union semantics (exactly one must match).
 func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas := make([]core.ZodSchema, 0, len(s.OneOf))
-	for _, subSchema := range s.OneOf {
-		converted, err := ctx.convert(subSchema)
-		if err != nil {
-			return nil, err
-		}
-		schemas = append(schemas, converted)
+	schemas, err := ctx.convertSchemaList(s.OneOf)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(schemas) == 0 {
@@ -622,10 +594,27 @@ func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, e
 		return schemas[0], nil
 	}
 
-	// Use Xor for exclusive union (oneOf semantics)
+	return types.Xor(zodSchemasToAny(schemas)), nil
+}
+
+// convertSchemaList converts a slice of JSON Schemas to GoZod schemas.
+func (ctx *fromJSONSchemaContext) convertSchemaList(schemas []*lib.Schema) ([]core.ZodSchema, error) {
+	result := make([]core.ZodSchema, 0, len(schemas))
+	for _, subSchema := range schemas {
+		converted, err := ctx.convert(subSchema)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, converted)
+	}
+	return result, nil
+}
+
+// zodSchemasToAny converts a slice of ZodSchema to []any for Union/Xor constructors.
+func zodSchemasToAny(schemas []core.ZodSchema) []any {
 	options := make([]any, len(schemas))
 	for i, s := range schemas {
 		options[i] = s
 	}
-	return types.Xor(options), nil
+	return options
 }

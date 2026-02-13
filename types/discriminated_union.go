@@ -61,11 +61,7 @@ func (z *ZodDiscriminatedUnion[T, R]) IsNilable() bool {
 // Parse validates input and returns a value matching the constraint type R.
 func (z *ZodDiscriminatedUnion[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
-
-	pctx := &core.ParseContext{}
-	if len(ctx) > 0 && ctx[0] != nil {
-		pctx = ctx[0]
-	}
+	pctx := resolveCtx(ctx)
 
 	if ce, ok := z.internals.Bag["construction_error"]; ok {
 		if msg, ok := ce.(string); ok {
@@ -150,11 +146,7 @@ func (z *ZodDiscriminatedUnion[T, R]) StrictParse(input T, ctx ...*core.ParseCon
 	cv, ok := convertToDiscriminatedUnionConstraintValue[T, R](input)
 	if !ok {
 		var zero R
-		pctx := core.NewParseContext()
-		if len(ctx) > 0 && ctx[0] != nil {
-			pctx = ctx[0]
-		}
-		return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", input), "discriminated union constraint type", any(input), pctx)
+		return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", input), "discriminated union constraint type", any(input), resolveCtx(ctx))
 	}
 	return z.Parse(cv, ctx...)
 }

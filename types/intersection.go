@@ -50,10 +50,7 @@ func (i *ZodIntersection[T, R]) IsNilable() bool {
 
 // Parse validates input using engine.ParseComplex for unified Default/Prefault handling.
 func (i *ZodIntersection[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	pc := &core.ParseContext{}
-	if len(ctx) > 0 && ctx[0] != nil {
-		pc = ctx[0]
-	}
+	pc := resolveCtx(ctx)
 	result, err := engine.ParseComplex[any](
 		input,
 		&i.internals.ZodTypeInternals,
@@ -194,11 +191,7 @@ func (i *ZodIntersection[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (
 
 // StrictParse validates input with compile-time type safety.
 func (i *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	pc := &core.ParseContext{}
-	if len(ctx) > 0 && ctx[0] != nil {
-		pc = ctx[0]
-	}
-
+	pc := resolveCtx(ctx)
 	converted := convertToIntersectionConstraintType[T, R](input)
 
 	leftResult, leftErr := i.internals.Left.ParseAny(converted, pc)
@@ -360,27 +353,15 @@ func (i *ZodIntersection[T, R]) Refine(fn func(R) bool, params ...any) *ZodInter
 		}
 		return false
 	}
-	p := utils.NormalizeParams(params...)
-	var msg any
-	if p.Error != nil {
-		msg = p.Error
-	}
-	check := checks.NewCustom[any](wrapper, msg)
 	in := i.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return i.withInternals(in)
 }
 
 // RefineAny applies flexible validation without type conversion.
 func (i *ZodIntersection[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntersection[T, R] {
-	p := utils.NormalizeParams(params...)
-	var msg any
-	if p.Error != nil {
-		msg = p.Error
-	}
-	check := checks.NewCustom[any](fn, msg)
 	in := i.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 	return i.withInternals(in)
 }
 

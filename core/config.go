@@ -27,24 +27,17 @@ func init() {
 }
 
 // SetConfig updates and returns the global configuration.
+// A nil argument resets the configuration to its zero state.
 func SetConfig(config *ZodConfig) *ZodConfig {
 	if config == nil {
-		// Reset to empty config
 		newConfig := &ZodConfig{}
 		globalConfig.Store(newConfig)
-		return &ZodConfig{}
+		return newConfig.clone()
 	}
 
-	// Get current config
 	current := globalConfig.Load()
+	newConfig := current.clone()
 
-	// Create new config (immutable update pattern)
-	newConfig := &ZodConfig{
-		CustomError: current.CustomError,
-		LocaleError: current.LocaleError,
-	}
-
-	// Apply updates
 	if config.CustomError != nil {
 		newConfig.CustomError = config.CustomError
 	}
@@ -52,10 +45,7 @@ func SetConfig(config *ZodConfig) *ZodConfig {
 		newConfig.LocaleError = config.LocaleError
 	}
 
-	// Atomic swap
 	globalConfig.Store(newConfig)
-
-	// Return copy
 	return newConfig.clone()
 }
 

@@ -272,25 +272,12 @@ func (z *ZodFunction[T]) Refine(fn func(T) bool, params ...any) *ZodFunction[T] 
 		}
 		return false
 	}
-
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
-	return z.withCheck(checks.NewCustom[any](wrap, msg))
+	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny adds a custom validation function that accepts any type.
 func (z *ZodFunction[T]) RefineAny(fn func(any) bool, params ...any) *ZodFunction[T] {
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
-	return z.withCheck(checks.NewCustom[any](fn, msg))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // =============================================================================

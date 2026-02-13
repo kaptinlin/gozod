@@ -19,13 +19,7 @@ func RunChecks(
 	if payload == nil || len(checks) == 0 {
 		return payload
 	}
-
-	var pc *core.ParseContext
-	if len(ctx) > 0 {
-		pc = ctx[0]
-	}
-
-	return executeChecks(payload.Value(), checks, payload, pc)
+	return executeChecks(payload.Value(), checks, payload, firstContext(ctx))
 }
 
 // RunChecksOnValue executes all validation checks on a specific value.
@@ -38,13 +32,15 @@ func RunChecksOnValue(
 	if payload == nil || len(checks) == 0 {
 		return payload
 	}
+	return executeChecks(value, checks, payload, firstContext(ctx))
+}
 
-	var pc *core.ParseContext
+// firstContext returns the first non-nil context from the variadic slice, or nil.
+func firstContext(ctx []*core.ParseContext) *core.ParseContext {
 	if len(ctx) > 0 {
-		pc = ctx[0]
+		return ctx[0]
 	}
-
-	return executeChecks(value, checks, payload, pc)
+	return nil
 }
 
 // ----------------------------------------------------------------------------
@@ -107,7 +103,7 @@ func executeChecks(
 
 		if ci.Def != nil && ci.Def.Error != nil {
 			errFn := *ci.Def.Error
-			for j := range len(iss) {
+			for j := range iss {
 				iss[j].Message = errFn(iss[j])
 				iss[j].Inst = ci
 			}
@@ -127,11 +123,11 @@ func executeChecks(
 // CheckAborted reports whether any issue from start onwards signals an abort.
 func CheckAborted(x core.ParsePayload, start int) bool {
 	iss := x.Issues()
-	if len(iss) == 0 || start >= len(iss) {
+	if start >= len(iss) {
 		return false
 	}
-	for i := start; i < len(iss); i++ {
-		if !iss[i].Continue {
+	for _, issue := range iss[start:] {
+		if !issue.Continue {
 			return true
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,10 +13,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/kaptinlin/gozod/pkg/coerce"
-	"github.com/kaptinlin/gozod/pkg/mapx"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
 	"github.com/kaptinlin/gozod/pkg/regex"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 // Pre-compiled regex patterns for ISO time and duration validation.
@@ -307,7 +306,7 @@ func CIDR(value any, version int) bool {
 	if !ok {
 		return false
 	}
-	if parts := strings.Split(str, "/"); len(parts) != 2 {
+	if !strings.Contains(str, "/") {
 		return false
 	}
 	_, ipnet, err := net.ParseCIDR(str)
@@ -318,13 +317,7 @@ func CIDR(value any, version int) bool {
 		return true
 	}
 	isV4 := ipnet.IP.To4() != nil
-	if version == 4 && !isV4 {
-		return false
-	}
-	if version == 6 && isV4 {
-		return false
-	}
-	return true
+	return (version == 4 && isV4) || (version == 6 && !isV4)
 }
 
 // CIDRv4 reports whether the string is a valid IPv4 CIDR notation.
@@ -471,12 +464,7 @@ func ISODuration(value any) bool {
 		}
 	}
 	// Ensure at least one digit after P.
-	for i, r := range duration {
-		if i > 0 && r >= '0' && r <= '9' {
-			return true
-		}
-	}
-	return false
+	return strings.ContainsAny(duration[1:], "0123456789")
 }
 
 // JSON reports whether the string is valid JSON.
@@ -491,14 +479,11 @@ func JSON(value any) bool {
 
 // Property reports whether the object has a property at key that passes the validator.
 func Property(obj any, key string, validator func(any) bool) bool {
-	if !reflectx.IsMap(obj) {
-		return false
-	}
 	m, ok := obj.(map[string]any)
 	if !ok {
 		return false
 	}
-	value, exists := mapx.Get(m, key)
+	value, exists := m[key]
 	if !exists {
 		return false
 	}
@@ -511,11 +496,11 @@ func Mime(value any, allowedTypes []string) bool {
 	if !ok {
 		return false
 	}
-	parts := strings.Split(str, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	typePart, subtype, hasSep := strings.Cut(str, "/")
+	if !hasSep || typePart == "" || subtype == "" {
 		return false
 	}
-	return slicex.Contains(allowedTypes, str)
+	return slices.Contains(allowedTypes, str)
 }
 
 // matchString extracts a string from value and checks it against pattern.
@@ -538,22 +523,19 @@ func toFloat64(value any) float64 {
 
 // collectionSize returns the size of a collection (map, slice, array, string).
 func collectionSize(value any) (int, bool) {
-	if reflectx.IsMap(value) {
-		if m, ok := value.(map[string]any); ok {
-			return mapx.Count(m), true
-		}
-		if m, ok := value.(map[any]any); ok {
-			return len(m), true
-		}
-		// Fall back to reflection for other map types (e.g., map[T]struct{} for sets).
+	switch m := value.(type) {
+	case map[string]any:
+		return len(m), true
+	case map[any]any:
+		return len(m), true
+	default:
+		// reflectx.Size handles maps, channels, slices, and arrays.
 		if size, ok := reflectx.Size(value); ok {
 			return size, true
 		}
-	}
-	if reflectx.HasLength(value) {
+		// reflectx.Length handles strings, arrays, and slices.
 		return reflectx.Length(value)
 	}
-	return 0, false
 }
 
 // isValidJWT reports whether the token has valid JWT structure without verifying signatures.
@@ -568,21 +550,12 @@ func isValidJWT(token string, expectedAlgorithm *string) bool {
 
 // validateJWTHeader reports whether the JWT header fields are valid.
 func validateJWTHeader(header map[string]any, expectedAlgorithm *string) bool {
-	if typ, exists := header["typ"]; exists {
-		if typStr, ok := typ.(string); ok && typStr != "JWT" {
-			return false
-		}
-	}
-	alg, exists := header["alg"]
-	if !exists {
+	if typStr, ok := header["typ"].(string); ok && typStr != "JWT" {
 		return false
 	}
-	algStr, ok := alg.(string)
+	algStr, ok := header["alg"].(string)
 	if !ok || algStr == "none" {
 		return false
 	}
-	if expectedAlgorithm != nil && algStr != *expectedAlgorithm {
-		return false
-	}
-	return true
+	return expectedAlgorithm == nil || algStr == *expectedAlgorithm
 }

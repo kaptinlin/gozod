@@ -479,11 +479,9 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 		return false
 	}
 
-	param := utils.FirstParam(params...)
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	result := z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
+	result := z.withInternals(in)
 	result.internals.HasUserRefinements = true
 	return result
 }
@@ -491,11 +489,9 @@ func (z *ZodObject[T, R]) Refine(fn func(R) bool, params ...any) *ZodObject[T, R
 // RefineAny provides flexible validation without type conversion.
 // Schemas with refinements cannot use Pick/Omit.
 func (z *ZodObject[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodObject[T, R] {
-	param := utils.FirstParam(params...)
-	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(param))
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	result := z.withInternals(newInternals)
+	in := z.internals.Clone()
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
+	result := z.withInternals(in)
 	result.internals.HasUserRefinements = true
 	return result
 }

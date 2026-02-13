@@ -291,22 +291,12 @@ func (z *ZodLazy[T]) Refine(fn func(T) bool, params ...any) *ZodLazy[T] {
 		}
 		return false
 	}
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](wrap, errMsg))
+	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny adds a custom validation function accepting any input.
 func (z *ZodLazy[T]) RefineAny(fn func(any) bool, params ...any) *ZodLazy[T] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](fn, errMsg))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // Unwrap resolves and returns the inner schema.
@@ -325,15 +315,13 @@ func (z *ZodLazy[T]) withCheck(c core.ZodCheck) *ZodLazy[T] {
 }
 
 func (z *ZodLazy[T]) convertResult(result any) T {
+	var zero T
 	if result == nil {
-		var zero T
 		return zero
 	}
-	var zero T
 	switch any(zero).(type) {
 	case *any:
-		ptr := &result
-		return any(ptr).(T)
+		return any(&result).(T)
 	default:
 		return any(result).(T) //nolint:unconvert
 	}

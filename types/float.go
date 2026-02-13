@@ -213,9 +213,8 @@ func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, 
 
 // Meta stores metadata for this float schema in the global registry.
 func (z *ZodFloatTyped[T, R]) Meta(meta core.GlobalMeta) *ZodFloatTyped[T, R] {
-	clone := z.withInternals(&z.internals.ZodTypeInternals)
-	core.GlobalRegistry.Add(clone, meta)
-	return clone
+	core.GlobalRegistry.Add(z, meta)
+	return z
 }
 
 // Describe registers a description in the global registry.
@@ -377,11 +376,7 @@ func (z *ZodFloatTyped[T, R]) Overwrite(transform func(T) T, params ...any) *Zod
 		}
 		return transform(val)
 	}
-
-	check := checks.NewZodCheckOverwrite(wrap, params...)
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewZodCheckOverwrite(wrap, params...))
 }
 
 // Pipe creates a pipeline that feeds the parsed value into another schema.
@@ -425,10 +420,7 @@ func (z *ZodFloatTyped[T, R]) Refine(fn func(T) bool, params ...any) *ZodFloatTy
 		msg = sp.Error
 	}
 
-	check := checks.NewCustom[any](wrapper, msg)
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](wrapper, msg))
 }
 
 // convertToFloatType converts matching float values to the target type T.
@@ -513,10 +505,7 @@ func (z *ZodFloatTyped[T, R]) Check(fn func(value R, payload *core.ParsePayload)
 			}
 		}
 	}
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
 // With is an alias for Check (Zod v4 API compatibility).

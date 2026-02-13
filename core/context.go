@@ -62,10 +62,7 @@ func (p *ParsePayload) AddIssues(issues ...ZodRawIssue) {
 	if len(issues) == 0 {
 		return
 	}
-	if p.issues == nil {
-		p.issues = make([]ZodRawIssue, 0, len(issues)+2)
-	}
-	p.issues = slices.Concat(p.issues, issues)
+	p.issues = append(p.issues, issues...)
 }
 
 // HasIssues reports whether the payload has any validation issues.

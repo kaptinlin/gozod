@@ -54,12 +54,7 @@ func (z *ZodXor[T, R]) IsNilable() bool {
 
 // Parse validates input ensuring exactly one option matches.
 func (z *ZodXor[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
-	var parseCtx *core.ParseContext
-	if len(ctx) > 0 && ctx[0] != nil {
-		parseCtx = ctx[0]
-	} else {
-		parseCtx = &core.ParseContext{}
-	}
+	parseCtx := resolveCtx(ctx)
 
 	result, err := engine.ParseComplex[any](
 		input,
@@ -85,8 +80,7 @@ func (z *ZodXor[T, R]) extractPtr(input any) (*any, bool) {
 	if input == nil {
 		return nil, true
 	}
-	val := input
-	return &val, true
+	return &input, true
 }
 
 // validate checks that exactly one option matches (Zod v4 exclusive union semantics).
@@ -145,12 +139,7 @@ func (z *ZodXor[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error
 	constraintInput, ok := convertToUnionConstraint[T, R](input)
 	if !ok {
 		var zero R
-		var parseCtx *core.ParseContext
-		if len(ctx) > 0 {
-			parseCtx = ctx[0]
-		} else {
-			parseCtx = core.NewParseContext()
-		}
+		parseCtx := resolveCtx(ctx)
 		return zero, issues.CreateTypeConversionError(
 			fmt.Sprintf("%T", input),
 			"xor constraint type",
@@ -317,31 +306,12 @@ func (z *ZodXor[T, R]) Refine(fn func(R) bool, params ...any) *ZodXor[T, R] {
 		}
 		return fn(cv)
 	}
-
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
-	}
-
-	check := checks.NewCustom[any](wrapper, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny adds a custom validation check operating on the raw value.
 func (z *ZodXor[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodXor[T, R] {
-	schemaParams := utils.NormalizeParams(params...)
-	var errorMessage any
-	if schemaParams.Error != nil {
-		errorMessage = schemaParams.Error
-	}
-
-	check := checks.NewCustom[any](fn, errorMessage)
-	newInternals := z.internals.Clone()
-	newInternals.AddCheck(check)
-	return z.withInternals(newInternals)
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // =============================================================================
@@ -361,6 +331,12 @@ func (z *ZodXor[T, R]) Or(other any) *ZodUnion[any, any] {
 // =============================================================================
 // HELPER METHODS
 // =============================================================================
+
+func (z *ZodXor[T, R]) withCheck(c core.ZodCheck) *ZodXor[T, R] {
+	in := z.internals.Clone()
+	in.AddCheck(c)
+	return z.withInternals(in)
+}
 
 func (z *ZodXor[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodXor[T, *T] {
 	return &ZodXor[T, *T]{

@@ -769,36 +769,23 @@ func ToLiteral(v any) (any, error) {
 	switch n := v.(type) {
 	case float32:
 		if math.Mod(float64(n), 1) == 0 {
-			return intLiteralFromInt64(int64(n)), nil
+			return numericLiteral(int64(n)), nil
 		}
 	case float64:
 		if math.Mod(n, 1) == 0 {
-			return intLiteralFromInt64(int64(n)), nil
+			return numericLiteral(int64(n)), nil
 		}
 	case int, int8, int16, int32, int64:
-		return intLiteralFromInt64(reflect.ValueOf(n).Int()), nil
+		return numericLiteral(reflect.ValueOf(n).Int()), nil
 	case uint, uint8, uint16, uint32, uint64:
-		return uintLiteralFromUint64(reflect.ValueOf(n).Uint()), nil
+		return numericLiteral(reflect.ValueOf(n).Uint()), nil
 	}
 	return v, nil
 }
 
-// intLiteralFromInt64 converts an int64 to its most natural literal:
-// 0 -> false, 1 -> true, otherwise -> int.
-func intLiteralFromInt64(v int64) any {
-	switch v {
-	case 0:
-		return false
-	case 1:
-		return true
-	default:
-		return v
-	}
-}
-
-// uintLiteralFromUint64 converts a uint64 to its most natural literal:
+// numericLiteral converts a numeric value to its most natural literal:
 // 0 -> false, 1 -> true, otherwise the original value is returned unchanged.
-func uintLiteralFromUint64(v uint64) any {
+func numericLiteral[T ~int64 | ~uint64](v T) any {
 	switch v {
 	case 0:
 		return false

@@ -14,7 +14,8 @@ import (
 // ----------------------------------------------------------------------------
 
 // processModifiers handles modifier processing for nil input.
-// It returns early for non-nil input.
+// It returns early for non-nil input. The parseCore parameter is accepted
+// for API compatibility but unused -- all modifier logic is in processModifiersCore.
 func processModifiers[T any](
 	input any,
 	internals *core.ZodTypeInternals,
@@ -25,7 +26,8 @@ func processModifiers[T any](
 	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
-// processModifiersStrict is the strict variant where default values skip parseCore.
+// processModifiersStrict delegates to the same core logic as processModifiers.
+// It exists as a separate function for call-site clarity in strict parse paths.
 func processModifiersStrict[T any](
 	input any,
 	internals *core.ZodTypeInternals,
@@ -81,17 +83,8 @@ func processModifiersCore[T any](
 		return nil, true, issues.CreateNonOptionalError(ctx)
 	}
 
-	// Optional/Nilable — allows nil values.
-	if internals.Optional || internals.Nilable {
-		if nc := filterNilChecks(internals.Checks); len(nc) > 0 {
-			r, err := ApplyChecks[any](nil, nc, ctx)
-			return r, true, err
-		}
-		return nil, true, nil
-	}
-
-	// Pointer types naturally allow nil.
-	if isPtr {
+	// Optional/Nilable and pointer types naturally allow nil values.
+	if internals.Optional || internals.Nilable || isPtr {
 		if nc := filterNilChecks(internals.Checks); len(nc) > 0 {
 			r, err := ApplyChecks[any](nil, nc, ctx)
 			return r, true, err

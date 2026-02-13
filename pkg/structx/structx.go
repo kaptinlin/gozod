@@ -120,12 +120,13 @@ func structValue(input any) (reflect.Value, bool) {
 }
 
 // setField assigns src to dst, converting types when possible.
+// AssignableTo is checked first as the cheaper, more common path.
 func setField(dst reflect.Value, src reflect.Value, targetType reflect.Type) {
 	switch {
-	case src.Type().ConvertibleTo(targetType):
-		dst.Set(src.Convert(targetType))
 	case src.Type().AssignableTo(targetType):
 		dst.Set(src)
+	case src.Type().ConvertibleTo(targetType):
+		dst.Set(src.Convert(targetType))
 	}
 }
 

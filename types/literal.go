@@ -185,24 +185,16 @@ func (z *ZodLiteral[T, R]) Meta(meta core.GlobalMeta) *ZodLiteral[T, R] {
 // Refine adds a typed custom validation function.
 func (z *ZodLiteral[T, R]) Refine(fn func(T) bool, params ...any) *ZodLiteral[T, R] {
 	wrapper := func(data any) bool {
-		var zero R
-		switch any(zero).(type) {
-		case *T:
-			if data == nil {
-				return true
-			}
-			typed, ok := data.(T)
-			if !ok {
-				return false
-			}
-			return fn(typed)
-		default:
-			typed, ok := data.(T)
-			if !ok {
-				return false
-			}
-			return fn(typed)
+		if data == nil {
+			var zero R
+			_, isPtr := any(zero).(*T)
+			return isPtr
 		}
+		typed, ok := data.(T)
+		if !ok {
+			return false
+		}
+		return fn(typed)
 	}
 	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }

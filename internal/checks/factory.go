@@ -332,10 +332,7 @@ func PrefixIssues(path any, iss []core.ZodRawIssue) []core.ZodRawIssue {
 		return iss
 	}
 	for i := range iss {
-		if iss[i].Path == nil {
-			iss[i].Path = make([]any, 0)
-		}
-		newPath := make([]any, len(iss[i].Path)+1)
+		newPath := make([]any, 1+len(iss[i].Path))
 		newPath[0] = path
 		copy(newPath[1:], iss[i].Path)
 		iss[i].Path = newPath

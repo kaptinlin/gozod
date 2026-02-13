@@ -365,27 +365,15 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 		}
 	}
 
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](wrapper, msg))
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 
 // RefineAny adds custom validation without type conversion.
 func (z *ZodArray[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodArray[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](fn, msg))
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 

@@ -277,17 +277,17 @@ func (z *ZodRecord[T, R]) Describe(description string) *ZodRecord[T, R] {
 
 // Min sets the minimum number of entries.
 func (z *ZodRecord[T, R]) Min(minLen int, params ...any) *ZodRecord[T, R] {
-	return z.withCheck(checks.MinSize(minLen, extractErrorMessage(params...)))
+	return z.withCheck(checks.MinSize(minLen, params...))
 }
 
 // Max sets the maximum number of entries.
 func (z *ZodRecord[T, R]) Max(maxLen int, params ...any) *ZodRecord[T, R] {
-	return z.withCheck(checks.MaxSize(maxLen, extractErrorMessage(params...)))
+	return z.withCheck(checks.MaxSize(maxLen, params...))
 }
 
 // Length sets the exact number of entries.
 func (z *ZodRecord[T, R]) Length(exactLen int, params ...any) *ZodRecord[T, R] {
-	return z.withCheck(checks.Size(exactLen, extractErrorMessage(params...)))
+	return z.withCheck(checks.Size(exactLen, params...))
 }
 
 // Transform applies a transformation function to the parsed record value.
@@ -326,12 +326,12 @@ func (z *ZodRecord[T, R]) Refine(fn func(R) bool, params ...any) *ZodRecord[T, R
 		}
 		return false
 	}
-	return z.withCheck(checks.NewCustom[any](wrapper, extractErrorMessage(params...)))
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny provides flexible validation without type conversion.
 func (z *ZodRecord[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodRecord[T, R] {
-	return z.withCheck(checks.NewCustom[any](fn, extractErrorMessage(params...)))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // withCheck clones internals, adds a check, and returns a new instance.
@@ -339,15 +339,6 @@ func (z *ZodRecord[T, R]) withCheck(check core.ZodCheck) *ZodRecord[T, R] {
 	in := z.internals.Clone()
 	in.AddCheck(check)
 	return z.withInternals(in)
-}
-
-// extractErrorMessage extracts the error message from variadic params.
-func extractErrorMessage(params ...any) any {
-	p := utils.NormalizeParams(params...)
-	if p.Error != nil {
-		return p.Error
-	}
-	return nil
 }
 
 func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord[T, *T] {

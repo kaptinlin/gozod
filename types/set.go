@@ -226,32 +226,17 @@ func (z *ZodSet[T, R]) Describe(description string) *ZodSet[T, R] {
 
 // Min sets the minimum number of elements.
 func (z *ZodSet[T, R]) Min(minLen int, params ...any) *ZodSet[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.MinSize(minLen, errMsg))
+	return z.withCheck(checks.MinSize(minLen, params...))
 }
 
 // Max sets the maximum number of elements.
 func (z *ZodSet[T, R]) Max(maxLen int, params ...any) *ZodSet[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.MaxSize(maxLen, errMsg))
+	return z.withCheck(checks.MaxSize(maxLen, params...))
 }
 
 // Length sets the exact number of elements required.
 func (z *ZodSet[T, R]) Length(exactLen int, params ...any) *ZodSet[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.Size(exactLen, errMsg))
+	return z.withCheck(checks.Size(exactLen, params...))
 }
 
 // NonEmpty ensures the set has at least one element.
@@ -292,22 +277,12 @@ func (z *ZodSet[T, R]) Refine(fn func(R) bool, params ...any) *ZodSet[T, R] {
 	wrap := func(v any) bool {
 		return fn(convertToSetConstraintType[T, R](v))
 	}
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](wrap, errMsg))
+	return z.withCheck(checks.NewCustom[any](wrap, utils.NormalizeCustomParams(params...)))
 }
 
 // RefineAny adds a custom validation function accepting any input.
 func (z *ZodSet[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodSet[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var errMsg any
-	if sp.Error != nil {
-		errMsg = sp.Error
-	}
-	return z.withCheck(checks.NewCustom[any](fn, errMsg))
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // And creates an intersection with another schema.
@@ -561,10 +536,8 @@ func newZodSetFromDef[T comparable, R any](def *ZodSetDef) *ZodSet[T, R] {
 	if def.Error != nil {
 		in.Error = def.Error
 	}
-	if len(def.Checks) > 0 {
-		for _, c := range def.Checks {
-			in.AddCheck(c)
-		}
+	for _, c := range def.Checks {
+		in.AddCheck(c)
 	}
 	return &ZodSet[T, R]{internals: in}
 }

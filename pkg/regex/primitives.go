@@ -70,5 +70,6 @@ var (
 	Uppercase = regexp.MustCompile(`^[^a-z]*$`)
 
 	// JSONString matches any string (simplistic; actual validation should be done at runtime).
-	JSONString = regexp.MustCompile(`^[\s\S]*$`)
+	// Uses the same pattern as String since runtime JSON parsing is required for real validation.
+	JSONString = String
 )

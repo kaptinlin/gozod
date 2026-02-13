@@ -223,33 +223,15 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnknown[T,
 		return false
 	}
 
-	param := utils.FirstParam(params...)
-	norm := utils.NormalizeParams(param)
-
-	var msg any
-	if norm.Error != nil {
-		msg = norm
-	}
-
-	check := checks.NewCustom[any](wrapper, msg)
 	in := z.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 
 // RefineAny provides flexible validation without type conversion.
 func (z *ZodUnknown[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodUnknown[T, R] {
-	param := utils.FirstParam(params...)
-	norm := utils.NormalizeParams(param)
-
-	var msg any
-	if norm.Error != nil {
-		msg = norm
-	}
-
-	check := checks.NewCustom[any](fn, msg)
 	in := z.internals.Clone()
-	in.AddCheck(check)
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 

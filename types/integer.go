@@ -391,10 +391,7 @@ func (z *ZodIntegerTyped[T, R]) Overwrite(
 		}
 		return transform(converted)
 	}
-	check := checks.NewZodCheckOverwrite(fn, params...)
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewZodCheckOverwrite(fn, params...))
 }
 
 // Pipe creates a validation pipeline to another schema.
@@ -461,11 +458,12 @@ func (z *ZodIntegerTyped[T, R]) Refine(
 		return fn(converted)
 	}
 
-	param := utils.FirstParam(params...)
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(param))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	sp := utils.NormalizeParams(params...)
+	var msg any
+	if sp.Error != nil {
+		msg = sp.Error
+	}
+	return z.withCheck(checks.NewCustom[any](wrapper, msg))
 }
 
 // And creates an intersection with another schema.
@@ -605,10 +603,7 @@ func convertToIntegerType[T IntegerConstraint](v any) (T, bool) {
 
 // RefineAny adds flexible custom validation using an untyped function.
 func (z *ZodIntegerTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodIntegerTyped[T, R] {
-	check := checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 }
 
 // CloneFrom copies configuration from another schema.
@@ -1074,10 +1069,7 @@ func (z *ZodIntegerTyped[T, R]) Check(fn func(value R, payload *core.ParsePayloa
 			}
 		}
 	}
-	check := checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...))
-	in := z.internals.Clone()
-	in.AddCheck(check)
-	return z.withInternals(in)
+	return z.withCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 }
 
 // With is an alias for Check (Zod v4 API compatibility).

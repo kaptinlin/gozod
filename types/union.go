@@ -304,14 +304,8 @@ func (z *ZodUnion[T, R]) Refine(
 		return fn(cv)
 	}
 
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](wrapper, msg))
+	in.AddCheck(checks.NewCustom[any](wrapper, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 
@@ -320,14 +314,8 @@ func (z *ZodUnion[T, R]) RefineAny(
 	fn func(any) bool,
 	params ...any,
 ) *ZodUnion[T, R] {
-	sp := utils.NormalizeParams(params...)
-	var msg any
-	if sp.Error != nil {
-		msg = sp.Error
-	}
-
 	in := z.internals.Clone()
-	in.AddCheck(checks.NewCustom[any](fn, msg))
+	in.AddCheck(checks.NewCustom[any](fn, utils.NormalizeCustomParams(params...)))
 	return z.withInternals(in)
 }
 

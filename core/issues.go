@@ -117,29 +117,29 @@ func (z ZodIssue) DivisorValue() (any, bool) {
 	return z.Divisor, z.Divisor != nil
 }
 
-// stringProperty safely gets a string property from the properties map.
-func stringProperty(properties map[string]any, key string) string {
+// typedProperty safely retrieves a typed value from the properties map.
+func typedProperty[T any](properties map[string]any, key string) (val T) {
 	if properties == nil {
-		return ""
+		return val
 	}
-	if value, ok := properties[key].(string); ok {
-		return value
-	}
-	return ""
+	v, _ := properties[key].(T)
+	return v
 }
 
 // zodTypeCodeProperty safely gets a ZodTypeCode from the properties map.
+// It accepts both ZodTypeCode and plain string values.
 func zodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
 	if properties == nil {
 		return ""
 	}
-	if value, ok := properties[key].(ZodTypeCode); ok {
-		return value
+	switch v := properties[key].(type) {
+	case ZodTypeCode:
+		return v
+	case string:
+		return ZodTypeCode(v)
+	default:
+		return ""
 	}
-	if value, ok := properties[key].(string); ok {
-		return ZodTypeCode(value)
-	}
-	return ""
 }
 
 // property safely gets a property from the properties map.
@@ -162,32 +162,32 @@ func (r ZodRawIssue) Received() ZodTypeCode {
 
 // Origin returns the origin value from properties.
 func (r ZodRawIssue) Origin() string {
-	return stringProperty(r.Properties, "origin")
+	return typedProperty[string](r.Properties, "origin")
 }
 
 // Format returns the format value from properties.
 func (r ZodRawIssue) Format() string {
-	return stringProperty(r.Properties, "format")
+	return typedProperty[string](r.Properties, "format")
 }
 
 // Pattern returns the pattern value from properties.
 func (r ZodRawIssue) Pattern() string {
-	return stringProperty(r.Properties, "pattern")
+	return typedProperty[string](r.Properties, "pattern")
 }
 
 // Prefix returns the prefix value from properties.
 func (r ZodRawIssue) Prefix() string {
-	return stringProperty(r.Properties, "prefix")
+	return typedProperty[string](r.Properties, "prefix")
 }
 
 // Suffix returns the suffix value from properties.
 func (r ZodRawIssue) Suffix() string {
-	return stringProperty(r.Properties, "suffix")
+	return typedProperty[string](r.Properties, "suffix")
 }
 
 // Includes returns the includes value from properties.
 func (r ZodRawIssue) Includes() string {
-	return stringProperty(r.Properties, "includes")
+	return typedProperty[string](r.Properties, "includes")
 }
 
 // Minimum returns the minimum value from properties.
@@ -198,10 +198,7 @@ func (r ZodRawIssue) Maximum() any { return r.property("maximum") }
 
 // Inclusive returns the inclusive flag from properties.
 func (r ZodRawIssue) Inclusive() bool {
-	if val, ok := r.property("inclusive").(bool); ok {
-		return val
-	}
-	return false
+	return typedProperty[bool](r.Properties, "inclusive")
 }
 
 // Divisor returns the divisor value from properties.
@@ -209,16 +206,10 @@ func (r ZodRawIssue) Divisor() any { return r.property("divisor") }
 
 // Keys returns the keys from properties.
 func (r ZodRawIssue) Keys() []string {
-	if val, ok := r.property("keys").([]string); ok {
-		return val
-	}
-	return nil
+	return typedProperty[[]string](r.Properties, "keys")
 }
 
 // Values returns the values from properties.
 func (r ZodRawIssue) Values() []any {
-	if val, ok := r.property("values").([]any); ok {
-		return val
-	}
-	return nil
+	return typedProperty[[]any](r.Properties, "values")
 }
