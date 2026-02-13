@@ -51,9 +51,10 @@ gozod/
 ├── core/          # Foundation contracts (interfaces, types, constants)
 ├── docs/          # User-facing documentation
 ├── examples/      # Example implementations
-├── internal/      # Private runtime engine (parser, checks, issues)
+├── internal/      # Private runtime (engine, checks, issues, utils)
+├── jsonschema/    # JSON Schema conversion (to/from)
 ├── locales/       # Internationalization bundles
-├── pkg/           # Reusable utilities (validate, coerce, reflectx, validators)
+├── pkg/           # Reusable utilities (validate, coerce, reflectx, mapx, regex, slicex, structx, tagparser, transform)
 └── types/         # Public schema implementations (one type per file)
 ```
 
@@ -61,7 +62,7 @@ gozod/
 
 - `types/` never import each other; cross-type logic lives in `internal/`, `pkg/`, or `coerce/`
 - Core layer contains zero business logic; only defines contracts
-- Root-level files: `gozod.go` (main API), `json_schema.go`, `from_json_schema.go`
+- Root-level files: `gozod.go` (main API re-exports all types, constructors, and JSON Schema conversion from subpackages)
 
 ### Schema Type Categories (`types/`)
 
@@ -73,7 +74,7 @@ gozod/
 - **Functions**: `function.go`
 - **Formats**: `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go`
 - **Text**: `text.go`, `stringbool.go`
-- **Advanced**: `lazy.go`, `literal.go`, `enum.go`, `transform.go`
+- **Advanced**: `lazy.go`, `literal.go`, `enum.go`
 
 ## Core Design Principles
 

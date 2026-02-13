@@ -467,9 +467,8 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Test transformation error handling.
 - [ ] Test interaction with default values and validation.
 
-#### Custom Validator Integration (where applicable)
-- [ ] Test custom validator registration and usage.
-- [ ] Test parameterized validators with different parameter values.
-- [ ] Test struct tag generation with custom validators.
-- [ ] Test custom validator error messages and localization.
-- [ ] Test validator registry isolation in tests.
+#### Custom Validation (where applicable)
+- [ ] Test `Check` and `CheckParam` methods with custom validation functions.
+- [ ] Test parameterized checks with different parameter values.
+- [ ] Test struct tag validation with `FromStruct[T]()`.
+- [ ] Test custom validation error messages.

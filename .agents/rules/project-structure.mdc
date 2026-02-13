@@ -28,7 +28,8 @@ go module gozod
 ├── core/        # Foundation contracts (no concrete logic)
 ├── docs/        # Documentation and guides
 ├── examples/    # Example implementations and usage
-├── internal/    # Private runtime engine (generic parser, checks, issues)
+├── internal/    # Private runtime (engine, checks, issues, utils)
+├── jsonschema/  # JSON Schema conversion (to/from)
 ├── locales/     # Built-in i18n bundles
 ├── pkg/         # Re-usable, reflection-free helpers (zero deps)
 └── types/       # Public schema implementations (String, Array, …)
@@ -59,10 +60,11 @@ graph TD;
 
 | File | Purpose |
 |------|---------|
-| `gozod.go` | Main entry point with all public constructors and exports |
+| `gozod.go` | Main entry point re-exporting all types, constructors, and JSON Schema conversion from subpackages |
 | `gozod_test.go` | Integration tests for the main API |
-| `json_schema.go` | JSON Schema generation functionality |
-| `json_schema_test.go` | Tests for JSON Schema generation |
+| `gozod_tags_test.go` | Tests for struct tag validation |
+| `gozod_circular_test.go` | Tests for circular reference handling |
+| `metadata_test.go` | Tests for metadata/registry functionality |
 | `CLAUDE.md` | Project instructions for Claude Code AI assistant |
 | `Makefile` | Build automation and common tasks |
 
@@ -113,15 +115,20 @@ Comprehensive examples showcasing different GoZod features:
 
 | Directory | Focus |
 |-----------|-------|
-| `code_generation/` | Code generation for performance |
-| `custom_validators/` | Custom validator implementation and usage |
-| `circular_references/` | Handling circular references automatically |
-| `advanced_lazy/` | Lazy evaluation and recursive structures |
+| `quickstart/` | Getting started examples |
+| `primitive/` | Primitive type validation |
+| `object/` | Object validation |
 | `struct_tags/` | Struct tag validation examples |
+| `format/` | Format validation (email, URL, UUID, etc.) |
 | `union/` | Union type validation |
 | `intersection/` | Intersection types |
 | `error_handling/` | Error handling patterns |
 | `coerce/` | Type coercion examples |
+| `config/` | Configuration validation |
+| `code_generation/` | Code generation for performance |
+| `circular_references/` | Handling circular references automatically |
+| `advanced_lazy/` | Lazy evaluation and recursive structures |
+| `i18n/` | Internationalization examples |
 
 ### 3.7 `pkg/` – Utilities Layer
 
@@ -135,11 +142,20 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `mapx`      | Generic map manipulation (string & generic keys) |
 | `slicex`    | Generic slice helpers (merge, unique, map) |
 | `structx`   | Struct ⇄ map conversion without `encoding/json` |
-| `regexes`   | Pre-compiled, namespaced regex library |
+| `regex`     | Pre-compiled, namespaced regex library |
 | `tagparser` | Struct tag parsing and schema generation |
-| `validators` | Custom validator system (registry, interfaces, converters) |
+| `transform` | Data transformation utilities |
 
-### 3.8 `internal/` – Runtime Engine (🤫 private)
+### 3.8 `jsonschema/` – JSON Schema Conversion
+
+| File | Purpose |
+|------|---------|
+| `to.go` | Convert GoZod schemas to JSON Schema (Draft 2020-12) |
+| `to_test.go` | Tests for to-JSON-Schema conversion |
+| `from.go` | Convert JSON Schema to GoZod schemas |
+| `from_test.go` | Tests for from-JSON-Schema conversion |
+
+### 3.9 `internal/` – Runtime Engine (🤫 private)
 
 | Sub-dir | Role | Key Files |
 |---------|------|-----------|
@@ -148,7 +164,7 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 | `issues`   | Raw issue builders, finalisers & formatters | `creators.go`, `formatters.go`, `finalize.go`, `errors.go`, `types.go`, `raw.go`, `accessors.go` |
 | `utils`    | Low-level helpers used only by the engine | `utils.go` |
 
-### 3.9 `types/` – Schema Implementations
+### 3.10 `types/` – Schema Implementations
 
 Each file maps 1-to-1 with a Zod API call and follows the **three-layer template**:
 
@@ -168,17 +184,17 @@ Current schema implementations include:
 |-------------|-------|---------|
 | **Primitives** | `string.go`, `bool.go`, `integer.go`, `float.go`, `bigint.go`, `complex.go` | Basic Go types |
 | **Special Types** | `any.go`, `unknown.go`, `never.go`, `nil.go` | Special validation types |
-| **Collections** | `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go` | Container types |
+| **Collections** | `array.go`, `slice.go`, `tuple.go`, `map.go`, `record.go`, `set.go` | Container types |
 | **Objects** | `object.go`, `struct.go` | Structured data types |
 | **Composition** | `union.go`, `xor.go`, `discriminated_union.go`, `intersection.go` | Type composition |
 | **Functions** | `function.go` | Function validation |
 | **Formats** | `email.go`, `network.go`, `ids.go`, `iso.go`, `time.go`, `file.go` | Format-specific validation |
 | **Text** | `text.go`, `stringbool.go` | Text processing types |
-| **Advanced** | `lazy.go`, `literal.go`, `enum.go`, `transform.go` | Advanced type features |
+| **Advanced** | `lazy.go`, `literal.go`, `enum.go` | Advanced type features |
 
 All schema files include comprehensive test counterparts (`*_test.go`).
 
-### 3.10 `locales/` – Internationalization
+### 3.11 `locales/` – Internationalization
 
 Tiny, zero-dep bundles of translated error messages:
 

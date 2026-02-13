@@ -101,14 +101,14 @@ This document defines comprehensive coding standards and best practices for the 
 | `.transform(fn)` | `.Transform(fn)` | `ZodType[T, any]`, supports type conversion | Go error handling |
 | `.pipe(schema)` | `.Pipe(schema)` | Pipeline connection | Full pipeline support |
 
-### Custom Validator System
+### Custom Validation
 
 | Feature | TypeScript Zod v4 | GoZod | Status |
 |---------|-------------------|-------|--------|
-| **Custom refinements** | `.refine(fn)` | `.Refine(fn)` + `validators.Register()` | ✅ Enhanced |
-| **Registry system** | Not available | `validators.Register(&CustomValidator{})` | ✅ Go enhancement |
-| **Struct tag integration** | Not available | `gozod:"required,custom_validator"` | ✅ Go enhancement |
-| **Parameterized validators** | Custom logic | `ZodParameterizedValidator` interface | ✅ Go enhancement |
+| **Custom refinements** | `.refine(fn)` | `.Refine(fn)` | ✅ Implemented |
+| **Custom checks** | Not available | `.Check(name, fn)` | ✅ Go enhancement |
+| **Struct tag integration** | Not available | `gozod:"required,email"` | ✅ Go enhancement |
+| **Parameterized checks** | Custom logic | `.CheckParam(name, param, fn)` | ✅ Go enhancement |
 
 ## 🔧 Go Language Idiom Guidelines
 
@@ -281,40 +281,36 @@ schema := gozod.FromStruct[User]()
 | `gozod:"email"` | `.Email()` | `Email string \`gozod:"email"\`` | ✅ Implemented |
 | `gozod:"custom_validator"` | Custom validator | `Username string \`gozod:"required,unique_username"\`` | ✅ Implemented |
 
-### Custom Validator Integration
+### Custom Validation Integration
 
 ```go
-// Register custom validator
-validators.Register(&UniqueUsernameValidator{})
+// Use Refine for custom validation logic
+usernameSchema := gozod.String().
+    Min(3).Max(20).
+    Refine(func(username string) bool {
+        // Custom validation logic
+        return !isReservedUsername(username)
+    }, "Username is not allowed")
 
-// Use in struct tags
+// Use Check for named custom checks
+schema := gozod.String().Check("no_spaces", func(s string) bool {
+    return !strings.Contains(s, " ")
+}, "Must not contain spaces")
+
+// Use CheckParam for parameterized checks
+schema := gozod.String().CheckParam("prefix", "PROD-", func(s, prefix string) bool {
+    return strings.HasPrefix(s, prefix)
+}, "Must start with the required prefix")
+
+// Struct tag validation
 type User struct {
-    Username string `gozod:"required,unique_username"`        // Basic validator
-    Age      int    `gozod:"required,min_age=21"`           // Parameterized validator
-    Email    string `gozod:"required,email"`                // Built-in validator
+    Name  string `gozod:"required,min=2,max=50"`
+    Email string `gozod:"required,email"`
+    Age   int    `gozod:"required,min=18"`
 }
 
-// Generate schema from tags
 schema := gozod.FromStruct[User]()
 result, err := schema.Parse(user)
-```
-
-### Validator Interfaces
-
-```go
-// Basic validator
-type ZodValidator[T any] interface {
-    Name() string
-    Validate(value T) bool
-    ErrorMessage(ctx *core.ParseContext) string
-}
-
-// Parameterized validator
-type ZodParameterizedValidator[T any] interface {
-    ZodValidator[T]
-    ValidateParam(value T, param string) bool
-    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
-}
 ```
 
 ## 🔄 Unified Design Patterns

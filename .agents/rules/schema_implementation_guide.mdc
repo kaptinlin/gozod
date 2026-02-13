@@ -473,109 +473,56 @@ No direct `fmt.Errorf` inside parsing/validation code.
 
 ---
 
-## 14  Custom Validator System Integration
+## 14  Custom Validation Patterns
 
-GoZod provides a flexible, registry-based custom validator system that integrates seamlessly with both programmatic APIs and struct tags.
+GoZod provides custom validation via `Refine`, `Check`, and `CheckParam` methods on all schema types.
 
-### 14.1  Validator Interfaces
+### 14.1  Refine – Custom Validation Functions
 
 ```go
-// Basic validator interface
-type ZodValidator[T any] interface {
-    Name() string
-    Validate(value T) bool
-    ErrorMessage(ctx *core.ParseContext) string
-}
+// Basic refinement with type-safe function
+schema := gozod.String().Refine(func(s string) bool {
+    return !isReservedUsername(s)
+}, "Username is not allowed")
 
-// Parameterized validator interface
-type ZodParameterizedValidator[T any] interface {
-    ZodValidator[T]
-    ValidateParam(value T, param string) bool
-    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
-}
-
-// Detailed validator interface (for complex error reporting)
-type ZodDetailedValidator[T any] interface {
-    ZodValidator[T]
-    ValidateWithDetails(value T) (*core.ValidationResult, error)
-}
+// RefineAny for input-agnostic validation
+schema := gozod.String().RefineAny(func(input any) bool {
+    s, ok := input.(string)
+    return ok && len(s) > 0
+}, "Must be a non-empty string")
 ```
 
-### 14.2  Validator Registration and Usage
+### 14.2  Check – Named Custom Checks
 
 ```go
-// 1. Register custom validators (users implement in their code)
-validators.Register(&UniqueUsernameValidator{})
-validators.Register(&MinAgeValidator{})
+// Named check for reusability and identification
+schema := gozod.String().Check("no_spaces", func(s string) bool {
+    return !strings.Contains(s, " ")
+}, "Must not contain spaces")
 
-// 2. Use in struct tags
+// Parameterized check with extra parameters
+schema := gozod.String().CheckParam("prefix", "PROD-", func(s, prefix string) bool {
+    return strings.HasPrefix(s, prefix)
+}, "Must start with the required prefix")
+```
+
+### 14.3  Struct Tag Validation
+
+```go
+// Struct tags provide declarative validation
 type User struct {
-    Username string `gozod:"required,unique_username,min=3"`
-    Age      int    `gozod:"required,min_age=21"`
-    Email    string `gozod:"required,email"`
+    Name  string `gozod:"required,min=2,max=50"`
+    Email string `gozod:"required,email"`
+    Age   int    `gozod:"required,min=18"`
 }
 
-// 3. Generate schema from tags
 schema := gozod.FromStruct[User]()
 result, err := schema.Parse(user)
 
-// 4. Use programmatically with Check methods
-schema := gozod.String().Check("unique_username", func(s string) bool {
-    return !isDuplicateUsername(s)
-})
-```
-
-### 14.3  Converter Functions
-
-Schema types integrate custom validators using converter functions:
-
-```go
-// Convert validator to refinement function
-func (z *ZodString[T]) UseValidator(validatorName string) *ZodString[T] {
-    validator := validators.GetValidator[string](validatorName)
-    if validator == nil {
-        panic(fmt.Sprintf("validator %s not found", validatorName))
-    }
-    
-    refineFn := validators.ToRefineFn(validator)
-    return z.Refine(refineFn)
-}
-
-// Convert validator to check function  
-func (z *ZodString[T]) UseValidatorCheck(validatorName string) *ZodString[T] {
-    validator := validators.GetValidator[string](validatorName)
-    if validator == nil {
-        panic(fmt.Sprintf("validator %s not found", validatorName))
-    }
-    
-    checkFn := validators.ToCheckFn(validator)
-    return z.Check(validatorName, checkFn)
-}
-```
-
-### 14.4  Implementation Example
-
-```go
-// Example custom validator
-type UniqueUsernameValidator struct{}
-
-func (v *UniqueUsernameValidator) Name() string {
-    return "unique_username"
-}
-
-func (v *UniqueUsernameValidator) Validate(value string) bool {
-    // Check database or cache for username uniqueness
-    return !database.UsernameExists(value)
-}
-
-func (v *UniqueUsernameValidator) ErrorMessage(ctx *core.ParseContext) string {
-    return "Username must be unique"
-}
-
-// Register the validator
-func init() {
-    validators.Register(&UniqueUsernameValidator{})
-}
+// Struct-level refinement for cross-field validation
+schema = schema.Refine(func(u User) bool {
+    return u.Age >= 21 || !strings.Contains(u.Email, "company.com")
+}, "Users under 21 cannot have company emails")
 ```
 
 ---
@@ -639,7 +586,7 @@ result, _ := schema.Parse(map[string]any{
 - [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.  
 - [ ] Default/Prefault accept value types, not pointers (compile-time safety).
 - [ ] Enhanced modifiers implemented: `DefaultFunc`, `PrefaultFunc`, `Meta`, `Nullish`.
-- [ ] Custom validator integration: `Check` and `CheckParam` methods implemented.
+- [ ] Custom validation: `Refine`, `Check` and `CheckParam` methods implemented.
 - [ ] Coerce method implemented for primitive types.
 - [ ] Type constraints defined correctly (`T | *T` pattern).
 - [ ] Comprehensive unit tests added following test guide structure.  

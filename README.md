@@ -2,7 +2,7 @@
 
 **GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed, zero-dependency data validation with intelligent type inference and maximum performance.
 
-[![Go Version](https://img.shields.io/badge/Go-%3E%3D1.18-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-%3E%3D1.25-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Test Status](https://img.shields.io/badge/Tests-Passing-green.svg)](https://github.com/kaptinlin/gozod)
 

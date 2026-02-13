@@ -230,21 +230,25 @@ GoZod's declarative struct tag system provides a unique approach to validation t
 |---------|--------|---------|--------|
 | **Multiple rules** | Comma-separated | `\`gozod:"required,min=2,max=50"\`` | ✅ Implemented |
 | **Numeric constraints** | `min=N`, `max=N`, `gt=N`, `lt=N` | `\`gozod:"min=0,max=120"\`` | ✅ Implemented |
-| **Custom validators** | Custom validator name | `\`gozod:"required,unique_username"\`` | ✅ Implemented |
-| **Parameterized validators** | `validator=param` | `\`gozod:"min_age=21"\`` | ✅ Implemented |
+| **Custom checks** | `.Check(name, fn)` method | `schema.Check("no_spaces", fn)` | ✅ Implemented |
+| **Parameterized checks** | `.CheckParam(name, param, fn)` | `schema.CheckParam("prefix", "PROD-", fn)` | ✅ Implemented |
 | **JSON field mapping** | Works with `json` tags | `Field string \`json:"field_name" gozod:"required"\`` | ✅ Implemented |
 
-### Custom Validator Integration
+### Custom Validation
 
 ```go
-// Register custom validator
-validators.Register(&UniqueUsernameValidator{})
+// Use Refine for custom validation logic
+usernameSchema := gozod.String().
+    Min(3).Max(20).
+    Refine(func(username string) bool {
+        return !isReservedUsername(username)
+    }, "Username is not allowed")
 
-// Use in struct tags
+// Struct tags with built-in validators
 type User struct {
-    Username string `gozod:"required,unique_username"`        // Basic validator
-    Age      int    `gozod:"required,min_age=21"`           // Parameterized validator
-    Email    string `gozod:"required,email"`                // Built-in validator
+    Name  string `gozod:"required,min=2,max=50"`
+    Email string `gozod:"required,email"`
+    Age   int    `gozod:"required,min=18"`
 }
 
 // Generate schema from tags
@@ -266,44 +270,37 @@ schema := gozod.FromStruct[User]()
 result, err := schema.Parse(user) // ✅ No stack overflow
 ```
 
-## 🎨 Custom Validator System
+## Custom Validation Methods
 
-GoZod provides a flexible custom validator system with registry and struct tag integration:
+GoZod provides flexible custom validation via `Refine`, `Check`, and `CheckParam` methods:
 
-### Validator Interfaces
+### Refine – Type-safe Custom Validation
 
 ```go
-// Basic validator
-type ZodValidator[T any] interface {
-    Name() string
-    Validate(value T) bool
-    ErrorMessage(ctx *core.ParseContext) string
-}
+// Refine with type-safe function
+schema := gozod.String().Refine(func(s string) bool {
+    return !strings.Contains(s, " ")
+}, "Must not contain spaces")
 
-// Parameterized validator
-type ZodParameterizedValidator[T any] interface {
-    ZodValidator[T]
-    ValidateParam(value T, param string) bool
-    ErrorMessageWithParam(ctx *core.ParseContext, param string) string
-}
+// RefineAny for input-agnostic validation
+schema := gozod.String().RefineAny(func(input any) bool {
+    s, ok := input.(string)
+    return ok && len(s) > 0
+}, "Must be a non-empty string")
 ```
 
-### Usage Pattern
+### Check / CheckParam – Named Custom Checks
 
 ```go
-// 1. Implement validator
-type EmailValidator struct{}
-func (v *EmailValidator) Name() string { return "custom_email" }
-func (v *EmailValidator) Validate(email string) bool { /* validation logic */ }
-func (v *EmailValidator) ErrorMessage(ctx *core.ParseContext) string { return "Invalid email" }
+// Named check for identification
+schema := gozod.String().Check("no_spaces", func(s string) bool {
+    return !strings.Contains(s, " ")
+}, "Must not contain spaces")
 
-// 2. Register validator
-validators.Register(&EmailValidator{})
-
-// 3. Use in struct tags or programmatically
-type User struct {
-    Email string `gozod:"required,custom_email"`
-}
+// Parameterized check
+schema := gozod.String().CheckParam("prefix", "PROD-", func(s, prefix string) bool {
+    return strings.HasPrefix(s, prefix)
+}, "Must start with the required prefix")
 ```
 
 ## GoZod Unique Features
