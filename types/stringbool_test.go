@@ -970,11 +970,9 @@ func TestStringBool_Overwrite(t *testing.T) {
 	t.Run("pointer type handling", func(t *testing.T) {
 		schema := StringBoolPtr().Overwrite(func(b *bool) *bool {
 			if b == nil {
-				falseVal := false
-				return &falseVal
+				return new(false)
 			}
-			inverted := !(*b)
-			return &inverted
+			return new(!(*b))
 		})
 
 		// Test normal case

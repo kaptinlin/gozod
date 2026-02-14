@@ -555,7 +555,7 @@ func hasUUIDRule(rules []tagparser.TagRule) bool {
 func findEnumRule(rules []tagparser.TagRule) *tagparser.TagRule {
 	for _, rule := range rules {
 		if rule.Name == "enum" {
-			return &rule
+			return new(rule)
 		}
 	}
 	return nil

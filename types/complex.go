@@ -254,10 +254,9 @@ func (z *ZodComplex[T]) Default(v complex128) *ZodComplex[T] {
 	var zero T
 	switch any(zero).(type) {
 	case *complex64:
-		val := complex64(v)
-		in.SetDefaultValue(&val)
+		in.SetDefaultValue(new(complex64(v)))
 	case *complex128:
-		in.SetDefaultValue(&v)
+		in.SetDefaultValue(new(v))
 	case complex64:
 		in.SetDefaultValue(complex64(v))
 	default:
@@ -274,10 +273,9 @@ func (z *ZodComplex[T]) DefaultFunc(fn func() complex128) *ZodComplex[T] {
 		var zero T
 		switch any(zero).(type) {
 		case *complex64:
-			val := complex64(v)
-			return &val
+			return new(complex64(v))
 		case *complex128:
-			return &v
+			return new(v)
 		case complex64:
 			return complex64(v)
 		default:
@@ -293,10 +291,9 @@ func (z *ZodComplex[T]) Prefault(v complex128) *ZodComplex[T] {
 	var zero T
 	switch any(zero).(type) {
 	case *complex64:
-		val := complex64(v)
-		in.SetPrefaultValue(&val)
+		in.SetPrefaultValue(new(complex64(v)))
 	case *complex128:
-		in.SetPrefaultValue(&v)
+		in.SetPrefaultValue(new(v))
 	case complex64:
 		in.SetPrefaultValue(complex64(v))
 	default:
@@ -313,10 +310,9 @@ func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 		var zero T
 		switch any(zero).(type) {
 		case *complex64:
-			val := complex64(v)
-			return &val
+			return new(complex64(v))
 		case *complex128:
-			return &v
+			return new(v)
 		case complex64:
 			return complex64(v)
 		default:
@@ -638,16 +634,14 @@ func extractComplex128[T ComplexConstraint](value T) complex128 {
 func toComplex128(v any) *complex128 {
 	switch val := v.(type) {
 	case complex64:
-		r := complex128(val)
-		return &r
+		return new(complex128(val))
 	case *complex64:
 		if val != nil {
-			r := complex128(*val)
-			return &r
+			return new(complex128(*val))
 		}
 		return nil
 	case complex128:
-		return &val
+		return new(val)
 	case *complex128:
 		if val != nil {
 			return val

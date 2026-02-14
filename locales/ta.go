@@ -78,7 +78,7 @@ var TypeDictionaryTa = map[string]string{
 // getSizingTa returns Tamil sizing information for a given type
 func getSizingTa(origin string) *issues.SizingInfo {
 	if info, exists := SizableTa[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

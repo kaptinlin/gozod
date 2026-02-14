@@ -111,10 +111,9 @@ func NormalizeCheckParams(params ...any) *core.CheckParams {
 // ApplyCheckParams applies normalized parameters to a check definition.
 func ApplyCheckParams(def *core.ZodCheckDef, cp *core.CheckParams) {
 	if cp != nil && cp.Error != "" {
-		em := core.ZodErrorMap(func(_ core.ZodRawIssue) string {
+		def.Error = new(core.ZodErrorMap(func(_ core.ZodRawIssue) string {
 			return cp.Error
-		})
-		def.Error = &em
+		}))
 	}
 }
 

@@ -77,7 +77,7 @@ var TypeDictionaryTh = map[string]string{
 // getSizingTh returns Thai sizing information for a given type
 func getSizingTh(origin string) *issues.SizingInfo {
 	if info, exists := SizableTh[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

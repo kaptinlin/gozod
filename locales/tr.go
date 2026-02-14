@@ -77,7 +77,7 @@ var TypeDictionaryTr = map[string]string{
 // getSizingTr returns Turkish sizing information for a given type
 func getSizingTr(origin string) *issues.SizingInfo {
 	if info, exists := SizableTr[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

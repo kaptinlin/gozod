@@ -97,7 +97,7 @@ var FormatNounsHe = map[string]hebrewTypeInfo{
 // getSizingHe returns Hebrew sizing information for a given type
 func getSizingHe(origin string) *hebrewSizingInfo {
 	if info, exists := SizableHe[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

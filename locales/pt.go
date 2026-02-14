@@ -78,7 +78,7 @@ var TypeDictionaryPt = map[string]string{
 // getSizingPt returns Portuguese sizing information for a given type
 func getSizingPt(origin string) *issues.SizingInfo {
 	if info, exists := SizablePt[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

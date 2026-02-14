@@ -77,7 +77,7 @@ var TypeDictionaryMs = map[string]string{
 // getSizingMs returns Malay sizing information for a given type
 func getSizingMs(origin string) *issues.SizingInfo {
 	if info, exists := SizableMs[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

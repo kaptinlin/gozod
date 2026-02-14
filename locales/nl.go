@@ -78,7 +78,7 @@ var TypeDictionaryNl = map[string]string{
 // getSizingNl returns Dutch sizing information for a given type
 func getSizingNl(origin string) *issues.SizingInfo {
 	if info, exists := SizableNl[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

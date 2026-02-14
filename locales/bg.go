@@ -86,7 +86,7 @@ var FormatGenderBg = map[string]string{
 // getSizingBg returns Bulgarian sizing information for a given type
 func getSizingBg(origin string) *issues.SizingInfo {
 	if info, exists := SizableBg[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

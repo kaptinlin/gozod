@@ -78,7 +78,7 @@ var TypeDictionaryDe = map[string]string{
 // getSizingDe returns German sizing information for a given type
 func getSizingDe(origin string) *issues.SizingInfo {
 	if info, exists := SizableDe[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

@@ -868,12 +868,10 @@ func TestComplex_Overwrite(t *testing.T) {
 		schema := ComplexPtr().Overwrite(func(c *complex128) *complex128 {
 			if c == nil {
 				// Return default complex number
-				defaultVal := complex128(1 + 0i)
-				return &defaultVal
+				return new(complex128(1 + 0i))
 			}
 			// Add π to the real part
-			transformed := complex(real(*c)+math.Pi, imag(*c))
-			return &transformed
+			return new(complex(real(*c)+math.Pi, imag(*c)))
 		})
 
 		input := complex128(1 + 2i)

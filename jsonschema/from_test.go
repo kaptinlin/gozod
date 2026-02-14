@@ -26,12 +26,10 @@ func TestFromJSONSchema_String(t *testing.T) {
 	})
 
 	t.Run("string with constraints", func(t *testing.T) {
-		minLen := float64(2)
-		maxLen := float64(10)
 		schema := &lib.Schema{}
 		schema.Type = []string{"string"}
-		schema.MinLength = &minLen
-		schema.MaxLength = &maxLen
+		schema.MinLength = new(float64(2))
+		schema.MaxLength = new(float64(10))
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
@@ -48,10 +46,9 @@ func TestFromJSONSchema_String(t *testing.T) {
 	})
 
 	t.Run("string with email format", func(t *testing.T) {
-		format := "email"
 		schema := &lib.Schema{}
 		schema.Type = []string{"string"}
-		schema.Format = &format
+		schema.Format = new("email")
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
@@ -137,16 +134,14 @@ func TestFromJSONSchema_Array(t *testing.T) {
 	})
 
 	t.Run("array with min/max items", func(t *testing.T) {
-		minItems := float64(1)
-		maxItems := float64(3)
 		itemSchema := &lib.Schema{}
 		itemSchema.Type = []string{"string"}
 
 		schema := &lib.Schema{}
 		schema.Type = []string{"array"}
 		schema.Items = itemSchema
-		schema.MinItems = &minItems
-		schema.MaxItems = &maxItems
+		schema.MinItems = new(float64(1))
+		schema.MaxItems = new(float64(3))
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
@@ -167,14 +162,12 @@ func TestFromJSONSchema_Object(t *testing.T) {
 		ageSchema := &lib.Schema{}
 		ageSchema.Type = []string{"integer"}
 
-		props := lib.SchemaMap{
-			"name": nameSchema,
-			"age":  ageSchema,
-		}
-
 		schema := &lib.Schema{}
 		schema.Type = []string{"object"}
-		schema.Properties = &props
+		schema.Properties = new(lib.SchemaMap{
+			"name": nameSchema,
+			"age":  ageSchema,
+		})
 		schema.Required = []string{"name"}
 
 		zodSchema, err := FromJSONSchema(schema)
@@ -262,16 +255,13 @@ func TestFromJSONSchema_AllOf(t *testing.T) {
 	ageSchema := &lib.Schema{}
 	ageSchema.Type = []string{"integer"}
 
-	props1 := lib.SchemaMap{"name": nameSchema}
-	props2 := lib.SchemaMap{"age": ageSchema}
-
 	obj1 := &lib.Schema{}
 	obj1.Type = []string{"object"}
-	obj1.Properties = &props1
+	obj1.Properties = new(lib.SchemaMap{"name": nameSchema})
 
 	obj2 := &lib.Schema{}
 	obj2.Type = []string{"object"}
-	obj2.Properties = &props2
+	obj2.Properties = new(lib.SchemaMap{"age": ageSchema})
 
 	schema := &lib.Schema{}
 	schema.AllOf = []*lib.Schema{obj1, obj2}
@@ -283,8 +273,7 @@ func TestFromJSONSchema_AllOf(t *testing.T) {
 
 func TestFromJSONSchema_BooleanSchema(t *testing.T) {
 	t.Run("true schema accepts anything", func(t *testing.T) {
-		trueVal := true
-		schema := &lib.Schema{Boolean: &trueVal}
+		schema := &lib.Schema{Boolean: new(true)}
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
@@ -292,8 +281,7 @@ func TestFromJSONSchema_BooleanSchema(t *testing.T) {
 	})
 
 	t.Run("false schema rejects everything", func(t *testing.T) {
-		falseVal := false
-		schema := &lib.Schema{Boolean: &falseVal}
+		schema := &lib.Schema{Boolean: new(false)}
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)

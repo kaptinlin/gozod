@@ -77,7 +77,7 @@ var TypeDictionaryAr = map[string]string{
 // getSizingAr returns Arabic sizing information for a given type
 func getSizingAr(origin string) *issues.SizingInfo {
 	if info, exists := SizableAr[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

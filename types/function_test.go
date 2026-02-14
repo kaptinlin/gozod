@@ -584,14 +584,12 @@ func TestFunction_Overwrite(t *testing.T) {
 		schema := FunctionPtr().
 			Overwrite(func(fn *any) *any {
 				if fn == nil {
-					dflt := any(func() string { return "default" })
-					return &dflt
+					return new(any(func() string { return "default" }))
 				}
 				if f, ok := (*fn).(func(string) string); ok {
-					wrapped := any(func(s string) string {
+					return new(any(func(s string) string {
 						return "transformed_" + f(s)
-					})
-					return &wrapped
+					}))
 				}
 				return fn
 			})

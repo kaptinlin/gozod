@@ -505,8 +505,7 @@ func TestFile_Overwrite(t *testing.T) {
 						Size:     fh.Size,
 					}
 					inner := any(newFH)
-					outer := any(&inner)
-					return &outer
+					return new(any(&inner))
 				}
 				return f
 			})

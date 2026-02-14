@@ -310,23 +310,20 @@ func CreateErrorMap(errorInput any) *core.ZodErrorMap {
 
 	switch e := errorInput.(type) {
 	case string:
-		errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
+		return new(core.ZodErrorMap(func(issue core.ZodRawIssue) string {
 			return e
-		})
-		return &errorMap
+		}))
 	case core.ZodErrorMap:
-		return &e
+		return new(e)
 	case *core.ZodErrorMap:
 		return e
 	case func(core.ZodRawIssue) string:
-		errorMap := core.ZodErrorMap(e)
-		return &errorMap
+		return new(core.ZodErrorMap(e))
 	default:
 		if str := fmt.Sprintf("%v", e); str != "" {
-			errorMap := core.ZodErrorMap(func(issue core.ZodRawIssue) string {
+			return new(core.ZodErrorMap(func(issue core.ZodRawIssue) string {
 				return str
-			})
-			return &errorMap
+			}))
 		}
 	}
 

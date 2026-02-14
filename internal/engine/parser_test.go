@@ -166,7 +166,7 @@ func TestParsePrimitive(t *testing.T) {
 					return nil, nil
 				}
 				if val, ok := result.(string); ok {
-					return &val, nil
+					return new(val), nil
 				}
 				return nil, issues.CreateInvalidTypeError(expectedType, result, ctx)
 			},

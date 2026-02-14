@@ -542,14 +542,12 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 			patterns = result
 
 			if len(patterns) == 1 {
-				p := patterns[0]
-				jsonSchema.Pattern = &p
+				jsonSchema.Pattern = new(patterns[0])
 			} else {
 				jsonSchema.AllOf = make([]*lib.Schema, len(patterns))
 				for i, p := range patterns {
-					pattern := p
 					jsonSchema.AllOf[i] = &lib.Schema{
-						Pattern: &pattern,
+						Pattern: new(p),
 					}
 				}
 			}
@@ -561,26 +559,26 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 
 	// Apply other string-related properties from the bag
 	if val, ok := internals.Bag["format"].(string); ok {
-		jsonSchema.Format = &val
+		jsonSchema.Format = new(val)
 	}
 	if v, ok := internals.Bag["minLength"]; ok {
 		if n, ok := toFloat(v); ok {
-			jsonSchema.MinLength = &n
+			jsonSchema.MinLength = new(n)
 		}
 	}
 	if v, ok := internals.Bag["maxLength"]; ok {
 		if n, ok := toFloat(v); ok {
-			jsonSchema.MaxLength = &n
+			jsonSchema.MaxLength = new(n)
 		}
 	}
 	if v, ok := internals.Bag["contentEncoding"]; ok {
 		if ce, ok := v.(string); ok {
-			jsonSchema.ContentEncoding = &ce
+			jsonSchema.ContentEncoding = new(ce)
 		}
 	}
 	if v, ok := internals.Bag["contentMediaType"]; ok {
 		if cmt, ok := v.(string); ok {
-			jsonSchema.ContentMediaType = &cmt
+			jsonSchema.ContentMediaType = new(cmt)
 		}
 	}
 }
@@ -603,8 +601,7 @@ type unwrapper interface {
 
 // booleanSchema returns a JSON Schema boolean schema (true or false).
 func booleanSchema(value bool) *lib.Schema {
-	v := value
-	return &lib.Schema{Boolean: &v}
+	return &lib.Schema{Boolean: new(value)}
 }
 
 // resolveUnknownKeysMode determines if a schema uses passthrough mode for unknown keys.
@@ -673,8 +670,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 
 	// Only add properties if there are any
 	if len(properties) > 0 {
-		schemaMap := lib.SchemaMap(properties)
-		jsonSchema.Properties = &schemaMap
+		jsonSchema.Properties = new(lib.SchemaMap(properties))
 	}
 	if len(required) > 0 {
 		slices.SortFunc(required, func(a, b string) int { return cmp.Compare(b, a) })
@@ -747,9 +743,8 @@ func (c *converter) convertArray(schema core.ZodSchema) (*lib.Schema, error) {
 				jsonSchema.PrefixItems = nil
 			} else {
 				// Fixed-length tuple
-				itemCount := float64(len(elements))
-				jsonSchema.MinItems = &itemCount
-				jsonSchema.MaxItems = &itemCount
+				jsonSchema.MinItems = new(float64(len(elements)))
+				jsonSchema.MaxItems = new(float64(len(elements)))
 			}
 		}
 	} else {
@@ -800,7 +795,6 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 	} else {
 		// No rest element - fixed length tuple.
 		// Find the last required (non-optional) item to set minItems.
-		itemCount := float64(len(items))
 		lastRequired := -1
 		for i := len(items) - 1; i >= 0; i-- {
 			if !items[i].Internals().IsOptional() {
@@ -808,9 +802,8 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 				break
 			}
 		}
-		minItems := float64(lastRequired + 1)
-		jsonSchema.MinItems = &minItems
-		jsonSchema.MaxItems = &itemCount
+		jsonSchema.MinItems = new(float64(lastRequired + 1))
+		jsonSchema.MaxItems = new(float64(len(items)))
 	}
 
 	return jsonSchema, nil
@@ -837,12 +830,10 @@ func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 	}
 
 	if meta.Title != "" && jsonSchema.Title == nil {
-		t := meta.Title
-		jsonSchema.Title = &t
+		jsonSchema.Title = new(meta.Title)
 	}
 	if meta.Description != "" && (jsonSchema.Description == nil || *jsonSchema.Description == "") {
-		d := meta.Description
-		jsonSchema.Description = &d
+		jsonSchema.Description = new(meta.Description)
 	}
 	if len(meta.Examples) > 0 && len(jsonSchema.Examples) == 0 {
 		jsonSchema.Examples = meta.Examples
@@ -886,12 +877,12 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 	if v, ok := bag["pattern"]; ok {
 		if p, ok := v.(string); ok {
 			if js.Pattern == nil {
-				js.Pattern = &p
+				js.Pattern = new(p)
 			} else {
 				if js.AllOf == nil {
 					js.AllOf = []*lib.Schema{{Pattern: js.Pattern}}
 				}
-				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &p})
+				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: new(p)})
 				js.Pattern = nil
 			}
 		}
@@ -909,14 +900,13 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 			}
 
 			if len(patterns) == 1 && js.AllOf == nil {
-				js.Pattern = &patterns[0]
+				js.Pattern = new(patterns[0])
 			} else {
 				if js.AllOf == nil {
 					js.AllOf = []*lib.Schema{}
 				}
 				for _, p := range patterns {
-					pCopy := p
-					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &pCopy})
+					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: new(p)})
 				}
 			}
 		}
@@ -927,69 +917,68 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 		switch k {
 		case "minLength":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = &f
+				js.MinLength = new(f)
 			}
 		case "maxLength":
 			if f, ok := toFloat(v); ok {
-				js.MaxLength = &f
+				js.MaxLength = new(f)
 			}
 		case "format":
 			if s, ok := v.(string); ok {
-				js.Format = &s
+				js.Format = new(s)
 			}
 		case "contentEncoding":
 			if s, ok := v.(string); ok {
-				js.ContentEncoding = &s
+				js.ContentEncoding = new(s)
 			}
 		case "contentMediaType":
 			if s, ok := v.(string); ok {
-				js.ContentMediaType = &s
+				js.ContentMediaType = new(s)
 			}
 		case "minimum":
 			if r, ok := toRat(v); ok {
-				js.Minimum = &r
+				js.Minimum = new(r)
 			}
 		case "maximum":
 			if r, ok := toRat(v); ok {
-				js.Maximum = &r
+				js.Maximum = new(r)
 			}
 		case "multipleOf":
 			if r, ok := toRat(v); ok {
-				js.MultipleOf = &r
+				js.MultipleOf = new(r)
 			}
 		case "exclusiveMinimum":
 			if r, ok := toRat(v); ok {
-				js.ExclusiveMinimum = &r
+				js.ExclusiveMinimum = new(r)
 			}
 		case "exclusiveMaximum":
 			if r, ok := toRat(v); ok {
-				js.ExclusiveMaximum = &r
+				js.ExclusiveMaximum = new(r)
 			}
 		case "minItems":
 			if f, ok := toFloat(v); ok {
-				js.MinItems = &f
+				js.MinItems = new(f)
 			}
 		case "maxItems":
 			if f, ok := toFloat(v); ok {
-				js.MaxItems = &f
+				js.MaxItems = new(f)
 			}
 		case "minSize":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = &f
+				js.MinLength = new(f)
 			}
 		case "maxSize":
 			if f, ok := toFloat(v); ok {
-				js.MaxLength = &f
+				js.MaxLength = new(f)
 			}
 		case "size":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = &f
-				js.MaxLength = &f
+				js.MinLength = new(f)
+				js.MaxLength = new(f)
 			}
 		case "mime":
 			if mimes, ok := v.([]string); ok && len(mimes) == 1 {
-				cm := mimes[0]
-				js.ContentMediaType = &cm
+				js.ContentMediaType = new(mimes[0])
 			}
 		}
 	}
@@ -1318,28 +1307,27 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 	if mimes, ok := internals.Bag["mime"].([]string); ok && len(mimes) > 1 {
 		anyOf := make([]*lib.Schema, len(mimes))
 		for i, mime := range mimes {
-			mimeCopy := mime
 			itemSchema := &lib.Schema{
 				Type:             []string{"string"},
 				Format:           new("binary"),
 				ContentEncoding:  new("binary"),
-				ContentMediaType: &mimeCopy,
+				ContentMediaType: new(mime),
 			}
 			// Apply min/max/size constraints using helper conversion
 			if v, ok := internals.Bag["size"]; ok {
 				if f, ok := toFloat(v); ok {
-					itemSchema.MinLength = &f
-					itemSchema.MaxLength = &f
+					itemSchema.MinLength = new(f)
+					itemSchema.MaxLength = new(f)
 				}
 			} else {
 				if v, ok := internals.Bag["minSize"]; ok {
 					if f, ok := toFloat(v); ok {
-						itemSchema.MinLength = &f
+						itemSchema.MinLength = new(f)
 					}
 				}
 				if v, ok := internals.Bag["maxSize"]; ok {
 					if f, ok := toFloat(v); ok {
-						itemSchema.MaxLength = &f
+						itemSchema.MaxLength = new(f)
 					}
 				}
 			}

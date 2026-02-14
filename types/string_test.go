@@ -1470,8 +1470,7 @@ func TestString_Modifiers_Overwrite(t *testing.T) {
 			if s == nil {
 				return nil
 			}
-			upper := strings.ToUpper(*s)
-			return &upper
+			return new(strings.ToUpper(*s))
 		})
 
 		result, err := schema.Parse("hello")

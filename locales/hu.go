@@ -77,7 +77,7 @@ var TypeDictionaryHu = map[string]string{
 // getSizingHu returns Hungarian sizing information for a given type
 func getSizingHu(origin string) *issues.SizingInfo {
 	if info, exists := SizableHu[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

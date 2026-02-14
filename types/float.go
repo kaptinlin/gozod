@@ -581,10 +581,9 @@ func convertDefaultValue[R any](v float64) any {
 	var zero R
 	switch any(zero).(type) {
 	case *float32:
-		val := float32(v)
-		return &val
+		return new(float32(v))
 	case *float64:
-		return &v
+		return new(v)
 	case float32:
 		return float32(v)
 	default: // float64

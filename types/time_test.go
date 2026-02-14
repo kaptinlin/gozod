@@ -1243,8 +1243,7 @@ func TestTime_Overwrite(t *testing.T) {
 			if t == nil {
 				return nil
 			}
-			utc := t.UTC()
-			return &utc
+			return new(t.UTC())
 		})
 
 		// Test with non-nil value

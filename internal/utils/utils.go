@@ -21,15 +21,13 @@ import (
 func ToErrorMap(err any) (*core.ZodErrorMap, bool) {
 	switch v := err.(type) {
 	case string:
-		m := core.ZodErrorMap(func(core.ZodRawIssue) string { return v })
-		return &m, true
+		return new(core.ZodErrorMap(func(core.ZodRawIssue) string { return v })), true
 	case core.ZodErrorMap:
-		return &v, true
+		return new(v), true
 	case *core.ZodErrorMap:
 		return v, true
 	case func(core.ZodRawIssue) string:
-		m := core.ZodErrorMap(v)
-		return &m, true
+		return new(core.ZodErrorMap(v)), true
 	default:
 		return nil, false
 	}
@@ -62,7 +60,7 @@ func NormalizeParams(params ...any) *core.SchemaParams {
 	case string:
 		return &core.SchemaParams{Error: v}
 	case core.SchemaParams:
-		return &v
+		return new(v)
 	case *core.SchemaParams:
 		if v == nil {
 			return &core.SchemaParams{}
@@ -91,7 +89,7 @@ func NormalizeCustomParams(params ...any) *core.CustomParams {
 	case string:
 		return &core.CustomParams{Error: v}
 	case core.CustomParams:
-		return &v
+		return new(v)
 	case *core.CustomParams:
 		if v == nil {
 			return &core.CustomParams{}

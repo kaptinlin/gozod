@@ -78,7 +78,7 @@ var TypeDictionaryPl = map[string]string{
 // getSizingPl returns Polish sizing information for a given type
 func getSizingPl(origin string) *issues.SizingInfo {
 	if info, exists := SizablePl[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

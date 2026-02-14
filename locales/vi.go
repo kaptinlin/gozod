@@ -77,7 +77,7 @@ var TypeDictionaryVi = map[string]string{
 // getSizingVi returns Vietnamese sizing information for a given type
 func getSizingVi(origin string) *issues.SizingInfo {
 	if info, exists := SizableVi[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }

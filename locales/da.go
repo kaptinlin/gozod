@@ -78,7 +78,7 @@ var TypeDictionaryDa = map[string]string{
 // getSizingDa returns Danish sizing information for a given type
 func getSizingDa(origin string) *issues.SizingInfo {
 	if info, exists := SizableDa[origin]; exists {
-		return &info
+		return new(info)
 	}
 	return nil
 }
