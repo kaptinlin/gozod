@@ -12,11 +12,11 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Package-level errors for array validation.
+// Sentinel errors for array validation.
 var (
-	errNilArrayPtr = errors.New("nil pointer to array")
-	errNilPtr      = errors.New("nil pointer")
-	errNotArray    = errors.New("expected array or slice")
+	ErrNilArrayPtr = errors.New("nil pointer to array")
+	ErrNilPtr      = errors.New("nil pointer")
+	ErrNotArray    = errors.New("expected array or slice")
 )
 
 // Type definitions
@@ -509,20 +509,20 @@ func (z *ZodArray[T, R]) extract(value any) ([]any, error) {
 		if v != nil {
 			return *v, nil
 		}
-		return nil, errNilArrayPtr
+		return nil, ErrNilArrayPtr
 	default:
 		rv := reflect.ValueOf(value)
 
 		// Handle pointer to slice/array.
 		if rv.Kind() == reflect.Pointer {
 			if rv.IsNil() {
-				return nil, errNilPtr
+				return nil, ErrNilPtr
 			}
 			rv = rv.Elem()
 		}
 
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return nil, fmt.Errorf("%w: got %T", errNotArray, value)
+			return nil, fmt.Errorf("%w: got %T", ErrNotArray, value)
 		}
 
 		result := make([]any, rv.Len())

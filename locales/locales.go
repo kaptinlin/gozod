@@ -67,9 +67,9 @@ var DefaultLocales = LocaleErrorMap{
 	"ur": formatUr, // Urdu
 }
 
-// GetLocaleFormatter returns a formatter function for the given locale
-// Falls back to English if the locale is not found, ensuring robust operation
-func GetLocaleFormatter(locale string) func(core.ZodRawIssue) string {
+// LocaleFormatter returns a formatter function for the given locale.
+// Falls back to English if the locale is not found, ensuring robust operation.
+func LocaleFormatter(locale string) func(core.ZodRawIssue) string {
 	if formatter, exists := DefaultLocales[locale]; exists {
 		return formatter
 	}
@@ -86,10 +86,10 @@ func GetLocaleFormatter(locale string) func(core.ZodRawIssue) string {
 	return DefaultLocales["en"]
 }
 
-// GetLocalizedError returns a localized error message for the given issue and locale
-// This is a convenience function for backward compatibility and simple usage
-func GetLocalizedError(issue core.ZodRawIssue, locale string) string {
-	formatter := GetLocaleFormatter(locale)
+// LocalizedError returns a localized error message for the given issue and locale.
+// This is a convenience function for backward compatibility and simple usage.
+func LocalizedError(issue core.ZodRawIssue, locale string) string {
+	formatter := LocaleFormatter(locale)
 	return formatter(issue)
 }
 
@@ -99,10 +99,10 @@ func RegisterLocale(locale string, formatFunc func(core.ZodRawIssue) string) {
 	DefaultLocales[locale] = formatFunc
 }
 
-// GetAvailableLocales returns a list of all registered locale identifiers
-// Useful for UI components that need to display available localization options
-// Now uses slicex for better slice handling
-func GetAvailableLocales() []string {
+// AvailableLocales returns a list of all registered locale identifiers.
+// Useful for UI components that need to display available localization options.
+// Uses slicex for better slice handling.
+func AvailableLocales() []string {
 	locales := make([]string, 0, len(DefaultLocales))
 	for locale := range DefaultLocales {
 		locales = append(locales, locale)
@@ -122,14 +122,14 @@ func GetAvailableLocales() []string {
 // SLICEX-ENHANCED UTILITY FUNCTIONS
 // =============================================================================
 
-// GetLocalizedErrors returns localized error messages for multiple issues
-// Uses slicex for efficient slice processing
-func GetLocalizedErrors(issues []core.ZodRawIssue, locale string) ([]string, error) {
+// LocalizedErrors returns localized error messages for multiple issues.
+// Uses slicex for efficient slice processing.
+func LocalizedErrors(issues []core.ZodRawIssue, locale string) ([]string, error) {
 	if slicex.IsEmpty(issues) {
 		return nil, nil
 	}
 
-	formatter := GetLocaleFormatter(locale)
+	formatter := LocaleFormatter(locale)
 	messages, err := slicex.Map(issues, func(issue any) any {
 		if rawIssue, ok := issue.(core.ZodRawIssue); ok {
 			return formatter(rawIssue)
@@ -203,10 +203,10 @@ func ValidateLocaleList(locales []string) (valid []string, invalid []string, err
 	return valid, invalid, nil
 }
 
-// JoinLocalizedMessages joins multiple localized messages with a separator
-// Utilizes slicex.Join for consistent formatting
+// JoinLocalizedMessages joins multiple localized messages with a separator.
+// Utilizes slicex.Join for consistent formatting.
 func JoinLocalizedMessages(issues []core.ZodRawIssue, locale string, separator string) (string, error) {
-	messages, err := GetLocalizedErrors(issues, locale)
+	messages, err := LocalizedErrors(issues, locale)
 	if err != nil {
 		return "", err
 	}

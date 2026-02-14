@@ -16,12 +16,11 @@ import (
 
 // Sentinel errors for object schema operations.
 var (
-	ErrNilObjectPointer                = errors.New("nil pointer cannot convert to object")
-	ErrPickRefinements                 = errors.New("pick cannot be used on schemas with refinements")
-	ErrOmitRefinements                 = errors.New("omit cannot be used on schemas with refinements")
-	ErrExtendRefinements               = errors.New("extend cannot overwrite keys on schemas with refinements, use SafeExtend")
-	ErrUnrecognizedKey                 = errors.New("unrecognized key")
-	ErrNilPointerCannotConvertToObject = ErrNilObjectPointer // Deprecated: Use ErrNilObjectPointer instead.
+	ErrNilObjectPointer  = errors.New("nil pointer cannot convert to object")
+	ErrPickRefinements   = errors.New("pick cannot be used on schemas with refinements")
+	ErrOmitRefinements   = errors.New("omit cannot be used on schemas with refinements")
+	ErrExtendRefinements = errors.New("extend cannot overwrite keys on schemas with refinements, use SafeExtend")
+	ErrUnrecognizedKey   = errors.New("unrecognized key")
 )
 
 // ObjectMode defines how to handle unknown keys in object validation.

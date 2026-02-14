@@ -32,9 +32,9 @@ func TestLocaleFormatterFunction(t *testing.T) {
 // LOCALE REGISTRY TESTS
 // =============================================================================
 
-func TestGetLocaleFormatter(t *testing.T) {
+func TestLocaleFormatter(t *testing.T) {
 	t.Run("returns existing formatter", func(t *testing.T) {
-		formatter := GetLocaleFormatter("en")
+		formatter := LocaleFormatter("en")
 
 		if formatter == nil {
 			t.Error("Expected formatter, got nil")
@@ -54,14 +54,14 @@ func TestGetLocaleFormatter(t *testing.T) {
 	})
 
 	t.Run("returns fallback for unknown locale", func(t *testing.T) {
-		formatter := GetLocaleFormatter("unknown-locale")
+		formatter := LocaleFormatter("unknown-locale")
 
 		if formatter == nil {
 			t.Error("Expected fallback formatter, got nil")
 		}
 
 		// Should fallback to English
-		enFormatter := GetLocaleFormatter("en")
+		enFormatter := LocaleFormatter("en")
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
 		if formatter(issue) != enFormatter(issue) {
@@ -72,8 +72,8 @@ func TestGetLocaleFormatter(t *testing.T) {
 	t.Run("handles language-only codes", func(t *testing.T) {
 		// Test that an unknown regional variant falls back to the base language
 		// e.g., "de-AT" (Austrian German) should fall back to "de" (German)
-		formatter := GetLocaleFormatter("de-AT")
-		deFormatter := GetLocaleFormatter("de")
+		formatter := LocaleFormatter("de-AT")
+		deFormatter := LocaleFormatter("de")
 
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
@@ -84,8 +84,8 @@ func TestGetLocaleFormatter(t *testing.T) {
 
 	t.Run("zh-TW has its own formatter", func(t *testing.T) {
 		// Test that zh-TW now has its own formatter (Traditional Chinese)
-		zhTwFormatter := GetLocaleFormatter("zh-TW")
-		zhCnFormatter := GetLocaleFormatter("zh-CN")
+		zhTwFormatter := LocaleFormatter("zh-TW")
+		zhCnFormatter := LocaleFormatter("zh-CN")
 
 		issue := core.ZodRawIssue{
 			Code:       core.InvalidType,
@@ -103,7 +103,7 @@ func TestGetLocaleFormatter(t *testing.T) {
 	})
 }
 
-func TestGetLocalizedError(t *testing.T) {
+func TestLocalizedError(t *testing.T) {
 	t.Run("returns localized error message", func(t *testing.T) {
 		issue := core.ZodRawIssue{
 			Code:       core.InvalidType,
@@ -111,8 +111,8 @@ func TestGetLocalizedError(t *testing.T) {
 			Input:      123,
 		}
 
-		enMessage := GetLocalizedError(issue, "en")
-		zhMessage := GetLocalizedError(issue, "zh-CN")
+		enMessage := LocalizedError(issue, "en")
+		zhMessage := LocalizedError(issue, "zh-CN")
 
 		if enMessage == "" {
 			t.Error("Expected non-empty English message")
@@ -137,7 +137,7 @@ func TestRegisterLocale(t *testing.T) {
 
 		RegisterLocale("custom", customFormat)
 
-		formatter := GetLocaleFormatter("custom")
+		formatter := LocaleFormatter("custom")
 		issue := core.ZodRawIssue{Code: core.InvalidType}
 
 		result := formatter(issue)
@@ -150,9 +150,9 @@ func TestRegisterLocale(t *testing.T) {
 	})
 }
 
-func TestGetAvailableLocales(t *testing.T) {
+func TestAvailableLocales(t *testing.T) {
 	t.Run("returns list of available locales", func(t *testing.T) {
-		locales := GetAvailableLocales()
+		locales := AvailableLocales()
 
 		if len(locales) == 0 {
 			t.Error("Expected at least one locale")
@@ -171,14 +171,14 @@ func TestGetAvailableLocales(t *testing.T) {
 // UTILITY FUNCTION TESTS
 // =============================================================================
 
-func TestGetLocalizedErrors(t *testing.T) {
+func TestLocalizedErrors(t *testing.T) {
 	t.Run("returns localized errors for multiple issues", func(t *testing.T) {
 		issues := []core.ZodRawIssue{
 			{Code: core.InvalidType, Properties: map[string]any{"expected": "string"}},
 			{Code: core.TooSmall, Properties: map[string]any{"minimum": 5}},
 		}
 
-		messages, err := GetLocalizedErrors(issues, "en")
+		messages, err := LocalizedErrors(issues, "en")
 
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
@@ -196,7 +196,7 @@ func TestGetLocalizedErrors(t *testing.T) {
 	})
 
 	t.Run("handles empty issues slice", func(t *testing.T) {
-		messages, err := GetLocalizedErrors([]core.ZodRawIssue{}, "en")
+		messages, err := LocalizedErrors([]core.ZodRawIssue{}, "en")
 
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
