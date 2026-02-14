@@ -381,8 +381,7 @@ func convertUnionToConstraint[T any, R any](value any) R {
 		if reflect.TypeOf(value).Kind() == reflect.Pointer {
 			return any(value).(R) //nolint:unconvert // generic constraint conversion
 		}
-		v := value
-		return any(&v).(R)
+		return any(new(value)).(R)
 	}
 
 	// R is non-pointer; dereference if value is a pointer.
@@ -417,8 +416,7 @@ func convertToUnionConstraint[T any, R any](value any) (R, bool) {
 	// Handle pointer conversion: wrap value as *any when R is *any.
 	if _, ok := any(zero).(*any); ok {
 		if value != nil {
-			v := value
-			return any(&v).(R), true
+			return any(new(value)).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}

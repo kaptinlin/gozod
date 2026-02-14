@@ -53,8 +53,7 @@ func convertAnyResult[T any, R any](result any, _ *core.ParseContext, _ core.Zod
 
 	// For R=*any, wrap the value in a pointer.
 	if _, ok := any(zero).(*any); ok {
-		v := result
-		return any(&v).(R), nil
+		return any(new(result)).(R), nil
 	}
 
 	return zero, nil
@@ -235,8 +234,7 @@ func (z *ZodAny[T, R]) Refine(fn func(R) bool, params ...any) *ZodAny[T, R] {
 			if v == nil {
 				return fn(any((*any)(nil)).(R))
 			}
-			val := v
-			return fn(any(&val).(R))
+			return fn(any(new(v)).(R))
 		}
 
 		return false

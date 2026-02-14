@@ -51,8 +51,7 @@ func convertUnknownResult[T any, R any](result any, _ *core.ParseContext, _ core
 	}
 	// For R=*any, wrap value in pointer.
 	if _, ok := any(zero).(*any); ok {
-		v := result
-		return any(&v).(R), nil
+		return any(new(result)).(R), nil
 	}
 	return zero, nil
 }
@@ -217,8 +216,7 @@ func (z *ZodUnknown[T, R]) Refine(fn func(R) bool, params ...any) *ZodUnknown[T,
 			if v == nil {
 				return fn(any((*any)(nil)).(R))
 			}
-			val := v
-			return fn(any(&val).(R))
+			return fn(any(new(v)).(R))
 		}
 		return false
 	}

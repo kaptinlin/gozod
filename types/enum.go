@@ -165,7 +165,7 @@ func (z *ZodEnum[T, R]) Prefault(v T) *ZodEnum[T, R] {
 	var zero R
 	switch any(zero).(type) {
 	case *T:
-		in.SetPrefaultValue(&v)
+		in.SetPrefaultValue(new(v))
 	default:
 		in.SetPrefaultValue(v)
 	}
@@ -181,7 +181,7 @@ func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
 		var zero R
 		switch any(zero).(type) {
 		case *T:
-			return &v
+			return new(v)
 		default:
 			return v
 		}
@@ -292,7 +292,7 @@ func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 				return fn(any((*T)(nil)).(R))
 			}
 			if val, ok := v.(T); ok {
-				return fn(any(&val).(R))
+				return fn(any(new(val)).(R))
 			}
 			return false
 		default:
@@ -339,8 +339,7 @@ func (z *ZodEnum[T, R]) Check(fn func(value R, payload *core.ParsePayload), para
 		var zero R
 		if _, ok := any(zero).(*T); ok {
 			if v, ok := payload.Value().(T); ok {
-				cp := v
-				fn(any(&cp).(R), payload)
+				fn(any(new(v)).(R), payload)
 			}
 		}
 	}
@@ -471,6 +470,7 @@ func (z *ZodEnum[T, R]) CloneFrom(source any) {
 }
 
 // extractEnumValue extracts the base value T from constraint type R.
+// This is an unexported helper function for internal use.
 func extractEnumValue[T comparable, R any](value R) T {
 	if ptr, ok := any(value).(*T); ok {
 		if ptr != nil {

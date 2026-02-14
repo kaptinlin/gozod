@@ -486,8 +486,7 @@ func convertToStructConstraintType[T any, R any](value T) R {
 	switch any(zero).(type) {
 	case *T:
 		// Need to return *T from T
-		valueCopy := value
-		return any(&valueCopy).(R)
+		return any(new(value)).(R)
 	default:
 		// Return T directly
 		return any(value).(R)
@@ -535,8 +534,7 @@ func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	if _, ok := any(zero).(*T); ok {
 		// Need to convert T to *T
 		if structVal, ok := value.(T); ok {
-			structCopy := structVal
-			return any(&structCopy).(R), true
+			return any(new(structVal)).(R), true
 		}
 	}
 
@@ -581,7 +579,7 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 					}
 				} else {
 					// Direct pointer creation
-					if result, ok := any(&v).(R); ok {
+					if result, ok := any(new(v)).(R); ok {
 						return result, true
 					}
 				}

@@ -310,7 +310,7 @@ func convertToNeverConstraintValue[T any, R any](value any) (R, bool) {
 		if value == nil {
 			return any((*any)(nil)).(R), true
 		}
-		return any(&value).(R), true
+		return any(new(value)).(R), true
 	}
 
 	return zero, false

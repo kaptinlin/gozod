@@ -505,8 +505,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			if !ok {
 				return false
 			}
-			cp := c
-			return fn(any(&cp).(T))
+			return fn(any(new(c)).(T))
 		case complex128:
 			if v == nil {
 				return false
@@ -524,8 +523,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			if !ok {
 				return false
 			}
-			cp := c
-			return fn(any(&cp).(T))
+			return fn(any(new(c)).(T))
 		default:
 			return false
 		}
@@ -671,8 +669,7 @@ func toComplexType[T ComplexConstraint](v any) (T, bool) {
 	case complex64:
 		return any(complex64(*c)).(T), true
 	case *complex64:
-		c64 := complex64(*c)
-		return any(&c64).(T), true
+		return any(new(complex64(*c))).(T), true
 	case complex128:
 		return any(*c).(T), true
 	case *complex128:

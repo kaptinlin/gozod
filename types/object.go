@@ -620,7 +620,7 @@ func convertToObjectType[T any, R any](v any) (R, bool) {
 
 	rType := reflect.TypeFor[R]()
 	if rType.Kind() == reflect.Pointer {
-		if converted, ok := any(&objectValue).(R); ok {
+		if converted, ok := any(new(objectValue)).(R); ok {
 			return converted, true
 		}
 	} else {

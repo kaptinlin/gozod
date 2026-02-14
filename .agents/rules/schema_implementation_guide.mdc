@@ -572,10 +572,52 @@ result, _ := schema.Parse(map[string]any{
 
 ---
 
-## 16  Implementation → PR Checklist
+## 16  Go 1.26 Patterns
 
-- [ ] File respects 5-section order & headings.  
-- [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).  
+### 16.1  `new(expr)` — Pointer from Expression
+
+Use `new(expr)` to create pointers from expressions directly. Never use `tmp := expr; &tmp`.
+
+```go
+// ✅ Go 1.26: new(expr)
+return any(new(val)).(T), true
+fn(any(new(b)).(T), payload)
+opts = new(v)
+
+// ❌ Old pattern: temporary variable + address-of
+cp := val
+return any(&cp).(T), true
+```
+
+### 16.2  Self-Referential Constraints
+
+All schema types must satisfy `core.Describable` and `core.Refineable` constraints.
+Add compile-time assertions in `types/constraints_verify.go` for any new schema type:
+
+```go
+// types/constraints_verify.go
+var _ core.Describable[*ZodNewType[T, R]] = (*ZodNewType[T, R])(nil)
+var _ core.Refineable[*ZodNewType[T, R]]  = (*ZodNewType[T, R])(nil)
+```
+
+### 16.3  Generic Helper Functions
+
+Use constraint-based generic helpers from `core/constraints.go`:
+
+```go
+// Apply description to any schema type
+described := core.DescribeSchema(mySchema, "field description")
+
+// Apply multiple refinements generically
+validated := core.ApplyRefinements(mySchema, rules)
+```
+
+---
+
+## 17  Implementation → PR Checklist
+
+- [ ] File respects 5-section order & headings.
+- [ ] All helper packages imported (`internal/engine`, `internal/checks`, `pkg/coerce`).
 - [ ] Both `Parse(any)` and `StrictParse(T)` implemented using engine helpers.
 - [ ] `Parse` method handles `any` input with runtime type checking.
 - [ ] `StrictParse` method accepts exact constraint type `T` with compile-time safety.
@@ -583,14 +625,16 @@ result, _ := schema.Parse(map[string]any{
 - [ ] Both `MustParse` and `MustStrictParse` implemented.
 - [ ] `ParseAny` and `MustParseAny` methods implemented for untyped results.
 - [ ] `GetInternals`, `IsOptional`, `IsNilable` methods implemented.
-- [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.  
+- [ ] Modifiers follow Copy-on-Write pattern + pointer conversion rules.
 - [ ] Default/Prefault accept value types, not pointers (compile-time safety).
 - [ ] Enhanced modifiers implemented: `DefaultFunc`, `PrefaultFunc`, `Meta`, `Nullish`.
 - [ ] Custom validation: `Refine`, `Check` and `CheckParam` methods implemented.
 - [ ] Coerce method implemented for primitive types.
 - [ ] Type constraints defined correctly (`T | *T` pattern).
-- [ ] Comprehensive unit tests added following test guide structure.  
-- [ ] Public constructors exported in `gozod.go`.  
+- [ ] Uses `new(expr)` for pointer creation (not `tmp := expr; &tmp`).
+- [ ] Compile-time constraint assertions added to `types/constraints_verify.go`.
+- [ ] Comprehensive unit tests added following test guide structure.
+- [ ] Public constructors exported in `gozod.go`.
 - [ ] JSON Schema support added if applicable.
 - [ ] Documentation updated for public API changes.
 

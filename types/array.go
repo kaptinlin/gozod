@@ -350,8 +350,7 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 				return fn(any((*T)(nil)).(R))
 			}
 			if val, ok := v.(T); ok {
-				cp := val
-				return fn(any(&cp).(R))
+				return fn(any(new(val)).(R))
 			}
 			return false
 		default:
@@ -433,7 +432,7 @@ func convertToConstraint[T any, R any](v []any) R {
 	var zero R
 	// Pointer types (e.g., *[]any): wrap in pointer.
 	if reflect.TypeFor[R]().Kind() == reflect.Pointer {
-		if r, ok := any(&v).(R); ok {
+		if r, ok := any(new(v)).(R); ok {
 			return r
 		}
 	}
@@ -482,7 +481,7 @@ func convertToArrayType[T any, R any](value any) (R, bool) {
 			return value.(R), true
 		}
 	case reflect.Pointer:
-		if r, ok := any(&arr).(R); ok {
+		if r, ok := any(new(arr)).(R); ok {
 			return r, true
 		}
 	}
@@ -534,6 +533,7 @@ func (z *ZodArray[T, R]) extract(value any) ([]any, error) {
 }
 
 // validate validates array content and collects all issues.
+// This is an unexported helper method for internal validation logic.
 func (z *ZodArray[T, R]) validate(value []any, chks []core.ZodCheck, ctx *core.ParseContext) ([]any, error) {
 	if z.internals == nil {
 		return nil, issues.CreateInvalidTypeError(core.ZodTypeArray, value, ctx)

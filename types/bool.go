@@ -1,3 +1,5 @@
+// Package types provides public schema implementations for all validation types
+// supported by gozod, with one type per file following a consistent structure.
 package types
 
 import (
@@ -174,7 +176,7 @@ func (z *ZodBool[T]) Prefault(v bool) *ZodBool[T] {
 	var zero T
 	switch any(zero).(type) {
 	case *bool:
-		in.SetPrefaultValue(&v)
+		in.SetPrefaultValue(new(v))
 	default:
 		in.SetPrefaultValue(v)
 	}
@@ -189,7 +191,7 @@ func (z *ZodBool[T]) PrefaultFunc(fn func() bool) *ZodBool[T] {
 		var zero T
 		switch any(zero).(type) {
 		case *bool:
-			return &v
+			return new(v)
 		default:
 			return v
 		}
@@ -276,8 +278,7 @@ func (z *ZodBool[T]) Refine(fn func(T) bool, params ...any) *ZodBool[T] {
 				return fn(any((*bool)(nil)).(T))
 			}
 			if b, ok := v.(bool); ok {
-				cp := b
-				return fn(any(&cp).(T))
+				return fn(any(new(b)).(T))
 			}
 			return false
 		default:
@@ -317,8 +318,7 @@ func (z *ZodBool[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 		var zero T
 		if _, ok := any(zero).(*bool); ok {
 			if b, ok := payload.Value().(bool); ok {
-				bCopy := b
-				fn(any(&bCopy).(T), payload)
+				fn(any(new(b)).(T), payload)
 			}
 		}
 	}
@@ -424,7 +424,7 @@ func convertToBoolType[T BoolConstraint](v any) (T, bool) {
 	case bool:
 		return any(boolValue).(T), true
 	case *bool:
-		return any(&boolValue).(T), true
+		return any(new(boolValue)).(T), true
 	default:
 		return zero, false
 	}
