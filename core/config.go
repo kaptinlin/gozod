@@ -1,3 +1,5 @@
+// Package core provides the foundation contracts for the gozod validation library,
+// including interfaces, types, and constants used throughout the system.
 package core
 
 import "sync/atomic"
@@ -9,6 +11,7 @@ type ZodConfig struct {
 }
 
 // clone creates a copy of the ZodConfig.
+// This is an unexported helper method for internal use.
 func (c *ZodConfig) clone() *ZodConfig {
 	if c == nil {
 		return &ZodConfig{}

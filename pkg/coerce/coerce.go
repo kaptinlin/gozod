@@ -14,41 +14,48 @@ import (
 )
 
 var (
-	ErrUnsupported = errors.New("conversion not supported")
-	ErrNilPointer  = errors.New("nil pointer")
-	ErrInvalidFmt  = errors.New("invalid format")
-	ErrEmptyInput  = errors.New("empty input")
-	ErrOverflow    = errors.New("value overflow")
-	ErrNegative    = errors.New("negative to unsigned")
-	ErrNotWhole    = errors.New("not whole number")
+	ErrUnsupported = errors.New("gozod: conversion not supported")
+	ErrNilPointer  = errors.New("gozod: nil pointer")
+	ErrInvalidFmt  = errors.New("gozod: invalid format")
+	ErrEmptyInput  = errors.New("gozod: empty input")
+	ErrOverflow    = errors.New("gozod: value overflow")
+	ErrNegative    = errors.New("gozod: negative to unsigned")
+	ErrNotWhole    = errors.New("gozod: not whole number")
 )
 
+// NewUnsupportedError creates an error for unsupported type conversions.
 func NewUnsupportedError(from, to string) error {
-	return fmt.Errorf("cannot convert %s to %s: %w", from, to, ErrUnsupported)
+	return fmt.Errorf("gozod: cannot convert %s to %s: %w", from, to, ErrUnsupported)
 }
 
+// NewFormatError creates an error for invalid format during parsing.
 func NewFormatError(value, target string) error {
-	return fmt.Errorf("cannot parse %q as %s: %w", value, target, ErrInvalidFmt)
+	return fmt.Errorf("gozod: cannot parse %q as %s: %w", value, target, ErrInvalidFmt)
 }
 
+// NewOverflowError creates an error for value overflow during conversion.
 func NewOverflowError(value any, target string) error {
-	return fmt.Errorf("value %v overflows %s: %w", value, target, ErrOverflow)
+	return fmt.Errorf("gozod: value %v overflows %s: %w", value, target, ErrOverflow)
 }
 
+// NewEmptyInputError creates an error for empty input during conversion.
 func NewEmptyInputError(target string) error {
-	return fmt.Errorf("empty input cannot convert to %s: %w", target, ErrEmptyInput)
+	return fmt.Errorf("gozod: empty input cannot convert to %s: %w", target, ErrEmptyInput)
 }
 
+// NewNegativeError creates an error for negative to unsigned conversion.
 func NewNegativeError(value any, target string) error {
-	return fmt.Errorf("negative value %v cannot convert to %s: %w", value, target, ErrNegative)
+	return fmt.Errorf("gozod: negative value %v cannot convert to %s: %w", value, target, ErrNegative)
 }
 
+// NewNotWholeError creates an error for non-whole number conversion.
 func NewNotWholeError(value any) error {
-	return fmt.Errorf("value %v is not a whole number: %w", value, ErrNotWhole)
+	return fmt.Errorf("gozod: value %v is not a whole number: %w", value, ErrNotWhole)
 }
 
+// NewNilPointerError creates an error for nil pointer conversion.
 func NewNilPointerError(target string) error {
-	return fmt.Errorf("cannot convert nil pointer to %s: %w", target, ErrNilPointer)
+	return fmt.Errorf("gozod: cannot convert nil pointer to %s: %w", target, ErrNilPointer)
 }
 
 // ToBool converts any value to boolean.
@@ -74,6 +81,8 @@ func ToBool(v any) (bool, error) {
 	}
 }
 
+// stringToBool converts a string to a boolean value.
+// This is an unexported helper function for internal use.
 func stringToBool(s string) (bool, error) {
 	s = strings.TrimSpace(s)
 	switch strings.ToLower(s) {

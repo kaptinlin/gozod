@@ -1,3 +1,5 @@
+// Package gozod provides a TypeScript Zod v4-inspired validation library for Go,
+// offering strongly-typed, zero-dependency data validation with intelligent type inference.
 package gozod
 
 import (

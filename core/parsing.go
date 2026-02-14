@@ -28,6 +28,7 @@ type ParsePayload struct {
 }
 
 // getOrCreateContext ensures a valid ParseContext exists.
+// This is an unexported helper function for internal use.
 func getOrCreateContext(ctx ...*ParseContext) *ParseContext {
 	if len(ctx) > 0 && ctx[0] != nil {
 		return ctx[0]

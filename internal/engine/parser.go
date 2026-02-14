@@ -326,26 +326,26 @@ func tryCommonPointerConversion[R any](value any) (R, bool) {
 	var zero R
 	switch any(zero).(type) {
 	case *string:
-		if v, ok := value.(string); ok {
-			if r, ok := any(new(v)).(R); ok {
+		if _, ok := value.(string); ok {
+			if r, ok := any(new(value.(string))).(R); ok {
 				return r, true
 			}
 		}
 	case *int64:
-		if v, ok := value.(int64); ok {
-			if r, ok := any(new(v)).(R); ok {
+		if _, ok := value.(int64); ok {
+			if r, ok := any(new(value.(int64))).(R); ok {
 				return r, true
 			}
 		}
 	case *float64:
-		if v, ok := value.(float64); ok {
-			if r, ok := any(new(v)).(R); ok {
+		if _, ok := value.(float64); ok {
+			if r, ok := any(new(value.(float64))).(R); ok {
 				return r, true
 			}
 		}
 	case *bool:
-		if v, ok := value.(bool); ok {
-			if r, ok := any(new(v)).(R); ok {
+		if _, ok := value.(bool); ok {
+			if r, ok := any(new(value.(bool))).(R); ok {
 				return r, true
 			}
 		}
@@ -475,15 +475,15 @@ func convertToDoublePtr[T any, R any](
 	if pp, ok := result.(**T); ok {
 		return any(pp).(R), nil
 	}
-	if p, ok := result.(*T); ok {
-		return any(new(p)).(R), nil
+	if _, ok := result.(*T); ok {
+		return any(new(result.(*T))).(R), nil
 	}
-	if v, ok := result.(T); ok {
-		return any(new(new(v))).(R), nil
+	if _, ok := result.(T); ok {
+		return any(new(new(result.(T)))).(R), nil
 	}
 	if c, err := convertToType[T](result, expectedType, ctx); err == nil {
-		if v, ok := c.(T); ok {
-			return any(new(new(v))).(R), nil
+		if _, ok := c.(T); ok {
+			return any(new(new(c.(T)))).(R), nil
 		}
 	}
 	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
@@ -499,12 +499,12 @@ func convertToPtr[T any, R any](
 	if p, ok := result.(*T); ok {
 		return any(p).(R), nil
 	}
-	if v, ok := result.(T); ok {
-		return any(new(v)).(R), nil
+	if _, ok := result.(T); ok {
+		return any(new(result.(T))).(R), nil
 	}
 	if c, err := convertToType[T](result, expectedType, ctx); err == nil {
-		if v, ok := c.(T); ok {
-			return any(new(v)).(R), nil
+		if _, ok := c.(T); ok {
+			return any(new(c.(T))).(R), nil
 		}
 	}
 	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)

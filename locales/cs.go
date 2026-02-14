@@ -76,8 +76,8 @@ var TypeDictionaryCs = map[string]string{
 
 // getSizingCs returns Czech sizing information for a given type
 func getSizingCs(origin string) *issues.SizingInfo {
-	if info, exists := SizableCs[origin]; exists {
-		return new(info)
+	if _, exists := SizableCs[origin]; exists {
+		return new(SizableCs[origin])
 	}
 	return nil
 }

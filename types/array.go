@@ -350,7 +350,7 @@ func (z *ZodArray[T, R]) Refine(fn func(R) bool, params ...any) *ZodArray[T, R] 
 				return fn(any((*T)(nil)).(R))
 			}
 			if val, ok := v.(T); ok {
-				return fn(any(new(val)).(R))
+				return fn(any(&val).(R))
 			}
 			return false
 		default:
@@ -481,7 +481,7 @@ func convertToArrayType[T any, R any](value any) (R, bool) {
 			return value.(R), true
 		}
 	case reflect.Pointer:
-		if r, ok := any(new(arr)).(R); ok {
+		if r, ok := any(&arr).(R); ok {
 			return r, true
 		}
 	}

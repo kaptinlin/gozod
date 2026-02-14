@@ -107,8 +107,8 @@ var TypeDictionaryRu = map[string]string{
 
 // getSizingRu returns Russian sizing information for a given type
 func getSizingRu(origin string) *RussianSizable {
-	if info, exists := SizableRu[origin]; exists {
-		return new(info)
+	if _, exists := SizableRu[origin]; exists {
+		return new(SizableRu[origin])
 	}
 	return nil
 }

@@ -471,7 +471,7 @@ func convertToTupleType[T any, R any](input T) (R, bool) {
 	// Handle pointer conversion.
 	if _, ok := any(zero).(*[]any); ok {
 		if arr, ok := any(input).([]any); ok {
-			return any(new(arr)).(R), true
+			return any(&arr).(R), true
 		}
 	}
 

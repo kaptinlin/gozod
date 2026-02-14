@@ -76,8 +76,8 @@ var TypeDictionaryJa = map[string]string{
 
 // getSizingJa returns Japanese sizing information for a given type
 func getSizingJa(origin string) *issues.SizingInfo {
-	if info, exists := SizableJa[origin]; exists {
-		return new(info)
+	if _, exists := SizableJa[origin]; exists {
+		return new(SizableJa[origin])
 	}
 	return nil
 }

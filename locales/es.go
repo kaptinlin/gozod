@@ -90,8 +90,8 @@ var TypeDictionaryEs = map[string]string{
 
 // getSizingEs returns Spanish sizing information for a given type
 func getSizingEs(origin string) *issues.SizingInfo {
-	if info, exists := SizableEs[origin]; exists {
-		return new(info)
+	if _, exists := SizableEs[origin]; exists {
+		return new(SizableEs[origin])
 	}
 	return nil
 }

@@ -534,7 +534,7 @@ func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	if _, ok := any(zero).(*T); ok {
 		// Need to convert T to *T
 		if structVal, ok := value.(T); ok {
-			return any(new(structVal)).(R), true
+			return any(&structVal).(R), true
 		}
 	}
 

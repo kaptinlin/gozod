@@ -121,10 +121,8 @@ func BenchmarkDirectCheckCreation(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		check := &core.ZodCheckInternals{
-			Def: def,
-			Check: func(payload *core.ParsePayload) {
-				// Simple validation
-			},
+			Def:   def,
+			Check: func(payload *core.ParsePayload) {},
 		}
 		_ = check
 	}

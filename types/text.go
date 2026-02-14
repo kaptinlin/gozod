@@ -157,7 +157,7 @@ func splitJWTOpts(params []any) (*JWTOptions, []any) {
 
 	for _, p := range params {
 		if o, ok := p.(JWTOptions); ok {
-			opts = new(o)
+			opts = &o
 		} else {
 			rest = append(rest, p)
 		}

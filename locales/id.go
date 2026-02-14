@@ -76,8 +76,8 @@ var TypeDictionaryId = map[string]string{
 
 // getSizingId returns Indonesian sizing information for a given type
 func getSizingId(origin string) *issues.SizingInfo {
-	if info, exists := SizableId[origin]; exists {
-		return new(info)
+	if _, exists := SizableId[origin]; exists {
+		return new(SizableId[origin])
 	}
 	return nil
 }

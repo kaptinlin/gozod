@@ -9,6 +9,7 @@ import (
 )
 
 // newIDSchema adds a check to a base string schema and returns a new instance.
+// This is an unexported helper function for creating ID validation schemas.
 func newIDSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
 	in := base.Internals().Clone()
 	in.AddCheck(check)
@@ -18,6 +19,8 @@ func newIDSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *Z
 // ZodGUID validates strings in GUID format (8-4-4-4-12 hex pattern).
 type ZodGUID[T StringConstraint] struct{ *ZodString[T] }
 
+// newGUID creates a new ZodGUID wrapper around a ZodString.
+// This is an unexported helper function for internal use.
 func newGUID[T StringConstraint](s *ZodString[T]) *ZodGUID[T] {
 	return &ZodGUID[T]{s}
 }

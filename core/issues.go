@@ -118,6 +118,7 @@ func (z ZodIssue) DivisorValue() (any, bool) {
 }
 
 // typedProperty safely retrieves a typed value from the properties map.
+// This is an unexported helper function for internal use.
 func typedProperty[T any](properties map[string]any, key string) (val T) {
 	if properties == nil {
 		return val
@@ -128,6 +129,7 @@ func typedProperty[T any](properties map[string]any, key string) (val T) {
 
 // zodTypeCodeProperty safely gets a ZodTypeCode from the properties map.
 // It accepts both ZodTypeCode and plain string values.
+// This is an unexported helper function for internal use.
 func zodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
 	if properties == nil {
 		return ""
@@ -143,6 +145,7 @@ func zodTypeCodeProperty(properties map[string]any, key string) ZodTypeCode {
 }
 
 // property safely gets a property from the properties map.
+// This is an unexported helper method for internal use.
 func (r ZodRawIssue) property(key string) any {
 	if r.Properties == nil {
 		return nil

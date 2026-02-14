@@ -219,7 +219,7 @@ func (z *ZodStringBool[T]) Refine(fn func(T) bool, params ...any) *ZodStringBool
 				return fn(any((*bool)(nil)).(T))
 			}
 			if b, ok := v.(bool); ok {
-				return fn(any(new(b)).(T))
+				return fn(any(&b).(T))
 			}
 			return false
 		default:
@@ -288,7 +288,7 @@ func (z *ZodStringBool[T]) Check(fn func(value T, payload *core.ParsePayload), p
 		var zero T
 		if _, ok := any(zero).(*bool); ok {
 			if b, ok := payload.Value().(bool); ok {
-				fn(any(new(b)).(T), payload)
+				fn(any(&b).(T), payload)
 			}
 		}
 	}

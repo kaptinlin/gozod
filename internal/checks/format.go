@@ -1,3 +1,5 @@
+// Package checks provides validation check factories and utilities for creating
+// reusable validation rules that can be attached to schemas.
 package checks
 
 import (
@@ -13,6 +15,7 @@ import (
 // annotations. Most format checks share the same structure: validate with a
 // function, report an invalid_format issue on failure, and attach format +
 // pattern metadata on schema attachment.
+// This is an unexported helper function for internal use.
 func newFormatCheck(
 	checkID string,
 	validateFn func(any) bool,

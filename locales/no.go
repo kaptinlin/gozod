@@ -77,8 +77,8 @@ var TypeDictionaryNo = map[string]string{
 
 // getSizingNo returns Norwegian sizing information for a given type
 func getSizingNo(origin string) *issues.SizingInfo {
-	if info, exists := SizableNo[origin]; exists {
-		return new(info)
+	if _, exists := SizableNo[origin]; exists {
+		return new(SizableNo[origin])
 	}
 	return nil
 }

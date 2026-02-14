@@ -76,8 +76,8 @@ var TypeDictionaryKo = map[string]string{
 
 // getSizingKo returns Korean sizing information for a given type
 func getSizingKo(origin string) *issues.SizingInfo {
-	if info, exists := SizableKo[origin]; exists {
-		return new(info)
+	if _, exists := SizableKo[origin]; exists {
+		return new(SizableKo[origin])
 	}
 	return nil
 }

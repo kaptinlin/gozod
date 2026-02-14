@@ -267,7 +267,7 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 				return fn(any((*time.Time)(nil)).(T))
 			}
 			if timeVal, ok := v.(time.Time); ok {
-				return fn(any(new(timeVal)).(T))
+				return fn(any(&timeVal).(T))
 			}
 			return false
 		default:
@@ -307,7 +307,7 @@ func (z *ZodTime[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 		var zero T
 		if _, ok := any(zero).(*time.Time); ok {
 			if t, ok := payload.Value().(time.Time); ok {
-				fn(any(new(t)).(T), payload)
+				fn(any(&t).(T), payload)
 			}
 		}
 	}
