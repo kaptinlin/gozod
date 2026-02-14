@@ -572,7 +572,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 	schema := Int()
 
 	// Concurrent writers
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(val int) {
 			defer wg.Done()
 			reg.Add(schema, val)
@@ -580,7 +580,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent readers
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			_, _ = reg.Get(schema)

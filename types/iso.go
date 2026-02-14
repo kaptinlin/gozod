@@ -8,13 +8,13 @@ import (
 
 // Precision constants control fractional-second digits in ISO 8601 strings.
 var (
-	PrecisionMinute      = intPtr(-1) // no seconds component
-	PrecisionSecond      = intPtr(0)  // seconds, no fraction
-	PrecisionDecisecond  = intPtr(1)  // 1 fractional digit
-	PrecisionCentisecond = intPtr(2)  // 2 fractional digits
-	PrecisionMillisecond = intPtr(3)  // 3 fractional digits
-	PrecisionMicrosecond = intPtr(6)  // 6 fractional digits
-	PrecisionNanosecond  = intPtr(9)  // 9 fractional digits
+	PrecisionMinute      = new(-1) // no seconds component
+	PrecisionSecond      = new(0)  // seconds, no fraction
+	PrecisionDecisecond  = new(1)  // 1 fractional digit
+	PrecisionCentisecond = new(2)  // 2 fractional digits
+	PrecisionMillisecond = new(3)  // 3 fractional digits
+	PrecisionMicrosecond = new(6)  // 6 fractional digits
+	PrecisionNanosecond  = new(9)  // 9 fractional digits
 )
 
 // IsoConstraint restricts generic type parameters to string or *string.
@@ -35,11 +35,6 @@ type IsoDatetimeOptions struct {
 // IsoTimeOptions configures ISO 8601 time validation.
 type IsoTimeOptions struct {
 	Precision *int // fractional-second digits; nil = any, -1 = minute
-}
-
-// intPtr returns a pointer to the given integer value.
-func intPtr(v int) *int {
-	return &v
 }
 
 // newIso creates a new ZodIso instance wrapping the given ZodString.

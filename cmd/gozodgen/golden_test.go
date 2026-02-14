@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -216,12 +217,7 @@ func TestCreateGoldenFiles(t *testing.T) {
 
 // hasFlag checks if a specific flag is present in os.Args
 func hasFlag(flag string) bool {
-	for _, arg := range os.Args {
-		if arg == flag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(os.Args, flag)
 }
 
 // TestRegenerateGoldenFiles can be used to update all golden files

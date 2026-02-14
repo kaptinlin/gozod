@@ -22,7 +22,7 @@ func isNilInput(input any) bool {
 	// Only these kinds can be nil.
 	//nolint:exhaustive
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
+	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
 		return v.IsNil()
 	default:
 		return false

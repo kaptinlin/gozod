@@ -77,7 +77,7 @@ func processModifiersCore[T any](
 	}
 
 	// NonOptional — higher priority than Optional/Nilable.
-	isPtr := reflect.TypeFor[T]().Kind() == reflect.Ptr
+	isPtr := reflect.TypeFor[T]().Kind() == reflect.Pointer
 
 	if internals.NonOptional && !isPtr {
 		return nil, true, issues.CreateNonOptionalError(ctx)

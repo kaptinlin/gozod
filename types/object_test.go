@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -1376,14 +1377,14 @@ func TestObject_EdgeCases(t *testing.T) {
 	t.Run("performance with large objects", func(t *testing.T) {
 		// Create schema with many fields
 		shape := make(core.ObjectSchema)
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			shape[fmt.Sprintf("field%d", i)] = String().Optional()
 		}
 		schema := Object(shape)
 
 		// Create input with all fields
 		input := make(map[string]any)
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			input[fmt.Sprintf("field%d", i)] = fmt.Sprintf("value%d", i)
 		}
 
@@ -1573,9 +1574,7 @@ func TestObject_Overwrite(t *testing.T) {
 		}).Overwrite(func(obj map[string]any) map[string]any {
 			// Add full name field
 			result := make(map[string]any)
-			for k, v := range obj {
-				result[k] = v
-			}
+			maps.Copy(result, obj)
 
 			// Compute full name
 			if firstName, ok := obj["firstName"].(string); ok {

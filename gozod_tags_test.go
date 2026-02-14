@@ -629,11 +629,11 @@ func TestTagValidation_LiteralValidation(t *testing.T) {
 
 func TestTagValidation_DefaultValues(t *testing.T) {
 	type TestStruct struct {
-		Name   *string                 `gozod:"default=Anonymous"`
-		Age    *int                    `gozod:"default=18"`
-		Active *bool                   `gozod:"default=true"`
-		Tags   *[]string               `gozod:"default=[\"tag1\",\"tag2\"]"`
-		Config *map[string]interface{} `gozod:"default={\"theme\":\"dark\"}"`
+		Name   *string         `gozod:"default=Anonymous"`
+		Age    *int            `gozod:"default=18"`
+		Active *bool           `gozod:"default=true"`
+		Tags   *[]string       `gozod:"default=[\"tag1\",\"tag2\"]"`
+		Config *map[string]any `gozod:"default={\"theme\":\"dark\"}"`
 	}
 
 	schema := FromStruct[TestStruct]()
@@ -677,7 +677,7 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		age := 25
 		active := false
 		tags := []string{"custom"}
-		config := map[string]interface{}{"theme": "light"}
+		config := map[string]any{"theme": "light"}
 
 		nonEmpty := TestStruct{
 			Name:   &name,

@@ -359,7 +359,7 @@ func TestAPIComparison(t *testing.T) {
 
 		// Measure new API performance
 		start := time.Now()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			_ = CreateInvalidTypeError(core.ZodTypeString, i, ctx)
 		}
 		duration := time.Since(start)

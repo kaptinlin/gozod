@@ -846,7 +846,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 
 		// Create a large record
 		largeRecord := make(map[string]any)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			largeRecord[fmt.Sprintf("key%d", i)] = i
 		}
 
@@ -922,7 +922,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 		const numGoroutines = 10
 		results := make(chan error, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				_, err := recordSchema.Parse(testRecord)
 				results <- err
@@ -930,7 +930,7 @@ func TestRecord_EdgeCases(t *testing.T) {
 		}
 
 		// Check all results
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			err := <-results
 			assert.NoError(t, err)
 		}

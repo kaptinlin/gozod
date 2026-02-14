@@ -263,7 +263,7 @@ func TestErrorProcessingIntegration(t *testing.T) {
 func TestPerformanceIntegration(t *testing.T) {
 	t.Run("raw issue creation is efficient", func(t *testing.T) {
 		// This test ensures issue creation doesn't have performance regressions
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			issue := NewRawIssue(core.InvalidType, i,
 				WithExpected("string"),
 				WithReceived("number"),
@@ -276,7 +276,7 @@ func TestPerformanceIntegration(t *testing.T) {
 		config := &core.ZodConfig{}
 
 		// Test finalization performance
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			rawIssue := NewRawIssue(core.TooSmall, i,
 				WithMinimum(100),
 				WithOrigin("number"),
@@ -289,8 +289,8 @@ func TestPerformanceIntegration(t *testing.T) {
 
 	t.Run("error formatting is efficient", func(t *testing.T) {
 		// Create a complex error with multiple issues
-		issues := []ZodIssue{}
-		for i := 0; i < 50; i++ {
+		issues := make([]ZodIssue, 0, 50)
+		for i := range 50 {
 			issues = append(issues, ZodIssue{
 				ZodIssueBase: ZodIssueBase{
 					Code:    core.InvalidType,
@@ -303,7 +303,7 @@ func TestPerformanceIntegration(t *testing.T) {
 		zodErr := NewZodError(issues)
 
 		// Test that formatting operations are efficient
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			formatted := FormatError(zodErr)
 			tree := TreeifyError(zodErr)
 			flattened := FlattenError(zodErr)

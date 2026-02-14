@@ -282,10 +282,7 @@ func demonstrateErrorHandling() {
 		if errors.As(err, &zodErr) {
 			fmt.Printf("   Found %d validation issues:\n", len(zodErr.Issues))
 
-			maxErrors := len(zodErr.Issues)
-			if maxErrors > 5 {
-				maxErrors = 5
-			}
+			maxErrors := min(len(zodErr.Issues), 5)
 			for i, issue := range zodErr.Issues[:maxErrors] { // Show first 5 errors
 				fieldPath := "root"
 				if len(issue.Path) > 0 {

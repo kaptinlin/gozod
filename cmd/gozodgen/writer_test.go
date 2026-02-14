@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			fields: []tagparser.FieldInfo{
 				{
 					Name: "ID",
-					Type: reflect.TypeOf(""),
+					Type: reflect.TypeFor[string](),
 					Rules: []tagparser.TagRule{
 						{Name: "required"},
 						{Name: "uuid"},
@@ -31,7 +32,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 				},
 				{
 					Name: "Email",
-					Type: reflect.TypeOf(""),
+					Type: reflect.TypeFor[string](),
 					Rules: []tagparser.TagRule{
 						{Name: "required"},
 						{Name: "email"},
@@ -46,7 +47,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			fields: []tagparser.FieldInfo{
 				{
 					Name: "SKU",
-					Type: reflect.TypeOf(""),
+					Type: reflect.TypeFor[string](),
 					Rules: []tagparser.TagRule{
 						{Name: "regex", Params: []string{"^[A-Z0-9]+$"}},
 					},
@@ -60,7 +61,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			fields: []tagparser.FieldInfo{
 				{
 					Name: "CreatedAt",
-					Type: reflect.TypeOf(struct{}{}), // Mock time.Time
+					Type: reflect.TypeFor[struct{}](), // Mock time.Time
 					Rules: []tagparser.TagRule{
 						{Name: "required"},
 					},
@@ -76,7 +77,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			// Modify the type string to simulate time.Time for time fields
 			for i := range tt.fields {
 				if strings.Contains(tt.name, "time") {
-					tt.fields[i].Type = reflect.TypeOf(struct{}{}) // We'll mock this
+					tt.fields[i].Type = reflect.TypeFor[struct{}]() // We'll mock this
 				}
 			}
 
@@ -93,13 +94,7 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 
 			// Check expected imports
 			for _, expectedImport := range tt.expectedImports {
-				found := false
-				for _, imp := range imports {
-					if imp == expectedImport {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(imports, expectedImport)
 				if !found {
 					t.Errorf("Expected import %s not found in %v", expectedImport, imports)
 				}
@@ -129,7 +124,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "simple string field",
 			field: tagparser.FieldInfo{
 				Name: "Name",
-				Type: reflect.TypeOf(""),
+				Type: reflect.TypeFor[string](),
 				Rules: []tagparser.TagRule{
 					{Name: "required"},
 					{Name: "min", Params: []string{"2"}},
@@ -144,7 +139,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "email field",
 			field: tagparser.FieldInfo{
 				Name: "Email",
-				Type: reflect.TypeOf(""),
+				Type: reflect.TypeFor[string](),
 				Rules: []tagparser.TagRule{
 					{Name: "required"},
 					{Name: "email"},
@@ -158,7 +153,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "integer field with range",
 			field: tagparser.FieldInfo{
 				Name: "Age",
-				Type: reflect.TypeOf(0),
+				Type: reflect.TypeFor[int](),
 				Rules: []tagparser.TagRule{
 					{Name: "required"},
 					{Name: "min", Params: []string{"18"}},
@@ -173,7 +168,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "float field with gt validation",
 			field: tagparser.FieldInfo{
 				Name: "Price",
-				Type: reflect.TypeOf(0.0),
+				Type: reflect.TypeFor[float64](),
 				Rules: []tagparser.TagRule{
 					{Name: "required"},
 					{Name: "gt", Params: []string{"0.0"}},
@@ -187,7 +182,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "enum field with default",
 			field: tagparser.FieldInfo{
 				Name: "Status",
-				Type: reflect.TypeOf(""),
+				Type: reflect.TypeFor[string](),
 				Rules: []tagparser.TagRule{
 					{Name: "enum", Params: []string{"active", "inactive"}},
 					{Name: "default", Params: []string{"active"}},
@@ -201,7 +196,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			name: "optional pointer field",
 			field: tagparser.FieldInfo{
 				Name:     "Description",
-				Type:     reflect.TypeOf((*string)(nil)),
+				Type:     reflect.TypeFor[*string](),
 				Optional: true,
 				Rules: []tagparser.TagRule{
 					{Name: "max", Params: []string{"500"}},
@@ -250,7 +245,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 					{
 						Name:     "ID",
 						JSONName: "id",
-						Type:     reflect.TypeOf(""),
+						Type:     reflect.TypeFor[string](),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},
 							{Name: "uuid"},
@@ -259,7 +254,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 					{
 						Name:     "Name",
 						JSONName: "name",
-						Type:     reflect.TypeOf(""),
+						Type:     reflect.TypeFor[string](),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},
 							{Name: "min", Params: []string{"2"}},
@@ -352,13 +347,13 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 			// Create a mock field with the rules
 			field := tagparser.FieldInfo{
 				Name:  "TestField",
-				Type:  reflect.TypeOf(""),
+				Type:  reflect.TypeFor[string](),
 				Rules: tt.rules,
 			}
 
 			// For numeric rules test, use int type
 			if strings.Contains(tt.name, "numeric") {
-				field.Type = reflect.TypeOf(0)
+				field.Type = reflect.TypeFor[int]()
 			}
 
 			result, err := writer.generateFieldSchemaCode(field, "TestStruct")
@@ -455,32 +450,32 @@ func TestGenerateValidatorChain(t *testing.T) {
 		expected  string
 	}{
 		// String validators
-		{name: "trim", rule: tagparser.TagRule{Name: "trim"}, fieldType: reflect.TypeOf(""), expected: ".Trim()"},
-		{name: "lowercase", rule: tagparser.TagRule{Name: "lowercase"}, fieldType: reflect.TypeOf(""), expected: ".ToLowerCase()"},
-		{name: "uppercase", rule: tagparser.TagRule{Name: "uppercase"}, fieldType: reflect.TypeOf(""), expected: ".ToUpperCase()"},
-		{name: "nilable", rule: tagparser.TagRule{Name: "nilable"}, fieldType: reflect.TypeOf(""), expected: ".Nilable()"},
-		{name: "url", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeOf(""), expected: ".URL()"},
-		{name: "ipv4", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeOf(""), expected: ".IPv4()"},
-		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeOf(""), expected: ".IPv6()"},
-		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeOf(""), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
+		{name: "trim", rule: tagparser.TagRule{Name: "trim"}, fieldType: reflect.TypeFor[string](), expected: ".Trim()"},
+		{name: "lowercase", rule: tagparser.TagRule{Name: "lowercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToLowerCase()"},
+		{name: "uppercase", rule: tagparser.TagRule{Name: "uppercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToUpperCase()"},
+		{name: "nilable", rule: tagparser.TagRule{Name: "nilable"}, fieldType: reflect.TypeFor[string](), expected: ".Nilable()"},
+		{name: "url", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeFor[string](), expected: ".URL()"},
+		{name: "ipv4", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ".IPv4()"},
+		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ".IPv6()"},
+		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
 
 		// Numeric validators
-		{name: "gte", rule: tagparser.TagRule{Name: "gte", Params: []string{"0"}}, fieldType: reflect.TypeOf(0), expected: ".Gte(0)"},
-		{name: "lt", rule: tagparser.TagRule{Name: "lt", Params: []string{"100"}}, fieldType: reflect.TypeOf(0), expected: ".Lt(100)"},
+		{name: "gte", rule: tagparser.TagRule{Name: "gte", Params: []string{"0"}}, fieldType: reflect.TypeFor[int](), expected: ".Gte(0)"},
+		{name: "lt", rule: tagparser.TagRule{Name: "lt", Params: []string{"100"}}, fieldType: reflect.TypeFor[int](), expected: ".Lt(100)"},
 
 		// Prefault
-		{name: "prefault string", rule: tagparser.TagRule{Name: "prefault", Params: []string{"test"}}, fieldType: reflect.TypeOf(""), expected: `.Prefault("test")`},
-		{name: "prefault int", rule: tagparser.TagRule{Name: "prefault", Params: []string{"42"}}, fieldType: reflect.TypeOf(0), expected: ".Prefault(42)"},
+		{name: "prefault string", rule: tagparser.TagRule{Name: "prefault", Params: []string{"test"}}, fieldType: reflect.TypeFor[string](), expected: `.Prefault("test")`},
+		{name: "prefault int", rule: tagparser.TagRule{Name: "prefault", Params: []string{"42"}}, fieldType: reflect.TypeFor[int](), expected: ".Prefault(42)"},
 
 		// Required (returns empty)
-		{name: "required", rule: tagparser.TagRule{Name: "required"}, fieldType: reflect.TypeOf(""), expected: ""},
+		{name: "required", rule: tagparser.TagRule{Name: "required"}, fieldType: reflect.TypeFor[string](), expected: ""},
 
 		// Time (returns empty)
-		{name: "time", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeOf(""), expected: ""},
+		{name: "time", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeFor[string](), expected: ""},
 
 		// Refine and check
-		{name: "refine", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeOf(""), expected: ".Refine(myValidator)"},
-		{name: "check", rule: tagparser.TagRule{Name: "check", Params: []string{"customCheck"}}, fieldType: reflect.TypeOf(""), expected: ".Check(customCheck)"},
+		{name: "refine", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeFor[string](), expected: ".Refine(myValidator)"},
+		{name: "check", rule: tagparser.TagRule{Name: "check", Params: []string{"customCheck"}}, fieldType: reflect.TypeFor[string](), expected: ".Check(customCheck)"},
 	}
 
 	for _, tt := range tests {
@@ -498,21 +493,21 @@ func TestGenerateDefaultValue(t *testing.T) {
 		fieldType reflect.Type
 		expected  string
 	}{
-		{name: "string", value: "hello", fieldType: reflect.TypeOf(""), expected: `.Default("hello")`},
-		{name: "int", value: "42", fieldType: reflect.TypeOf(0), expected: ".Default(42)"},
-		{name: "int64", value: "100", fieldType: reflect.TypeOf(int64(0)), expected: ".Default(100)"},
-		{name: "uint", value: "10", fieldType: reflect.TypeOf(uint(0)), expected: ".Default(10)"},
-		{name: "float64", value: "3.14", fieldType: reflect.TypeOf(0.0), expected: ".Default(3.14)"},
-		{name: "bool", value: "true", fieldType: reflect.TypeOf(false), expected: ".Default(true)"},
-		{name: "pointer string", value: "world", fieldType: reflect.TypeOf((*string)(nil)), expected: `.Default("world")`},
+		{name: "string", value: "hello", fieldType: reflect.TypeFor[string](), expected: `.Default("hello")`},
+		{name: "int", value: "42", fieldType: reflect.TypeFor[int](), expected: ".Default(42)"},
+		{name: "int64", value: "100", fieldType: reflect.TypeFor[int64](), expected: ".Default(100)"},
+		{name: "uint", value: "10", fieldType: reflect.TypeFor[uint](), expected: ".Default(10)"},
+		{name: "float64", value: "3.14", fieldType: reflect.TypeFor[float64](), expected: ".Default(3.14)"},
+		{name: "bool", value: "true", fieldType: reflect.TypeFor[bool](), expected: ".Default(true)"},
+		{name: "pointer string", value: "world", fieldType: reflect.TypeFor[*string](), expected: `.Default("world")`},
 		// Slice types
-		{name: "string slice", value: `["a","b"]`, fieldType: reflect.TypeOf([]string{}), expected: `.Default([]string{"a", "b"})`},
-		{name: "int slice", value: `[1,2,3]`, fieldType: reflect.TypeOf([]int{}), expected: `.Default([]int{1, 2, 3})`},
-		{name: "float slice", value: `[1.1,2.2]`, fieldType: reflect.TypeOf([]float64{}), expected: `.Default([]float64{1.1, 2.2})`},
-		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Default([]bool{true, false})`},
+		{name: "string slice", value: `["a","b"]`, fieldType: reflect.TypeFor[[]string](), expected: `.Default([]string{"a", "b"})`},
+		{name: "int slice", value: `[1,2,3]`, fieldType: reflect.TypeFor[[]int](), expected: `.Default([]int{1, 2, 3})`},
+		{name: "float slice", value: `[1.1,2.2]`, fieldType: reflect.TypeFor[[]float64](), expected: `.Default([]float64{1.1, 2.2})`},
+		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeFor[[]bool](), expected: `.Default([]bool{true, false})`},
 		// Map types
-		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Default(map[string]string{"k": "v"})`},
-		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeOf(map[string]any{}), expected: `.Default(map[string]any{"a": 1})`},
+		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Default(map[string]string{"k": "v"})`},
+		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeFor[map[string]any](), expected: `.Default(map[string]any{"a": 1})`},
 	}
 
 	for _, tt := range tests {
@@ -530,21 +525,21 @@ func TestGeneratePrefaultValue(t *testing.T) {
 		fieldType reflect.Type
 		expected  string
 	}{
-		{name: "string", value: "hello", fieldType: reflect.TypeOf(""), expected: `.Prefault("hello")`},
-		{name: "int", value: "42", fieldType: reflect.TypeOf(0), expected: ".Prefault(42)"},
-		{name: "int64", value: "100", fieldType: reflect.TypeOf(int64(0)), expected: ".Prefault(100)"},
-		{name: "uint", value: "10", fieldType: reflect.TypeOf(uint(0)), expected: ".Prefault(10)"},
-		{name: "float64", value: "3.14", fieldType: reflect.TypeOf(0.0), expected: ".Prefault(3.14)"},
-		{name: "bool", value: "true", fieldType: reflect.TypeOf(false), expected: ".Prefault(true)"},
-		{name: "pointer string", value: "world", fieldType: reflect.TypeOf((*string)(nil)), expected: `.Prefault("world")`},
+		{name: "string", value: "hello", fieldType: reflect.TypeFor[string](), expected: `.Prefault("hello")`},
+		{name: "int", value: "42", fieldType: reflect.TypeFor[int](), expected: ".Prefault(42)"},
+		{name: "int64", value: "100", fieldType: reflect.TypeFor[int64](), expected: ".Prefault(100)"},
+		{name: "uint", value: "10", fieldType: reflect.TypeFor[uint](), expected: ".Prefault(10)"},
+		{name: "float64", value: "3.14", fieldType: reflect.TypeFor[float64](), expected: ".Prefault(3.14)"},
+		{name: "bool", value: "true", fieldType: reflect.TypeFor[bool](), expected: ".Prefault(true)"},
+		{name: "pointer string", value: "world", fieldType: reflect.TypeFor[*string](), expected: `.Prefault("world")`},
 		// Slice types
-		{name: "string slice", value: `["x","y"]`, fieldType: reflect.TypeOf([]string{}), expected: `.Prefault([]string{"x", "y"})`},
-		{name: "int slice", value: `[4,5,6]`, fieldType: reflect.TypeOf([]int{}), expected: `.Prefault([]int{4, 5, 6})`},
-		{name: "float slice", value: `[3.3,4.4]`, fieldType: reflect.TypeOf([]float64{}), expected: `.Prefault([]float64{3.3, 4.4})`},
-		{name: "bool slice", value: `[false,true]`, fieldType: reflect.TypeOf([]bool{}), expected: `.Prefault([]bool{false, true})`},
+		{name: "string slice", value: `["x","y"]`, fieldType: reflect.TypeFor[[]string](), expected: `.Prefault([]string{"x", "y"})`},
+		{name: "int slice", value: `[4,5,6]`, fieldType: reflect.TypeFor[[]int](), expected: `.Prefault([]int{4, 5, 6})`},
+		{name: "float slice", value: `[3.3,4.4]`, fieldType: reflect.TypeFor[[]float64](), expected: `.Prefault([]float64{3.3, 4.4})`},
+		{name: "bool slice", value: `[false,true]`, fieldType: reflect.TypeFor[[]bool](), expected: `.Prefault([]bool{false, true})`},
 		// Map types
-		{name: "string map", value: `{"foo":"bar"}`, fieldType: reflect.TypeOf(map[string]string{}), expected: `.Prefault(map[string]string{"foo": "bar"})`},
-		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeOf(map[string]any{}), expected: `.Prefault(map[string]any{"x": 99})`},
+		{name: "string map", value: `{"foo":"bar"}`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Prefault(map[string]string{"foo": "bar"})`},
+		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeFor[map[string]any](), expected: `.Prefault(map[string]any{"x": 99})`},
 	}
 
 	for _, tt := range tests {

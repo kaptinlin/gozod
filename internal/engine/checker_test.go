@@ -276,8 +276,8 @@ func TestExecuteChecks(t *testing.T) {
 		payload.SetIssues(make([]core.ZodRawIssue, 1, 10)) // Capacity 10
 
 		// Create multiple checks to test memory allocation
-		var checkList []core.ZodCheck
-		for i := 0; i < 5; i++ {
+		checkList := make([]core.ZodCheck, 0, 5)
+		for range 5 {
 			check := checks.NewCustom[string](func(v any) bool {
 				return false // Always fail to generate issues
 			}, core.CustomParams{})
@@ -300,8 +300,8 @@ func TestExecuteChecks(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
 		// Create multiple checks that all pass
-		var checkList []core.ZodCheck
-		for i := 0; i < 10; i++ {
+		checkList := make([]core.ZodCheck, 0, 10)
+		for range 10 {
 			check := checks.NewCustom[string](func(v any) bool {
 				return true // Always pass
 			}, core.CustomParams{})

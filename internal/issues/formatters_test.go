@@ -721,8 +721,8 @@ func TestFormatterEdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles very deep nesting", func(t *testing.T) {
-		deepPath := []any{}
-		for i := 0; i < 20; i++ {
+		deepPath := make([]any, 0, 20)
+		for i := range 20 {
 			deepPath = append(deepPath, fmt.Sprintf("level%d", i))
 		}
 
@@ -748,8 +748,8 @@ func TestFormatterEdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles large numbers of issues", func(t *testing.T) {
-		issues := []ZodIssue{}
-		for i := 0; i < 100; i++ {
+		issues := make([]ZodIssue, 0, 100)
+		for i := range 100 {
 			issues = append(issues, ZodIssue{
 				ZodIssueBase: ZodIssueBase{
 					Code:    core.InvalidType,

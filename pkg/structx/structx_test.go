@@ -68,13 +68,13 @@ func TestToMap(t *testing.T) {
 func TestFromMap(t *testing.T) {
 	t.Run("non-struct type returns error", func(t *testing.T) {
 		data := map[string]any{"a": 1}
-		_, err := FromMap(data, reflect.TypeOf("string"))
+		_, err := FromMap(data, reflect.TypeFor[string]())
 		assert.ErrorIs(t, err, ErrTargetTypeMustBeStruct)
 	})
 
 	t.Run("map converts to struct", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": 30}
-		result, err := FromMap(data, reflect.TypeOf(testUser{}))
+		result, err := FromMap(data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user, ok := result.(testUser)
@@ -85,7 +85,7 @@ func TestFromMap(t *testing.T) {
 
 	t.Run("pointer type converts correctly", func(t *testing.T) {
 		data := map[string]any{"host": "localhost", "port": 8080}
-		result, err := FromMap(data, reflect.TypeOf(&testConfig{}))
+		result, err := FromMap(data, reflect.TypeFor[*testConfig]())
 		require.NoError(t, err)
 
 		config, ok := result.(testConfig)
@@ -144,13 +144,13 @@ func TestMarshal(t *testing.T) {
 func TestUnmarshal(t *testing.T) {
 	t.Run("non-struct type returns error", func(t *testing.T) {
 		data := map[string]any{"a": 1}
-		_, err := Unmarshal(data, reflect.TypeOf("string"))
+		_, err := Unmarshal(data, reflect.TypeFor[string]())
 		assert.ErrorIs(t, err, ErrTargetTypeMustBeStruct)
 	})
 
 	t.Run("correctly unmarshals data", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": 30}
-		result, err := Unmarshal(data, reflect.TypeOf(testUser{}))
+		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user, ok := result.(testUser)
@@ -160,7 +160,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles missing fields gracefully", func(t *testing.T) {
 		data := map[string]any{"name": "Bob"}
-		result, err := Unmarshal(data, reflect.TypeOf(testUser{}))
+		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -170,7 +170,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles nil values gracefully", func(t *testing.T) {
 		data := map[string]any{"name": nil, "age": 25}
-		result, err := Unmarshal(data, reflect.TypeOf(testUser{}))
+		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -180,7 +180,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles type conversion", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": int64(30)}
-		result, err := Unmarshal(data, reflect.TypeOf(testUser{}))
+		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -242,7 +242,7 @@ func TestFieldName(t *testing.T) {
 		WithoutTag string
 	}
 
-	st := reflect.TypeOf(testStruct{})
+	st := reflect.TypeFor[testStruct]()
 
 	tests := []struct {
 		field string

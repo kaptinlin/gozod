@@ -411,14 +411,14 @@ func TestArray_EdgeCases(t *testing.T) {
 		testArray := []any{"hello", 42}
 
 		results := make(chan error, 5)
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			go func() {
 				_, err := schema.Parse(testArray)
 				results <- err
 			}()
 		}
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			err := <-results
 			assert.NoError(t, err)
 		}

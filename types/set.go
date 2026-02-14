@@ -347,7 +347,7 @@ func (z *ZodSet[T, R]) extractForEngine(value any) (map[T]struct{}, bool) {
 
 	// Fall back to reflection for non-standard map or slice types.
 	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Map && rv.Type().Elem() == reflect.TypeOf(struct{}{}) {
+	if rv.Kind() == reflect.Map && rv.Type().Elem() == reflect.TypeFor[struct{}]() {
 		set := make(map[T]struct{}, rv.Len())
 		for _, key := range rv.MapKeys() {
 			typed, ok := key.Interface().(T)

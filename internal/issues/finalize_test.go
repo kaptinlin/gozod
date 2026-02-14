@@ -571,8 +571,8 @@ func TestFinalizationIntegration(t *testing.T) {
 
 func TestFinalizationEdgeCases(t *testing.T) {
 	t.Run("handles very long paths", func(t *testing.T) {
-		longPath := []any{}
-		for i := 0; i < 100; i++ {
+		longPath := make([]any, 0, 100)
+		for i := range 100 {
 			longPath = append(longPath, i)
 		}
 
@@ -592,7 +592,7 @@ func TestFinalizationEdgeCases(t *testing.T) {
 
 	t.Run("handles very large property maps", func(t *testing.T) {
 		largeProps := make(map[string]any)
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			largeProps[string(rune(i))] = i
 		}
 

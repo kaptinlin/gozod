@@ -1558,8 +1558,7 @@ func hasGozodTags(structType reflect.Type) bool {
 		return false
 	}
 
-	for i := range structType.NumField() {
-		field := structType.Field(i)
+	for field := range structType.Fields() {
 		if _, exists := field.Tag.Lookup("gozod"); exists {
 			return true
 		}

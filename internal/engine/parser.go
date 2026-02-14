@@ -244,7 +244,7 @@ func isNilInput[R any](input R) bool {
 		return true
 	}
 	switch rv.Kind() { //nolint:exhaustive // only nillable kinds need explicit handling
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
+	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
 		return rv.IsNil()
 	default:
 		return false
@@ -554,7 +554,7 @@ func convertResultToType[T any](result any) (T, error) {
 	rv := reflect.ValueOf(result)
 
 	// T is pointer, got value: wrap it.
-	if zt.Kind() == reflect.Ptr {
+	if zt.Kind() == reflect.Pointer {
 		et := zt.Elem()
 		if rv.IsValid() && rv.Type() == et {
 			p := reflect.New(et)
@@ -566,7 +566,7 @@ func convertResultToType[T any](result any) (T, error) {
 	}
 
 	// T is value, got pointer: dereference it.
-	if rv.IsValid() && rv.Kind() == reflect.Ptr && rv.Type().Elem() == zt {
+	if rv.IsValid() && rv.Kind() == reflect.Pointer && rv.Type().Elem() == zt {
 		if d := rv.Elem(); d.IsValid() {
 			if v, ok := d.Interface().(T); ok {
 				return v, nil
@@ -737,7 +737,7 @@ func parsePrimitiveStrictWithChecks[T any, R any](
 	var ok bool
 
 	rt := reflect.TypeOf(input)
-	if rt != nil && rt.Kind() == reflect.Ptr {
+	if rt != nil && rt.Kind() == reflect.Pointer {
 		tVal, ok = extractFromPointer[T, R](input, internals, expectedType, validator, pc)
 		if !ok {
 			// Check if it was a nil pointer that was handled.
@@ -1098,7 +1098,7 @@ func dereferencePointer(input any) (any, bool) {
 
 	// Reflection fallback for other pointer types.
 	rv := reflect.ValueOf(input)
-	if rv.Kind() != reflect.Ptr {
+	if rv.Kind() != reflect.Pointer {
 		return input, false
 	}
 	if rv.IsNil() {

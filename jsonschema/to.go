@@ -476,19 +476,19 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		// Per user request, BigInt is not supported for JSON Schema generation.
 		return nil, fmt.Errorf("%w: %s", ErrUnrepresentableType, core.ZodTypeBigInt)
 	case core.ZodTypeDate:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("date-time")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("date-time")}
 	case core.ZodTypeEmail:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("email")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("email")}
 	case core.ZodTypeTime:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("time")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("time")}
 	case core.ZodTypeISODateTime, core.ZodTypeIso:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("date-time")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("date-time")}
 	case core.ZodTypeISODate:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("date")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("date")}
 	case core.ZodTypeISOTime:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("time")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("time")}
 	case core.ZodTypeISODuration:
-		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: ptrToString("duration")}
+		jsonSchema = &lib.Schema{Type: []string{"string"}, Format: new("duration")}
 	case core.ZodTypeOptional, core.ZodTypeNilable, core.ZodTypeDefault, core.ZodTypePrefault, core.ZodTypeRefine, core.ZodTypeCheck:
 		if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
 			return c.convert(s.Inner())
@@ -1307,8 +1307,8 @@ func (c *converter) convertLiteral(schema core.ZodSchema) (*lib.Schema, error) {
 func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 	s := &lib.Schema{
 		Type:            []string{"string"},
-		Format:          ptrToString("binary"),
-		ContentEncoding: ptrToString("binary"),
+		Format:          new("binary"),
+		ContentEncoding: new("binary"),
 	}
 
 	internals := schema.Internals()
@@ -1321,8 +1321,8 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 			mimeCopy := mime
 			itemSchema := &lib.Schema{
 				Type:             []string{"string"},
-				Format:           ptrToString("binary"),
-				ContentEncoding:  ptrToString("binary"),
+				Format:           new("binary"),
+				ContentEncoding:  new("binary"),
 				ContentMediaType: &mimeCopy,
 			}
 			// Apply min/max/size constraints using helper conversion
@@ -1379,8 +1379,6 @@ func isCompositeType(t core.ZodTypeCode) bool {
 	_, ok := compositeTypes[t]
 	return ok
 }
-
-func ptrToString(s string) *string { return &s }
 
 // convertLazy resolves inner schema and delegates conversion.
 func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {

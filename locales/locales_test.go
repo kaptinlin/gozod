@@ -1,6 +1,7 @@
 package locales
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -158,13 +159,7 @@ func TestGetAvailableLocales(t *testing.T) {
 		}
 
 		// Should contain at least "en"
-		found := false
-		for _, locale := range locales {
-			if locale == "en" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(locales, "en")
 
 		if !found {
 			t.Error("Expected 'en' locale to be available")

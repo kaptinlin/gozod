@@ -64,7 +64,7 @@ func Marshal(input any) map[string]any {
 // It returns [ErrTargetTypeMustBeStruct] if typ is not a struct type.
 // Fields are matched by json tag name, falling back to the Go field name.
 func Unmarshal(data map[string]any, typ reflect.Type) (any, error) {
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
@@ -105,7 +105,7 @@ func structValue(input any) (reflect.Value, bool) {
 	}
 
 	v := reflect.ValueOf(input)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return reflect.Value{}, false
 		}

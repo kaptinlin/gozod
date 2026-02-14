@@ -77,9 +77,9 @@ func newFuncTypeError(v any, ctx *core.ParseContext) error {
 
 // convertResult converts the engine result to the constraint type T.
 func (z *ZodFunction[T]) convertResult(result any) T {
-	typ := reflect.TypeOf((*T)(nil)).Elem()
+	typ := reflect.TypeFor[T]()
 
-	if typ.Kind() == reflect.Ptr && typ.Elem() == reflect.TypeOf((*any)(nil)).Elem() {
+	if typ.Kind() == reflect.Pointer && typ.Elem() == reflect.TypeFor[any]() {
 		if result == nil {
 			return any((*any)(nil)).(T)
 		}
@@ -461,8 +461,8 @@ func convertToFuncType[T FunctionConstraint](v any) (T, bool) {
 	var zero T
 
 	if v == nil {
-		typ := reflect.TypeOf((*T)(nil)).Elem()
-		return zero, typ.Kind() == reflect.Ptr
+		typ := reflect.TypeFor[T]()
+		return zero, typ.Kind() == reflect.Pointer
 	}
 
 	rv := reflect.ValueOf(v)
@@ -474,8 +474,8 @@ func convertToFuncType[T FunctionConstraint](v any) (T, bool) {
 		return val, true
 	}
 
-	typ := reflect.TypeOf((*T)(nil)).Elem()
-	if typ.Kind() == reflect.Ptr {
+	typ := reflect.TypeFor[T]()
+	if typ.Kind() == reflect.Pointer {
 		if val, ok := any(&v).(T); ok {
 			return val, true
 		}

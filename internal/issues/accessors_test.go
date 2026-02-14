@@ -338,7 +338,7 @@ func TestAccessorPerformance(t *testing.T) {
 		)
 
 		// Test that repeated access is efficient
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			_ = issue.Expected()
 			_ = issue.Received()
 			_ = issue.Minimum()
@@ -364,7 +364,7 @@ func TestAccessorPerformance(t *testing.T) {
 		}
 
 		// Test that type checking and access is efficient
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			_, _ = issue.ExpectedType()
 			_, _ = issue.ReceivedType()
 			_, _ = issue.MinValue() // Should return false quickly

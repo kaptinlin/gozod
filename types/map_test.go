@@ -598,7 +598,7 @@ func TestMap_EdgeCases(t *testing.T) {
 
 		// Create a large map
 		largeMap := make(map[any]any)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			largeMap[fmt.Sprintf("key%d", i)] = i
 		}
 
@@ -686,7 +686,7 @@ func TestMap_EdgeCases(t *testing.T) {
 		const numGoroutines = 10
 		results := make(chan error, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				_, err := mapSchema.Parse(testMap)
 				results <- err
@@ -694,7 +694,7 @@ func TestMap_EdgeCases(t *testing.T) {
 		}
 
 		// Check all results
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			err := <-results
 			assert.NoError(t, err)
 		}

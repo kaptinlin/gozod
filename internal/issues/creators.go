@@ -3,6 +3,7 @@ package issues
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
@@ -12,9 +13,7 @@ import (
 // CreateIssue creates a new ZodRawIssue with safely copied properties.
 func CreateIssue(code core.IssueCode, message string, properties map[string]any, input any) core.ZodRawIssue {
 	props := make(map[string]any, len(properties))
-	for k, v := range properties {
-		props[k] = v
-	}
+	maps.Copy(props, properties)
 
 	return core.ZodRawIssue{
 		Code:       code,
@@ -98,9 +97,7 @@ func CreateInvalidFormatIssue(format string, input any, additionalProps map[stri
 	properties := make(map[string]any, 1+len(additionalProps))
 	properties["format"] = format
 
-	for k, v := range additionalProps {
-		properties[k] = v
-	}
+	maps.Copy(properties, additionalProps)
 
 	return CreateIssue(core.InvalidFormat, "", properties, input)
 }
@@ -188,9 +185,7 @@ func CreateInvalidSchemaIssue(reason string, input any, additionalProps ...map[s
 	}
 
 	if len(additionalProps) > 0 {
-		for k, v := range additionalProps[0] {
-			properties[k] = v
-		}
+		maps.Copy(properties, additionalProps[0])
 	}
 
 	return CreateIssue(core.InvalidSchema, "", properties, input)

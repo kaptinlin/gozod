@@ -252,7 +252,7 @@ func TestStruct_WithSchema(t *testing.T) {
 			Name:    "John Doe",
 			Age:     30,
 			Email:   "john@example.com",
-			Address: stringPtr("123 Main St"),
+			Address: new("123 Main St"),
 		}
 
 		result, err := schema.Parse(userWithAddress)
@@ -367,11 +367,6 @@ func TestStruct_SchemaConstructors(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, validUser, *result)
 	})
-}
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
 }
 
 // =============================================================================
@@ -802,7 +797,7 @@ func TestStruct_EdgeCases(t *testing.T) {
 		const numGoroutines = 10
 		results := make(chan error, numGoroutines)
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				_, err := schema.Parse(validUser)
 				results <- err
@@ -810,7 +805,7 @@ func TestStruct_EdgeCases(t *testing.T) {
 		}
 
 		// Check all results
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			err := <-results
 			assert.NoError(t, err)
 		}

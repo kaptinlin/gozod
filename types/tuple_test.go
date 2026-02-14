@@ -413,7 +413,7 @@ func TestTuple_InputConversion(t *testing.T) {
 	t.Run("converts typed slice to []any", func(t *testing.T) {
 		schema := types.Tuple(gozod.String(), gozod.Int())
 		// Using a slice literal that gets converted
-		input := []interface{}{"hello", 42}
+		input := []any{"hello", 42}
 		result, err := schema.Parse(input)
 		require.NoError(t, err)
 		assert.Equal(t, []any{"hello", 42}, result)

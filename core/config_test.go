@@ -46,35 +46,29 @@ func TestSetConfigConcurrent(t *testing.T) {
 	iterations := 100
 
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range iterations {
 				_ = Config()
 			}
-		}()
+		})
 	}
 
 	customErr := func(issue ZodRawIssue) string { return "custom" }
 	localeErr := func(issue ZodRawIssue) string { return "locale" }
 
 	for range 5 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range iterations {
 				SetConfig(&ZodConfig{
 					CustomError: customErr,
 					LocaleError: localeErr,
 				})
 			}
-		}()
+		})
 	}
 
 	for range 5 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range iterations {
 				if j%2 == 0 {
 					Config()
@@ -82,7 +76,7 @@ func TestSetConfigConcurrent(t *testing.T) {
 					SetConfig(&ZodConfig{CustomError: customErr})
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

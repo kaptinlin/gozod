@@ -66,9 +66,7 @@ func (p *TagParser) ParseStructTags(typ reflect.Type) ([]FieldInfo, error) {
 
 	fields := make([]FieldInfo, 0, typ.NumField())
 
-	for i := range typ.NumField() {
-		f := typ.Field(i)
-
+	for f := range typ.Fields() {
 		if !f.IsExported() {
 			continue
 		}

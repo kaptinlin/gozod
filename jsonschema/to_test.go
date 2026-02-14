@@ -17,7 +17,7 @@ import (
 func assertJSONEquals(t *testing.T, expected string, actualJSON string) {
 	t.Helper()
 
-	var expectedVal, actualVal interface{}
+	var expectedVal, actualVal any
 
 	err := json.Unmarshal([]byte(expected), &expectedVal)
 	require.NoError(t, err, "Failed to unmarshal expected JSON")
@@ -31,10 +31,10 @@ func assertJSONEquals(t *testing.T, expected string, actualJSON string) {
 }
 
 // isSubset recursively verifies that exp is a subset of act (i.e., all keys/values in exp are present in act).
-func isSubset(exp, act interface{}) bool {
+func isSubset(exp, act any) bool {
 	switch e := exp.(type) {
-	case map[string]interface{}:
-		a, ok := act.(map[string]interface{})
+	case map[string]any:
+		a, ok := act.(map[string]any)
 		if !ok {
 			return false
 		}
@@ -48,8 +48,8 @@ func isSubset(exp, act interface{}) bool {
 			}
 		}
 		return true
-	case []interface{}:
-		a, ok := act.([]interface{})
+	case []any:
+		a, ok := act.([]any)
 		if !ok || len(e) != len(a) {
 			return false
 		}
@@ -1732,7 +1732,7 @@ func TestToJSONSchemaOverride(t *testing.T) {
 	schema := types.String()
 	opts := Options{
 		Override: func(ctx OverrideContext) {
-			ctx.JSONSchema.Title = stringPtr("overridden")
+			ctx.JSONSchema.Title = new("overridden")
 		},
 	}
 	schemaObj, err := ToJSONSchema(schema, opts)
@@ -1748,7 +1748,7 @@ func TestToJSONSchemaOverrideWithRefs(t *testing.T) {
 		Override: func(ctx OverrideContext) {
 			// Optional string returns a *ZodString[*string]
 			if _, ok := ctx.ZodSchema.(*types.ZodString[*string]); ok {
-				ctx.JSONSchema.Title = stringPtr("overridden_string")
+				ctx.JSONSchema.Title = new("overridden_string")
 			}
 		},
 	}
@@ -1950,10 +1950,6 @@ func TestToJSONSchemaBasicRegistry(t *testing.T) {
 
 	assert.Contains(t, resultStr, `"author":{"$ref":"#/$defs/User"`)
 	assert.Contains(t, resultStr, `"posts":{"items":{"$ref":"#/$defs/Post"},"type":"array"}`)
-}
-
-func stringPtr(s string) *string {
-	return &s
 }
 
 // =============================================================================
