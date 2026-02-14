@@ -517,7 +517,7 @@ func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 
 	if _, ok := any(zero).(*map[string]any); ok {
 		if recordVal, ok := value.(map[string]any); ok {
-			return any(new(recordVal)).(R), true
+			return any(&recordVal).(R), true
 		}
 		if recordPtr, ok := value.(*map[string]any); ok {
 			return any(recordPtr).(R), true

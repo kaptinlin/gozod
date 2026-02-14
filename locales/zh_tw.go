@@ -76,8 +76,8 @@ var TypeDictionaryZhTw = map[string]string{
 
 // getSizingZhTw returns Traditional Chinese sizing information for a given type
 func getSizingZhTw(origin string) *issues.SizingInfo {
-	if info, exists := SizableZhTw[origin]; exists {
-		return new(info)
+	if _, exists := SizableZhTw[origin]; exists {
+		return new(SizableZhTw[origin])
 	}
 	return nil
 }

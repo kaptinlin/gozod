@@ -77,8 +77,8 @@ var TypeDictionaryFr = map[string]string{
 
 // getSizingFr returns French sizing information for a given type
 func getSizingFr(origin string) *issues.SizingInfo {
-	if info, exists := SizableFr[origin]; exists {
-		return new(info)
+	if _, exists := SizableFr[origin]; exists {
+		return new(SizableFr[origin])
 	}
 	return nil
 }

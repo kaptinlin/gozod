@@ -235,7 +235,7 @@ func NewProperty(property string, schema core.ZodSchema, args ...any) *ZodCheckP
 
 // Bag and constraint utilities
 
-// ensureBag initializes and returns the schema's Bag map.
+// EnsureBag initializes and returns the schema's Bag map.
 func ensureBag(schema any) map[string]any {
 	s, ok := schema.(interface{ Internals() *core.ZodTypeInternals })
 	if !ok {
@@ -255,7 +255,7 @@ func SetBagProperty(schema any, key string, value any) {
 	}
 }
 
-// mergeConstraint merges a constraint into the schema's bag with conflict resolution.
+// MergeConstraint merges a constraint into the schema's bag with conflict resolution.
 func mergeConstraint(schema any, key string, value any, merge func(old, new any) any) {
 	bag := ensureBag(schema)
 	if bag == nil {
@@ -307,7 +307,7 @@ func mergeMaximumConstraint(schema any, value any, inclusive bool) {
 	removeConflictingBound(schema, conflict, value, func(cmp int) bool { return cmp <= 0 })
 }
 
-// removeConflictingBound removes a conflicting bound from the bag when the
+// RemoveConflictingBound removes a conflicting bound from the bag when the
 // comparison between value and the existing bound satisfies shouldRemove.
 func removeConflictingBound(schema any, key string, value any, shouldRemove func(int) bool) {
 	bag := ensureBag(schema)
@@ -341,7 +341,7 @@ func PrefixIssues(path any, iss []core.ZodRawIssue) []core.ZodRawIssue {
 
 // Custom check execution
 
-// executeCustomCheck dispatches to the appropriate refine or check function.
+// ExecuteCustomCheck dispatches to the appropriate refine or check function.
 func executeCustomCheck(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -359,7 +359,7 @@ func executeCustomCheck(payload *core.ParsePayload, ci *ZodCheckCustomInternals)
 	}
 }
 
-// executeRefine dispatches typed refine functions and reports validation results.
+// ExecuteRefine dispatches typed refine functions and reports validation results.
 func executeRefine(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	v := payload.Value()
 	switch fn := ci.Def.Fn.(type) {
@@ -407,7 +407,7 @@ func executeRefine(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	}
 }
 
-// executeCheckFn runs a check-style function that modifies the payload directly.
+// ExecuteCheckFn runs a check-style function that modifies the payload directly.
 func executeCheckFn(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	switch fn := ci.Def.Fn.(type) {
 	case core.ZodCheckFn:
@@ -419,7 +419,7 @@ func executeCheckFn(payload *core.ParsePayload, ci *ZodCheckCustomInternals) {
 	}
 }
 
-// handleRefineResult creates an error issue when a refine function returns false.
+// HandleRefineResult creates an error issue when a refine function returns false.
 func handleRefineResult(ok bool, payload *core.ParsePayload, input any, ci *ZodCheckCustomInternals) {
 	if ok {
 		return
@@ -446,7 +446,7 @@ func handleRefineResult(ok bool, payload *core.ParsePayload, input any, ci *ZodC
 	payload.AddIssueWithPath(issue, path)
 }
 
-// resolvePath returns the issue path, using a custom path override if configured.
+// ResolvePath returns the issue path, using a custom path override if configured.
 func resolvePath(payload *core.ParsePayload, ci *ZodCheckCustomInternals) []any {
 	pp := payload.Path()
 	path := make([]any, len(pp))
@@ -471,7 +471,7 @@ func resolvePath(payload *core.ParsePayload, ci *ZodCheckCustomInternals) []any 
 	return path
 }
 
-// resolveErrorMessage returns the custom error message if configured.
+// ResolveErrorMessage returns the custom error message if configured.
 func resolveErrorMessage(ci *ZodCheckCustomInternals, input any, path []any) string {
 	if ci.Def.Error == nil {
 		return ""
@@ -486,7 +486,7 @@ func resolveErrorMessage(ci *ZodCheckCustomInternals, input any, path []any) str
 
 // Property check execution
 
-// executePropertyCheck validates a specific property of an object.
+// ExecutePropertyCheck validates a specific property of an object.
 func executePropertyCheck(payload *core.ParsePayload, pi *ZodCheckPropertyInternals) {
 	obj, ok := payload.Value().(map[string]any)
 	if !ok {

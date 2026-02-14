@@ -71,8 +71,8 @@ var SizableZh = map[string]issues.SizingInfo{
 
 // getSizingZh returns Chinese sizing information for a given type
 func getSizingZh(origin string) *issues.SizingInfo {
-	if info, exists := SizableZh[origin]; exists {
-		return new(info)
+	if _, exists := SizableZh[origin]; exists {
+		return new(SizableZh[origin])
 	}
 	return nil
 }

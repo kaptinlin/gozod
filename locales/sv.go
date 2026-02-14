@@ -77,8 +77,8 @@ var TypeDictionarySv = map[string]string{
 
 // getSizingSv returns Swedish sizing information for a given type
 func getSizingSv(origin string) *issues.SizingInfo {
-	if info, exists := SizableSv[origin]; exists {
-		return new(info)
+	if _, exists := SizableSv[origin]; exists {
+		return new(SizableSv[origin])
 	}
 	return nil
 }

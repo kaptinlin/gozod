@@ -77,8 +77,8 @@ var TypeDictionaryUr = map[string]string{
 
 // getSizingUr returns Urdu sizing information for a given type
 func getSizingUr(origin string) *issues.SizingInfo {
-	if info, exists := SizableUr[origin]; exists {
-		return new(info)
+	if _, exists := SizableUr[origin]; exists {
+		return new(SizableUr[origin])
 	}
 	return nil
 }

@@ -547,7 +547,7 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 				jsonSchema.AllOf = make([]*lib.Schema, len(patterns))
 				for i, p := range patterns {
 					jsonSchema.AllOf[i] = &lib.Schema{
-						Pattern: new(p),
+						Pattern: &p,
 					}
 				}
 			}
@@ -559,7 +559,7 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 
 	// Apply other string-related properties from the bag
 	if val, ok := internals.Bag["format"].(string); ok {
-		jsonSchema.Format = new(val)
+		jsonSchema.Format = &val
 	}
 	if v, ok := internals.Bag["minLength"]; ok {
 		if n, ok := toFloat(v); ok {
@@ -573,12 +573,12 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 	}
 	if v, ok := internals.Bag["contentEncoding"]; ok {
 		if ce, ok := v.(string); ok {
-			jsonSchema.ContentEncoding = new(ce)
+			jsonSchema.ContentEncoding = &ce
 		}
 	}
 	if v, ok := internals.Bag["contentMediaType"]; ok {
 		if cmt, ok := v.(string); ok {
-			jsonSchema.ContentMediaType = new(cmt)
+			jsonSchema.ContentMediaType = &cmt
 		}
 	}
 }
@@ -601,7 +601,7 @@ type unwrapper interface {
 
 // booleanSchema returns a JSON Schema boolean schema (true or false).
 func booleanSchema(value bool) *lib.Schema {
-	return &lib.Schema{Boolean: new(value)}
+	return &lib.Schema{Boolean: &value}
 }
 
 // resolveUnknownKeysMode determines if a schema uses passthrough mode for unknown keys.
@@ -877,12 +877,12 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 	if v, ok := bag["pattern"]; ok {
 		if p, ok := v.(string); ok {
 			if js.Pattern == nil {
-				js.Pattern = new(p)
+				js.Pattern = &p
 			} else {
 				if js.AllOf == nil {
 					js.AllOf = []*lib.Schema{{Pattern: js.Pattern}}
 				}
-				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: new(p)})
+				js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &p})
 				js.Pattern = nil
 			}
 		}
@@ -906,7 +906,7 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 					js.AllOf = []*lib.Schema{}
 				}
 				for _, p := range patterns {
-					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: new(p)})
+					js.AllOf = append(js.AllOf, &lib.Schema{Pattern: &p})
 				}
 			}
 		}
@@ -925,15 +925,15 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 			}
 		case "format":
 			if s, ok := v.(string); ok {
-				js.Format = new(s)
+				js.Format = &s
 			}
 		case "contentEncoding":
 			if s, ok := v.(string); ok {
-				js.ContentEncoding = new(s)
+				js.ContentEncoding = &s
 			}
 		case "contentMediaType":
 			if s, ok := v.(string); ok {
-				js.ContentMediaType = new(s)
+				js.ContentMediaType = &s
 			}
 		case "minimum":
 			if r, ok := toRat(v); ok {
@@ -965,16 +965,16 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 			}
 		case "minSize":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = new(f)
+				js.MinLength = &f
 			}
 		case "maxSize":
 			if f, ok := toFloat(v); ok {
-				js.MaxLength = new(f)
+				js.MaxLength = &f
 			}
 		case "size":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = new(f)
-				js.MaxLength = new(f)
+				js.MinLength = &f
+				js.MaxLength = &f
 			}
 		case "mime":
 			if mimes, ok := v.([]string); ok && len(mimes) == 1 {

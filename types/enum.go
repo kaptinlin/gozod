@@ -292,7 +292,7 @@ func (z *ZodEnum[T, R]) Refine(fn func(R) bool, params ...any) *ZodEnum[T, R] {
 				return fn(any((*T)(nil)).(R))
 			}
 			if val, ok := v.(T); ok {
-				return fn(any(new(val)).(R))
+				return fn(any(&val).(R))
 			}
 			return false
 		default:
@@ -339,7 +339,7 @@ func (z *ZodEnum[T, R]) Check(fn func(value R, payload *core.ParsePayload), para
 		var zero R
 		if _, ok := any(zero).(*T); ok {
 			if v, ok := payload.Value().(T); ok {
-				fn(any(new(v)).(R), payload)
+				fn(any(&v).(R), payload)
 			}
 		}
 	}

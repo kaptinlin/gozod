@@ -525,7 +525,7 @@ func (z *ZodMap[T, R]) extractPtrForEngine(input any) (*map[any]any, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return new(result), true
+	return &result, true
 }
 
 func (z *ZodMap[T, R]) validateForEngine(value map[any]any, chks []core.ZodCheck, ctx *core.ParseContext) (map[any]any, error) {
@@ -592,7 +592,7 @@ func toConstraintType[T any, R any](value T) R {
 	switch any(zero).(type) {
 	case *map[any]any:
 		if mv, ok := any(value).(map[any]any); ok {
-			return any(new(mv)).(R)
+			return any(&mv).(R)
 		}
 		return any((*map[any]any)(nil)).(R)
 	default:
@@ -678,7 +678,7 @@ func toConstraintValue[T any, R any](value any) (R, bool) {
 
 	if _, ok := any(zero).(*map[any]any); ok {
 		if mv, ok := value.(map[any]any); ok {
-			return any(new(mv)).(R), true
+			return any(&mv).(R), true
 		}
 	}
 

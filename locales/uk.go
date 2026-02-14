@@ -76,8 +76,8 @@ var TypeDictionaryUk = map[string]string{
 
 // getSizingUk returns Ukrainian sizing information for a given type
 func getSizingUk(origin string) *issues.SizingInfo {
-	if info, exists := SizableUk[origin]; exists {
-		return new(info)
+	if _, exists := SizableUk[origin]; exists {
+		return new(SizableUk[origin])
 	}
 	return nil
 }

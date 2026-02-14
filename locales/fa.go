@@ -77,8 +77,8 @@ var TypeDictionaryFa = map[string]string{
 
 // getSizingFa returns Persian sizing information for a given type
 func getSizingFa(origin string) *issues.SizingInfo {
-	if info, exists := SizableFa[origin]; exists {
-		return new(info)
+	if _, exists := SizableFa[origin]; exists {
+		return new(SizableFa[origin])
 	}
 	return nil
 }

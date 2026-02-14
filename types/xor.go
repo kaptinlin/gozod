@@ -84,6 +84,7 @@ func (z *ZodXor[T, R]) extractPtr(input any) (*any, bool) {
 }
 
 // validate checks that exactly one option matches (Zod v4 exclusive union semantics).
+// This is an unexported helper method for internal validation logic.
 func (z *ZodXor[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *core.ParseContext) (any, error) {
 	successes := make([]any, 0, len(z.internals.Options))
 	var allErrors []error

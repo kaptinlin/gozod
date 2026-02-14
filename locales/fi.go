@@ -86,8 +86,8 @@ var TypeDictionaryFi = map[string]string{
 
 // getSizingFi returns Finnish sizing information for a given type
 func getSizingFi(origin string) *finnishSizingInfo {
-	if info, exists := SizableFi[origin]; exists {
-		return new(info)
+	if _, exists := SizableFi[origin]; exists {
+		return new(SizableFi[origin])
 	}
 	return nil
 }

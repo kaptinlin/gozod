@@ -107,7 +107,7 @@ func (z *ZodBigInt[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 		}
 		input = sub
 	}
-	return engine.ParsePrimitive[*big.Int, T](
+	return engine.ParsePrimitive(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeBigInt,
@@ -133,7 +133,7 @@ func (z *ZodBigInt[T]) ParseAny(input any, ctx ...*core.ParseContext) (any, erro
 
 // StrictParse validates input with compile-time type safety.
 func (z *ZodBigInt[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
-	return engine.ParsePrimitiveStrict[*big.Int, T](
+	return engine.ParsePrimitiveStrict(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeBigInt,
@@ -349,7 +349,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 				return fn(any((**big.Int)(nil)).(T))
 			}
 			if val, ok := v.(*big.Int); ok {
-				return fn(any(new(val)).(T))
+				return fn(any(&val).(T))
 			}
 			return false
 		default:
@@ -475,7 +475,7 @@ func toBigIntType[T BigIntegerConstraint](v any) (T, bool) {
 		return zero, false
 	case **big.Int:
 		if val, ok := v.(*big.Int); ok {
-			return any(new(val)).(T), true
+			return any(&val).(T), true
 		}
 		if pp, ok := v.(**big.Int); ok {
 			return any(pp).(T), true

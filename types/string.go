@@ -100,7 +100,7 @@ func (z *ZodString[T]) Coerce(input any) (any, bool) {
 
 // Parse validates input and returns a value of type T.
 func (z *ZodString[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
-	return engine.ParsePrimitive[string, T](
+	return engine.ParsePrimitive(
 		input,
 		&z.internals.ZodTypeInternals,
 		z.expectedType(),
@@ -121,7 +121,7 @@ func (z *ZodString[T]) MustParse(input any, ctx ...*core.ParseContext) T {
 
 // StrictParse requires exact type T for compile-time type safety.
 func (z *ZodString[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) {
-	return engine.ParsePrimitiveStrict[string, T](
+	return engine.ParsePrimitiveStrict(
 		input,
 		&z.internals.ZodTypeInternals,
 		z.expectedType(),
@@ -398,7 +398,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 		var zero T
 		if _, ok := any(zero).(*string); ok {
 			if strVal, ok := payload.Value().(string); ok {
-					fn(any(new(strVal)).(T), payload)
+				fn(any(&strVal).(T), payload)
 			}
 		}
 	}
@@ -433,7 +433,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 			if !ok {
 				return false
 			}
-			return fn(any(new(strVal)).(T))
+			return fn(any(&strVal).(T))
 
 		default:
 			return false
@@ -563,7 +563,7 @@ func convertToStringType[T StringConstraint](v any) (T, bool) {
 			return any((*string)(nil)).(T), true
 		}
 		if str, ok := v.(string); ok {
-			return any(new(str)).(T), true
+			return any(&str).(T), true
 		}
 		if strPtr, ok := v.(*string); ok {
 			return any(strPtr).(T), true

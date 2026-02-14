@@ -20,6 +20,10 @@ linters:
     - unconvert
     - whitespace
   settings:
+    staticcheck:
+      checks:
+        - "all"
+        - "-SA4006" # Go 1.26 new(expr) not yet recognized as variable usage
     revive:
       rules:
         - name: unused-parameter

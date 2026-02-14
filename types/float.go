@@ -453,14 +453,14 @@ func convertToFloatType[T FloatConstraint](v any) (T, bool) {
 		}
 	case *float32:
 		if val, ok := v.(float32); ok {
-			return any(new(val)).(T), true
+			return any(&val).(T), true
 		}
 		if val, ok := v.(*float32); ok {
 			return any(val).(T), true
 		}
 	case *float64:
 		if val, ok := v.(float64); ok {
-			return any(new(val)).(T), true
+			return any(&val).(T), true
 		}
 		if val, ok := v.(*float64); ok {
 			return any(val).(T), true

@@ -505,7 +505,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			if !ok {
 				return false
 			}
-			return fn(any(new(c)).(T))
+			return fn(any(&c).(T))
 		case complex128:
 			if v == nil {
 				return false
@@ -523,7 +523,7 @@ func (z *ZodComplex[T]) Refine(fn func(T) bool, params ...any) *ZodComplex[T] {
 			if !ok {
 				return false
 			}
-			return fn(any(new(c)).(T))
+			return fn(any(&c).(T))
 		default:
 			return false
 		}
