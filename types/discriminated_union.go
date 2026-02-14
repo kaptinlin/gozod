@@ -327,8 +327,7 @@ func convertToDiscriminatedUnionConstraintType[T any, R any](v any) R {
 	var zero R
 	if _, ok := any(zero).(*any); ok {
 		if v != nil {
-			cp := v
-			return any(&cp).(R)
+			return any(new(v)).(R)
 		}
 		return any((*any)(nil)).(R)
 	}
@@ -355,8 +354,7 @@ func convertToDiscriminatedUnionConstraintValue[T any, R any](v any) (R, bool) {
 	}
 	if _, ok := any(zero).(*any); ok {
 		if v != nil {
-			cp := v
-			return any(&cp).(R), true
+			return any(new(v)).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}

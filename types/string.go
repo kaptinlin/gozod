@@ -339,11 +339,13 @@ func (z *ZodString[T]) JWT(params ...any) *ZodString[T] {
 }
 
 // isDelimiter reports whether s is a recognized MAC address delimiter.
+// This is an unexported helper function for internal use.
 func isDelimiter(s string) bool {
 	return len(s) == 1 || s == ":" || s == "-" || s == "."
 }
 
 // isJWTAlgorithm reports whether s looks like a JWA algorithm identifier.
+// This is an unexported helper function for internal use.
 func isJWTAlgorithm(s string) bool {
 	return len(s) > 0 && len(s) <= 10 &&
 		(strings.HasPrefix(s, "HS") || strings.HasPrefix(s, "RS") ||
@@ -396,8 +398,7 @@ func (z *ZodString[T]) Check(fn func(value T, payload *core.ParsePayload), param
 		var zero T
 		if _, ok := any(zero).(*string); ok {
 			if strVal, ok := payload.Value().(string); ok {
-				strCopy := strVal
-				fn(any(&strCopy).(T), payload)
+					fn(any(new(strVal)).(T), payload)
 			}
 		}
 	}
@@ -432,8 +433,7 @@ func (z *ZodString[T]) Refine(fn func(T) bool, params ...any) *ZodString[T] {
 			if !ok {
 				return false
 			}
-			sCopy := strVal
-			return fn(any(&sCopy).(T))
+			return fn(any(new(strVal)).(T))
 
 		default:
 			return false
@@ -543,8 +543,7 @@ func applyStringTransform[T StringConstraint](val T, fn func(string) string) T {
 		if v == nil {
 			return val
 		}
-		result := fn(*v)
-		return any(&result).(T)
+		return any(new(fn(*v))).(T)
 	default:
 		return val
 	}
@@ -564,8 +563,7 @@ func convertToStringType[T StringConstraint](v any) (T, bool) {
 			return any((*string)(nil)).(T), true
 		}
 		if str, ok := v.(string); ok {
-			sCopy := str
-			return any(&sCopy).(T), true
+			return any(new(str)).(T), true
 		}
 		if strPtr, ok := v.(*string); ok {
 			return any(strPtr).(T), true
@@ -591,6 +589,7 @@ func extractString[T StringConstraint](value T) string {
 }
 
 // newZodStringFromDef constructs a new ZodString from the given definition.
+// This is an unexported helper function for internal use.
 func newZodStringFromDef[T StringConstraint](def *ZodStringDef) *ZodString[T] {
 	internals := &ZodStringInternals{
 		ZodTypeInternals: core.ZodTypeInternals{

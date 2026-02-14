@@ -24,10 +24,12 @@ This document defines comprehensive coding standards and best practices for the 
 - **Field Naming Consistency**: Use the same naming conventions as JS version
 
 ### 3. Go Language Idioms
-- **Use Go 1.25+ Features**: Fully utilize generics, Swiss Tables, and performance optimizations
+- **Use Go 1.26+ Features**: Fully utilize generics, Swiss Tables, `new(expr)`, self-referential constraints, and performance optimizations
 - **Follow Go Conventions**: Error handling, naming conventions, package organization
 - **Value Types First**: Use value types rather than pointer types for struct fields
 - **Zero-Allocation Optimization**: Avoid memory allocation when possible
+- **`new(expr)` for pointer creation**: Use `new(expr)` instead of `tmp := expr; &tmp` to create pointers from expressions
+- **Compile-time constraint verification**: All schema types must satisfy `core.Describable` and `core.Refineable` (verified in `types/constraints_verify.go`)
 
 ### 4. Avoid Over-Engineering
 - **Simplified Implementation**: Direct inlining rather than complex function wrapping
@@ -142,6 +144,18 @@ type ZodCheck interface {
 
 type Cloneable interface {
     CloneFrom(source any)
+}
+
+// ✅ Go 1.26 self-referential generic constraints for compile-time verification
+type Describable[S Describable[S]] interface {
+    Describe(string) S
+    Meta(GlobalMeta) S
+    Internals() *ZodTypeInternals
+}
+
+type Refineable[S Refineable[S]] interface {
+    RefineAny(func(any) bool, ...any) S
+    Internals() *ZodTypeInternals
 }
 
 // ❌ Avoid large, all-encompassing interfaces
@@ -340,7 +354,7 @@ schema := gozod.String().
 **Key Points:**
 - Metadata is stored via `core.GlobalRegistry` (thread-safe)
 - Used for JSON Schema generation, documentation, and debugging
-- All 26 schema types implement `.Describe()` and `.Meta()` methods
+- All 29 schema types implement `.Describe()` and `.Meta()` methods (verified at compile time via `core.Describable` constraint in `types/constraints_verify.go`)
 - Follows Copy-on-Write pattern (returns new schema instance)
 
 ### 1. Parse vs StrictParse Pattern

@@ -8,6 +8,7 @@ import (
 
 // newTextSchema adds a check to a base string schema using the clone-addCheck-wrap pattern.
 // It clones the base schema's internals, adds the check, and returns a new schema instance.
+// This is an unexported helper function for internal use.
 func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
 	in := base.Internals().Clone()
 	in.AddCheck(check)
@@ -24,6 +25,8 @@ type ZodEmoji[T StringConstraint] struct {
 	*ZodString[T]
 }
 
+// newEmoji creates a new ZodEmoji wrapper around a ZodString.
+// This is an unexported helper function for internal use.
 func newEmoji[T StringConstraint](s *ZodString[T]) *ZodEmoji[T] {
 	return &ZodEmoji[T]{s}
 }
@@ -154,7 +157,7 @@ func splitJWTOpts(params []any) (*JWTOptions, []any) {
 
 	for _, p := range params {
 		if o, ok := p.(JWTOptions); ok {
-			opts = &o
+			opts = new(o)
 		} else {
 			rest = append(rest, p)
 		}

@@ -349,8 +349,7 @@ func (z *ZodBigInt[T]) Refine(fn func(T) bool, params ...any) *ZodBigInt[T] {
 				return fn(any((**big.Int)(nil)).(T))
 			}
 			if val, ok := v.(*big.Int); ok {
-				ptr := &val
-				return fn(any(ptr).(T))
+				return fn(any(new(val)).(T))
 			}
 			return false
 		default:
@@ -476,8 +475,7 @@ func toBigIntType[T BigIntegerConstraint](v any) (T, bool) {
 		return zero, false
 	case **big.Int:
 		if val, ok := v.(*big.Int); ok {
-			ptr := &val
-			return any(ptr).(T), true
+			return any(new(val)).(T), true
 		}
 		if pp, ok := v.(**big.Int); ok {
 			return any(pp).(T), true

@@ -548,53 +548,43 @@ func convertToIntegerType[T IntegerConstraint](v any) (T, bool) {
 	// Pointer types
 	case *int:
 		if converted, err := coerce.ToInteger[int](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *int8:
 		if converted, err := coerce.ToInteger[int8](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *int16:
 		if converted, err := coerce.ToInteger[int16](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *int32:
 		if converted, err := coerce.ToInteger[int32](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *int64:
 		if converted, err := coerce.ToInteger[int64](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *uint:
 		if converted, err := coerce.ToInteger[uint](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *uint8:
 		if converted, err := coerce.ToInteger[uint8](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *uint16:
 		if converted, err := coerce.ToInteger[uint16](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *uint32:
 		if converted, err := coerce.ToInteger[uint32](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	case *uint64:
 		if converted, err := coerce.ToInteger[uint64](v); err == nil {
-			ptr := &converted
-			return any(ptr).(T), true
+			return any(new(converted)).(T), true
 		}
 	}
 

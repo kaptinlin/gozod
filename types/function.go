@@ -83,8 +83,7 @@ func (z *ZodFunction[T]) convertResult(result any) T {
 		if result == nil {
 			return any((*any)(nil)).(T)
 		}
-		ptr := &result
-		return any(ptr).(T)
+		return any(new(result)).(T)
 	}
 
 	if result == nil {
@@ -476,7 +475,7 @@ func convertToFuncType[T FunctionConstraint](v any) (T, bool) {
 
 	typ := reflect.TypeFor[T]()
 	if typ.Kind() == reflect.Pointer {
-		if val, ok := any(&v).(T); ok {
+		if val, ok := any(new(v)).(T); ok {
 			return val, true
 		}
 	}

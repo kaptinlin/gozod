@@ -425,8 +425,7 @@ func convertToIntersectionConstraintType[T any, R any](value any) R {
 		if reflect.TypeOf(value).Kind() == reflect.Pointer {
 			return any(value).(R) //nolint:unconvert // generic constraint conversion
 		}
-		v := value
-		return any(&v).(R)
+		return any(new(value)).(R)
 	}
 
 	// R is not a pointer; dereference if value is a pointer.
@@ -463,8 +462,7 @@ func convertToIntersectionConstraintValue[T any, R any](value any) (R, bool) {
 	}
 	if _, ok := any(zero).(*any); ok {
 		if value != nil {
-			v := value
-			return any(&v).(R), true
+			return any(new(value)).(R), true
 		}
 		return any((*any)(nil)).(R), true
 	}

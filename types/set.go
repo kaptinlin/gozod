@@ -497,7 +497,7 @@ func convertToSetConstraintType[T comparable, R any](value any) R {
 	if rt != nil && rt.Kind() == reflect.Pointer {
 		switch v := value.(type) {
 		case map[T]struct{}:
-			return any(&v).(R)
+			return any(new(v)).(R)
 		case *map[T]struct{}:
 			return any(v).(R)
 		}

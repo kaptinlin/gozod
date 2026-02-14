@@ -321,7 +321,7 @@ func (z *ZodLazy[T]) convertResult(result any) T {
 	}
 	switch any(zero).(type) {
 	case *any:
-		return any(&result).(T)
+		return any(new(result)).(T)
 	default:
 		return any(result).(T) //nolint:unconvert
 	}

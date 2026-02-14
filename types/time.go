@@ -267,8 +267,7 @@ func (z *ZodTime[T]) Refine(fn func(T) bool, params ...any) *ZodTime[T] {
 				return fn(any((*time.Time)(nil)).(T))
 			}
 			if timeVal, ok := v.(time.Time); ok {
-				tCopy := timeVal
-				return fn(any(&tCopy).(T))
+				return fn(any(new(timeVal)).(T))
 			}
 			return false
 		default:
@@ -308,8 +307,7 @@ func (z *ZodTime[T]) Check(fn func(value T, payload *core.ParsePayload), params 
 		var zero T
 		if _, ok := any(zero).(*time.Time); ok {
 			if t, ok := payload.Value().(time.Time); ok {
-				tCopy := t
-				fn(any(&tCopy).(T), payload)
+				fn(any(new(t)).(T), payload)
 			}
 		}
 	}
@@ -375,7 +373,7 @@ func convertToTimeType[T TimeConstraint](v any) (T, bool) {
 	case time.Time:
 		return any(timeValue).(T), true
 	case *time.Time:
-		return any(&timeValue).(T), true
+		return any(new(timeValue)).(T), true
 	default:
 		return zero, false
 	}

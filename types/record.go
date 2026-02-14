@@ -85,7 +85,7 @@ func (z *ZodRecord[T, R]) IsLoose() bool {
 func (z *ZodRecord[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error) {
 	var zero R
 
-	result, err := engine.ParseComplex[T](
+	result, err := engine.ParseComplex(
 		input,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeRecord,
@@ -136,7 +136,7 @@ func (z *ZodRecord[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, er
 		)
 	}
 
-	return engine.ParseComplexStrict[T, R](
+	return engine.ParseComplexStrict(
 		constraintInput,
 		&z.internals.ZodTypeInternals,
 		core.ZodTypeRecord,
@@ -295,7 +295,7 @@ func (z *ZodRecord[T, R]) Transform(fn func(T, *core.RefinementContext) (any, er
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
 		return fn(extractRecordValue[T, R](input), ctx)
 	}
-	return core.NewZodTransform[R, any](z, wrapperFn)
+	return core.NewZodTransform(z, wrapperFn)
 }
 
 // Pipe creates a validation pipeline with a target schema.
@@ -303,7 +303,7 @@ func (z *ZodRecord[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	targetFn := func(input R, ctx *core.ParseContext) (any, error) {
 		return target.Parse(extractRecordValue[T, R](input), ctx)
 	}
-	return core.NewZodPipe[R, any](z, target, targetFn)
+	return core.NewZodPipe(z, target, targetFn)
 }
 
 // Overwrite transforms the input value while preserving the original type.
@@ -517,8 +517,7 @@ func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 
 	if _, ok := any(zero).(*map[string]any); ok {
 		if recordVal, ok := value.(map[string]any); ok {
-			recordCopy := recordVal
-			return any(&recordCopy).(R), true
+			return any(new(recordVal)).(R), true
 		}
 		if recordPtr, ok := value.(*map[string]any); ok {
 			return any(recordPtr).(R), true
@@ -576,7 +575,7 @@ func convertToRecordType[T any, R any](v any) (R, bool) {
 	// Convert to target constraint type R
 	zeroType := reflect.TypeFor[R]()
 	if zeroType.Kind() == reflect.Pointer {
-		if converted, ok := any(&recordValue).(R); ok {
+		if converted, ok := any(new(recordValue)).(R); ok {
 			return converted, true
 		}
 	} else {

@@ -58,6 +58,12 @@ gozod/
 └── types/         # Public schema implementations (one type per file)
 ```
 
+### Key Files
+
+- `core/interfaces.go` - `ZodType[T]`, `ZodSchema`, `ZodTypeInternals` (Clone for Copy-on-Write)
+- `core/constraints.go` - Go 1.26 self-referential generic constraints (`Describable[S]`, `Refineable[S]`) + generic helper functions
+- `types/constraints_verify.go` - Compile-time assertions verifying all 29 schema types satisfy constraint interfaces
+
 ### One-Way Dependency Rule
 
 - `types/` never import each other; cross-type logic lives in `internal/`, `pkg/`, or `coerce/`
@@ -86,6 +92,7 @@ gozod/
 6. **Semantic Zod v4 Compatibility** - Identical behavior with Go-native naming (`"bool"` not `"boolean"`, `"nil"` not `"null"`)
 7. **Go Idioms First** - Error values, Go type names, interfaces over inheritance
 8. **Zero Dependencies** - Pure Go implementation, no external libraries
+9. **Compile-Time Constraint Verification** - Self-referential generic constraints (`core.Describable`, `core.Refineable`) enforce API consistency across all 29 schema types at compile time
 
 ### Default vs Prefault Semantics
 
@@ -119,11 +126,19 @@ if err != nil {
 }
 ```
 
+## Go 1.26 Patterns
+
+- **`new(expr)`**: Use `new(expr)` to create a pointer from an expression directly, instead of `tmp := expr; &tmp`. All schema types follow this pattern consistently.
+- **Self-referential generic constraints**: `core.Describable[S Describable[S]]` and `core.Refineable[S Refineable[S]]` enforce compile-time API consistency. New schema types must add assertions to `types/constraints_verify.go`.
+- **Generic helper functions**: `core.DescribeSchema`, `core.MetaSchema`, `core.ApplyRefinements` operate on any schema satisfying the constraints.
+
 ## Quality Standards
 
 - **Testing**: >90% coverage, all tests pass with `-race` flag, use `for b.Loop()` in benchmarks
 - **Linting**: golangci-lint v2.9.0 clean, `gofmt`/`goimports` before committing
 - **Type safety**: All type assertions must be safe; use `var zero R` for zero values (not `*new(R)`)
+- **Pointer creation**: Use `new(expr)` (Go 1.26) instead of temporary variable + address-of
+- **Constraint verification**: New schema types must be added to `types/constraints_verify.go`
 - **Compatibility**: Changes must not break Zod v4 semantic compatibility
 
 ## Documentation Cross-Reference

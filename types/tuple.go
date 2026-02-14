@@ -454,7 +454,7 @@ func convertToTupleConstraintType[R any](arr []any) R {
 	}
 
 	if zeroType.Kind() == reflect.Pointer && zeroType.Elem().Kind() == reflect.Slice {
-		return any(&arr).(R)
+		return any(new(arr)).(R)
 	}
 	return any(arr).(R)
 }
@@ -471,7 +471,7 @@ func convertToTupleType[T any, R any](input T) (R, bool) {
 	// Handle pointer conversion.
 	if _, ok := any(zero).(*[]any); ok {
 		if arr, ok := any(input).([]any); ok {
-			return any(&arr).(R), true
+			return any(new(arr)).(R), true
 		}
 	}
 

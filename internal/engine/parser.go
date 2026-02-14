@@ -327,25 +327,25 @@ func tryCommonPointerConversion[R any](value any) (R, bool) {
 	switch any(zero).(type) {
 	case *string:
 		if v, ok := value.(string); ok {
-			if r, ok := any(&v).(R); ok {
+			if r, ok := any(new(v)).(R); ok {
 				return r, true
 			}
 		}
 	case *int64:
 		if v, ok := value.(int64); ok {
-			if r, ok := any(&v).(R); ok {
+			if r, ok := any(new(v)).(R); ok {
 				return r, true
 			}
 		}
 	case *float64:
 		if v, ok := value.(float64); ok {
-			if r, ok := any(&v).(R); ok {
+			if r, ok := any(new(v)).(R); ok {
 				return r, true
 			}
 		}
 	case *bool:
 		if v, ok := value.(bool); ok {
-			if r, ok := any(&v).(R); ok {
+			if r, ok := any(new(v)).(R); ok {
 				return r, true
 			}
 		}
@@ -476,16 +476,14 @@ func convertToDoublePtr[T any, R any](
 		return any(pp).(R), nil
 	}
 	if p, ok := result.(*T); ok {
-		return any(&p).(R), nil
+		return any(new(p)).(R), nil
 	}
 	if v, ok := result.(T); ok {
-		p := &v
-		return any(&p).(R), nil
+		return any(new(new(v))).(R), nil
 	}
 	if c, err := convertToType[T](result, expectedType, ctx); err == nil {
 		if v, ok := c.(T); ok {
-			p := &v
-			return any(&p).(R), nil
+			return any(new(new(v))).(R), nil
 		}
 	}
 	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
@@ -502,11 +500,11 @@ func convertToPtr[T any, R any](
 		return any(p).(R), nil
 	}
 	if v, ok := result.(T); ok {
-		return any(&v).(R), nil
+		return any(new(v)).(R), nil
 	}
 	if c, err := convertToType[T](result, expectedType, ctx); err == nil {
 		if v, ok := c.(T); ok {
-			return any(&v).(R), nil
+			return any(new(v)).(R), nil
 		}
 	}
 	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
@@ -725,6 +723,7 @@ func parsePrimitiveStrictNil[T any, R any](
 
 // parsePrimitiveStrictWithChecks handles the validation path for ParsePrimitiveStrict
 // when checks are present.
+// This is an unexported helper function for internal use.
 func parsePrimitiveStrictWithChecks[T any, R any](
 	input R,
 	internals *core.ZodTypeInternals,
@@ -829,8 +828,7 @@ func convertValidatedToResult[T any, R any](validated T) R {
 	var zero R
 	switch any(zero).(type) {
 	case *T:
-		p := &validated
-		return any(p).(R)
+		return any(new(validated)).(R)
 	default:
 		return any(validated).(R)
 	}
