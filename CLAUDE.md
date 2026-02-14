@@ -20,7 +20,7 @@ Detailed implementation guides in `.agents/rules/`:
 | `schema_implementation_guide.mdc` | 5-section file layout, type templates, engine integration |
 | `schema_test_implementation_guide.mdc` | Test architecture, StrictParse testing, Default/Prefault semantics |
 | `checks_implementation_guide.mdc` | Validation check factories, JSON Schema integration |
-| `performance-optimization.mdc` | Go 1.25+ optimizations, benchmark patterns (`b.Loop()`) |
+| `performance-optimization.mdc` | Go 1.26+ optimizations, benchmark patterns (`b.Loop()`) |
 | `project-structure.mdc` | Layered architecture, package responsibilities, file organization |
 | `naming_guide.md` | Go naming conventions, receiver naming, error naming |
 | `module_organization_guide.md` | Package design, dependency injection, testing organization |
@@ -122,7 +122,7 @@ if err != nil {
 ## Quality Standards
 
 - **Testing**: >90% coverage, all tests pass with `-race` flag, use `for b.Loop()` in benchmarks
-- **Linting**: golangci-lint v2.7.2 clean, `gofmt`/`goimports` before committing
+- **Linting**: golangci-lint v2.9.0 clean, `gofmt`/`goimports` before committing
 - **Type safety**: All type assertions must be safe; use `var zero R` for zero values (not `*new(R)`)
 - **Compatibility**: Changes must not break Zod v4 semantic compatibility
 
