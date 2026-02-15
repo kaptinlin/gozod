@@ -499,7 +499,7 @@ func TestTime_Refine(t *testing.T) {
 	t.Run("refine pointer allows nil", func(t *testing.T) {
 		schema := TimePtr().Nilable().Refine(func(t *time.Time) bool {
 			// Accept nil or times after 2023
-			return t == nil || (t != nil && t.Year() >= 2023)
+			return t == nil || t.Year() >= 2023
 		})
 
 		// Expect nil to be accepted

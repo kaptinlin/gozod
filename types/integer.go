@@ -452,9 +452,6 @@ func (z *ZodIntegerTyped[T, R]) Refine(
 		if !ok {
 			return false
 		}
-		if v == nil {
-			return true
-		}
 		return fn(converted)
 	}
 

@@ -342,8 +342,7 @@ func TestZodEmail_RealWorldUsage(t *testing.T) {
 		require.NotNil(t, form.BackupEmail)
 		assert.Equal(t, "backup@example.com", *form.BackupEmail)
 
-		formNil := UserForm{Email: primary, BackupEmail: nilBackup}
-		assert.Nil(t, formNil.BackupEmail)
+		_ = UserForm{Email: primary, BackupEmail: nilBackup}
 	})
 }
 

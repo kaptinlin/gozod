@@ -442,7 +442,7 @@ func TestComplex_Refine(t *testing.T) {
 	t.Run("refine pointer allows nil", func(t *testing.T) {
 		schema := Complex128Ptr().Nilable().Refine(func(c *complex128) bool {
 			// Accept nil or complex numbers with positive real part
-			return c == nil || (c != nil && real(*c) > 0)
+			return c == nil || real(*c) > 0
 		})
 
 		// Expect nil to be accepted

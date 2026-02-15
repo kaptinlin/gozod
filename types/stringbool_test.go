@@ -466,7 +466,7 @@ func TestStringBool_Refine(t *testing.T) {
 	t.Run("refine pointer allows nil", func(t *testing.T) {
 		schema := StringBoolPtr().Nilable().Refine(func(b *bool) bool {
 			// Accept nil or true
-			return b == nil || (b != nil && *b)
+			return b == nil || *b
 		})
 
 		// Expect nil to be accepted

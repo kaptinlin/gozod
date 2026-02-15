@@ -341,7 +341,7 @@ func (z *ZodString[T]) JWT(params ...any) *ZodString[T] {
 // isDelimiter reports whether s is a recognized MAC address delimiter.
 // This is an unexported helper function for internal use.
 func isDelimiter(s string) bool {
-	return len(s) == 1 || s == ":" || s == "-" || s == "."
+	return s == ":" || s == "-" || s == "."
 }
 
 // isJWTAlgorithm reports whether s looks like a JWA algorithm identifier.

@@ -659,8 +659,8 @@ func (z *ZodObject[T, R]) extractObject(v any) (map[string]any, error) {
 			}
 			name := f.Name
 			if tag := f.Tag.Get("json"); tag != "" && tag != "-" {
-				if idx := strings.Index(tag, ","); idx > 0 {
-					name = tag[:idx]
+				if tagName, _, found := strings.Cut(tag, ","); found {
+					name = tagName
 				} else {
 					name = tag
 				}
