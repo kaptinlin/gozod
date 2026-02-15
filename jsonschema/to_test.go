@@ -204,17 +204,17 @@ func TestToJSONSchema_StringFormats(t *testing.T) {
 		},
 		{
 			name:     "UUIDv4",
-			schema:   types.Uuidv4(),
+			schema:   types.UUIDv4(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv6",
-			schema:   types.Uuidv6(),
+			schema:   types.UUIDv6(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv7",
-			schema:   types.Uuidv7(),
+			schema:   types.UUIDv7(),
 			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
@@ -234,32 +234,32 @@ func TestToJSONSchema_StringFormats(t *testing.T) {
 		},
 		{
 			name:     "CUID",
-			schema:   types.Cuid(),
+			schema:   types.CUID(),
 			expected: `{"type":"string","format":"cuid","pattern":"^[cC][^\\s-]{8,}$"}`,
 		},
 		{
 			name:     "CUID2",
-			schema:   types.Cuid2(),
+			schema:   types.CUID2(),
 			expected: `{"type":"string","format":"cuid2","pattern":"^[0-9a-z]+$"}`,
 		},
 		{
 			name:     "ULID",
-			schema:   types.Ulid(),
+			schema:   types.ULID(),
 			expected: `{"type":"string","format":"ulid","pattern":"^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$"}`,
 		},
 		{
 			name:     "XID",
-			schema:   types.Xid(),
+			schema:   types.XID(),
 			expected: `{"type":"string","format":"xid","pattern":"^[0-9a-vA-V]{20}$"}`,
 		},
 		{
 			name:     "KSUID",
-			schema:   types.Ksuid(),
+			schema:   types.KSUID(),
 			expected: `{"type":"string","format":"ksuid","pattern":"^[A-Za-z0-9]{27}$"}`,
 		},
 		{
 			name:     "NanoID",
-			schema:   types.Nanoid(),
+			schema:   types.NanoID(),
 			expected: `{"type":"string","format":"nanoid","pattern":"^[a-zA-Z0-9_-]{21}$"}`,
 		},
 		{

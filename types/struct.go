@@ -2155,16 +2155,16 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 		case "cuid":
 			switch schema.(type) {
 			case *ZodString[string]:
-				schema = Cuid()
+				schema = CUID()
 			case *ZodString[*string]:
-				schema = CuidPtr()
+				schema = CUIDPtr()
 			}
 		case "cuid2":
 			switch schema.(type) {
 			case *ZodString[string]:
-				schema = Cuid2()
+				schema = CUID2()
 			case *ZodString[*string]:
-				schema = Cuid2Ptr()
+				schema = CUID2Ptr()
 			}
 		case "jwt":
 			switch schema.(type) {

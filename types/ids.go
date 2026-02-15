@@ -100,13 +100,13 @@ func (z *ZodCUID[T]) Nullish() *ZodCUID[*string] {
 	return newCUID(z.ZodString.Nullish())
 }
 
-// Cuid creates a CUID schema for collision-resistant unique identifiers.
-func Cuid(params ...any) *ZodCUID[string] {
+// CUID creates a CUID schema for collision-resistant unique identifiers.
+func CUID(params ...any) *ZodCUID[string] {
 	return newCUID(newIDSchema(StringTyped[string](params...), checks.CUID(params...)))
 }
 
-// CuidPtr creates a pointer CUID schema.
-func CuidPtr(params ...any) *ZodCUID[*string] {
+// CUIDPtr creates a pointer CUID schema.
+func CUIDPtr(params ...any) *ZodCUID[*string] {
 	return newCUID(newIDSchema(StringPtr(params...), checks.CUID(params...)))
 }
 
@@ -146,13 +146,13 @@ func (z *ZodCUID2[T]) Nullish() *ZodCUID2[*string] {
 	return newCUID2(z.ZodString.Nullish())
 }
 
-// Cuid2 creates a CUID2 schema for next-generation collision-resistant identifiers.
-func Cuid2(params ...any) *ZodCUID2[string] {
+// CUID2 creates a CUID2 schema for next-generation collision-resistant identifiers.
+func CUID2(params ...any) *ZodCUID2[string] {
 	return newCUID2(newIDSchema(StringTyped[string](params...), checks.CUID2(params...)))
 }
 
-// Cuid2Ptr creates a pointer CUID2 schema.
-func Cuid2Ptr(params ...any) *ZodCUID2[*string] {
+// CUID2Ptr creates a pointer CUID2 schema.
+func CUID2Ptr(params ...any) *ZodCUID2[*string] {
 	return newCUID2(newIDSchema(StringPtr(params...), checks.CUID2(params...)))
 }
 
@@ -192,13 +192,13 @@ func (z *ZodULID[T]) Nullish() *ZodULID[*string] {
 	return newULID(z.ZodString.Nullish())
 }
 
-// Ulid creates a ULID schema.
-func Ulid(params ...any) *ZodULID[string] {
+// ULID creates a ULID schema.
+func ULID(params ...any) *ZodULID[string] {
 	return newULID(newIDSchema(StringTyped[string](params...), checks.ULID(params...)))
 }
 
-// UlidPtr creates a pointer ULID schema.
-func UlidPtr(params ...any) *ZodULID[*string] {
+// ULIDPtr creates a pointer ULID schema.
+func ULIDPtr(params ...any) *ZodULID[*string] {
 	return newULID(newIDSchema(StringPtr(params...), checks.ULID(params...)))
 }
 
@@ -238,13 +238,13 @@ func (z *ZodXID[T]) Nullish() *ZodXID[*string] {
 	return newXID(z.ZodString.Nullish())
 }
 
-// Xid creates an XID schema.
-func Xid(params ...any) *ZodXID[string] {
+// XID creates an XID schema.
+func XID(params ...any) *ZodXID[string] {
 	return newXID(newIDSchema(StringTyped[string](params...), checks.XID(params...)))
 }
 
-// XidPtr creates a pointer XID schema.
-func XidPtr(params ...any) *ZodXID[*string] {
+// XIDPtr creates a pointer XID schema.
+func XIDPtr(params ...any) *ZodXID[*string] {
 	return newXID(newIDSchema(StringPtr(params...), checks.XID(params...)))
 }
 
@@ -284,13 +284,13 @@ func (z *ZodKSUID[T]) Nullish() *ZodKSUID[*string] {
 	return newKSUID(z.ZodString.Nullish())
 }
 
-// Ksuid creates a KSUID schema.
-func Ksuid(params ...any) *ZodKSUID[string] {
+// KSUID creates a KSUID schema.
+func KSUID(params ...any) *ZodKSUID[string] {
 	return newKSUID(newIDSchema(StringTyped[string](params...), checks.KSUID(params...)))
 }
 
-// KsuidPtr creates a pointer KSUID schema.
-func KsuidPtr(params ...any) *ZodKSUID[*string] {
+// KSUIDPtr creates a pointer KSUID schema.
+func KSUIDPtr(params ...any) *ZodKSUID[*string] {
 	return newKSUID(newIDSchema(StringPtr(params...), checks.KSUID(params...)))
 }
 
@@ -330,13 +330,13 @@ func (z *ZodNanoID[T]) Nullish() *ZodNanoID[*string] {
 	return newNanoID(z.ZodString.Nullish())
 }
 
-// Nanoid creates a NanoID schema.
-func Nanoid(params ...any) *ZodNanoID[string] {
+// NanoID creates a NanoID schema.
+func NanoID(params ...any) *ZodNanoID[string] {
 	return newNanoID(newIDSchema(StringTyped[string](params...), checks.NanoID(params...)))
 }
 
-// NanoidPtr creates a pointer NanoID schema.
-func NanoidPtr(params ...any) *ZodNanoID[*string] {
+// NanoIDPtr creates a pointer NanoID schema.
+func NanoIDPtr(params ...any) *ZodNanoID[*string] {
 	return newNanoID(newIDSchema(StringPtr(params...), checks.NanoID(params...)))
 }
 
@@ -424,32 +424,32 @@ func UUIDPtr(params ...any) *ZodUUID[*string] {
 	return newUUIDSchema(StringPtr(rest...), ver, rest)
 }
 
-// Uuidv4 creates a UUID v4 schema.
-func Uuidv4(params ...any) *ZodUUID[string] {
+// UUIDv4 creates a UUID v4 schema.
+func UUIDv4(params ...any) *ZodUUID[string] {
 	return newUUID(newIDSchema(StringTyped[string](params...), checks.UUIDv4(params...)))
 }
 
-// Uuidv4Ptr creates a pointer UUID v4 schema.
-func Uuidv4Ptr(params ...any) *ZodUUID[*string] {
+// UUIDv4Ptr creates a pointer UUID v4 schema.
+func UUIDv4Ptr(params ...any) *ZodUUID[*string] {
 	return newUUID(newIDSchema(StringPtr(params...), checks.UUIDv4(params...)))
 }
 
-// Uuidv6 creates a UUID v6 schema.
-func Uuidv6(params ...any) *ZodUUID[string] {
+// UUIDv6 creates a UUID v6 schema.
+func UUIDv6(params ...any) *ZodUUID[string] {
 	return newUUID(newIDSchema(StringTyped[string](params...), checks.UUID6(params...)))
 }
 
-// Uuidv6Ptr creates a pointer UUID v6 schema.
-func Uuidv6Ptr(params ...any) *ZodUUID[*string] {
+// UUIDv6Ptr creates a pointer UUID v6 schema.
+func UUIDv6Ptr(params ...any) *ZodUUID[*string] {
 	return newUUID(newIDSchema(StringPtr(params...), checks.UUID6(params...)))
 }
 
-// Uuidv7 creates a UUID v7 schema.
-func Uuidv7(params ...any) *ZodUUID[string] {
+// UUIDv7 creates a UUID v7 schema.
+func UUIDv7(params ...any) *ZodUUID[string] {
 	return newUUID(newIDSchema(StringTyped[string](params...), checks.UUID7(params...)))
 }
 
-// Uuidv7Ptr creates a pointer UUID v7 schema.
-func Uuidv7Ptr(params ...any) *ZodUUID[*string] {
+// UUIDv7Ptr creates a pointer UUID v7 schema.
+func UUIDv7Ptr(params ...any) *ZodUUID[*string] {
 	return newUUID(newIDSchema(StringPtr(params...), checks.UUID7(params...)))
 }

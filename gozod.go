@@ -306,28 +306,28 @@ var (
 
 // Unique identifier constructors
 var (
-	Cuid      = types.Cuid
-	CuidPtr   = types.CuidPtr
-	Cuid2     = types.Cuid2
-	Cuid2Ptr  = types.Cuid2Ptr
+	CUID      = types.CUID
+	CUIDPtr   = types.CUIDPtr
+	CUID2     = types.CUID2
+	CUID2Ptr  = types.CUID2Ptr
 	GUID      = types.GUID
 	GUIDPtr   = types.GUIDPtr
-	Ulid      = types.Ulid
-	UlidPtr   = types.UlidPtr
-	Xid       = types.Xid
-	XidPtr    = types.XidPtr
-	Ksuid     = types.Ksuid
-	KsuidPtr  = types.KsuidPtr
-	Nanoid    = types.Nanoid
-	NanoidPtr = types.NanoidPtr
+	ULID      = types.ULID
+	ULIDPtr   = types.ULIDPtr
+	XID       = types.XID
+	XIDPtr    = types.XIDPtr
+	KSUID     = types.KSUID
+	KSUIDPtr  = types.KSUIDPtr
+	NanoID    = types.NanoID
+	NanoIDPtr = types.NanoIDPtr
 	UUID      = types.UUID
 	UUIDPtr   = types.UUIDPtr
-	Uuidv4    = types.Uuidv4
-	Uuidv4Ptr = types.Uuidv4Ptr
-	Uuidv6    = types.Uuidv6
-	Uuidv6Ptr = types.Uuidv6Ptr
-	Uuidv7    = types.Uuidv7
-	Uuidv7Ptr = types.Uuidv7Ptr
+	UUIDv4    = types.UUIDv4
+	UUIDv4Ptr = types.UUIDv4Ptr
+	UUIDv6    = types.UUIDv6
+	UUIDv6Ptr = types.UUIDv6Ptr
+	UUIDv7    = types.UUIDv7
+	UUIDv7Ptr = types.UUIDv7Ptr
 	JWT       = types.JWT
 	JWTPtr    = types.JWTPtr
 )
