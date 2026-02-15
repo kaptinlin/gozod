@@ -282,7 +282,7 @@ type Product struct {
 
 	// Check specific validations
 	helper.AssertCodeContains(generatedContent,
-		`"id": gozod.Uuid()`,
+		`"id": gozod.UUID()`,
 		`.Regex(regexp.MustCompile("^[A-Z0-9\\-]+$"))`,
 		`.Min(1).Max(200)`,
 		`.Gt(0.0)`,

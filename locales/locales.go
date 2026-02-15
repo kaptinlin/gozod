@@ -56,7 +56,7 @@ var DefaultLocales = LocaleErrorMap{
 	"ko": formatKo, // Korean
 	"vi": formatVi, // Vietnamese
 	"th": formatTh, // Thai
-	"id": formatId, // Indonesian
+	"id": formatID, // Indonesian
 	"ms": formatMs, // Malay
 	"ta": formatTa, // Tamil
 

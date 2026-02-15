@@ -13,7 +13,7 @@ import (
 // KOREAN LOCALE FORMATTER
 // =============================================================================
 
-// Korean sizing info mappings
+// SizableKo maps Korean sizing information.
 var SizableKo = map[string]issues.SizingInfo{
 	"string": {Unit: "문자", Verb: ""},
 	"file":   {Unit: "바이트", Verb: ""},
@@ -23,7 +23,7 @@ var SizableKo = map[string]issues.SizingInfo{
 	"map":    {Unit: "개", Verb: ""},
 }
 
-// Korean format noun mappings
+// FormatNounsKo maps Korean format noun translations.
 var FormatNounsKo = map[string]string{
 	"regex":            "입력",
 	"email":            "이메일 주소",
@@ -56,7 +56,7 @@ var FormatNounsKo = map[string]string{
 	"template_literal": "입력",
 }
 
-// Korean type dictionary
+// TypeDictionaryKo maps Korean type name translations.
 var TypeDictionaryKo = map[string]string{
 	"nan":       "NaN",
 	"number":    "숫자",

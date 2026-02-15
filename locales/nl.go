@@ -14,7 +14,7 @@ import (
 // DUTCH LOCALE FORMATTER
 // =============================================================================
 
-// Dutch sizing info mappings
+// SizableNl maps Dutch sizing information.
 var SizableNl = map[string]issues.SizingInfo{
 	"string": {Unit: "tekens", Verb: "heeft"},
 	"file":   {Unit: "bytes", Verb: "heeft"},
@@ -24,7 +24,7 @@ var SizableNl = map[string]issues.SizingInfo{
 	"map":    {Unit: "items", Verb: "heeft"},
 }
 
-// Dutch format noun mappings
+// FormatNounsNl maps Dutch format noun translations.
 var FormatNounsNl = map[string]string{
 	"regex":            "invoer",
 	"email":            "emailadres",
@@ -57,7 +57,7 @@ var FormatNounsNl = map[string]string{
 	"template_literal": "invoer",
 }
 
-// Dutch type dictionary
+// TypeDictionaryNl maps Dutch type name translations.
 var TypeDictionaryNl = map[string]string{
 	"nan":       "NaN",
 	"number":    "getal",

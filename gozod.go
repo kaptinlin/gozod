@@ -15,7 +15,7 @@ import (
 // CORE DEFINITIONS – Basic validation primitives, checks, and configurations
 // =============================================================================
 
-// Generic ZodType alias for ergonomic use
+// ZodType is a generic alias for core.ZodType for ergonomic use.
 type ZodType[T any] = core.ZodType[T]
 
 // Schema and configuration aliases
@@ -85,14 +85,14 @@ type (
 // String Format Types
 // -----------------------------------------------------------------------------
 type (
-	// Standard formats
+	// ZodEmail validates email addresses.
 	ZodEmail[T types.EmailConstraint]      = types.ZodEmail[T]
 	ZodEmoji[T types.StringConstraint]     = types.ZodEmoji[T]
 	ZodBase64[T types.StringConstraint]    = types.ZodBase64[T]
 	ZodBase64URL[T types.StringConstraint] = types.ZodBase64URL[T]
 	ZodHex[T types.StringConstraint]       = types.ZodHex[T]
 
-	// Network formats
+	// ZodIPv4 validates IPv4 addresses.
 	ZodIPv4[T types.StringConstraint]     = types.ZodIPv4[T]
 	ZodIPv6[T types.StringConstraint]     = types.ZodIPv6[T]
 	ZodCIDRv4[T types.StringConstraint]   = types.ZodCIDRv4[T]
@@ -103,12 +103,12 @@ type (
 	ZodE164[T types.StringConstraint]     = types.ZodE164[T]
 	URLOptions                            = types.URLOptions
 
-	// ISO 8601 formats
+	// ZodIso validates ISO 8601 formatted strings.
 	ZodIso[T types.IsoConstraint] = types.ZodIso[T]
 	IsoDatetimeOptions            = types.IsoDatetimeOptions
 	IsoTimeOptions                = types.IsoTimeOptions
 
-	// Unique identifier formats
+	// ZodCUID validates CUID strings.
 	ZodCUID[T types.StringConstraint]   = types.ZodCUID[T]
 	ZodCUID2[T types.StringConstraint]  = types.ZodCUID2[T]
 	ZodGUID[T types.StringConstraint]   = types.ZodGUID[T]
@@ -310,8 +310,8 @@ var (
 	CuidPtr   = types.CuidPtr
 	Cuid2     = types.Cuid2
 	Cuid2Ptr  = types.Cuid2Ptr
-	Guid      = types.Guid
-	GuidPtr   = types.GuidPtr
+	GUID      = types.GUID
+	GUIDPtr   = types.GUIDPtr
 	Ulid      = types.Ulid
 	UlidPtr   = types.UlidPtr
 	Xid       = types.Xid
@@ -320,8 +320,8 @@ var (
 	KsuidPtr  = types.KsuidPtr
 	Nanoid    = types.Nanoid
 	NanoidPtr = types.NanoidPtr
-	Uuid      = types.Uuid
-	UuidPtr   = types.UuidPtr
+	UUID      = types.UUID
+	UUIDPtr   = types.UUIDPtr
 	Uuidv4    = types.Uuidv4
 	Uuidv4Ptr = types.Uuidv4Ptr
 	Uuidv6    = types.Uuidv6
@@ -521,7 +521,7 @@ type (
 	ZodRawIssue = core.ZodRawIssue
 )
 
-// Error utility function
+// IsZodError checks whether an error is a ZodError.
 var IsZodError = issues.IsZodError
 
 // -----------------------------------------------------------------------------

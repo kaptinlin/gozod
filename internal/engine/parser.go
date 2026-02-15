@@ -1,3 +1,4 @@
+// Package engine provides the core parsing and validation engine for GoZod schemas.
 package engine
 
 import (

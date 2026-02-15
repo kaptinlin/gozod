@@ -26,7 +26,7 @@ type hebrewSizingInfo struct {
 	LongLabel  string // for "too big"
 }
 
-// Hebrew type names with gender
+// TypeNamesHe maps Hebrew type names with gender.
 var TypeNamesHe = map[string]hebrewTypeInfo{
 	"string":    {Label: "מחרוזת", Gender: "f"},
 	"number":    {Label: "מספר", Gender: "m"},
@@ -50,7 +50,7 @@ var TypeNamesHe = map[string]hebrewTypeInfo{
 	"value":     {Label: "ערך", Gender: "m"},
 }
 
-// Hebrew sizing info mappings
+// SizableHe maps Hebrew sizing information.
 var SizableHe = map[string]hebrewSizingInfo{
 	"string": {Unit: "תווים", ShortLabel: "קצר", LongLabel: "ארוך"},
 	"file":   {Unit: "בייטים", ShortLabel: "קטן", LongLabel: "גדול"},
@@ -61,7 +61,7 @@ var SizableHe = map[string]hebrewSizingInfo{
 	"number": {Unit: "", ShortLabel: "קטן", LongLabel: "גדול"},
 }
 
-// Hebrew format noun mappings with gender
+// FormatNounsHe maps Hebrew format noun translations with gender.
 var FormatNounsHe = map[string]hebrewTypeInfo{
 	"regex":            {Label: "קלט", Gender: "m"},
 	"email":            {Label: "כתובת אימייל", Gender: "f"},

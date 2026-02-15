@@ -644,11 +644,11 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 
 	for key, propSchema := range shape {
 		c.path = append(c.path, "properties", key)
-		propJsonSchema, err := c.convert(propSchema)
+		propJSONSchema, err := c.convert(propSchema)
 		if err != nil {
 			return nil, err
 		}
-		properties[key] = propJsonSchema
+		properties[key] = propJSONSchema
 		c.path = c.path[:len(c.path)-2]
 
 		isRequired := !propSchema.Internals().IsOptional()
@@ -683,11 +683,11 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 		if catchallSchema := s.Catchall(); catchallSchema != nil {
 			// If there's a catchall schema, convert it to additionalProperties
 			c.path = append(c.path, "additionalProperties")
-			catchallJsonSchema, err := c.convert(catchallSchema)
+			catchallJSONSchema, err := c.convert(catchallSchema)
 			if err != nil {
 				return nil, err
 			}
-			jsonSchema.AdditionalProperties = catchallJsonSchema
+			jsonSchema.AdditionalProperties = catchallJSONSchema
 			c.path = c.path[:len(c.path)-1]
 		}
 	}

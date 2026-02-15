@@ -1,3 +1,4 @@
+// Package jsonschema provides JSON Schema conversion for GoZod schemas.
 package jsonschema
 
 import (
@@ -280,7 +281,7 @@ func (ctx *fromJSONSchemaContext) getFormatSchema(format string) core.ZodSchema 
 	case "email":
 		return types.Email()
 	case "uuid":
-		return types.Uuid()
+		return types.UUID()
 	case "uri", "url":
 		return types.URL()
 	case "date-time":

@@ -137,7 +137,7 @@ type TestStruct struct {
 type TestField struct {
 	Name     string
 	Type     string
-	JsonTag  string
+	JSONTag  string
 	GozodTag string
 }
 
@@ -154,8 +154,8 @@ func (ts TestStruct) GenerateStructCode() string {
 		sb.WriteString(fmt.Sprintf("\t%s %s", field.Name, field.Type))
 
 		var tags []string
-		if field.JsonTag != "" {
-			tags = append(tags, fmt.Sprintf(`json:"%s"`, field.JsonTag))
+		if field.JSONTag != "" {
+			tags = append(tags, fmt.Sprintf(`json:"%s"`, field.JSONTag))
 		}
 		if field.GozodTag != "" {
 			tags = append(tags, fmt.Sprintf(`gozod:"%s"`, field.GozodTag))
@@ -177,30 +177,30 @@ var CommonTestStructs = map[string]TestStruct{
 		Name:    "User",
 		Package: "main",
 		Fields: []TestField{
-			{Name: "ID", Type: "string", JsonTag: "id", GozodTag: "required,uuid"},
-			{Name: "Name", Type: "string", JsonTag: "name", GozodTag: "required,min=2,max=50"},
-			{Name: "Email", Type: "string", JsonTag: "email", GozodTag: "required,email"},
-			{Name: "Age", Type: "int", JsonTag: "age", GozodTag: "required,min=18,max=120"},
+			{Name: "ID", Type: "string", JSONTag: "id", GozodTag: "required,uuid"},
+			{Name: "Name", Type: "string", JSONTag: "name", GozodTag: "required,min=2,max=50"},
+			{Name: "Email", Type: "string", JSONTag: "email", GozodTag: "required,email"},
+			{Name: "Age", Type: "int", JSONTag: "age", GozodTag: "required,min=18,max=120"},
 		},
 	},
 	"ComplexProduct": {
 		Name:    "Product",
 		Package: "main",
 		Fields: []TestField{
-			{Name: "ID", Type: "string", JsonTag: "id", GozodTag: "required,uuid"},
-			{Name: "Name", Type: "string", JsonTag: "name", GozodTag: "required,min=1,max=200"},
-			{Name: "Price", Type: "float64", JsonTag: "price", GozodTag: "required,gt=0.0"},
-			{Name: "Tags", Type: "[]string", JsonTag: "tags", GozodTag: "min=0,max=10"},
-			{Name: "Active", Type: "*bool", JsonTag: "active", GozodTag: "default=true"},
+			{Name: "ID", Type: "string", JSONTag: "id", GozodTag: "required,uuid"},
+			{Name: "Name", Type: "string", JSONTag: "name", GozodTag: "required,min=1,max=200"},
+			{Name: "Price", Type: "float64", JSONTag: "price", GozodTag: "required,gt=0.0"},
+			{Name: "Tags", Type: "[]string", JSONTag: "tags", GozodTag: "min=0,max=10"},
+			{Name: "Active", Type: "*bool", JSONTag: "active", GozodTag: "default=true"},
 		},
 	},
 	"CircularRef": {
 		Name:    "Node",
 		Package: "main",
 		Fields: []TestField{
-			{Name: "Value", Type: "int", JsonTag: "value", GozodTag: "required"},
-			{Name: "Next", Type: "*Node", JsonTag: "next", GozodTag: ""},
-			{Name: "Children", Type: "[]*Node", JsonTag: "children", GozodTag: ""},
+			{Name: "Value", Type: "int", JSONTag: "value", GozodTag: "required"},
+			{Name: "Next", Type: "*Node", JSONTag: "next", GozodTag: ""},
+			{Name: "Children", Type: "[]*Node", JSONTag: "children", GozodTag: ""},
 		},
 	},
 }

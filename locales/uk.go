@@ -13,7 +13,7 @@ import (
 // UKRAINIAN LOCALE FORMATTER
 // =============================================================================
 
-// Ukrainian sizing info mappings
+// SizableUk maps Ukrainian sizing information.
 var SizableUk = map[string]issues.SizingInfo{
 	"string": {Unit: "символів", Verb: "матиме"},
 	"file":   {Unit: "байтів", Verb: "матиме"},
@@ -23,7 +23,7 @@ var SizableUk = map[string]issues.SizingInfo{
 	"map":    {Unit: "записів", Verb: "матиме"},
 }
 
-// Ukrainian format noun mappings
+// FormatNounsUk maps Ukrainian format noun translations.
 var FormatNounsUk = map[string]string{
 	"regex":            "вхідні дані",
 	"email":            "адреса електронної пошти",
@@ -56,7 +56,7 @@ var FormatNounsUk = map[string]string{
 	"template_literal": "вхідні дані",
 }
 
-// Ukrainian type dictionary
+// TypeDictionaryUk maps Ukrainian type name translations.
 var TypeDictionaryUk = map[string]string{
 	"nan":       "NaN",
 	"number":    "число",

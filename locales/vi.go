@@ -13,7 +13,7 @@ import (
 // VIETNAMESE LOCALE FORMATTER
 // =============================================================================
 
-// Vietnamese sizing info mappings
+// SizableVi maps Vietnamese sizing information.
 var SizableVi = map[string]issues.SizingInfo{
 	"string": {Unit: "ký tự", Verb: "có"},
 	"file":   {Unit: "byte", Verb: "có"},
@@ -23,7 +23,7 @@ var SizableVi = map[string]issues.SizingInfo{
 	"map":    {Unit: "mục", Verb: "có"},
 }
 
-// Vietnamese format noun mappings
+// FormatNounsVi maps Vietnamese format noun translations.
 var FormatNounsVi = map[string]string{
 	"regex":            "đầu vào",
 	"email":            "địa chỉ email",
@@ -56,7 +56,7 @@ var FormatNounsVi = map[string]string{
 	"template_literal": "đầu vào",
 }
 
-// Vietnamese type dictionary
+// TypeDictionaryVi maps Vietnamese type name translations.
 var TypeDictionaryVi = map[string]string{
 	"nan":       "NaN",
 	"number":    "số",

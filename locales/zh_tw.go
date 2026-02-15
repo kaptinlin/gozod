@@ -13,7 +13,7 @@ import (
 // TRADITIONAL CHINESE (TAIWAN) LOCALE FORMATTER
 // =============================================================================
 
-// Traditional Chinese sizing info mappings
+// SizableZhTw maps Traditional Chinese sizing information.
 var SizableZhTw = map[string]issues.SizingInfo{
 	"string": {Unit: "字元", Verb: "擁有"},
 	"file":   {Unit: "位元組", Verb: "擁有"},
@@ -23,7 +23,7 @@ var SizableZhTw = map[string]issues.SizingInfo{
 	"map":    {Unit: "項目", Verb: "擁有"},
 }
 
-// Traditional Chinese format noun mappings
+// FormatNounsZhTw maps Traditional Chinese format noun translations.
 var FormatNounsZhTw = map[string]string{
 	"regex":            "輸入",
 	"email":            "郵件地址",
@@ -56,7 +56,7 @@ var FormatNounsZhTw = map[string]string{
 	"template_literal": "輸入",
 }
 
-// Traditional Chinese type dictionary
+// TypeDictionaryZhTw maps Traditional Chinese type name translations.
 var TypeDictionaryZhTw = map[string]string{
 	"nan":       "NaN",
 	"number":    "數字",

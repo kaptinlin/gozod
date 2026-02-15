@@ -2120,9 +2120,9 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 			// Replace string schema with UUID schema
 			switch schema.(type) {
 			case *ZodString[string]:
-				schema = Uuid()
+				schema = UUID()
 			case *ZodString[*string]:
-				schema = UuidPtr()
+				schema = UUIDPtr()
 			}
 		case "ipv4":
 			switch schema.(type) {

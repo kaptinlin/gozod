@@ -14,7 +14,7 @@ import (
 // SWEDISH LOCALE FORMATTER
 // =============================================================================
 
-// Swedish sizing info mappings
+// SizableSv maps Swedish sizing information.
 var SizableSv = map[string]issues.SizingInfo{
 	"string": {Unit: "tecken", Verb: "att ha"},
 	"file":   {Unit: "bytes", Verb: "att ha"},
@@ -24,7 +24,7 @@ var SizableSv = map[string]issues.SizingInfo{
 	"map":    {Unit: "poster", Verb: "att innehålla"},
 }
 
-// Swedish format noun mappings
+// FormatNounsSv maps Swedish format noun translations.
 var FormatNounsSv = map[string]string{
 	"regex":            "reguljärt uttryck",
 	"email":            "e-postadress",
@@ -57,7 +57,7 @@ var FormatNounsSv = map[string]string{
 	"template_literal": "mall-literal",
 }
 
-// Swedish type dictionary
+// TypeDictionarySv maps Swedish type name translations.
 var TypeDictionarySv = map[string]string{
 	"nan":       "NaN",
 	"number":    "antal",

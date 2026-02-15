@@ -13,7 +13,7 @@ import (
 // JAPANESE LOCALE FORMATTER
 // =============================================================================
 
-// Japanese sizing info mappings
+// SizableJa maps Japanese sizing information.
 var SizableJa = map[string]issues.SizingInfo{
 	"string": {Unit: "文字", Verb: "である"},
 	"file":   {Unit: "バイト", Verb: "である"},
@@ -23,7 +23,7 @@ var SizableJa = map[string]issues.SizingInfo{
 	"map":    {Unit: "エントリ", Verb: "である"},
 }
 
-// Japanese format noun mappings
+// FormatNounsJa maps Japanese format noun translations.
 var FormatNounsJa = map[string]string{
 	"regex":            "入力値",
 	"email":            "メールアドレス",
@@ -56,7 +56,7 @@ var FormatNounsJa = map[string]string{
 	"template_literal": "入力値",
 }
 
-// Japanese type dictionary
+// TypeDictionaryJa maps Japanese type name translations.
 var TypeDictionaryJa = map[string]string{
 	"nan":       "NaN",
 	"number":    "数値",

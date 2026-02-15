@@ -13,7 +13,7 @@ import (
 // HUNGARIAN LOCALE FORMATTER
 // =============================================================================
 
-// Hungarian sizing info mappings
+// SizableHu maps Hungarian sizing information.
 var SizableHu = map[string]issues.SizingInfo{
 	"string": {Unit: "karakter", Verb: "legyen"},
 	"file":   {Unit: "byte", Verb: "legyen"},
@@ -23,7 +23,7 @@ var SizableHu = map[string]issues.SizingInfo{
 	"map":    {Unit: "bejegyzés", Verb: "legyen"},
 }
 
-// Hungarian format noun mappings
+// FormatNounsHu maps Hungarian format noun translations.
 var FormatNounsHu = map[string]string{
 	"regex":            "bemenet",
 	"email":            "email cím",
@@ -56,7 +56,7 @@ var FormatNounsHu = map[string]string{
 	"template_literal": "bemenet",
 }
 
-// Hungarian type dictionary
+// TypeDictionaryHu maps Hungarian type name translations.
 var TypeDictionaryHu = map[string]string{
 	"nan":       "NaN",
 	"number":    "szám",

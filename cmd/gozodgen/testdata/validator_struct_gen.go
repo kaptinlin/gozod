@@ -17,7 +17,7 @@ func (vs ValidatorStruct) Schema() *gozod.ZodStruct[ValidatorStruct, ValidatorSt
 	return gozod.Struct[ValidatorStruct](gozod.StructSchema{
 		"email": gozod.String().Email().Optional(),
 		"url": gozod.String().URL().Optional(),
-		"uuid": gozod.Uuid().Optional(),
+		"uuid": gozod.UUID().Optional(),
 		"ipv4": gozod.String().IPv4().Optional(),
 		"ipv6": gozod.String().IPv6().Optional(),
 		"regex": gozod.String().Regex(regexp.MustCompile("^[A-Z]+$")).Optional(),

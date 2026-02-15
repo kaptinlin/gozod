@@ -13,7 +13,7 @@ import (
 // TURKISH LOCALE FORMATTER
 // =============================================================================
 
-// Turkish sizing info mappings
+// SizableTr maps Turkish sizing information.
 var SizableTr = map[string]issues.SizingInfo{
 	"string": {Unit: "karakter", Verb: "olmalı"},
 	"file":   {Unit: "bayt", Verb: "olmalı"},
@@ -23,7 +23,7 @@ var SizableTr = map[string]issues.SizingInfo{
 	"map":    {Unit: "girdi", Verb: "olmalı"},
 }
 
-// Turkish format noun mappings
+// FormatNounsTr maps Turkish format noun translations.
 var FormatNounsTr = map[string]string{
 	"regex":            "girdi",
 	"email":            "e-posta adresi",
@@ -56,7 +56,7 @@ var FormatNounsTr = map[string]string{
 	"template_literal": "şablon dizesi",
 }
 
-// Turkish type dictionary
+// TypeDictionaryTr maps Turkish type name translations.
 var TypeDictionaryTr = map[string]string{
 	"nan":       "NaN",
 	"number":    "sayı",

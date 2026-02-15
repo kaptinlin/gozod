@@ -19,7 +19,7 @@ type finnishSizingInfo struct {
 	Subject string // genitive form for "of X"
 }
 
-// Finnish sizing info mappings
+// SizableFi maps Finnish sizing information.
 var SizableFi = map[string]finnishSizingInfo{
 	"string": {Unit: "merkkiä", Subject: "merkkijonon"},
 	"file":   {Unit: "tavua", Subject: "tiedoston"},
@@ -33,7 +33,7 @@ var SizableFi = map[string]finnishSizingInfo{
 	"date":   {Unit: "", Subject: "päivämäärän"},
 }
 
-// Finnish format noun mappings
+// FormatNounsFi maps Finnish format noun translations.
 var FormatNounsFi = map[string]string{
 	"regex":            "säännöllinen lauseke",
 	"email":            "sähköpostiosoite",
@@ -66,7 +66,7 @@ var FormatNounsFi = map[string]string{
 	"template_literal": "templaattimerkkijono",
 }
 
-// Finnish type dictionary
+// TypeDictionaryFi maps Finnish type name translations.
 var TypeDictionaryFi = map[string]string{
 	"nan":       "NaN",
 	"number":    "numero",

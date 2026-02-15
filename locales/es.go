@@ -13,7 +13,7 @@ import (
 // SPANISH LOCALE FORMATTER
 // =============================================================================
 
-// Spanish sizing info mappings
+// SizableEs maps Spanish sizing information.
 var SizableEs = map[string]issues.SizingInfo{
 	"string": {Unit: "caracteres", Verb: "tener"},
 	"file":   {Unit: "bytes", Verb: "tener"},
@@ -23,7 +23,7 @@ var SizableEs = map[string]issues.SizingInfo{
 	"map":    {Unit: "entradas", Verb: "tener"},
 }
 
-// Spanish format noun mappings
+// FormatNounsEs maps Spanish format noun translations.
 var FormatNounsEs = map[string]string{
 	"regex":            "entrada",
 	"email":            "dirección de correo electrónico",
@@ -56,7 +56,7 @@ var FormatNounsEs = map[string]string{
 	"template_literal": "entrada",
 }
 
-// Spanish type dictionary (comprehensive)
+// TypeDictionaryEs maps Spanish type name translations.
 var TypeDictionaryEs = map[string]string{
 	"nan":       "NaN",
 	"string":    "texto",

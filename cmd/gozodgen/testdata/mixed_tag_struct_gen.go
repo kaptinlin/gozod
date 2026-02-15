@@ -11,7 +11,7 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (mts MixedTagStruct) Schema() *gozod.ZodStruct[MixedTagStruct, MixedTagStruct] {
 	return gozod.Struct[MixedTagStruct](gozod.StructSchema{
-		"id": gozod.Uuid(),
+		"id": gozod.UUID(),
 		"Active": gozod.Bool().Default(true).Optional(),
 	})
 }

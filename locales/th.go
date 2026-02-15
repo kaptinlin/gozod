@@ -13,7 +13,7 @@ import (
 // THAI LOCALE FORMATTER
 // =============================================================================
 
-// Thai sizing info mappings
+// SizableTh maps Thai sizing information.
 var SizableTh = map[string]issues.SizingInfo{
 	"string": {Unit: "ตัวอักษร", Verb: "ควรมี"},
 	"file":   {Unit: "ไบต์", Verb: "ควรมี"},
@@ -23,7 +23,7 @@ var SizableTh = map[string]issues.SizingInfo{
 	"map":    {Unit: "รายการ", Verb: "ควรมี"},
 }
 
-// Thai format noun mappings
+// FormatNounsTh maps Thai format noun translations.
 var FormatNounsTh = map[string]string{
 	"regex":            "ข้อมูลที่ป้อน",
 	"email":            "ที่อยู่อีเมล",
@@ -56,7 +56,7 @@ var FormatNounsTh = map[string]string{
 	"template_literal": "ข้อมูลที่ป้อน",
 }
 
-// Thai type dictionary
+// TypeDictionaryTh maps Thai type name translations.
 var TypeDictionaryTh = map[string]string{
 	"nan":       "NaN",
 	"number":    "ตัวเลข",

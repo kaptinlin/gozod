@@ -14,7 +14,7 @@ import (
 // PORTUGUESE LOCALE FORMATTER
 // =============================================================================
 
-// Portuguese sizing info mappings
+// SizablePt maps Portuguese sizing information.
 var SizablePt = map[string]issues.SizingInfo{
 	"string": {Unit: "caracteres", Verb: "ter"},
 	"file":   {Unit: "bytes", Verb: "ter"},
@@ -24,7 +24,7 @@ var SizablePt = map[string]issues.SizingInfo{
 	"map":    {Unit: "entradas", Verb: "ter"},
 }
 
-// Portuguese format noun mappings
+// FormatNounsPt maps Portuguese format noun translations.
 var FormatNounsPt = map[string]string{
 	"regex":            "padrão",
 	"email":            "endereço de e-mail",
@@ -57,7 +57,7 @@ var FormatNounsPt = map[string]string{
 	"template_literal": "entrada",
 }
 
-// Portuguese type dictionary
+// TypeDictionaryPt maps Portuguese type name translations.
 var TypeDictionaryPt = map[string]string{
 	"nan":       "NaN",
 	"number":    "número",

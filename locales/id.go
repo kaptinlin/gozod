@@ -13,8 +13,8 @@ import (
 // INDONESIAN LOCALE FORMATTER
 // =============================================================================
 
-// Indonesian sizing info mappings
-var SizableId = map[string]issues.SizingInfo{
+// SizableID maps Indonesian sizing information.
+var SizableID = map[string]issues.SizingInfo{
 	"string": {Unit: "karakter", Verb: "memiliki"},
 	"file":   {Unit: "byte", Verb: "memiliki"},
 	"array":  {Unit: "item", Verb: "memiliki"},
@@ -23,8 +23,8 @@ var SizableId = map[string]issues.SizingInfo{
 	"map":    {Unit: "entri", Verb: "memiliki"},
 }
 
-// Indonesian format noun mappings
-var FormatNounsId = map[string]string{
+// FormatNounsID maps Indonesian format noun translations.
+var FormatNounsID = map[string]string{
 	"regex":            "input",
 	"email":            "alamat email",
 	"url":              "URL",
@@ -56,8 +56,8 @@ var FormatNounsId = map[string]string{
 	"template_literal": "input",
 }
 
-// Indonesian type dictionary
-var TypeDictionaryId = map[string]string{
+// TypeDictionaryID maps Indonesian type name translations.
+var TypeDictionaryID = map[string]string{
 	"nan":       "NaN",
 	"number":    "angka",
 	"array":     "array",
@@ -74,40 +74,40 @@ var TypeDictionaryId = map[string]string{
 	"set":       "set",
 }
 
-// getSizingId returns Indonesian sizing information for a given type
-func getSizingId(origin string) *issues.SizingInfo {
-	if _, exists := SizableId[origin]; exists {
-		return new(SizableId[origin])
+// getSizingID returns Indonesian sizing information for a given type
+func getSizingID(origin string) *issues.SizingInfo {
+	if _, exists := SizableID[origin]; exists {
+		return new(SizableID[origin])
 	}
 	return nil
 }
 
-// getFormatNounId returns Indonesian noun for a format name
-func getFormatNounId(format string) string {
-	if noun, exists := FormatNounsId[format]; exists {
+// getFormatNounID returns Indonesian noun for a format name
+func getFormatNounID(format string) string {
+	if noun, exists := FormatNounsID[format]; exists {
 		return noun
 	}
 	return format
 }
 
-// getTypeNameId returns Indonesian type name
-func getTypeNameId(typeName string) string {
-	if name, exists := TypeDictionaryId[typeName]; exists {
+// getTypeNameID returns Indonesian type name
+func getTypeNameID(typeName string) string {
+	if name, exists := TypeDictionaryID[typeName]; exists {
 		return name
 	}
 	return typeName
 }
 
-// formatId provides Indonesian error messages
-func formatId(raw core.ZodRawIssue) string {
+// formatID provides Indonesian error messages
+func formatID(raw core.ZodRawIssue) string {
 	code := raw.Code
 
 	switch code {
 	case core.InvalidType:
 		expected := mapx.StringOr(raw.Properties, "expected", "")
-		expected = getTypeNameId(expected)
+		expected = getTypeNameID(expected)
 		received := issues.ParsedTypeToString(raw.Input)
-		received = getTypeNameId(received)
+		received = getTypeNameID(received)
 		return fmt.Sprintf("Input tidak valid: diharapkan %s, diterima %s", expected, received)
 
 	case core.InvalidValue:
@@ -122,17 +122,17 @@ func formatId(raw core.ZodRawIssue) string {
 			issues.JoinValuesWithSeparator(values, "|"))
 
 	case core.TooBig:
-		return formatSizeConstraintId(raw, false)
+		return formatSizeConstraintID(raw, false)
 
 	case core.TooSmall:
-		return formatSizeConstraintId(raw, true)
+		return formatSizeConstraintID(raw, true)
 
 	case core.InvalidFormat:
 		format := mapx.StringOr(raw.Properties, "format", "")
 		if format == "" {
 			return "Format tidak valid"
 		}
-		return formatStringValidationId(raw, format)
+		return formatStringValidationID(raw, format)
 
 	case core.NotMultipleOf:
 		divisor := mapx.AnyOr(raw.Properties, "divisor", nil)
@@ -212,8 +212,8 @@ func formatId(raw core.ZodRawIssue) string {
 	}
 }
 
-// formatSizeConstraintId formats size constraint messages in Indonesian
-func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
+// formatSizeConstraintID formats size constraint messages in Indonesian
+func formatSizeConstraintID(raw core.ZodRawIssue, isTooSmall bool) string {
 	origin := mapx.StringOr(raw.Properties, "origin", "")
 	if origin == "" {
 		origin = "value"
@@ -234,7 +234,7 @@ func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
 	}
 
 	inclusive := mapx.BoolOr(raw.Properties, "inclusive", true)
-	sizing := getSizingId(mapx.StringOr(raw.Properties, "origin", ""))
+	sizing := getSizingID(mapx.StringOr(raw.Properties, "origin", ""))
 	thresholdStr := issues.FormatThreshold(threshold)
 
 	// Indonesian comparison operators
@@ -266,8 +266,8 @@ func formatSizeConstraintId(raw core.ZodRawIssue, isTooSmall bool) string {
 	return fmt.Sprintf("Terlalu besar: diharapkan %s menjadi %s%s", origin, adj, thresholdStr)
 }
 
-// formatStringValidationId handles string format validation messages in Indonesian
-func formatStringValidationId(raw core.ZodRawIssue, format string) string {
+// formatStringValidationID handles string format validation messages in Indonesian
+func formatStringValidationID(raw core.ZodRawIssue, format string) string {
 	switch format {
 	case "starts_with":
 		prefix := mapx.StringOr(raw.Properties, "prefix", "")
@@ -294,19 +294,19 @@ func formatStringValidationId(raw core.ZodRawIssue, format string) string {
 		}
 		return fmt.Sprintf("String tidak valid: harus sesuai pola %s", pattern)
 	default:
-		noun := getFormatNounId(format)
+		noun := getFormatNounID(format)
 		return fmt.Sprintf("%s tidak valid", noun)
 	}
 }
 
-// Id returns a ZodConfig configured for Indonesian locale.
-func Id() *core.ZodConfig {
+// ID returns a ZodConfig configured for Indonesian locale.
+func ID() *core.ZodConfig {
 	return &core.ZodConfig{
-		LocaleError: formatId,
+		LocaleError: formatID,
 	}
 }
 
-// FormatMessageId formats a single issue using Indonesian locale
-func FormatMessageId(issue core.ZodRawIssue) string {
-	return formatId(issue)
+// FormatMessageID formats a single issue using Indonesian locale
+func FormatMessageID(issue core.ZodRawIssue) string {
+	return formatID(issue)
 }

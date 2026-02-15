@@ -13,7 +13,7 @@ import (
 // URDU LOCALE FORMATTER
 // =============================================================================
 
-// Urdu sizing info mappings
+// SizableUr maps Urdu sizing information.
 var SizableUr = map[string]issues.SizingInfo{
 	"string": {Unit: "حروف", Verb: "ہونا"},
 	"file":   {Unit: "بائٹس", Verb: "ہونا"},
@@ -23,7 +23,7 @@ var SizableUr = map[string]issues.SizingInfo{
 	"map":    {Unit: "اندراجات", Verb: "ہونا"},
 }
 
-// Urdu format noun mappings
+// FormatNounsUr maps Urdu format noun translations.
 var FormatNounsUr = map[string]string{
 	"regex":            "ان پٹ",
 	"email":            "ای میل ایڈریس",
@@ -56,7 +56,7 @@ var FormatNounsUr = map[string]string{
 	"template_literal": "ان پٹ",
 }
 
-// Urdu type dictionary
+// TypeDictionaryUr maps Urdu type name translations.
 var TypeDictionaryUr = map[string]string{
 	"nan":       "NaN",
 	"number":    "نمبر",

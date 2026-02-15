@@ -14,7 +14,7 @@ import (
 // DANISH LOCALE FORMATTER
 // =============================================================================
 
-// Danish sizing info mappings
+// SizableDa maps Danish sizing information.
 var SizableDa = map[string]issues.SizingInfo{
 	"string": {Unit: "tegn", Verb: "havde"},
 	"file":   {Unit: "bytes", Verb: "havde"},
@@ -24,7 +24,7 @@ var SizableDa = map[string]issues.SizingInfo{
 	"map":    {Unit: "poster", Verb: "indeholdt"},
 }
 
-// Danish format noun mappings
+// FormatNounsDa maps Danish format noun translations.
 var FormatNounsDa = map[string]string{
 	"regex":            "input",
 	"email":            "e-mailadresse",
@@ -57,7 +57,7 @@ var FormatNounsDa = map[string]string{
 	"template_literal": "input",
 }
 
-// Danish type dictionary
+// TypeDictionaryDa maps Danish type name translations.
 var TypeDictionaryDa = map[string]string{
 	"nan":       "NaN",
 	"number":    "tal",

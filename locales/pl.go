@@ -14,7 +14,7 @@ import (
 // POLISH LOCALE FORMATTER
 // =============================================================================
 
-// Polish sizing info mappings
+// SizablePl maps Polish sizing information.
 var SizablePl = map[string]issues.SizingInfo{
 	"string": {Unit: "znaków", Verb: "mieć"},
 	"file":   {Unit: "bajtów", Verb: "mieć"},
@@ -24,7 +24,7 @@ var SizablePl = map[string]issues.SizingInfo{
 	"map":    {Unit: "wpisów", Verb: "mieć"},
 }
 
-// Polish format noun mappings
+// FormatNounsPl maps Polish format noun translations.
 var FormatNounsPl = map[string]string{
 	"regex":            "wyrażenie",
 	"email":            "adres email",
@@ -57,7 +57,7 @@ var FormatNounsPl = map[string]string{
 	"template_literal": "wejście",
 }
 
-// Polish type dictionary
+// TypeDictionaryPl maps Polish type name translations.
 var TypeDictionaryPl = map[string]string{
 	"nan":       "NaN",
 	"number":    "liczba",

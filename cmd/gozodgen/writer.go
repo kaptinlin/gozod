@@ -215,7 +215,7 @@ func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structNa
 	// UUID special case
 	if hasUUIDRule(field.Rules) && isStringType(field.Type) {
 		var b strings.Builder
-		b.WriteString("gozod.Uuid()")
+		b.WriteString("gozod.UUID()")
 		for _, rule := range field.Rules {
 			if rule.Name != "uuid" {
 				if code := generateValidatorChain(rule, field.Type); code != "" {

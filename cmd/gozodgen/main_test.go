@@ -251,7 +251,7 @@ type TestProduct struct {
 	// Check that both structs have Schema methods
 	helper.AssertCodeContains(userContent,
 		"func (tu TestUser) Schema() *gozod.ZodStruct[TestUser, TestUser]",
-		`"id": gozod.Uuid()`,
+		`"id": gozod.UUID()`,
 		`"email": gozod.String().Email()`,
 	)
 

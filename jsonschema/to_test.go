@@ -199,7 +199,7 @@ func TestToJSONSchema_StringFormats(t *testing.T) {
 		},
 		{
 			name:     "UUID",
-			schema:   types.Uuid(),
+			schema:   types.UUID(),
 			expected: `{"type":"string","format":"uuid","pattern":"^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"}`,
 		},
 		{
@@ -1846,11 +1846,11 @@ func TestToJSONSchemaUnrepresentableLiteral(t *testing.T) {
 }
 
 func TestToJSONSchemaDescribeWithID(t *testing.T) {
-	jobId := types.String().Meta(core.GlobalMeta{ID: "jobId"})
+	jobID := types.String().Meta(core.GlobalMeta{ID: "jobId"})
 
 	schema := types.Struct[map[string]any](core.ObjectSchema{
-		"current":  jobId.Meta(core.GlobalMeta{Description: "Current job"}),
-		"previous": jobId.Meta(core.GlobalMeta{Description: "Previous job"}),
+		"current":  jobID.Meta(core.GlobalMeta{Description: "Current job"}),
+		"previous": jobID.Meta(core.GlobalMeta{Description: "Previous job"}),
 	})
 
 	result, err := ToJSONSchema(schema)
@@ -1867,11 +1867,11 @@ func TestToJSONSchemaDescribeWithID(t *testing.T) {
 }
 
 func TestToJSONSchemaOverwriteID(t *testing.T) {
-	jobId := types.String().Meta(core.GlobalMeta{ID: "aaa"})
+	jobID := types.String().Meta(core.GlobalMeta{ID: "aaa"})
 
 	schema := types.Struct[map[string]any](core.ObjectSchema{
-		"current":  jobId,
-		"previous": jobId.Meta(core.GlobalMeta{ID: "bbb"}),
+		"current":  jobID,
+		"previous": jobID.Meta(core.GlobalMeta{ID: "bbb"}),
 	})
 
 	result, err := ToJSONSchema(schema)

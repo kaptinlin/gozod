@@ -54,13 +54,13 @@ func (z *ZodGUID[T]) Nullish() *ZodGUID[*string] {
 	return newGUID(z.ZodString.Nullish())
 }
 
-// Guid creates a GUID schema (8-4-4-4-12 hex pattern).
-func Guid(params ...any) *ZodGUID[string] {
+// GUID creates a GUID schema (8-4-4-4-12 hex pattern).
+func GUID(params ...any) *ZodGUID[string] {
 	return newGUID(newIDSchema(StringTyped[string](params...), checks.GUID(params...)))
 }
 
-// GuidPtr creates a pointer GUID schema.
-func GuidPtr(params ...any) *ZodGUID[*string] {
+// GUIDPtr creates a pointer GUID schema.
+func GUIDPtr(params ...any) *ZodGUID[*string] {
 	return newGUID(newIDSchema(StringPtr(params...), checks.GUID(params...)))
 }
 
@@ -412,14 +412,14 @@ func parseUUIDVersion(params []any) (version string, rest []any) {
 	return "", params
 }
 
-// Uuid creates a UUID schema with optional version parameter: "v4", "v6", "v7".
-func Uuid(params ...any) *ZodUUID[string] {
+// UUID creates a UUID schema with optional version parameter: "v4", "v6", "v7".
+func UUID(params ...any) *ZodUUID[string] {
 	ver, rest := parseUUIDVersion(params)
 	return newUUIDSchema(StringTyped[string](rest...), ver, rest)
 }
 
-// UuidPtr creates a pointer UUID schema with optional version parameter.
-func UuidPtr(params ...any) *ZodUUID[*string] {
+// UUIDPtr creates a pointer UUID schema with optional version parameter.
+func UUIDPtr(params ...any) *ZodUUID[*string] {
 	ver, rest := parseUUIDVersion(params)
 	return newUUIDSchema(StringPtr(rest...), ver, rest)
 }

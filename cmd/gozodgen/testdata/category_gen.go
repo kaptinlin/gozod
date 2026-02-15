@@ -11,9 +11,9 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (c Category) Schema() *gozod.ZodStruct[Category, Category] {
 	return gozod.Struct[Category](gozod.StructSchema{
-		"id": gozod.Uuid(),
+		"id": gozod.UUID(),
 		"name": gozod.String().Min(2),
 		"description": gozod.String().Max(500).Optional(),
-		"parent_id": gozod.Uuid(),
+		"parent_id": gozod.UUID(),
 	})
 }

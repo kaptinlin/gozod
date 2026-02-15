@@ -13,7 +13,7 @@ import (
 // ARABIC LOCALE FORMATTER
 // =============================================================================
 
-// Arabic sizing info mappings
+// SizableAr maps Arabic sizing information.
 var SizableAr = map[string]issues.SizingInfo{
 	"string": {Unit: "حرف", Verb: "أن يحوي"},
 	"file":   {Unit: "بايت", Verb: "أن يحوي"},
@@ -23,7 +23,7 @@ var SizableAr = map[string]issues.SizingInfo{
 	"map":    {Unit: "مدخل", Verb: "أن يحوي"},
 }
 
-// Arabic format noun mappings
+// FormatNounsAr maps Arabic format noun translations.
 var FormatNounsAr = map[string]string{
 	"regex":            "مدخل",
 	"email":            "بريد إلكتروني",
@@ -56,7 +56,7 @@ var FormatNounsAr = map[string]string{
 	"template_literal": "مدخل",
 }
 
-// Arabic type dictionary
+// TypeDictionaryAr maps Arabic type name translations.
 var TypeDictionaryAr = map[string]string{
 	"nan":       "NaN",
 	"number":    "رقم",

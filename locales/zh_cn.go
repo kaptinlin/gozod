@@ -58,7 +58,7 @@ func getParsedTypeZh(input any) string {
 	}
 }
 
-// Chinese sizing info mappings - updated with consistent terminology
+// SizableZh maps Chinese sizing information.
 var SizableZh = map[string]issues.SizingInfo{
 	"string": {Unit: "字符", Verb: "包含"},
 	"file":   {Unit: "字节", Verb: "包含"},
@@ -77,7 +77,7 @@ func getSizingZh(origin string) *issues.SizingInfo {
 	return nil
 }
 
-// Chinese format noun mappings - comprehensive coverage for Go and web types
+// FormatNounsZh maps Chinese format noun translations.
 var FormatNounsZh = map[string]string{
 	"regex":            "输入",
 	"email":            "电子邮件",

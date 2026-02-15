@@ -13,7 +13,7 @@ import (
 // TAMIL LOCALE FORMATTER
 // =============================================================================
 
-// Tamil sizing info mappings
+// SizableTa maps Tamil sizing information.
 var SizableTa = map[string]issues.SizingInfo{
 	"string": {Unit: "எழுத்துக்கள்", Verb: "கொண்டிருக்க வேண்டும்"},
 	"file":   {Unit: "பைட்டுகள்", Verb: "கொண்டிருக்க வேண்டும்"},
@@ -23,7 +23,7 @@ var SizableTa = map[string]issues.SizingInfo{
 	"map":    {Unit: "உள்ளீடுகள்", Verb: "கொண்டிருக்க வேண்டும்"},
 }
 
-// Tamil format noun mappings
+// FormatNounsTa maps Tamil format noun translations.
 var FormatNounsTa = map[string]string{
 	"regex":            "உள்ளீடு",
 	"email":            "மின்னஞ்சல் முகவரி",
@@ -56,7 +56,7 @@ var FormatNounsTa = map[string]string{
 	"template_literal": "உள்ளீடு",
 }
 
-// Tamil type dictionary
+// TypeDictionaryTa maps Tamil type name translations.
 var TypeDictionaryTa = map[string]string{
 	"nan":       "NaN",
 	"number":    "எண்",

@@ -1,3 +1,4 @@
+// Package issues provides error creation, formatting, and management for GoZod validation.
 package issues
 
 import (

@@ -13,7 +13,7 @@ import (
 // BULGARIAN LOCALE FORMATTER
 // =============================================================================
 
-// Bulgarian sizing info mappings
+// SizableBg maps Bulgarian sizing information.
 var SizableBg = map[string]issues.SizingInfo{
 	"string": {Unit: "символа", Verb: "да съдържа"},
 	"file":   {Unit: "байта", Verb: "да съдържа"},
@@ -23,7 +23,7 @@ var SizableBg = map[string]issues.SizingInfo{
 	"map":    {Unit: "записа", Verb: "да съдържа"},
 }
 
-// Bulgarian format noun mappings with gender
+// FormatNounsBg maps Bulgarian format noun translations with gender.
 var FormatNounsBg = map[string]string{
 	"regex":            "вход",
 	"email":            "имейл адрес",
@@ -56,7 +56,7 @@ var FormatNounsBg = map[string]string{
 	"template_literal": "вход",
 }
 
-// Bulgarian type dictionary
+// TypeDictionaryBg maps Bulgarian type name translations.
 var TypeDictionaryBg = map[string]string{
 	"nan":       "NaN",
 	"number":    "число",
@@ -74,7 +74,7 @@ var TypeDictionaryBg = map[string]string{
 	"set":       "множество",
 }
 
-// Bulgarian gender adjectives for format validation
+// FormatGenderBg maps Bulgarian gender adjectives for format validation.
 var FormatGenderBg = map[string]string{
 	"emoji":    "Невалидно",
 	"datetime": "Невалидно",

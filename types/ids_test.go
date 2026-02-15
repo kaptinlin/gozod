@@ -10,7 +10,7 @@ import (
 
 func TestGUID(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
-		s := Guid()
+		s := GUID()
 		valid := []string{
 			"123e4567-e89b-12d3-a456-426655440000",
 			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
@@ -28,7 +28,7 @@ func TestGUID(t *testing.T) {
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		s := Guid()
+		s := GUID()
 		invalid := []any{
 			"not-a-guid", 123, true, "",
 			"123e4567-e89b-12d3-a456",
@@ -44,7 +44,7 @@ func TestGUID(t *testing.T) {
 
 	t.Run("pointer", func(t *testing.T) {
 		want := "123e4567-e89b-12d3-a456-426655440000"
-		got, err := GuidPtr().Parse(want)
+		got, err := GUIDPtr().Parse(want)
 		require.NoError(t, err)
 		assert.IsType(t, (*string)(nil), got)
 		require.NotNil(t, got)
@@ -52,20 +52,20 @@ func TestGUID(t *testing.T) {
 	})
 
 	t.Run("optional", func(t *testing.T) {
-		got, err := Guid().Optional().Parse(nil)
+		got, err := GUID().Optional().Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
 
 	t.Run("default", func(t *testing.T) {
 		want := "123e4567-e89b-12d3-a456-426655440000"
-		got, err := Guid().Default(want).Parse(nil)
+		got, err := GUID().Default(want).Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})
 
 	t.Run("StrictParse", func(t *testing.T) {
-		s := Guid()
+		s := GUID()
 		want := "123e4567-e89b-12d3-a456-426655440000"
 		got, err := s.StrictParse(want)
 		require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestGUID(t *testing.T) {
 	})
 
 	t.Run("MustStrictParse", func(t *testing.T) {
-		s := Guid()
+		s := GUID()
 		want := "123e4567-e89b-12d3-a456-426655440000"
 		got := s.MustStrictParse(want)
 		assert.Equal(t, want, got)
@@ -84,17 +84,17 @@ func TestGUID(t *testing.T) {
 	})
 
 	t.Run("custom error", func(t *testing.T) {
-		s := Guid(core.SchemaParams{Error: "Invalid GUID format"})
+		s := GUID(core.SchemaParams{Error: "Invalid GUID format"})
 		_, err := s.Parse("invalid")
 		assert.Error(t, err)
 	})
 
 	t.Run("chaining with min length", func(t *testing.T) {
-		got, err := Guid().Min(36).Parse("123e4567-e89b-12d3-a456-426655440000")
+		got, err := GUID().Min(36).Parse("123e4567-e89b-12d3-a456-426655440000")
 		require.NoError(t, err)
 		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", got)
 
-		_, err = Guid().Min(37).Parse("123e4567-e89b-12d3-a456-426655440000")
+		_, err = GUID().Min(37).Parse("123e4567-e89b-12d3-a456-426655440000")
 		assert.Error(t, err)
 	})
 }
@@ -275,7 +275,7 @@ func TestNanoID(t *testing.T) {
 
 func TestUUID(t *testing.T) {
 	t.Run("valid generic", func(t *testing.T) {
-		s := Uuid()
+		s := UUID()
 		valid := []string{
 			"123e4567-e89b-12d3-a456-426655440000",
 			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
@@ -291,7 +291,7 @@ func TestUUID(t *testing.T) {
 	})
 
 	t.Run("invalid generic", func(t *testing.T) {
-		s := Uuid()
+		s := UUID()
 		invalid := []any{"not-a-uuid", 123, true, ""}
 		for _, v := range invalid {
 			_, err := s.Parse(v)
@@ -303,7 +303,7 @@ func TestUUID(t *testing.T) {
 		valid := "d9428888-122b-469b-84de-d6e0a77858b7"
 		invalid := "d9428888-122b-169b-84de-d6e0a77858b7"
 
-		s1 := Uuid("v4")
+		s1 := UUID("v4")
 		_, err := s1.Parse(valid)
 		require.NoError(t, err)
 		_, err = s1.Parse(invalid)
@@ -320,7 +320,7 @@ func TestUUID(t *testing.T) {
 		valid := "1ee9b3b0-0b4a-6290-9b49-0242ac120002"
 		invalid := "1ee9b3b0-0b4a-1290-9b49-0242ac120002"
 
-		s1 := Uuid("v6")
+		s1 := UUID("v6")
 		_, err := s1.Parse(valid)
 		require.NoError(t, err)
 		_, err = s1.Parse(invalid)
@@ -337,7 +337,7 @@ func TestUUID(t *testing.T) {
 		valid := "01890de4-7f13-7d5a-a439-c5f10a8a71d1"
 		invalid := "01890de4-7f13-4d5a-a439-c5f10a8a71d1"
 
-		s1 := Uuid("v7")
+		s1 := UUID("v7")
 		_, err := s1.Parse(valid)
 		require.NoError(t, err)
 		_, err = s1.Parse(invalid)
@@ -358,7 +358,7 @@ func TestUUID(t *testing.T) {
 
 	t.Run("default with generic", func(t *testing.T) {
 		want := "123e4567-e89b-12d3-a456-426655440000"
-		got, err := Uuid().Default(want).Parse(nil)
+		got, err := UUID().Default(want).Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})
@@ -370,7 +370,7 @@ func TestIDs_DefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got1)
 
-		got2, err := Uuid().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Parse(nil)
+		got2, err := UUID().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", got2)
 
@@ -385,7 +385,7 @@ func TestIDs_DefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "short", got1)
 
-		got2, err := Uuid().Refine(func(s string) bool {
+		got2, err := UUID().Refine(func(s string) bool {
 			return false
 		}, "Should never pass").Default("invalid-uuid-format").Parse(nil)
 		require.NoError(t, err)

@@ -14,7 +14,7 @@ import (
 // NORWEGIAN LOCALE FORMATTER
 // =============================================================================
 
-// Norwegian sizing info mappings
+// SizableNo maps Norwegian sizing information.
 var SizableNo = map[string]issues.SizingInfo{
 	"string": {Unit: "tegn", Verb: "å ha"},
 	"file":   {Unit: "bytes", Verb: "å ha"},
@@ -24,7 +24,7 @@ var SizableNo = map[string]issues.SizingInfo{
 	"map":    {Unit: "oppføringer", Verb: "å inneholde"},
 }
 
-// Norwegian format noun mappings
+// FormatNounsNo maps Norwegian format noun translations.
 var FormatNounsNo = map[string]string{
 	"regex":            "input",
 	"email":            "e-postadresse",
@@ -57,7 +57,7 @@ var FormatNounsNo = map[string]string{
 	"template_literal": "input",
 }
 
-// Norwegian type dictionary
+// TypeDictionaryNo maps Norwegian type name translations.
 var TypeDictionaryNo = map[string]string{
 	"nan":       "NaN",
 	"number":    "tall",

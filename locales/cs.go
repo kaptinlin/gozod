@@ -13,7 +13,7 @@ import (
 // CZECH LOCALE FORMATTER
 // =============================================================================
 
-// Czech sizing info mappings
+// SizableCs maps Czech sizing information.
 var SizableCs = map[string]issues.SizingInfo{
 	"string": {Unit: "znaků", Verb: "mít"},
 	"file":   {Unit: "bajtů", Verb: "mít"},
@@ -23,7 +23,7 @@ var SizableCs = map[string]issues.SizingInfo{
 	"map":    {Unit: "záznamů", Verb: "mít"},
 }
 
-// Czech format noun mappings
+// FormatNounsCs maps Czech format noun translations.
 var FormatNounsCs = map[string]string{
 	"regex":            "regulární výraz",
 	"email":            "e-mailová adresa",
@@ -56,7 +56,7 @@ var FormatNounsCs = map[string]string{
 	"template_literal": "vstup",
 }
 
-// Czech type dictionary
+// TypeDictionaryCs maps Czech type name translations.
 var TypeDictionaryCs = map[string]string{
 	"nan":       "NaN",
 	"number":    "číslo",

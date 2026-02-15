@@ -44,7 +44,7 @@ type RussianSizable struct {
 	Verb     string
 }
 
-// Russian sizing info mappings with plural forms
+// SizableRu maps Russian sizing information with plural forms.
 var SizableRu = map[string]RussianSizable{
 	"string": {UnitOne: "символ", UnitFew: "символа", UnitMany: "символов", Verb: "иметь"},
 	"file":   {UnitOne: "байт", UnitFew: "байта", UnitMany: "байт", Verb: "иметь"},
@@ -54,7 +54,7 @@ var SizableRu = map[string]RussianSizable{
 	"map":    {UnitOne: "запись", UnitFew: "записи", UnitMany: "записей", Verb: "иметь"},
 }
 
-// Russian format noun mappings
+// FormatNounsRu maps Russian format noun translations.
 var FormatNounsRu = map[string]string{
 	"regex":            "ввод",
 	"email":            "email адрес",
@@ -87,7 +87,7 @@ var FormatNounsRu = map[string]string{
 	"template_literal": "ввод",
 }
 
-// Russian type dictionary
+// TypeDictionaryRu maps Russian type name translations.
 var TypeDictionaryRu = map[string]string{
 	"nan":       "NaN",
 	"number":    "число",

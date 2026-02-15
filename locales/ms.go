@@ -13,7 +13,7 @@ import (
 // MALAY LOCALE FORMATTER
 // =============================================================================
 
-// Malay sizing info mappings
+// SizableMs maps Malay sizing information.
 var SizableMs = map[string]issues.SizingInfo{
 	"string": {Unit: "aksara", Verb: "mempunyai"},
 	"file":   {Unit: "bait", Verb: "mempunyai"},
@@ -23,7 +23,7 @@ var SizableMs = map[string]issues.SizingInfo{
 	"map":    {Unit: "entri", Verb: "mempunyai"},
 }
 
-// Malay format noun mappings
+// FormatNounsMs maps Malay format noun translations.
 var FormatNounsMs = map[string]string{
 	"regex":            "input",
 	"email":            "alamat e-mel",
@@ -56,7 +56,7 @@ var FormatNounsMs = map[string]string{
 	"template_literal": "input",
 }
 
-// Malay type dictionary
+// TypeDictionaryMs maps Malay type name translations.
 var TypeDictionaryMs = map[string]string{
 	"nan":       "NaN",
 	"number":    "nombor",

@@ -14,7 +14,7 @@ import (
 // GERMAN LOCALE FORMATTER
 // =============================================================================
 
-// German sizing info mappings
+// SizableDe maps German sizing information.
 var SizableDe = map[string]issues.SizingInfo{
 	"string": {Unit: "Zeichen", Verb: "haben"},
 	"file":   {Unit: "Bytes", Verb: "haben"},
@@ -24,7 +24,7 @@ var SizableDe = map[string]issues.SizingInfo{
 	"map":    {Unit: "Einträge", Verb: "haben"},
 }
 
-// German format noun mappings
+// FormatNounsDe maps German format noun translations.
 var FormatNounsDe = map[string]string{
 	"regex":            "Eingabe",
 	"email":            "E-Mail-Adresse",
@@ -57,7 +57,7 @@ var FormatNounsDe = map[string]string{
 	"template_literal": "Eingabe",
 }
 
-// German type dictionary
+// TypeDictionaryDe maps German type name translations.
 var TypeDictionaryDe = map[string]string{
 	"nan":       "NaN",
 	"number":    "Zahl",

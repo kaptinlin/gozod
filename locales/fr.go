@@ -14,7 +14,7 @@ import (
 // FRENCH LOCALE FORMATTER
 // =============================================================================
 
-// French sizing info mappings
+// SizableFr maps French sizing information.
 var SizableFr = map[string]issues.SizingInfo{
 	"string": {Unit: "caractères", Verb: "avoir"},
 	"file":   {Unit: "octets", Verb: "avoir"},
@@ -24,7 +24,7 @@ var SizableFr = map[string]issues.SizingInfo{
 	"map":    {Unit: "entrées", Verb: "avoir"},
 }
 
-// French format noun mappings
+// FormatNounsFr maps French format noun translations.
 var FormatNounsFr = map[string]string{
 	"regex":            "entrée",
 	"email":            "adresse e-mail",
@@ -57,7 +57,7 @@ var FormatNounsFr = map[string]string{
 	"template_literal": "entrée",
 }
 
-// French type dictionary
+// TypeDictionaryFr maps French type name translations.
 var TypeDictionaryFr = map[string]string{
 	"nan":       "NaN",
 	"number":    "nombre",

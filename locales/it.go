@@ -14,7 +14,7 @@ import (
 // ITALIAN LOCALE FORMATTER
 // =============================================================================
 
-// Italian sizing info mappings
+// SizableIt maps Italian sizing information.
 var SizableIt = map[string]issues.SizingInfo{
 	"string": {Unit: "caratteri", Verb: "avere"},
 	"file":   {Unit: "byte", Verb: "avere"},
@@ -24,7 +24,7 @@ var SizableIt = map[string]issues.SizingInfo{
 	"map":    {Unit: "voci", Verb: "avere"},
 }
 
-// Italian format noun mappings
+// FormatNounsIt maps Italian format noun translations.
 var FormatNounsIt = map[string]string{
 	"regex":            "input",
 	"email":            "indirizzo email",
@@ -57,7 +57,7 @@ var FormatNounsIt = map[string]string{
 	"template_literal": "input",
 }
 
-// Italian type dictionary
+// TypeDictionaryIt maps Italian type name translations.
 var TypeDictionaryIt = map[string]string{
 	"nan":       "NaN",
 	"number":    "numero",
