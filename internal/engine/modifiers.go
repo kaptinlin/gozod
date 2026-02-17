@@ -51,16 +51,7 @@ func processModifiersCore[T any](
 	}
 
 	// Default/DefaultFunc — short-circuit, highest priority.
-	if internals.DefaultValue != nil {
-		v := cloneDefaultValue(internals.DefaultValue)
-		if hasOverwriteCheck(internals.Checks) {
-			r, err := ApplyChecks(v, internals.Checks, ctx)
-			return r, true, err
-		}
-		return v, true, nil
-	}
-	if internals.DefaultFunc != nil {
-		v := internals.DefaultFunc()
+	if v := resolveDefault(internals); v != nil {
 		if hasOverwriteCheck(internals.Checks) {
 			r, err := ApplyChecks(v, internals.Checks, ctx)
 			return r, true, err
@@ -134,6 +125,18 @@ func filterNilChecks(checks []core.ZodCheck) []core.ZodCheck {
 		}
 	}
 	return out
+}
+
+// resolveDefault returns the default value for the schema, cloning it if
+// it is a DefaultValue, or invoking DefaultFunc. Returns nil when neither is set.
+func resolveDefault(internals *core.ZodTypeInternals) any {
+	if internals.DefaultValue != nil {
+		return cloneDefaultValue(internals.DefaultValue)
+	}
+	if internals.DefaultFunc != nil {
+		return internals.DefaultFunc()
+	}
+	return nil
 }
 
 // cloneDefaultValue creates a shallow copy of map/slice default values.

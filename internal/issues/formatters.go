@@ -43,8 +43,8 @@ var Sizable = map[string]SizingInfo{
 
 // Sizing returns the appropriate sizing information for a given type.
 func Sizing(origin string) *SizingInfo {
-	if _, exists := Sizable[origin]; exists {
-		return new(Sizable[origin])
+	if s, ok := Sizable[origin]; ok {
+		return &s
 	}
 	return nil
 }

@@ -327,26 +327,26 @@ func tryCommonPointerConversion[R any](value any) (R, bool) {
 	var zero R
 	switch any(zero).(type) {
 	case *string:
-		if _, ok := value.(string); ok {
-			if r, ok := any(new(value.(string))).(R); ok {
+		if v, ok := value.(string); ok {
+			if r, ok := any(&v).(R); ok {
 				return r, true
 			}
 		}
 	case *int64:
-		if _, ok := value.(int64); ok {
-			if r, ok := any(new(value.(int64))).(R); ok {
+		if v, ok := value.(int64); ok {
+			if r, ok := any(&v).(R); ok {
 				return r, true
 			}
 		}
 	case *float64:
-		if _, ok := value.(float64); ok {
-			if r, ok := any(new(value.(float64))).(R); ok {
+		if v, ok := value.(float64); ok {
+			if r, ok := any(&v).(R); ok {
 				return r, true
 			}
 		}
 	case *bool:
-		if _, ok := value.(bool); ok {
-			if r, ok := any(new(value.(bool))).(R); ok {
+		if v, ok := value.(bool); ok {
+			if r, ok := any(&v).(R); ok {
 				return r, true
 			}
 		}
