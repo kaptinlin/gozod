@@ -86,7 +86,7 @@ clean: ## Clean build artifacts and caches
 ### Key Design Decisions
 
 - **Local `./bin/`**: golangci-lint installs to project-local `./bin/`, not global paths. Add `bin/` to `.gitignore`.
-- **Version pinning**: `.golangci.version` file is the single source of truth. Changing this file triggers automatic reinstall on next `make lint`.
+- **Version pinning**: `.golangci.version` file is the single source of truth. Changing this file triggers automatic reinstall on next `task lint`.
 - **Multi-module support**: `MODULE_DIRS` variable allows linting across multiple Go modules in a monorepo.
 - **Tidy check**: `tidy-lint` ensures `go.mod`/`go.sum` are committed in their tidy state.
 
@@ -119,10 +119,10 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install dependencies
-        run: make deps
+        run: task deps
 
       - name: Run unit tests
-        run: make test
+        run: task test
 
   lint:
     name: Lint
@@ -139,15 +139,15 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Install dependencies
-        run: make deps
+        run: task deps
 
       - name: Run linters
-        run: make lint
+        run: task lint
 ```
 
 ### CI Notes
 
 - Uses `go-version-file: go.mod` so Go version is always in sync with the project.
 - Lint and test run as separate jobs for parallel execution.
-- `make lint` handles golangci-lint installation automatically via the Makefile.
+- `task lint` handles golangci-lint installation automatically via the Makefile.
 - No need for the `golangci-lint-action` GitHub Action — the Makefile approach gives identical behavior locally and in CI.

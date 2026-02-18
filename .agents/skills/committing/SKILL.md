@@ -58,14 +58,14 @@ Before committing, run verification:
 
 ```bash
 go fmt ./...
-make lint
-make test
+task lint
+task test
 ```
 
 Or all at once:
 
 ```bash
-make verify
+task verify
 ```
 
 Fix all issues before committing. Do not skip lint or test failures.

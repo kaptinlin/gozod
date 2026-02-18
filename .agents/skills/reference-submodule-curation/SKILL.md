@@ -1,5 +1,5 @@
 ---
-name: reference-submodule-curation
+name: curating-references
 description: Finds high-quality maintained GitHub references for a user’s development goal and adds selected repos into the target project .references directory via git submodule. Use when users ask to search related libraries/frameworks and vendor them as reference submodules.
 compatibility:
   - Requires git

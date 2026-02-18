@@ -83,7 +83,7 @@ ls -la AGENTS.md  # Should show AGENTS.md -> CLAUDE.md
 After generation, verify:
 
 - [ ] Project overview matches actual project purpose
-- [ ] All listed commands actually work (`make test`, etc.)
+- [ ] All listed commands actually work (`task test`, etc.)
 - [ ] Go version matches `go.mod`
 - [ ] Module path is correct
 - [ ] Directory structure matches reality

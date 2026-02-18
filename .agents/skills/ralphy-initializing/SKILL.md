@@ -37,8 +37,8 @@ project:
 
 # Commands (from Makefile or defaults)
 commands:
-  test: "make test"
-  lint: "make lint"
+  test: "task test"
+  lint: "task lint"
   build: "go build ./..."
 
 # Rules - instructions the AI MUST follow

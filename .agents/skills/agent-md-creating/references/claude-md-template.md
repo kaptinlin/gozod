@@ -181,14 +181,14 @@ Specialized skills available in `.agents/skills/`:
 {Detect from Makefile. If no Makefile, use Go defaults. Only list commands that actually exist.}
 
 ```bash
-make test          # Run all tests with race detection
-make lint          # Run golangci-lint + go mod tidy check
+task test          # Run all tests with race detection
+task lint          # Run golangci-lint + go mod tidy check
 make fmt           # Format code
 make vet           # Run go vet
-make verify        # Full verification: deps, fmt, vet, lint, test
+task verify        # Full verification: deps, fmt, vet, lint, test
 make bench         # Run benchmarks
-make deps          # Download and tidy dependencies
-make clean         # Clean build artifacts
+task deps          # Download and tidy dependencies
+task clean         # Clean build artifacts
 ```
 
 {If no Makefile:}
@@ -351,9 +351,9 @@ Generic ordered JSON object for Go preserving insertion order. Uses go-json-expe
 ## Commands
 
 \```bash
-make test    # Run all tests
-make lint    # Run golangci-lint and go mod tidy check
-make verify  # Run all: deps, fmt, vet, lint, test
+task test    # Run all tests
+task lint    # Run golangci-lint and go mod tidy check
+task verify  # Run all: deps, fmt, vet, lint, test
 \```
 
 ## Architecture

@@ -80,8 +80,8 @@ If a dependency upgrade introduces breaking changes, fix the code before proceed
 
 ```bash
 go fmt .
-make lint
-make test
+task lint
+task test
 ```
 
 Then run package-wide formatting if needed:
@@ -92,7 +92,7 @@ go fmt ./...
 
 **Hard gate before commit:**
 - Fix all compile, lint, and test issues first.
-- `go fmt .`, `make lint`, and `make test` must all pass.
+- `go fmt .`, `task lint`, and `task test` must all pass.
 - Do not proceed to staging/commit while any check is failing.
 
 ### Step 5: Update Documentation
@@ -174,8 +174,8 @@ go get -u ./...                                    # upgrade deps
 go mod tidy                                        # tidy modules
 go fmt .                                           # format (gate 1)
 go fmt ./...                                       # format package-wide
-make lint                                          # lint
-make test                                          # test
+task lint                                          # lint
+task test                                          # test
 # ... fix all issues, update README.md / CLAUDE.md if needed ...
 git add .
 git reset TODO.md PLAN.md 2>/dev/null || true      # exclude temp dev files

@@ -23,11 +23,17 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install dependencies
-        run: make deps
+        run: task deps
 
       - name: Run unit tests
-        run: make test
+        run: task test
 
   lint:
     name: Lint
@@ -43,8 +49,15 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install dependencies
-        run: make deps
+        run: task deps
 
       - name: Run linters
-        run: make lint
+        run: task lint
+

@@ -59,11 +59,11 @@ The Makefile must:
 
 When fixing lint errors, follow this workflow:
 
-1. Run `make lint` to see all issues
+1. Run `task lint` to see all issues
 2. Fix issues by category, not file-by-file
 3. Never suppress warnings with `//nolint` unless there is a justified reason (add explanation: `//nolint:lintername // reason`)
-4. After fixing, run `make lint` again to confirm zero issues
-5. Run `make test` to ensure fixes don't break behavior
+4. After fixing, run `task lint` again to confirm zero issues
+5. Run `task test` to ensure fixes don't break behavior
 
 ### Common Fix Patterns
 
@@ -156,7 +156,7 @@ func parse(s string) (int, error) {
 2. Create `.golangci.yml` from the recommended config template
 3. Add Makefile targets from the integration template
 4. Add CI workflow (GitHub Actions)
-5. Run `make lint` and fix all issues before committing
+5. Run `task lint` and fix all issues before committing
 6. Commit all three config files together:
    ```bash
    git add .golangci.version .golangci.yml Makefile

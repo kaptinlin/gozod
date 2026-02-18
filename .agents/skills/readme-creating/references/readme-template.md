@@ -79,8 +79,8 @@ cd benchmarks && go test -bench=. -benchmem
 ## Development
 
 ```bash
-make test    # Run all tests with race detector
-make lint    # Run golangci-lint
+task test    # Run all tests with race detector
+task lint    # Run golangci-lint
 make all     # lint + test
 ```
 

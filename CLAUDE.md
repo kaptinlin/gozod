@@ -28,12 +28,12 @@ Detailed implementation guides in `.agents/rules/`:
 ## Commands
 
 ```bash
-make test           # Run all tests with race detection
-make lint           # Run golangci-lint + mod tidy
-make golangci-lint  # Run only golangci-lint
-make tidy-lint      # Run only module tidy check
+task test           # Run all tests with race detection
+task lint           # Run golangci-lint + mod tidy
+task golangci-lint  # Run only golangci-lint
+task tidy-lint      # Run only module tidy check
 go build ./...      # Verify compilation
-make clean          # Clean build artifacts
+task clean          # Clean build artifacts
 
 # Individual package tests
 go test ./types/
