@@ -1082,8 +1082,8 @@ func TestTagValidation_ErrorMessages(t *testing.T) {
 		t.Fatal("Should fail with validation errors")
 	}
 
-	var zodErr *ZodError
-	if !errors.As(err, &zodErr) {
+	zodErr, ok := errors.AsType[*ZodError](err)
+	if !ok {
 		t.Fatal("Expected ZodError")
 	}
 

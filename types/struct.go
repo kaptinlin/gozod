@@ -800,8 +800,7 @@ func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseCont
 		parsedFieldValue, err := z.parseFieldWithSchema(fieldValue.Interface(), fieldSchema, ctx)
 		if err != nil {
 			// Collect field validation errors with path prefix
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
+			if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 				for _, fieldIssue := range zodErr.Issues {
 					rawIssue := issues.ConvertZodIssueToRawWithPrependedPath(fieldIssue, []any{fieldName})
 					collectedIssues = append(collectedIssues, rawIssue)

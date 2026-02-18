@@ -32,8 +32,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 		assert.Equal(t, core.ZodTypeString, zodErr.Issues[0].Expected)
@@ -44,8 +43,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.TooBig, zodErr.Issues[0].Code)
 		assert.Equal(t, 100, zodErr.Issues[0].Maximum)
@@ -58,8 +56,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.TooSmall, zodErr.Issues[0].Code)
 		assert.Equal(t, 5, zodErr.Issues[0].Minimum)
@@ -72,8 +69,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.InvalidFormat, zodErr.Issues[0].Code)
 		assert.Equal(t, "email", zodErr.Issues[0].Format)
@@ -84,8 +80,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.NotMultipleOf, zodErr.Issues[0].Code)
 		assert.Equal(t, 2, zodErr.Issues[0].Divisor)
@@ -96,8 +91,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.Custom, zodErr.Issues[0].Code)
 		require.Equal(t, "Custom validation failed", zodErr.Issues[0].Message)
@@ -109,8 +103,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.InvalidValue, zodErr.Issues[0].Code)
 		assert.Equal(t, validValues, zodErr.Issues[0].Values)
@@ -122,8 +115,7 @@ func TestErrorCreationHelpers(t *testing.T) {
 
 		require.NotNil(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		require.Len(t, zodErr.Issues, 1)
 		require.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
 		assert.Equal(t, keys, zodErr.Issues[0].Keys)
@@ -235,8 +227,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
@@ -246,8 +237,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
@@ -257,8 +247,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
@@ -269,8 +258,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidValue, zodErr.Issues[0].Code)
 	})
@@ -280,8 +268,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.TooBig, zodErr.Issues[0].Code)
 	})
@@ -291,8 +278,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.TooSmall, zodErr.Issues[0].Code)
 	})
@@ -302,8 +288,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.InvalidFormat, zodErr.Issues[0].Code)
 	})
@@ -314,8 +299,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.Custom, zodErr.Issues[0].Code)
 		assert.Equal(t, "Custom validation failed", zodErr.Issues[0].Message)
@@ -327,8 +311,7 @@ func TestHighLevelErrorAPI(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.IsType(t, &ZodError{}, err)
-		var zodErr *ZodError
-		errors.As(err, &zodErr)
+		zodErr, _ := errors.AsType[*ZodError](err)
 		assert.Len(t, zodErr.Issues, 1)
 		assert.Equal(t, core.UnrecognizedKeys, zodErr.Issues[0].Code)
 	})
@@ -345,8 +328,7 @@ func TestAPIComparison(t *testing.T) {
 		assert.IsType(t, &ZodError{}, err)
 
 		// Should be *ZodError type
-		var zodErr *ZodError
-		ok := errors.As(err, &zodErr)
+		zodErr, ok := errors.AsType[*ZodError](err)
 		require.True(t, ok)
 
 		assert.Len(t, zodErr.Issues, 1)

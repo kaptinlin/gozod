@@ -430,8 +430,7 @@ func CreateInvalidKeyError(key string, origin string, input any, ctx *core.Parse
 // extractFirstRawIssue extracts the first raw issue from an error, returning
 // a fallback issue if the error is not a ZodError or has no issues.
 func extractFirstRawIssue(err error, fallbackCode core.IssueCode, input any) core.ZodRawIssue {
-	var zodErr *ZodError
-	if errors.As(err, &zodErr) && len(zodErr.Issues) > 0 {
+	if zodErr, ok := errors.AsType[*ZodError](err); ok && len(zodErr.Issues) > 0 {
 		return ConvertZodIssueToRaw(zodErr.Issues[0])
 	}
 	return CreateIssue(fallbackCode, err.Error(), nil, input)

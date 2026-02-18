@@ -31,8 +31,7 @@ func main() {
 		return // Should not happen with invalid data.
 	}
 
-	var zErr *gozod.ZodError
-	if errors.As(err, &zErr) {
+	if zErr, ok := errors.AsType[*gozod.ZodError](err); ok {
 		// PrettifyError provides a human-readable summary of all issues.
 		fmt.Println("--- Prettified Error (in Chinese) ---")
 		fmt.Println(gozod.PrettifyError(zErr))

@@ -37,8 +37,8 @@ func main() {
 		fmt.Printf("%#v\n", flat.FieldErrors)
 	}
 
-	// Demonstrate standard errors.As as alternative.
-	if errors.As(err, &zErr) {
-		fmt.Println("Extracted via errors.As ->", zErr.Error())
+	// Demonstrate standard errors.AsType as alternative.
+	if zErr, ok := errors.AsType[*gozod.ZodError](err); ok {
+		fmt.Println("Extracted via errors.AsType ->", zErr.Error())
 	}
 }

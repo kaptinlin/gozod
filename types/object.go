@@ -677,8 +677,7 @@ func (z *ZodObject[T, R]) extractObject(v any) (map[string]any, error) {
 
 // collectFieldErrors appends validation errors from err to errs with the given field path.
 func collectFieldErrors(err error, field string, errs *[]core.ZodRawIssue, val any) {
-	var zodErr *issues.ZodError
-	if errors.As(err, &zodErr) {
+	if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 		for _, issue := range zodErr.Issues {
 			*errs = append(*errs, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{field}))
 		}

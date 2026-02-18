@@ -421,8 +421,7 @@ func (z *ZodSet[T, R]) collectErrors(value any, schema any, pathKey any, ctx *co
 		return dst
 	}
 
-	var zodErr *issues.ZodError
-	if errors.As(err, &zodErr) {
+	if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 		for _, issue := range zodErr.Issues {
 			dst = append(dst, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{pathKey}))
 		}
@@ -488,13 +487,13 @@ func convertToSetType[T comparable, R any](v any) (R, bool) {
 
 func convertToSetConstraintType[T comparable, R any](value any) R {
 	var zero R
-	rt := reflect.TypeOf(zero)
+	rt := reflect.TypeFor[R]()
 
 	if value == nil {
 		return zero
 	}
 
-	if rt != nil && rt.Kind() == reflect.Pointer {
+	if rt.Kind() == reflect.Pointer {
 		switch v := value.(type) {
 		case map[T]struct{}:
 			return any(new(v)).(R)

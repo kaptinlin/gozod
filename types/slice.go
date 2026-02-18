@@ -457,8 +457,7 @@ func (z *ZodSlice[T, R]) validateForEngine(
 	if schema, ok := z.internals.Element.(core.ZodSchema); ok && schema != nil {
 		for i, elem := range validated {
 			if err := validateElement(elem, schema); err != nil {
-				var zodErr *issues.ZodError
-				if errors.As(err, &zodErr) {
+				if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 					for _, issue := range zodErr.Issues {
 						errs = append(errs, issues.ConvertZodIssueToRawWithProperties(issue, []any{i}))
 					}

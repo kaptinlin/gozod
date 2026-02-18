@@ -84,15 +84,11 @@ func IsZodError(err error, target **ZodError) bool {
 		return false
 	}
 
-	var zodErr *ZodError
-	if errors.As(err, &zodErr) {
-		if target != nil {
-			*target = zodErr
-		}
-		return true
+	zodErr, ok := errors.AsType[*ZodError](err)
+	if ok && target != nil {
+		*target = zodErr
 	}
-
-	return false
+	return ok
 }
 
 // ZodFormattedError represents a formatted error with hierarchical field-level grouping.

@@ -278,8 +278,7 @@ func demonstrateErrorHandling() {
 		fmt.Printf("❌ Multiple validation errors (expected):\n")
 
 		// Parse structured error for detailed reporting
-		var zodErr *gozod.ZodError
-		if errors.As(err, &zodErr) {
+		if zodErr, ok := errors.AsType[*gozod.ZodError](err); ok {
 			fmt.Printf("   Found %d validation issues:\n", len(zodErr.Issues))
 
 			maxErrors := min(len(zodErr.Issues), 5)

@@ -694,8 +694,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 					continue // Skip this key, it will be preserved as-is.
 				}
 				// For non-ZodError errors, propagate immediately to match strict validation behavior.
-				var zodErr *issues.ZodError
-				if errors.As(keyErr, &zodErr) {
+				if zodErr, ok := errors.AsType[*issues.ZodError](keyErr); ok {
 					for _, issue := range zodErr.Issues {
 						rawIssues = append(rawIssues, issues.ConvertZodIssueToRaw(issue))
 					}

@@ -460,8 +460,7 @@ func (z *ZodMap[T, R]) collectErrors(value, schema, pathKey any, ctx *core.Parse
 		return dst
 	}
 
-	var zodErr *issues.ZodError
-	if errors.As(err, &zodErr) {
+	if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 		for _, issue := range zodErr.Issues {
 			dst = append(dst, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{pathKey}))
 		}

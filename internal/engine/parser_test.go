@@ -381,8 +381,8 @@ func TestParseComplex(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		var zodErr *issues.ZodError
-		require.True(t, errors.As(err, &zodErr))
+		zodErr, ok := errors.AsType[*issues.ZodError](err)
+		require.True(t, ok)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
 
@@ -546,8 +546,8 @@ func TestProcessModifiers(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 
-		var zodErr *issues.ZodError
-		require.True(t, errors.As(err, &zodErr))
+		zodErr, ok := errors.AsType[*issues.ZodError](err)
+		require.True(t, ok)
 		assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
 	})
 }

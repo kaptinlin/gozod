@@ -112,8 +112,7 @@ func demoSelfReference() {
 	_, err = schema.Parse(invalidUser)
 	if err != nil {
 		fmt.Println("✓ Validation correctly failed for invalid user")
-		var zodErr *gozod.ZodError
-		if errors.As(err, &zodErr) {
+		if zodErr, ok := errors.AsType[*gozod.ZodError](err); ok {
 			fmt.Printf("  Issues found: %d\n", len(zodErr.Issues))
 		}
 	}
