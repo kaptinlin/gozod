@@ -419,40 +419,40 @@ func structuralHash(v any) uint64 {
 // writeHash writes a structural representation of v into the hash.
 func writeHash(h *maphash.Hash, v any) {
 	if v == nil {
-		h.WriteByte(0)
+		_ = h.WriteByte(0)
 		return
 	}
 	switch val := v.(type) {
 	case bool:
-		h.WriteByte(1)
+		_ = h.WriteByte(1)
 		if val {
-			h.WriteByte(1)
+			_ = h.WriteByte(1)
 		} else {
-			h.WriteByte(0)
+			_ = h.WriteByte(0)
 		}
 	case float64:
-		h.WriteByte(2)
+		_ = h.WriteByte(2)
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(val))
-		h.Write(buf[:])
+		_, _ = h.Write(buf[:])
 	case int:
-		h.WriteByte(3)
+		_ = h.WriteByte(3)
 		var buf [8]byte
-		binary.LittleEndian.PutUint64(buf[:], uint64(val))
-		h.Write(buf[:])
+		binary.LittleEndian.PutUint64(buf[:], uint64(val)) //nolint:gosec // Overflow is acceptable for hashing
+		_, _ = h.Write(buf[:])
 	case string:
-		h.WriteByte(4)
-		h.WriteString(val)
+		_ = h.WriteByte(4)
+		_, _ = h.WriteString(val)
 	case []any:
-		h.WriteByte(5)
+		_ = h.WriteByte(5)
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(len(val)))
-		h.Write(buf[:])
+		_, _ = h.Write(buf[:])
 		for _, elem := range val {
 			writeHash(h, elem)
 		}
 	case map[string]any:
-		h.WriteByte(6)
+		_ = h.WriteByte(6)
 		// Sort keys for deterministic ordering.
 		keys := make([]string, 0, len(val))
 		for k := range val {
@@ -461,15 +461,15 @@ func writeHash(h *maphash.Hash, v any) {
 		sort.Strings(keys)
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(len(keys)))
-		h.Write(buf[:])
+		_, _ = h.Write(buf[:])
 		for _, k := range keys {
-			h.WriteString(k)
+			_, _ = h.WriteString(k)
 			writeHash(h, val[k])
 		}
 	default:
 		// Fallback: use fmt representation for unknown types.
-		h.WriteByte(7)
-		h.WriteString(fmt.Sprintf("%v", v))
+		_ = h.WriteByte(7)
+		_, _ = fmt.Fprintf(h, "%v", v)
 	}
 }
 
