@@ -1,10 +1,14 @@
 package slicex
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/maphash"
+	"math"
 	"reflect"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -239,7 +243,9 @@ func Reverse(s any) (any, error) {
 }
 
 // Unique removes duplicate elements, preserving first-occurrence order.
-// Comparable types use a map; non-comparable types fall back to reflect.DeepEqual.
+// Comparable types use a map for O(1) lookup. Non-comparable types use a
+// hash-bucketed approach with structural hashing, falling back to
+// reflect.DeepEqual only on hash collisions.
 func Unique(s any) (any, error) {
 	if s == nil {
 		return nil, nil
@@ -249,16 +255,17 @@ func Unique(s any) (any, error) {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvert, err)
 	}
 	seen := make(map[any]struct{})
-	var seenOther []any
+	buckets := make(map[uint64][]any)
 	result := make([]any, 0, len(items))
 	for _, v := range items {
-		if isDuplicate(v, seen, seenOther) {
+		if isDuplicate(v, seen, buckets) {
 			continue
 		}
 		if v == nil || reflect.TypeOf(v).Comparable() {
 			seen[v] = struct{}{}
 		} else {
-			seenOther = append(seenOther, v)
+			h := structuralHash(v)
+			buckets[h] = append(buckets[h], v)
 		}
 		result = append(result, v)
 	}
@@ -377,18 +384,93 @@ func toAnySlice[T any](v []T) []any {
 	return result
 }
 
+// hashSeed is a per-process seed for structural hashing of non-comparable types.
+var hashSeed = maphash.MakeSeed()
+
 // isDuplicate checks whether v has already been seen.
-func isDuplicate(v any, seen map[any]struct{}, seenOther []any) bool {
+// Comparable types are looked up in the seen map. Non-comparable types are
+// looked up in buckets keyed by structural hash, falling back to DeepEqual
+// only on hash collisions.
+func isDuplicate(v any, seen map[any]struct{}, buckets map[uint64][]any) bool {
 	if v == nil || reflect.TypeOf(v).Comparable() {
 		_, ok := seen[v]
 		return ok
 	}
-	for _, existing := range seenOther {
+	h := structuralHash(v)
+	for _, existing := range buckets[h] {
 		if reflect.DeepEqual(existing, v) {
 			return true
 		}
 	}
 	return false
+}
+
+// structuralHash computes a hash for a value based on its structure.
+// It handles common JSON-like types (nil, bool, float64, int, string,
+// []any, map[string]any) directly, and falls back to fmt.Sprintf for
+// other types.
+func structuralHash(v any) uint64 {
+	var h maphash.Hash
+	h.SetSeed(hashSeed)
+	writeHash(&h, v)
+	return h.Sum64()
+}
+
+// writeHash writes a structural representation of v into the hash.
+func writeHash(h *maphash.Hash, v any) {
+	if v == nil {
+		h.WriteByte(0)
+		return
+	}
+	switch val := v.(type) {
+	case bool:
+		h.WriteByte(1)
+		if val {
+			h.WriteByte(1)
+		} else {
+			h.WriteByte(0)
+		}
+	case float64:
+		h.WriteByte(2)
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], math.Float64bits(val))
+		h.Write(buf[:])
+	case int:
+		h.WriteByte(3)
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(val))
+		h.Write(buf[:])
+	case string:
+		h.WriteByte(4)
+		h.WriteString(val)
+	case []any:
+		h.WriteByte(5)
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(len(val)))
+		h.Write(buf[:])
+		for _, elem := range val {
+			writeHash(h, elem)
+		}
+	case map[string]any:
+		h.WriteByte(6)
+		// Sort keys for deterministic ordering.
+		keys := make([]string, 0, len(val))
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(len(keys)))
+		h.Write(buf[:])
+		for _, k := range keys {
+			h.WriteString(k)
+			writeHash(h, val[k])
+		}
+	default:
+		// Fallback: use fmt representation for unknown types.
+		h.WriteByte(7)
+		h.WriteString(fmt.Sprintf("%v", v))
+	}
 }
 
 // restoreType attempts to convert []any back to the concrete slice type
