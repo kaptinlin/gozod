@@ -520,15 +520,15 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 ```go
 type Config struct {
-    Environment string `yaml:"environment" gozod:"required,regex=^(dev|staging|prod)$"`
-    Port        int    `yaml:"port" gozod:"required,min=1000,max=9999"`
+    Environment string `yaml:"environment" validate:"required,regex=^(dev|staging|prod)$"`
+    Port        int    `yaml:"port" validate:"required,min=1000,max=9999"`
     Database    struct {
-        Host     string `yaml:"host" gozod:"required"`
-        Port     int    `yaml:"port" gozod:"required,min=1,max=65535"`
-        Name     string `yaml:"name" gozod:"required,min=1"`
-        Username string `yaml:"username" gozod:"required"`
-        Password string `yaml:"password" gozod:"required,min=8"`
-    } `yaml:"database" gozod:"required"`
+        Host     string `yaml:"host" validate:"required"`
+        Port     int    `yaml:"port" validate:"required,min=1,max=65535"`
+        Name     string `yaml:"name" validate:"required,min=1"`
+        Username string `yaml:"username" validate:"required"`
+        Password string `yaml:"password" validate:"required,min=8"`
+    } `yaml:"database" validate:"required"`
     Debug bool `yaml:"debug"`
 }
 
@@ -537,13 +537,13 @@ func LoadConfig(path string) (*Config, error) {
     if err != nil {
         return nil, err
     }
-    
+
     var config Config
     if err := yaml.Unmarshal(data, &config); err != nil {
         return nil, err
     }
-    
-    schema := gozod.FromStruct[Config]()
+
+    schema := gozod.FromStruct[Config](gozod.WithTagName("validate"))
     return schema.Parse(config)
 }
 ```
@@ -584,5 +584,3 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
----

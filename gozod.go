@@ -18,6 +18,9 @@ import (
 // ZodType is a generic alias for core.ZodType for ergonomic use.
 type ZodType[T any] = core.ZodType[T]
 
+// Unwrapper allows wrapper types to expose their underlying value for validation.
+type Unwrapper = core.Unwrapper
+
 // Schema and configuration aliases
 type (
 	SchemaParams = core.SchemaParams
@@ -608,6 +611,22 @@ var GlobalRegistry = core.GlobalRegistry
 // STRUCT TAG SUPPORT
 // =============================================================================
 
+// FromStructOption configures FromStruct behavior
+type FromStructOption = types.FromStructOption
+
+// WithTagName sets a custom tag name (default: "gozod")
+//
+// Example:
+//
+//	type User struct {
+//	    Name string `validate:"required,min=2"`
+//	}
+//
+//	schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
+func WithTagName(name string) FromStructOption {
+	return types.WithTagName(name)
+}
+
 // FromStruct creates a ZodStruct schema from struct tags
 // This provides convenient tag-based validation for Go structs
 //
@@ -619,14 +638,18 @@ var GlobalRegistry = core.GlobalRegistry
 //	}
 //
 //	schema := gozod.FromStruct[User]()
-func FromStruct[T any]() *types.ZodStruct[T, T] {
-	return types.FromStruct[T]()
+//
+// Use WithTagName to customize the tag name:
+//
+//	schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
+func FromStruct[T any](opts ...FromStructOption) *types.ZodStruct[T, T] {
+	return types.FromStruct[T](opts...)
 }
 
 // FromStructPtr creates a ZodStruct schema for pointer types from struct tags
 // This is useful for handling optional/nullable struct inputs
-func FromStructPtr[T any]() *types.ZodStruct[T, *T] {
-	return types.FromStructPtr[T]()
+func FromStructPtr[T any](opts ...FromStructOption) *types.ZodStruct[T, *T] {
+	return types.FromStructPtr[T](opts...)
 }
 
 // =============================================================================

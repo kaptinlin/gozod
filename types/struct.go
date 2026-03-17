@@ -835,6 +835,18 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 		return fieldValue, nil
 	}
 
+	// Check if fieldValue implements Unwrapper interface
+	originalFieldValue := fieldValue
+	if unwrapper, ok := fieldValue.(core.Unwrapper); ok {
+		value, ok := unwrapper.Unwrap()
+		if !ok {
+			// Value not set, skip validation
+			return fieldValue, nil
+		}
+		// Use unwrapped value for validation
+		fieldValue = value
+	}
+
 	// Use reflection to call Parse method - this handles all schema types
 	schemaVal := reflect.ValueOf(fieldSchema)
 	parseMethod := schemaVal.MethodByName("Parse")
@@ -859,6 +871,11 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 		if err, ok := results[1].Interface().(error); ok {
 			return nil, err
 		}
+	}
+
+	// If we unwrapped the value, return the original wrapper type
+	if originalFieldValue != fieldValue {
+		return originalFieldValue, nil
 	}
 
 	// Return the parsed value (first return value)
@@ -1505,20 +1522,35 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 // STRUCT TAG SUPPORT
 // =============================================================================
 
+// FromStructOption configures FromStruct behavior
+type FromStructOption func(*fromStructConfig)
+
+type fromStructConfig struct {
+	tagName string
+}
+
+// WithTagName sets a custom tag name (default: "gozod")
+func WithTagName(name string) FromStructOption {
+	return func(c *fromStructConfig) {
+		c.tagName = name
+	}
+}
+
 // FromStruct creates a ZodStruct schema from struct tags
-// This is a convenience function that uses the tag parsing infrastructure
-func FromStruct[T any]() *ZodStruct[T, T] {
-	// For now, create basic struct with minimal tag parsing
+func FromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
+	cfg := &fromStructConfig{tagName: "gozod"}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	var zero T
 	structType := reflect.TypeOf(zero)
 
-	// Check if struct has any gozod tags
-	if !hasGozodTags(structType) {
+	if !hasTagsWithName(structType, cfg.tagName) {
 		return Struct[T]()
 	}
 
-	// Parse struct tags and create schema with field validation
-	fieldSchemas := parseStructTagsToSchemas(structType)
+	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
 	if len(fieldSchemas) == 0 {
 		return Struct[T]()
 	}
@@ -1527,17 +1559,20 @@ func FromStruct[T any]() *ZodStruct[T, T] {
 }
 
 // FromStructPtr creates a ZodStruct schema for pointer types from struct tags
-func FromStructPtr[T any]() *ZodStruct[T, *T] {
+func FromStructPtr[T any](opts ...FromStructOption) *ZodStruct[T, *T] {
+	cfg := &fromStructConfig{tagName: "gozod"}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	var zero T
 	structType := reflect.TypeOf(zero)
 
-	// Check if struct has any gozod tags
-	if !hasGozodTags(structType) {
+	if !hasTagsWithName(structType, cfg.tagName) {
 		return StructPtr[T]()
 	}
 
-	// Parse struct tags and create schema with field validation
-	fieldSchemas := parseStructTagsToSchemas(structType)
+	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
 	if len(fieldSchemas) == 0 {
 		return StructPtr[T]()
 	}
@@ -1545,8 +1580,8 @@ func FromStructPtr[T any]() *ZodStruct[T, *T] {
 	return StructPtr[T](fieldSchemas)
 }
 
-// hasGozodTags checks if a struct type has any gozod tags
-func hasGozodTags(structType reflect.Type) bool {
+// hasTagsWithName checks if a struct type has any tags with the given name
+func hasTagsWithName(structType reflect.Type, tagName string) bool {
 	if structType.Kind() == reflect.Pointer {
 		structType = structType.Elem()
 	}
@@ -1556,7 +1591,7 @@ func hasGozodTags(structType reflect.Type) bool {
 	}
 
 	for field := range structType.Fields() {
-		if _, exists := field.Tag.Lookup("gozod"); exists {
+		if _, exists := field.Tag.Lookup(tagName); exists {
 			return true
 		}
 	}
@@ -1564,19 +1599,27 @@ func hasGozodTags(structType reflect.Type) bool {
 	return false
 }
 
-// parseStructTagsToSchemas converts struct tags to field schemas
-func parseStructTagsToSchemas(structType reflect.Type) core.StructSchema {
-	// Initialize cycle detection context
+// hasGozodTags checks if a struct type has any gozod tags (internal helper)
+func hasGozodTags(structType reflect.Type) bool {
+	return hasTagsWithName(structType, "gozod")
+}
+
+// parseStructTagsToSchemasWithTag converts struct tags to field schemas using custom tag name
+func parseStructTagsToSchemasWithTag(structType reflect.Type, tagName string) core.StructSchema {
 	visited := make(map[reflect.Type]bool)
-	return parseStructTagsToSchemasWithCycleDetection(structType, visited)
+	return parseStructTagsToSchemasWithCycleDetection(structType, tagName, visited)
+}
+
+// parseStructTagsToSchemas converts struct tags to field schemas (internal helper using "gozod")
+func parseStructTagsToSchemas(structType reflect.Type) core.StructSchema {
+	return parseStructTagsToSchemasWithTag(structType, "gozod")
 }
 
 // parseStructTagsToSchemasWithCycleDetection parses struct tags with cycle detection
-func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited map[reflect.Type]bool) core.StructSchema {
+func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName string, visited map[reflect.Type]bool) core.StructSchema {
 	schemas := make(core.StructSchema)
 
-	// Use tagparser to parse struct tags
-	parser := tagparser.New()
+	parser := tagparser.NewWithTagName(tagName)
 	fields, err := parser.ParseStructTags(structType)
 	if err != nil {
 		return schemas
@@ -1598,7 +1641,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited
 
 		// Create basic schema based on field type
 		// Pass the field info and visited map for cycle detection
-		schema := createSchemaFromTypeWithCycleDetection(field.Type, field, visited)
+		schema := createSchemaFromTypeWithCycleDetection(field.Type, field, tagName, visited)
 		if schema != nil {
 			// Apply parsed tag rules
 			schema = applyParsedTagRules(schema, field)
@@ -1610,7 +1653,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, visited
 }
 
 // createSchemaFromTypeWithCycleDetection creates a schema with cycle detection
-func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, visited map[reflect.Type]bool) core.ZodSchema {
+func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, tagName string, visited map[reflect.Type]bool) core.ZodSchema {
 	// Check for circular reference
 	actualType := fieldType
 	isPointer := actualType.Kind() == reflect.Pointer
@@ -1634,6 +1677,14 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 
 	// For nested structs (not circular), create schema with cycle detection
 	if actualType.Kind() == reflect.Struct && actualType != reflect.TypeFor[time.Time]() {
+		// Check if this type implements Unwrapper interface
+		zeroVal := reflect.Zero(actualType)
+		if _, ok := zeroVal.Interface().(core.Unwrapper); ok {
+			// This type implements Unwrapper, delegate to createSchemaFromTypeWithInfo
+			// which will extract the Value field type
+			return createSchemaFromTypeWithInfo(fieldType, fieldInfo)
+		}
+
 		// Check if coercion is enabled
 		hasCoerce := false
 		for _, rule := range fieldInfo.Rules {
@@ -1653,9 +1704,9 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 
 		// Create nested struct schema with cycle detection
 		var schema core.ZodSchema
-		if hasGozodTags(actualType) {
+		if hasTagsWithName(actualType, tagName) {
 			// Parse nested struct tags recursively with cycle detection
-			fieldSchemas := parseStructTagsToSchemasWithCycleDetection(actualType, visited)
+			fieldSchemas := parseStructTagsToSchemasWithCycleDetection(actualType, tagName, visited)
 			if len(fieldSchemas) > 0 {
 				schema = Object(fieldSchemas)
 			} else {
@@ -1778,6 +1829,18 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 
 // createSchemaFromTypeWithInfo creates a basic schema based on Go type with field info
 func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.FieldInfo) core.ZodSchema {
+	// Check if this type implements Unwrapper interface
+	if fieldType.Kind() == reflect.Struct {
+		zeroVal := reflect.Zero(fieldType)
+		if _, ok := zeroVal.Interface().(core.Unwrapper); ok {
+			// This type implements Unwrapper, look for Value field
+			if valueField, found := fieldType.FieldByName("Value"); found {
+				// Use the Value field's type for schema creation
+				fieldType = valueField.Type
+			}
+		}
+	}
+
 	// Check if coercion is enabled
 	hasCoerce := false
 	for _, rule := range fieldInfo.Rules {

@@ -45,6 +45,25 @@ go get github.com/kaptinlin/gozod
 
 ## 🏷️ Tag Syntax
 
+### Custom Tag Names
+
+By default, GoZod uses the `gozod` tag name. You can customize this using the `WithTagName` option:
+
+```go
+type User struct {
+    Name  string `validate:"required,min=2"`
+    Email string `validate:"required,email"`
+}
+
+// Use custom tag name
+schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
+```
+
+This is useful when:
+- Migrating from other validation libraries
+- Following team conventions
+- Avoiding tag name conflicts
+
 ### Core Rules
 
 - **Optional by Default**: Fields are optional unless marked `required`
@@ -371,6 +390,40 @@ type PasswordForm struct {
 schema := gozod.FromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
     return form.Password == form.ConfirmPassword
 }, "Passwords must match")
+```
+
+### Wrapper Types (Optional, Nullable)
+
+GoZod supports validation of wrapper types like `Optional[T]` and `sql.NullString` through the `Unwrapper` interface:
+
+```go
+type Optional[T any] struct {
+    Value T
+    set   bool
+}
+
+func (o Optional[T]) Unwrap() (any, bool) {
+    return o.Value, o.set
+}
+
+type ServerConfig struct {
+    Host string        `gozod:"required"`
+    Port Optional[int] `gozod:"min=1000,max=9999"`
+}
+
+schema := gozod.FromStruct[ServerConfig]()
+
+// Port not set - validation skipped
+config1 := ServerConfig{Host: "localhost"}
+result, _ := schema.Parse(config1)  // ✅ Success
+
+// Port set with valid value
+config2 := ServerConfig{Host: "localhost", Port: Optional[int]{Value: 3000, set: true}}
+result, _ = schema.Parse(config2)  // ✅ Success
+
+// Port set with invalid value
+config3 := ServerConfig{Host: "localhost", Port: Optional[int]{Value: 100, set: true}}
+_, err := schema.Parse(config3)  // ❌ Validation fails: Port < 1000
 ```
 
 ---
