@@ -837,6 +837,7 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 
 	// Check if fieldValue implements Unwrapper interface
 	originalFieldValue := fieldValue
+	wasUnwrapped := false
 	if unwrapper, ok := fieldValue.(core.Unwrapper); ok {
 		value, ok := unwrapper.Unwrap()
 		if !ok {
@@ -845,6 +846,7 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 		}
 		// Use unwrapped value for validation
 		fieldValue = value
+		wasUnwrapped = true
 	}
 
 	// Use reflection to call Parse method - this handles all schema types
@@ -874,7 +876,7 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 	}
 
 	// If we unwrapped the value, return the original wrapper type
-	if originalFieldValue != fieldValue {
+	if wasUnwrapped {
 		return originalFieldValue, nil
 	}
 
