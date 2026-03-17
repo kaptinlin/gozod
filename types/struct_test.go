@@ -1605,3 +1605,81 @@ func TestStruct_MultiErrorCollection(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// ValidateStruct tests
+// =============================================================================
+
+func TestValidateStruct(t *testing.T) {
+	t.Run("valid struct", func(t *testing.T) {
+		type Config struct {
+			Host string `validate:"required,min=1"`
+			Port int    `validate:"min=1000,max=9999"`
+		}
+
+		config := &Config{Host: "localhost", Port: 8080}
+		result, err := ValidateStruct(config, WithTagName("validate"))
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		parsed := result.(Config)
+		assert.Equal(t, "localhost", parsed.Host)
+		assert.Equal(t, 8080, parsed.Port)
+	})
+
+	t.Run("collects all validation errors", func(t *testing.T) {
+		type Config struct {
+			Host string `validate:"required,min=5"`
+			Port int    `validate:"min=1000,max=9999"`
+			Name string `validate:"required,min=3"`
+		}
+
+		config := &Config{Host: "", Port: 500, Name: "ab"}
+		_, err := ValidateStruct(config, WithTagName("validate"))
+
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+
+		// Should have at least 3 errors (Host required, Port too small, Name too short)
+		assert.GreaterOrEqual(t, len(zodErr.Issues), 3)
+	})
+
+	t.Run("non-struct input", func(t *testing.T) {
+		_, err := ValidateStruct("not a struct", WithTagName("validate"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be a struct")
+	})
+
+	t.Run("pointer to struct", func(t *testing.T) {
+		type Config struct {
+			Host string `validate:"required"`
+		}
+
+		config := &Config{Host: "localhost"}
+		result, err := ValidateStruct(config, WithTagName("validate"))
+
+		require.NoError(t, err)
+		parsed := result.(Config)
+		assert.Equal(t, "localhost", parsed.Host)
+	})
+
+	t.Run("fields without tags are copied", func(t *testing.T) {
+		type Config struct {
+			Host    string `validate:"required"`
+			Port    int
+			Timeout int
+		}
+
+		config := &Config{Host: "localhost", Port: 8080, Timeout: 30}
+		result, err := ValidateStruct(config, WithTagName("validate"))
+
+		require.NoError(t, err)
+		parsed := result.(Config)
+		assert.Equal(t, "localhost", parsed.Host)
+		assert.Equal(t, 8080, parsed.Port)
+		assert.Equal(t, 30, parsed.Timeout)
+	})
+}

@@ -25,6 +25,7 @@ import (
 var (
 	ErrFieldNotFoundOrNotSettable = errors.New("field not found or not settable")
 	ErrCannotAssignToField        = errors.New("cannot assign value to field of type")
+	ErrValueMustBeStruct          = errors.New("value must be a struct or pointer to struct")
 )
 
 // anyType is the reflect.Type for interface{}/any, cached to avoid repeated allocation.
@@ -1536,6 +1537,95 @@ func WithTagName(name string) FromStructOption {
 	return func(c *fromStructConfig) {
 		c.tagName = name
 	}
+}
+
+// ValidateStruct validates a struct using tags and returns the parsed result.
+// Returns the struct with defaults applied, coercions performed, and all validation issues.
+//
+// This is the runtime equivalent of FromStruct[T]().Parse(value).
+//
+// Example:
+//
+//	type Config struct {
+//	    Host string `validate:"default=localhost"`
+//	    Port int    `validate:"min=1000"`
+//	}
+//	result, err := types.ValidateStruct(&Config{Port: 8080}, types.WithTagName("validate"))
+//	config := result.(*Config)  // Host is now "localhost"
+func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
+	cfg := &fromStructConfig{tagName: "gozod"}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	rv := reflect.ValueOf(value)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+
+	if rv.Kind() != reflect.Struct {
+		return nil, ErrValueMustBeStruct
+	}
+
+	structType := rv.Type()
+
+	// Parse struct tags
+	parser := tagparser.NewWithTagName(cfg.tagName)
+	parsedFields, err := parser.ParseStructTags(structType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse struct tags: %w", err)
+	}
+
+	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
+
+	var allIssues []core.ZodIssue
+	result := reflect.New(structType).Elem()
+
+	// First, copy all fields from input to result
+	for i := 0; i < structType.NumField(); i++ {
+		result.Field(i).Set(rv.Field(i))
+	}
+
+	// Then process fields with validation tags
+	for _, pf := range parsedFields {
+		schema := fieldSchemas[pf.JSONName]
+		if schema == nil {
+			continue
+		}
+
+		fieldValue := rv.FieldByName(pf.Name)
+		if !fieldValue.IsValid() {
+			continue
+		}
+
+		parsed, err := schema.ParseAny(fieldValue.Interface())
+		if err != nil {
+			var zodErr *issues.ZodError
+			if errors.As(err, &zodErr) {
+				for _, issue := range zodErr.Issues {
+					issue.Path = append([]any{pf.Name}, issue.Path...)
+					allIssues = append(allIssues, issue)
+				}
+			} else {
+				allIssues = append(allIssues, issues.ZodIssue{
+					ZodIssueBase: core.ZodIssueBase{
+						Code:    core.Custom,
+						Path:    []any{pf.Name},
+						Message: err.Error(),
+					},
+				})
+			}
+			continue
+		}
+
+		result.FieldByName(pf.Name).Set(reflect.ValueOf(parsed))
+	}
+
+	if len(allIssues) > 0 {
+		return nil, issues.NewZodError(allIssues)
+	}
+
+	return result.Interface(), nil
 }
 
 // FromStruct creates a ZodStruct schema from struct tags

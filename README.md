@@ -112,6 +112,39 @@ func main() {
 }
 ```
 
+### Runtime Struct Validation
+
+For scenarios where the struct type is only known at runtime (e.g., CLI frameworks, web frameworks):
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/kaptinlin/gozod/types"
+)
+
+type Config struct {
+    Host string `validate:"required,min=1"`
+    Port int    `validate:"min=1000,max=9999"`
+}
+
+func main() {
+    config := &Config{Host: "localhost", Port: 8080}
+
+    // Runtime validation without generic type parameters
+    result, err := types.ValidateStruct(config, types.WithTagName("validate"))
+    if err != nil {
+        fmt.Printf("Validation error: %v\n", err)
+        return
+    }
+
+    // Type assertion needed for runtime validation
+    validated := result.(Config)
+    fmt.Printf("Valid config: %+v\n", validated)
+}
+```
+
 ### Programmatic Struct Validation
 
 ```go

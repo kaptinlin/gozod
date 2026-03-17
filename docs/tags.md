@@ -37,6 +37,53 @@ func main() {
 }
 ```
 
+## 🔄 Runtime Validation
+
+For scenarios where the struct type is only known at runtime (e.g., CLI frameworks, web frameworks), use `ValidateStruct`:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/kaptinlin/gozod/types"
+)
+
+type Config struct {
+    Host string `validate:"required,min=1"`
+    Port int    `validate:"min=1000,max=9999"`
+}
+
+func main() {
+    config := &Config{Host: "localhost", Port: 8080}
+
+    // Runtime validation without generic type parameters
+    result, err := types.ValidateStruct(config, types.WithTagName("validate"))
+    if err != nil {
+        fmt.Printf("Validation error: %v\n", err)
+        return
+    }
+
+    // Type assertion needed for runtime validation
+    validated := result.(Config)
+    fmt.Printf("Valid config: %+v\n", validated)
+}
+```
+
+**When to use `ValidateStruct`:**
+- Generic validators that work with any struct type
+- Framework integration (CLI, web, etc.)
+- Dynamic validation scenarios
+- When compile-time type parameters are not available
+
+**Comparison:**
+
+| Feature | `FromStruct[T]()` | `ValidateStruct()` |
+|---------|-------------------|-------------------|
+| Type parameters | Compile-time generic | Runtime `any` |
+| Return type | Strongly typed `T` | `any` (needs type assertion) |
+| Use case | Type known at compile time | Type known at runtime |
+
 ## 📦 Installation
 
 ```bash
