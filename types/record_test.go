@@ -1911,4 +1911,50 @@ func TestRecord_NumericStringKeys(t *testing.T) {
 		_, err := schema.Parse(map[string]any{"4": "four"})
 		require.Error(t, err)
 	})
+
+	t.Run("union of numeric literal keys", func(t *testing.T) {
+		// Zod v4: z.record(z.union([z.literal(1), z.literal(2), z.literal(3)]), z.string())
+		// Generalized numeric key handling (762e911e) enables this.
+		numericKeys := Union([]any{
+			LiteralOf([]int{1}),
+			LiteralOf([]int{2}),
+			LiteralOf([]int{3}),
+		})
+		schema := Record(numericKeys, String())
+
+		result, err := schema.Parse(map[string]any{"1": "one", "2": "two"})
+		require.NoError(t, err)
+		assert.Equal(t, "one", result["1"])
+		assert.Equal(t, "two", result["2"])
+
+		// Unrecognized numeric key should fail
+		_, err = schema.Parse(map[string]any{"4": "four"})
+		require.Error(t, err)
+	})
+
+	t.Run("union of string and numeric literal keys", func(t *testing.T) {
+		// Zod v4: z.record(z.union([z.literal("a"), z.literal("b"), z.literal(1), z.literal(2)]), z.string())
+		mixedKeys := Union([]any{
+			LiteralOf([]string{"a", "b"}),
+			LiteralOf([]int{1, 2}),
+		})
+		schema := Record(mixedKeys, String())
+
+		// String keys should pass directly
+		result, err := schema.Parse(map[string]any{"a": "alpha"})
+		require.NoError(t, err)
+		assert.Equal(t, "alpha", result["a"])
+
+		// Numeric string keys should pass via numeric retry
+		result, err = schema.Parse(map[string]any{"1": "one"})
+		require.NoError(t, err)
+		assert.Equal(t, "one", result["1"])
+
+		// Unrecognized keys should fail
+		_, err = schema.Parse(map[string]any{"c": "charlie"})
+		require.Error(t, err)
+
+		_, err = schema.Parse(map[string]any{"3": "three"})
+		require.Error(t, err)
+	})
 }

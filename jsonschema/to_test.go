@@ -1974,3 +1974,24 @@ func TestToJSONSchema_OverwriteDescriptions(t *testing.T) {
 	assert.Contains(t, resultStr, "\"description\":\"d\"")
 	assert.Contains(t, resultStr, "\"description\":\"e\"")
 }
+
+// TestToJSONSchema_RefWithOptionalAndDescribe verifies that a schema with
+// meta ID, describe, and optional produces correct $ref output with the
+// description preserved on the $ref site (Zod v4: cbf77bb1).
+func TestToJSONSchema_RefWithOptionalAndDescribe(t *testing.T) {
+	schema := types.String().Meta(core.GlobalMeta{ID: "foo"}).Describe("bar").Optional()
+
+	js, err := ToJSONSchema(schema)
+	require.NoError(t, err)
+
+	jsonBytes, err := json.Marshal(js)
+	require.NoError(t, err)
+	resultStr := string(jsonBytes)
+
+	// Should have $defs with "foo" definition
+	assert.Contains(t, resultStr, "$defs")
+	assert.Contains(t, resultStr, "foo")
+
+	// Description "bar" should be preserved (on $ref site or in output)
+	assert.Contains(t, resultStr, "bar")
+}

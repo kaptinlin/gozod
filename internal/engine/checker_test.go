@@ -268,6 +268,36 @@ func TestExecuteChecks(t *testing.T) {
 		}
 	})
 
+	t.Run("non-abort failure does NOT skip When-gated check", func(t *testing.T) {
+		payload := core.NewParsePayload("hi")
+
+		// Check 1: always fails, WITHOUT Abort (default)
+		check1 := checks.NewCustom[string](func(v any) bool {
+			return false
+		}, core.CustomParams{})
+
+		// Check 2: has a When predicate — should still run because check1 was not an explicit abort
+		check2 := checks.NewCustom[string](func(v any) bool {
+			return false // Also fails
+		}, core.CustomParams{
+			When: func(_ *core.ParsePayload) bool {
+				return true
+			},
+		})
+
+		checkList := []core.ZodCheck{check1, check2}
+		result := executeChecks("hi", checkList, payload, nil)
+
+		if result == nil {
+			t.Fatal("Expected result, got nil")
+		}
+
+		// Should have 2 issues: non-abort failure must not block When-gated checks (Zod v4: 5b574501)
+		if len(result.Issues()) != 2 {
+			t.Errorf("Expected 2 issues (non-abort should not skip When-gated check), got %d", len(result.Issues()))
+		}
+	})
+
 	t.Run("memory optimization with sufficient capacity", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
@@ -320,11 +350,11 @@ func TestExecuteChecks(t *testing.T) {
 	})
 }
 
-func TestCheckAborted(t *testing.T) {
+func TestExplicitlyAborted(t *testing.T) {
 	t.Run("no issues", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
-		aborted := CheckAborted(*payload, 0)
+		aborted := ExplicitlyAborted(*payload, 0)
 		if aborted {
 			t.Error("Expected not aborted for empty issues")
 		}
@@ -335,7 +365,7 @@ func TestCheckAborted(t *testing.T) {
 		issue := issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string"))
 		payload.AddIssue(issue)
 
-		aborted := CheckAborted(*payload, 10)
+		aborted := ExplicitlyAborted(*payload, 10)
 		if aborted {
 			t.Error("Expected not aborted for out of bounds index")
 		}
@@ -347,19 +377,19 @@ func TestCheckAborted(t *testing.T) {
 		issue.Continue = true
 		payload.AddIssue(issue)
 
-		aborted := CheckAborted(*payload, 0)
+		aborted := ExplicitlyAborted(*payload, 0)
 		if aborted {
 			t.Error("Expected not aborted when Continue is true")
 		}
 	})
 
-	t.Run("issues with abort flag", func(t *testing.T) {
+	t.Run("issues with explicit abort flag", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 		issue := issues.NewRawIssue(core.InvalidType, "test", issues.WithExpected("string"))
 		issue.Continue = false
 		payload.AddIssue(issue)
 
-		aborted := CheckAborted(*payload, 0)
+		aborted := ExplicitlyAborted(*payload, 0)
 		if !aborted {
 			t.Error("Expected aborted when Continue is false")
 		}

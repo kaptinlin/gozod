@@ -2337,4 +2337,63 @@ func TestFloatMultipleOfSmallSteps(t *testing.T) {
 		_, err = schema.Parse(1.23) // 123 * 0.01
 		assert.NoError(t, err)
 	})
+
+	// Extreme small step tests — GoZod's relative epsilon approach handles
+	// arbitrarily small steps that Zod's regex-based method cannot (Zod v4: 3a818de1).
+	t.Run("MultipleOf extreme small steps", func(t *testing.T) {
+		schema1 := Float64().MultipleOf(1e-20)
+		_, err := schema1.Parse(7e-20) // 7 * 1e-20
+		assert.NoError(t, err)
+
+		_, err = schema1.Parse(1e-19) // 10 * 1e-20
+		assert.NoError(t, err)
+
+		schema2 := Float64().MultipleOf(1e-100)
+		_, err = schema2.Parse(2e-100) // 2 * 1e-100
+		assert.NoError(t, err)
+	})
+}
+
+// TestFloatBoundaryValues tests Min/Max boundary conditions and chained
+// constraint interactions at zero (Zod v4: 8fbf701e).
+func TestFloatBoundaryValues(t *testing.T) {
+	t.Run("Min(0) boundary", func(t *testing.T) {
+		schema := Float64().Min(0.0)
+
+		_, err := schema.Parse(0.0)
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(1.5)
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(-1.5)
+		assert.Error(t, err)
+	})
+
+	t.Run("Max(0) boundary", func(t *testing.T) {
+		schema := Float64().Max(0.0)
+
+		_, err := schema.Parse(0.0)
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(-1.5)
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(1.5)
+		assert.Error(t, err)
+	})
+
+	t.Run("Min(0).Positive() with negative zero", func(t *testing.T) {
+		schema := Float64().Min(0.0).Positive()
+		negZero := math.Copysign(0, -1)
+
+		_, err := schema.Parse(negZero)
+		assert.Error(t, err, "negative zero is not positive")
+
+		_, err = schema.Parse(0.0)
+		assert.Error(t, err, "zero is not positive")
+
+		_, err = schema.Parse(1.5)
+		assert.NoError(t, err)
+	})
 }

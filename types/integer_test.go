@@ -2597,3 +2597,32 @@ func TestInt_MustStrictParse(t *testing.T) {
 		assert.Equal(t, uint16(0), Uint16().MustStrictParse(uint16(0)))
 	})
 }
+
+// TestIntBoundaryValues tests chained constraint interactions at zero boundary (Zod v4: 8fbf701e).
+func TestIntBoundaryValues(t *testing.T) {
+	t.Run("Min(0).Positive() rejects zero", func(t *testing.T) {
+		schema := Int64().Min(0).Positive()
+
+		_, err := schema.Parse(int64(0))
+		assert.Error(t, err, "zero satisfies Min(0) but not Positive()")
+
+		_, err = schema.Parse(int64(5))
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(int64(-5))
+		assert.Error(t, err)
+	})
+
+	t.Run("Max(0).NonPositive() accepts zero", func(t *testing.T) {
+		schema := Int64().Max(0).NonPositive()
+
+		_, err := schema.Parse(int64(0))
+		assert.NoError(t, err, "zero satisfies both Max(0) and NonPositive()")
+
+		_, err = schema.Parse(int64(-5))
+		assert.NoError(t, err)
+
+		_, err = schema.Parse(int64(5))
+		assert.Error(t, err)
+	})
+}

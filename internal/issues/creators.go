@@ -21,6 +21,7 @@ func CreateIssue(code core.IssueCode, message string, properties map[string]any,
 		Properties: props,
 		Input:      input,
 		Path:       []any{},
+		Continue:   true,
 	}
 }
 

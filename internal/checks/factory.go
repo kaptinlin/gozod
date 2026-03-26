@@ -443,6 +443,7 @@ func handleRefineResult(ok bool, payload *core.ParsePayload, input any, ci *ZodC
 	issue := issues.CreateCustomIssue(msg, props, input)
 	issue.Input = input
 	issue.Inst = ci
+	issue.Continue = !ci.Def.Abort
 	payload.AddIssueWithPath(issue, path)
 }
 

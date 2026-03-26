@@ -79,11 +79,11 @@ func executeChecks(
 		}
 
 		// Skip check if "when" predicate returns false.
-		// Check for explicit abort before evaluating When — a prior check
-		// with Abort:true should prevent subsequent checks from running,
-		// even if they have a When predicate (Zod v4 fix: 5b574501).
+		// Only explicit aborts (from Abort:true) should prevent When-gated checks
+		// from running. Non-abort check failures and type errors must NOT block
+		// subsequent When-gated checks like Min/Max (Zod v4 fix: 5b574501).
 		if ci.When != nil {
-			if CheckAborted(*payload, 0) {
+			if ExplicitlyAborted(*payload, 0) {
 				continue
 			}
 			wp := core.NewParsePayloadWithPath(val, payload.Path())
@@ -120,8 +120,11 @@ func executeChecks(
 	return payload
 }
 
-// CheckAborted reports whether any issue from start onwards signals an abort.
-func CheckAborted(x core.ParsePayload, start int) bool {
+// ExplicitlyAborted reports whether any issue from start onwards signals an
+// explicit abort (Continue=false). Only issues from checks with Abort:true
+// have Continue=false; regular check failures have Continue=true and do not
+// trigger this (Zod v4: explicitlyAborted, commit 5b574501).
+func ExplicitlyAborted(x core.ParsePayload, start int) bool {
 	iss := x.Issues()
 	if start >= len(iss) {
 		return false

@@ -1108,3 +1108,32 @@ func TestE164_RefineAny(t *testing.T) {
 		require.NotNil(t, result)
 	})
 }
+
+// TestHTTPURL_StrictFormat verifies that GoZod rejects malformed HTTP URLs
+// that some lenient parsers (like JS URL()) might accept (Zod v4: 3cd45ebc).
+func TestHTTPURL_StrictFormat(t *testing.T) {
+	schema := HTTPURL()
+
+	validURLs := []string{
+		"http://example.com",
+		"https://example.com/path",
+		"https://example.com:8080/path?q=1",
+	}
+	for _, u := range validURLs {
+		_, err := schema.Parse(u)
+		assert.NoError(t, err, "Expected %q to be valid", u)
+	}
+
+	invalidURLs := []string{
+		"http:example.com",     // missing //
+		"https:example.com",    // missing //
+		"http:/www.google.com", // single /
+		"https:/example.com",   // single /
+		"ftp://example.com",    // wrong protocol
+		"example.com",          // no protocol
+	}
+	for _, u := range invalidURLs {
+		_, err := schema.Parse(u)
+		assert.Error(t, err, "Expected %q to be invalid", u)
+	}
+}
