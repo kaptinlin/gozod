@@ -5,6 +5,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/core"
 )
 
@@ -33,9 +36,7 @@ func TestIsNil(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsNil(tt.v); got != tt.want {
-				t.Errorf("IsNil() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsNil(tt.v))
 		})
 	}
 }
@@ -58,9 +59,7 @@ func TestIsBool(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsBool(tt.v); got != tt.want {
-				t.Errorf("IsBool() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsBool(tt.v))
 		})
 	}
 }
@@ -79,9 +78,7 @@ func TestIsString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsString(tt.v); got != tt.want {
-				t.Errorf("IsString() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsString(tt.v))
 		})
 	}
 }
@@ -108,9 +105,7 @@ func TestIsNumeric(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsNumeric(tt.v); got != tt.want {
-				t.Errorf("IsNumeric() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsNumeric(tt.v))
 		})
 	}
 }
@@ -131,9 +126,7 @@ func TestIsArray(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsArray(tt.v); got != tt.want {
-				t.Errorf("IsArray() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsArray(tt.v))
 		})
 	}
 }
@@ -151,9 +144,7 @@ func TestIsSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsSlice(tt.v); got != tt.want {
-				t.Errorf("IsSlice() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsSlice(tt.v))
 		})
 	}
 }
@@ -171,9 +162,7 @@ func TestIsMap(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsMap(tt.v); got != tt.want {
-				t.Errorf("IsMap() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsMap(tt.v))
 		})
 	}
 }
@@ -191,9 +180,7 @@ func TestIsStruct(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsStruct(tt.v); got != tt.want {
-				t.Errorf("IsStruct() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsStruct(tt.v))
 		})
 	}
 }
@@ -227,9 +214,7 @@ func TestParsedType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ParsedType(tt.v); got != tt.want {
-				t.Errorf("ParsedType() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, ParsedType(tt.v))
 		})
 	}
 }
@@ -255,9 +240,7 @@ func TestParsedCategory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ParsedCategory(tt.v); got != tt.want {
-				t.Errorf("ParsedCategory() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, ParsedCategory(tt.v))
 		})
 	}
 }
@@ -282,12 +265,8 @@ func TestDeref(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			val, ok := Deref(tt.v)
-			if ok != tt.ok {
-				t.Errorf("Deref() ok = %v, want %v", ok, tt.ok)
-			}
-			if val != tt.want {
-				t.Errorf("Deref() val = %v, want %v", val, tt.want)
-			}
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, val)
 		})
 	}
 }
@@ -309,9 +288,7 @@ func TestDerefAll(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DerefAll(tt.v); got != tt.want {
-				t.Errorf("DerefAll() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, DerefAll(tt.v))
 		})
 	}
 	_ = ppx
@@ -336,9 +313,8 @@ func TestStringVal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s, ok := StringVal(tt.v)
-			if ok != tt.ok || s != tt.want {
-				t.Errorf("StringVal() = (%q, %v), want (%q, %v)", s, ok, tt.want, tt.ok)
-			}
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, s)
 		})
 	}
 }
@@ -358,9 +334,7 @@ func TestHasLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := HasLength(tt.v); got != tt.want {
-				t.Errorf("HasLength() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, HasLength(tt.v))
 		})
 	}
 }
@@ -381,9 +355,7 @@ func TestHasSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := HasSize(tt.v); got != tt.want {
-				t.Errorf("HasSize() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, HasSize(tt.v))
 		})
 	}
 }
@@ -405,9 +377,8 @@ func TestLength(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n, ok := Length(tt.v)
-			if ok != tt.ok || n != tt.want {
-				t.Errorf("Length() = (%d, %v), want (%d, %v)", n, ok, tt.want, tt.ok)
-			}
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, n)
 		})
 	}
 }
@@ -428,9 +399,8 @@ func TestSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			n, ok := Size(tt.v)
-			if ok != tt.ok || n != tt.want {
-				t.Errorf("Size() = (%d, %v), want (%d, %v)", n, ok, tt.want, tt.ok)
-			}
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, n)
 		})
 	}
 }
@@ -442,29 +412,23 @@ func TestSize(t *testing.T) {
 func TestConvert(t *testing.T) {
 	t.Run("same type", func(t *testing.T) {
 		got, err := Convert[int](42)
-		if err != nil || got != 42 {
-			t.Errorf("Convert[int](42) = (%v, %v), want (42, nil)", got, err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 42, got)
 	})
 
 	t.Run("numeric conversion", func(t *testing.T) {
 		got, err := Convert[float64](42)
-		if err != nil || got != 42.0 {
-			t.Errorf("Convert[float64](42) = (%v, %v), want (42.0, nil)", got, err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 42.0, got)
 	})
 
 	t.Run("nil input", func(t *testing.T) {
 		_, err := Convert[int](nil)
-		if !errors.Is(err, ErrNil) {
-			t.Errorf("Convert[int](nil) error = %v, want ErrNil", err)
-		}
+		assert.True(t, errors.Is(err, ErrNil))
 	})
 
 	t.Run("unsupported", func(t *testing.T) {
 		_, err := Convert[int]("hello")
-		if !errors.Is(err, ErrUnsupported) {
-			t.Errorf("Convert[int](string) error = %v, want ErrUnsupported", err)
-		}
+		assert.True(t, errors.Is(err, ErrUnsupported))
 	})
 }

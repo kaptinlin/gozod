@@ -3,6 +3,9 @@ package engine
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/issues"
@@ -23,13 +26,8 @@ func TestRunChecks(t *testing.T) {
 
 		result := RunChecks(checkList, payload)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.Issues()))
-		}
+		require.NotNil(t, result)
+		assert.Len(t, result.Issues(), 0)
 	})
 
 	t.Run("with context parameter", func(t *testing.T) {
@@ -44,9 +42,7 @@ func TestRunChecks(t *testing.T) {
 
 		result := RunChecks(checkList, payload, ctx)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
+		require.NotNil(t, result)
 	})
 
 	t.Run("failed validation", func(t *testing.T) {
@@ -63,31 +59,22 @@ func TestRunChecks(t *testing.T) {
 
 		result := RunChecks(checkList, payload)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) == 0 {
-			t.Error("Expected validation issues, got none")
-		}
+		require.NotNil(t, result)
+		assert.NotEmpty(t, result.Issues())
 	})
 
 	t.Run("nil payload", func(t *testing.T) {
 		check := checks.NewCustom[string](func(v any) bool { return true }, core.SchemaParams{})
 		result := RunChecks([]core.ZodCheck{check}, nil)
 
-		if result != nil {
-			t.Error("Expected nil result for nil payload")
-		}
+		assert.Nil(t, result)
 	})
 
 	t.Run("empty checks", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 		result := RunChecks([]core.ZodCheck{}, payload)
 
-		if result != payload {
-			t.Error("Expected same payload for empty checks")
-		}
+		assert.Equal(t, payload, result)
 	})
 }
 
@@ -106,13 +93,8 @@ func TestRunChecksOnValue(t *testing.T) {
 
 		result := RunChecksOnValue("test", checkList, payload)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.Issues()))
-		}
+		require.NotNil(t, result)
+		assert.Len(t, result.Issues(), 0)
 	})
 
 	t.Run("with context parameter", func(t *testing.T) {
@@ -127,9 +109,7 @@ func TestRunChecksOnValue(t *testing.T) {
 
 		result := RunChecksOnValue("test", checkList, payload, ctx)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
+		require.NotNil(t, result)
 	})
 
 	t.Run("failed validation", func(t *testing.T) {
@@ -146,13 +126,8 @@ func TestRunChecksOnValue(t *testing.T) {
 
 		result := RunChecksOnValue("test", checkList, payload)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) == 0 {
-			t.Error("Expected validation issues, got none")
-		}
+		require.NotNil(t, result)
+		assert.NotEmpty(t, result.Issues())
 	})
 
 	t.Run("nil payload", func(t *testing.T) {
@@ -160,9 +135,7 @@ func TestRunChecksOnValue(t *testing.T) {
 
 		result := RunChecksOnValue("test", []core.ZodCheck{check}, nil)
 
-		if result != nil {
-			t.Error("Expected nil result for nil payload")
-		}
+		assert.Nil(t, result)
 	})
 
 	t.Run("empty checks", func(t *testing.T) {
@@ -171,13 +144,8 @@ func TestRunChecksOnValue(t *testing.T) {
 
 		result := RunChecksOnValue("test", []core.ZodCheck{}, payload)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) != initialIssues {
-			t.Error("Expected no new issues for empty checks")
-		}
+		require.NotNil(t, result)
+		assert.Len(t, result.Issues(), initialIssues)
 	})
 }
 
@@ -195,18 +163,11 @@ func TestExecuteChecks(t *testing.T) {
 
 		result := executeChecks("test", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) == 0 {
-			t.Fatal("Expected validation issues")
-		}
+		require.NotNil(t, result)
+		require.NotEmpty(t, result.Issues())
 
 		issue := result.Issues()[0]
-		if issue.Message != "Custom error message" {
-			t.Errorf("Expected custom error message, got %s", issue.Message)
-		}
+		assert.Equal(t, "Custom error message", issue.Message)
 	})
 
 	t.Run("abort flag early termination", func(t *testing.T) {
@@ -226,14 +187,8 @@ func TestExecuteChecks(t *testing.T) {
 
 		result := executeChecks("test", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		issues := result.Issues()
-		if len(issues) == 0 {
-			t.Fatal("Expected at least one issue")
-		}
+		require.NotNil(t, result)
+		assert.NotEmpty(t, result.Issues())
 	})
 
 	t.Run("abort skips check with When predicate", func(t *testing.T) {
@@ -258,14 +213,10 @@ func TestExecuteChecks(t *testing.T) {
 		checkList := []core.ZodCheck{check1, check2}
 		result := executeChecks("hi", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
+		require.NotNil(t, result)
 
 		// Should have exactly 1 issue from check1, not 2
-		if len(result.Issues()) != 1 {
-			t.Errorf("Expected exactly 1 issue (abort should skip When-gated check), got %d", len(result.Issues()))
-		}
+		assert.Len(t, result.Issues(), 1, "Expected exactly 1 issue (abort should skip When-gated check)")
 	})
 
 	t.Run("non-abort failure does NOT skip When-gated check", func(t *testing.T) {
@@ -288,14 +239,10 @@ func TestExecuteChecks(t *testing.T) {
 		checkList := []core.ZodCheck{check1, check2}
 		result := executeChecks("hi", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
+		require.NotNil(t, result)
 
 		// Should have 2 issues: non-abort failure must not block When-gated checks (Zod v4: 5b574501)
-		if len(result.Issues()) != 2 {
-			t.Errorf("Expected 2 issues (non-abort should not skip When-gated check), got %d", len(result.Issues()))
-		}
+		assert.Len(t, result.Issues(), 2, "Expected 2 issues (non-abort should not skip When-gated check)")
 	})
 
 	t.Run("memory optimization with sufficient capacity", func(t *testing.T) {
@@ -316,14 +263,10 @@ func TestExecuteChecks(t *testing.T) {
 
 		result := executeChecks("test", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
+		require.NotNil(t, result)
 
 		// Should have issues from all checks
-		if len(result.Issues()) <= 1 {
-			t.Error("Expected multiple issues from checks")
-		}
+		assert.Greater(t, len(result.Issues()), 1, "Expected multiple issues from checks")
 	})
 
 	t.Run("performance with no issues", func(t *testing.T) {
@@ -340,13 +283,8 @@ func TestExecuteChecks(t *testing.T) {
 
 		result := executeChecks("test", checkList, payload, nil)
 
-		if result == nil {
-			t.Fatal("Expected result, got nil")
-		}
-
-		if len(result.Issues()) != 0 {
-			t.Errorf("Expected no issues, got %d", len(result.Issues()))
-		}
+		require.NotNil(t, result)
+		assert.Len(t, result.Issues(), 0)
 	})
 }
 
@@ -355,9 +293,7 @@ func TestExplicitlyAborted(t *testing.T) {
 		payload := core.NewParsePayload("test")
 
 		aborted := ExplicitlyAborted(*payload, 0)
-		if aborted {
-			t.Error("Expected not aborted for empty issues")
-		}
+		assert.False(t, aborted)
 	})
 
 	t.Run("start index out of bounds", func(t *testing.T) {
@@ -366,9 +302,7 @@ func TestExplicitlyAborted(t *testing.T) {
 		payload.AddIssue(issue)
 
 		aborted := ExplicitlyAborted(*payload, 10)
-		if aborted {
-			t.Error("Expected not aborted for out of bounds index")
-		}
+		assert.False(t, aborted)
 	})
 
 	t.Run("issues with continue flag", func(t *testing.T) {
@@ -378,9 +312,7 @@ func TestExplicitlyAborted(t *testing.T) {
 		payload.AddIssue(issue)
 
 		aborted := ExplicitlyAborted(*payload, 0)
-		if aborted {
-			t.Error("Expected not aborted when Continue is true")
-		}
+		assert.False(t, aborted)
 	})
 
 	t.Run("issues with explicit abort flag", func(t *testing.T) {
@@ -390,8 +322,6 @@ func TestExplicitlyAborted(t *testing.T) {
 		payload.AddIssue(issue)
 
 		aborted := ExplicitlyAborted(*payload, 0)
-		if !aborted {
-			t.Error("Expected aborted when Continue is false")
-		}
+		assert.True(t, aborted)
 	})
 }

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Optional is a test wrapper type
@@ -44,19 +46,14 @@ func TestBasicIntValidation(t *testing.T) {
 		config := Config{Port: 3000}
 		schema := gozod.FromStruct[Config]()
 		_, err := schema.Parse(config)
-		if err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
+		require.NoError(t, err)
 	})
 
 	t.Run("invalid value - too small", func(t *testing.T) {
 		config := Config{Port: 100}
 		schema := gozod.FromStruct[Config]()
 		_, err := schema.Parse(config)
-		if err == nil {
-			t.Fatal("expected validation error, got nil")
-		}
-		t.Logf("Got expected error: %v", err)
+		require.Error(t, err, "expected validation error")
 	})
 }
 
@@ -69,11 +66,8 @@ func TestFromStructWithOptional(t *testing.T) {
 	schema := gozod.FromStruct[Config]()
 	shape := schema.Shape()
 
-	if portSchema, ok := shape["Port"]; ok {
-		t.Logf("Port schema found: %T", portSchema)
-	} else {
-		t.Fatal("Port schema not found in shape")
-	}
+	_, ok := shape["Port"]
+	require.True(t, ok, "Port schema not found in shape")
 }
 
 // TestStructWithOptionalFields tests struct validation with Optional fields
@@ -91,12 +85,8 @@ func TestStructWithOptionalFields(t *testing.T) {
 
 		schema := gozod.FromStruct[Config]()
 		result, err := schema.Parse(config)
-		if err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
-		if result.Host != "localhost" {
-			t.Errorf("expected Host=localhost, got: %s", result.Host)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "localhost", result.Host)
 	})
 
 	t.Run("optional field set with valid value", func(t *testing.T) {
@@ -107,12 +97,8 @@ func TestStructWithOptionalFields(t *testing.T) {
 
 		schema := gozod.FromStruct[Config]()
 		result, err := schema.Parse(config)
-		if err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
-		if result.Port.Value != 3000 {
-			t.Errorf("expected Port=3000, got: %d", result.Port.Value)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 3000, result.Port.Value)
 	})
 
 	t.Run("optional field set with invalid value", func(t *testing.T) {
@@ -123,9 +109,7 @@ func TestStructWithOptionalFields(t *testing.T) {
 
 		schema := gozod.FromStruct[Config]()
 		_, err := schema.Parse(config)
-		if err == nil {
-			t.Fatal("expected validation error, got nil")
-		}
+		require.Error(t, err, "expected validation error")
 	})
 
 	t.Run("optional field set with zero value", func(t *testing.T) {
@@ -136,8 +120,6 @@ func TestStructWithOptionalFields(t *testing.T) {
 
 		schema := gozod.FromStruct[Config]()
 		_, err := schema.Parse(config)
-		if err == nil {
-			t.Fatal("expected validation error for zero value, got nil")
-		}
+		require.Error(t, err, "expected validation error for zero value")
 	})
 }

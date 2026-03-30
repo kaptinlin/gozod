@@ -86,19 +86,11 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 		}
 
 		result2, err := schema.Parse(user2)
-		if err != nil {
-			t.Fatalf("Failed to parse user with circular friends: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse user with circular friends")
 
-		if result2.Name != "Bob" {
-			t.Errorf("Expected name 'Bob', got '%s'", result2.Name)
-		}
-		if len(result2.Friends) != 1 {
-			t.Errorf("Expected 1 friend, got %d", len(result2.Friends))
-		}
-		if result2.Friends[0].Name != "Charlie" {
-			t.Errorf("Expected friend name 'Charlie', got '%s'", result2.Friends[0].Name)
-		}
+		assert.Equal(t, "Bob", result2.Name)
+		require.Len(t, result2.Friends, 1)
+		assert.Equal(t, "Charlie", result2.Friends[0].Name)
 	})
 
 	t.Run("validation errors propagate through circular references", func(t *testing.T) {
@@ -115,11 +107,7 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 		}
 
 		_, err := schema.Parse(invalidMainUser)
-		if err == nil {
-			t.Fatal("Expected validation error for main user with short name")
-		} else {
-			t.Logf("Main user validation works: %v", err)
-		}
+		require.Error(t, err, "Expected validation error for main user with short name")
 
 		// Now test with invalid friend name (too short)
 		invalidUser := CircularUser{
@@ -134,18 +122,8 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 			},
 		}
 
-		result, err := schema.Parse(invalidUser)
-		if err == nil {
-			// The lazy evaluation might not be validating nested fields properly
-			// Let's check what we got
-			t.Logf("WARNING: No error returned. Result: %+v", result)
-			if len(result.Friends) > 0 {
-				t.Logf("Friend name in result: %s (should have failed for being too short)", result.Friends[0].Name)
-			}
-			t.Fatal("Expected validation error for friend with short name")
-		} else {
-			t.Logf("Got validation error as expected: %v", err)
-		}
+		_, err = schema.Parse(invalidUser)
+		require.Error(t, err, "Expected validation error for friend with short name")
 
 		// Test with invalid age
 		invalidUser2 := CircularUser{
@@ -161,11 +139,7 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 		}
 
 		_, err = schema.Parse(invalidUser2)
-		if err == nil {
-			t.Fatal("Expected validation error for friend with invalid age")
-		} else {
-			t.Logf("Got validation error for age as expected: %v", err)
-		}
+		require.Error(t, err, "Expected validation error for friend with invalid age")
 	})
 }
 
@@ -183,19 +157,13 @@ func TestCircularReferences_LinkedList(t *testing.T) {
 		node3.Prev = node2
 
 		result, err := schema.Parse(*node1)
-		if err != nil {
-			t.Fatalf("Failed to parse linked list: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse linked list")
 
-		if result.Value != 1 {
-			t.Errorf("Expected value 1, got %d", result.Value)
-		}
-		if result.Next == nil || result.Next.Value != 2 {
-			t.Error("Next node not properly validated")
-		}
-		if result.Next.Next == nil || result.Next.Next.Value != 3 {
-			t.Error("Next.Next node not properly validated")
-		}
+		assert.Equal(t, 1, result.Value)
+		require.NotNil(t, result.Next, "Next node not properly validated")
+		assert.Equal(t, 2, result.Next.Value)
+		require.NotNil(t, result.Next.Next, "Next.Next node not properly validated")
+		assert.Equal(t, 3, result.Next.Next.Value)
 	})
 }
 
@@ -228,16 +196,10 @@ func TestCircularReferences_TreeStructure(t *testing.T) {
 		}
 
 		result, err := schema.Parse(root)
-		if err != nil {
-			t.Fatalf("Failed to parse tree structure: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse tree structure")
 
-		if result.Name != "Root" {
-			t.Errorf("Expected name 'Root', got '%s'", result.Name)
-		}
-		if len(result.Children) != 2 {
-			t.Errorf("Expected 2 children, got %d", len(result.Children))
-		}
+		assert.Equal(t, "Root", result.Name)
+		assert.Len(t, result.Children, 2)
 	})
 }
 
@@ -266,16 +228,10 @@ func TestCircularReferences_MutualReferences(t *testing.T) {
 		}
 
 		result, err := deptSchema.Parse(dept)
-		if err != nil {
-			t.Fatalf("Failed to parse department with employees: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse department with employees")
 
-		if result.Name != "Engineering" {
-			t.Errorf("Expected department name 'Engineering', got '%s'", result.Name)
-		}
-		if len(result.Employees) != 2 {
-			t.Errorf("Expected 2 employees, got %d", len(result.Employees))
-		}
+		assert.Equal(t, "Engineering", result.Name)
+		assert.Len(t, result.Employees, 2)
 	})
 
 	t.Run("Employee with self-references", func(t *testing.T) {
@@ -303,16 +259,10 @@ func TestCircularReferences_MutualReferences(t *testing.T) {
 		}
 
 		result, err := empSchema.Parse(emp)
-		if err != nil {
-			t.Fatalf("Failed to parse employee hierarchy: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse employee hierarchy")
 
-		if result.Name != "CEO" {
-			t.Errorf("Expected name 'CEO', got '%s'", result.Name)
-		}
-		if len(result.Reports) != 2 {
-			t.Errorf("Expected 2 reports, got %d", len(result.Reports))
-		}
+		assert.Equal(t, "CEO", result.Name)
+		assert.Len(t, result.Reports, 2)
 	})
 }
 
@@ -352,13 +302,9 @@ func TestCircularReferences_ValidationDepth(t *testing.T) {
 		}
 
 		result, err := schema.Parse(deepUser)
-		if err != nil {
-			t.Fatalf("Failed to parse deeply nested structure: %v", err)
-		}
+		require.NoError(t, err, "Failed to parse deeply nested structure")
 
 		// Verify deep nesting worked
-		if result.Friends[0].Friends[0].Friends[0].Friends[0].Name != "Level4" {
-			t.Error("Deep nesting not properly validated")
-		}
+		assert.Equal(t, "Level4", result.Friends[0].Friends[0].Friends[0].Friends[0].Name)
 	})
 }

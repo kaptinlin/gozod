@@ -3,6 +3,8 @@ package validate_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -42,25 +44,15 @@ func TestCIDR(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := validate.CIDR(tt.input, tt.version)
-			if got != tt.want {
-				t.Errorf("CIDR(%q, %d) = %v, want %v", tt.input, tt.version, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestCIDRv4v6Wrappers(t *testing.T) {
-	if !validate.CIDRv4("192.168.1.0/24") {
-		t.Error("CIDRv4 should return true for valid IPv4 CIDR")
-	}
-	if validate.CIDRv4("fe80::/64") {
-		t.Error("CIDRv4 should return false for IPv6 CIDR")
-	}
+	assert.True(t, validate.CIDRv4("192.168.1.0/24"), "CIDRv4 should return true for valid IPv4 CIDR")
+	assert.False(t, validate.CIDRv4("fe80::/64"), "CIDRv4 should return false for IPv6 CIDR")
 
-	if !validate.CIDRv6("fe80::/64") {
-		t.Error("CIDRv6 should return true for valid IPv6 CIDR")
-	}
-	if validate.CIDRv6("192.168.1.0/24") {
-		t.Error("CIDRv6 should return false for IPv4 CIDR")
-	}
+	assert.True(t, validate.CIDRv6("fe80::/64"), "CIDRv6 should return true for valid IPv6 CIDR")
+	assert.False(t, validate.CIDRv6("192.168.1.0/24"), "CIDRv6 should return false for IPv4 CIDR")
 }

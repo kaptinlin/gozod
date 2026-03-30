@@ -2,6 +2,9 @@ package types
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFromStructWithCustomTag(t *testing.T) {
@@ -21,13 +24,9 @@ func TestFromStructWithCustomTag(t *testing.T) {
 		}
 
 		result, err := schema.Parse(user)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		require.NoError(t, err)
 
-		if result.Name != "Alice" {
-			t.Errorf("expected Name=Alice, got %s", result.Name)
-		}
+		assert.Equal(t, "Alice", result.Name)
 	})
 
 	t.Run("invalid email", func(t *testing.T) {
@@ -38,9 +37,7 @@ func TestFromStructWithCustomTag(t *testing.T) {
 		}
 
 		_, err := schema.Parse(user)
-		if err == nil {
-			t.Fatal("expected validation error")
-		}
+		require.Error(t, err)
 	})
 
 	t.Run("age too young", func(t *testing.T) {
@@ -51,9 +48,7 @@ func TestFromStructWithCustomTag(t *testing.T) {
 		}
 
 		_, err := schema.Parse(user)
-		if err == nil {
-			t.Fatal("expected validation error")
-		}
+		require.Error(t, err)
 	})
 }
 
@@ -72,13 +67,9 @@ func TestFromStructPtrWithCustomTag(t *testing.T) {
 		}
 
 		result, err := schema.Parse(cfg)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		require.NoError(t, err)
 
-		if result.Host != "localhost" {
-			t.Errorf("expected Host=localhost, got %s", result.Host)
-		}
+		assert.Equal(t, "localhost", result.Host)
 	})
 }
 
@@ -98,12 +89,8 @@ func TestFromStructDefaultTag(t *testing.T) {
 		}
 
 		result, err := schema.Parse(product)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		require.NoError(t, err)
 
-		if result.Name != "Widget" {
-			t.Errorf("expected Name=Widget, got %s", result.Name)
-		}
+		assert.Equal(t, "Widget", result.Name)
 	})
 }

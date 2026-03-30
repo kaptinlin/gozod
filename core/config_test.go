@@ -3,6 +3,9 @@ package core
 import (
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetConfig(t *testing.T) {
@@ -14,28 +17,16 @@ func TestSetConfig(t *testing.T) {
 		LocaleError: localeErr,
 	})
 
-	if config.CustomError == nil {
-		t.Error("Expected CustomError to be set")
-	}
-	if config.LocaleError == nil {
-		t.Error("Expected LocaleError to be set")
-	}
+	require.NotNil(t, config.CustomError, "Expected CustomError to be set")
+	require.NotNil(t, config.LocaleError, "Expected LocaleError to be set")
 
 	retrieved := Config()
-	if retrieved.CustomError == nil {
-		t.Error("Expected retrieved CustomError to be set")
-	}
-	if retrieved.LocaleError == nil {
-		t.Error("Expected retrieved LocaleError to be set")
-	}
+	assert.NotNil(t, retrieved.CustomError, "Expected retrieved CustomError to be set")
+	assert.NotNil(t, retrieved.LocaleError, "Expected retrieved LocaleError to be set")
 
 	reset := SetConfig(nil)
-	if reset.CustomError != nil {
-		t.Error("Expected CustomError to be nil after reset")
-	}
-	if reset.LocaleError != nil {
-		t.Error("Expected LocaleError to be nil after reset")
-	}
+	assert.Nil(t, reset.CustomError, "Expected CustomError to be nil after reset")
+	assert.Nil(t, reset.LocaleError, "Expected LocaleError to be nil after reset")
 }
 
 func TestSetConfigConcurrent(t *testing.T) {
@@ -98,20 +89,12 @@ func TestSetConfigPartialUpdate(t *testing.T) {
 		CustomError: newCustomErr,
 	})
 
-	if result.CustomError == nil {
-		t.Error("Expected CustomError to be updated")
-	}
-	if result.LocaleError == nil {
-		t.Error("Expected LocaleError to be preserved")
-	}
+	assert.NotNil(t, result.CustomError, "Expected CustomError to be updated")
+	assert.NotNil(t, result.LocaleError, "Expected LocaleError to be preserved")
 
 	retrieved := Config()
-	if retrieved.CustomError == nil {
-		t.Error("Expected CustomError to be present in Config")
-	}
-	if retrieved.LocaleError == nil {
-		t.Error("Expected LocaleError to be preserved in Config")
-	}
+	assert.NotNil(t, retrieved.CustomError, "Expected CustomError to be present in Config")
+	assert.NotNil(t, retrieved.LocaleError, "Expected LocaleError to be preserved in Config")
 }
 
 func BenchmarkConfig(b *testing.B) {

@@ -3,6 +3,8 @@ package transform
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSlugify(t *testing.T) {
@@ -72,9 +74,7 @@ func TestSlugify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Slugify(tt.input); got != tt.want {
-				t.Errorf("Slugify(%q) = %q, want %q", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, Slugify(tt.input))
 		})
 	}
 }

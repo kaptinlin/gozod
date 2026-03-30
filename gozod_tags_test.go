@@ -26,9 +26,7 @@ type MainPackageUser struct {
 func TestMainFromStruct_BasicUsage(t *testing.T) {
 	// Test main package FromStruct function
 	schema := FromStruct[MainPackageUser]()
-	if schema == nil {
-		t.Fatal("FromStruct should return a non-nil schema")
-	}
+	require.NotNil(t, schema, "FromStruct should return a non-nil schema")
 
 	// Test basic validation
 	user := MainPackageUser{
@@ -39,18 +37,13 @@ func TestMainFromStruct_BasicUsage(t *testing.T) {
 
 	result, err := schema.Parse(user)
 	require.NoError(t, err, "Parse should succeed for valid user")
-
-	if result.Name != user.Name {
-		assert.Equal(t, user.Name, result.Name, "Expected name %s, got %s", user.Name, result.Name)
-	}
+	assert.Equal(t, user.Name, result.Name)
 }
 
 func TestMainFromStructPtr_BasicUsage(t *testing.T) {
 	// Test main package FromStructPtr function
 	schema := FromStructPtr[MainPackageUser]()
-	if schema == nil {
-		t.Fatal("FromStructPtr should return a non-nil schema")
-	}
+	require.NotNil(t, schema, "FromStructPtr should return a non-nil schema")
 
 	// Test with pointer input
 	user := &MainPackageUser{
@@ -72,18 +65,14 @@ func TestMainFromStruct_WithModifiers(t *testing.T) {
 
 	// Test chaining with modifiers
 	optionalSchema := schema.Optional()
-	if optionalSchema == nil {
-		t.Fatal("FromStruct should support chaining with Optional")
-	}
+	require.NotNil(t, optionalSchema, "FromStruct should support chaining with Optional")
 
 	// Test with Refine
 	refineSchema := schema.Refine(func(user MainPackageUser) bool {
 		return len(user.Name) > 0
 	}, "Name cannot be empty")
 
-	if refineSchema == nil {
-		t.Fatal("FromStruct should support chaining with Refine")
-	}
+	require.NotNil(t, refineSchema, "FromStruct should support chaining with Refine")
 
 	// Test refine validation
 	validUser := MainPackageUser{
@@ -112,9 +101,7 @@ func TestMainFromStruct_Integration(t *testing.T) {
 	}
 
 	_, err := schema.Parse(invalidUser)
-	if err == nil {
-		t.Fatal("Should fail for invalid user type")
-	}
+	require.Error(t, err, "Should fail for invalid user type")
 }
 
 // =============================================================================
@@ -139,13 +126,8 @@ func TestMainFromStruct_DocumentationExample(t *testing.T) {
 	result, err := schema.Parse(validUser)
 	require.NoError(t, err, "Documentation example should work")
 
-	if result.Name != validUser.Name {
-		assert.Equal(t, validUser.Name, result.Name, "Expected name %s, got %s", validUser.Name, result.Name)
-	}
-
-	if result.Email != validUser.Email {
-		assert.Equal(t, validUser.Email, result.Email, "Expected email %s, got %s", validUser.Email, result.Email)
-	}
+	assert.Equal(t, validUser.Name, result.Name)
+	assert.Equal(t, validUser.Email, result.Email)
 }
 
 // =============================================================================
@@ -185,9 +167,7 @@ func TestTagValidation_StringValidators(t *testing.T) {
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Valid input should pass")
 
-		if result.MinMaxString != valid.MinMaxString {
-			assert.Equal(t, valid.MinMaxString, result.MinMaxString, "Expected MinMaxString %s, got %s", valid.MinMaxString, result.MinMaxString)
-		}
+		assert.Equal(t, valid.MinMaxString, result.MinMaxString)
 	})
 
 	t.Run("min/max validation", func(t *testing.T) {
@@ -235,9 +215,7 @@ func TestTagValidation_NumericValidators(t *testing.T) {
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Valid numeric input should pass")
 
-		if result.MinInt != valid.MinInt {
-			assert.Equal(t, valid.MinInt, result.MinInt, "Expected MinInt %d, got %d", valid.MinInt, result.MinInt)
-		}
+		assert.Equal(t, valid.MinInt, result.MinInt)
 	})
 }
 
@@ -267,9 +245,7 @@ func TestTagValidation_ModifierCombinations(t *testing.T) {
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Valid complex combinations should pass")
 
-		if result.RequiredField != valid.RequiredField {
-			assert.Equal(t, valid.RequiredField, result.RequiredField, "Expected RequiredField %s, got %s", valid.RequiredField, result.RequiredField)
-		}
+		assert.Equal(t, valid.RequiredField, result.RequiredField)
 	})
 }
 
@@ -325,9 +301,7 @@ func TestTagValidation_EdgeCases(t *testing.T) {
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Edge cases should be handled gracefully")
 
-		if result.EmptyTag != valid.EmptyTag {
-			assert.Equal(t, valid.EmptyTag, result.EmptyTag, "Expected EmptyTag %s, got %s", valid.EmptyTag, result.EmptyTag)
-		}
+		assert.Equal(t, valid.EmptyTag, result.EmptyTag)
 	})
 }
 
@@ -360,12 +334,8 @@ func TestTagValidation_NestedStructSupport(t *testing.T) {
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Valid nested struct should pass")
 
-		if result.Name != valid.Name {
-			assert.Equal(t, valid.Name, result.Name, "Expected Name %s, got %s", valid.Name, result.Name)
-		}
-		if result.Address.Street != valid.Address.Street {
-			assert.Equal(t, valid.Address.Street, result.Address.Street, "Expected Street %s, got %s", valid.Address.Street, result.Address.Street)
-		}
+		assert.Equal(t, valid.Name, result.Name)
+		assert.Equal(t, valid.Address.Street, result.Address.Street)
 	})
 }
 
@@ -650,26 +620,16 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		result, err := schema.Parse(empty)
 		require.NoError(t, err, "Default values should be applied")
 
-		if result.Name == nil || *result.Name != "Anonymous" {
-			t.Errorf("Expected default name 'Anonymous', got %v", result.Name)
-		}
-		if result.Age == nil || *result.Age != 18 {
-			t.Errorf("Expected default age 18, got %v", result.Age)
-		}
-		if result.Active == nil || !*result.Active {
-			t.Error("Expected default active to be true")
-		}
-		if result.Tags == nil || len(*result.Tags) != 2 || (*result.Tags)[0] != "tag1" || (*result.Tags)[1] != "tag2" {
-			t.Errorf("Expected default tags [\"tag1\", \"tag2\"], got %v", result.Tags)
-		}
-		if result.Config == nil {
-			t.Error("Expected default config map, got nil")
-		} else {
-			config := *result.Config
-			if theme, ok := config["theme"]; !ok || theme != "dark" {
-				t.Errorf("Expected config theme 'dark', got %v", config)
-			}
-		}
+		require.NotNil(t, result.Name, "Expected default name to be set")
+		assert.Equal(t, "Anonymous", *result.Name)
+		require.NotNil(t, result.Age, "Expected default age to be set")
+		assert.Equal(t, 18, *result.Age)
+		require.NotNil(t, result.Active, "Expected default active to be set")
+		assert.True(t, *result.Active)
+		require.NotNil(t, result.Tags, "Expected default tags to be set")
+		assert.Equal(t, []string{"tag1", "tag2"}, *result.Tags)
+		require.NotNil(t, result.Config, "Expected default config map")
+		assert.Equal(t, "dark", (*result.Config)["theme"])
 	})
 
 	t.Run("non-nil values preserved, defaults not applied", func(t *testing.T) {
@@ -691,26 +651,16 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		require.NoError(t, err, "Parsing should succeed")
 
 		// Non-nil values should be preserved (defaults should not be applied)
-		if result.Name == nil || *result.Name != "John" {
-			t.Errorf("Expected name 'John', got %v", result.Name)
-		}
-		if result.Age == nil || *result.Age != 25 {
-			t.Errorf("Expected age 25, got %v", result.Age)
-		}
-		if result.Active == nil || *result.Active != false {
-			t.Error("Expected active to be false")
-		}
-		if result.Tags == nil || len(*result.Tags) != 1 || (*result.Tags)[0] != "custom" {
-			t.Errorf("Expected tags ['custom'], got %v", result.Tags)
-		}
-		if result.Config == nil {
-			t.Error("Expected config map, got nil")
-		} else {
-			configResult := *result.Config
-			if theme, ok := configResult["theme"]; !ok || theme != "light" {
-				t.Errorf("Expected config theme 'light', got %v", configResult)
-			}
-		}
+		require.NotNil(t, result.Name)
+		assert.Equal(t, "John", *result.Name)
+		require.NotNil(t, result.Age)
+		assert.Equal(t, 25, *result.Age)
+		require.NotNil(t, result.Active)
+		assert.False(t, *result.Active)
+		require.NotNil(t, result.Tags)
+		assert.Equal(t, []string{"custom"}, *result.Tags)
+		require.NotNil(t, result.Config, "Expected config map")
+		assert.Equal(t, "light", (*result.Config)["theme"])
 	})
 }
 
@@ -724,19 +674,13 @@ func TestTagValidation_Prefault(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-
-		// Test that the schema was created successfully with prefault tag
-		if schema == nil {
-			t.Fatal("Schema should be created successfully")
-		}
+		require.NotNil(t, schema, "Schema should be created successfully")
 
 		// Test with valid struct - should work normally
 		validInput := TestStruct{Name: "ValidName"}
 		result, err := schema.Parse(validInput)
 		require.NoError(t, err, "Valid input should pass")
-		if result.Name != "ValidName" {
-			t.Errorf("Expected 'ValidName', got %s", result.Name)
-		}
+		assert.Equal(t, "ValidName", result.Name)
 	})
 
 	t.Run("prefault with validation constraints", func(t *testing.T) {
@@ -750,9 +694,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		validInput := TestStruct{Name: "LongEnoughName"}
 		result, err := schema.Parse(validInput)
 		require.NoError(t, err, "Valid input should pass")
-		if result.Name != "LongEnoughName" {
-			t.Errorf("Expected 'LongEnoughName', got %s", result.Name)
-		}
+		assert.Equal(t, "LongEnoughName", result.Name)
 
 		// Test with struct that has invalid data - should fail validation
 		invalidInput := TestStruct{Name: "Bad"} // Too short
@@ -768,17 +710,13 @@ func TestTagValidation_Prefault(t *testing.T) {
 		// This mainly tests that the schema creation doesn't fail
 		// when both modifiers are present
 		schema := FromStruct[TestStruct]()
-		if schema == nil {
-			t.Fatal("Schema with both default and prefault should be created")
-		}
+		require.NotNil(t, schema, "Schema with both default and prefault should be created")
 
 		// Test normal parsing behavior
 		validInput := TestStruct{Name: "TestName"}
 		result, err := schema.Parse(validInput)
 		require.NoError(t, err, "Valid input should pass")
-		if result.Name != "TestName" {
-			t.Errorf("Expected 'TestName', got %s", result.Name)
-		}
+		assert.Equal(t, "TestName", result.Name)
 	})
 
 	t.Run("multiple types with prefault", func(t *testing.T) {
@@ -790,11 +728,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-
-		// Test that schema creation succeeds for multiple types
-		if schema == nil {
-			t.Fatal("Schema should be created successfully")
-		}
+		require.NotNil(t, schema, "Schema should be created successfully")
 
 		// Test normal parsing
 		validInput := TestStruct{
@@ -805,12 +739,8 @@ func TestTagValidation_Prefault(t *testing.T) {
 		}
 		result, err := schema.Parse(validInput)
 		require.NoError(t, err, "Valid input should pass")
-		if result.Name != "TestName" {
-			t.Errorf("Expected 'TestName', got %s", result.Name)
-		}
-		if result.Priority != 5 {
-			t.Errorf("Expected priority 5, got %d", result.Priority)
-		}
+		assert.Equal(t, "TestName", result.Name)
+		assert.Equal(t, 5, result.Priority)
 	})
 }
 
@@ -822,19 +752,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-
-		// The struct field will have the correct type, but during parsing
-		// the coercion should allow string input to be converted
-		// This test verifies that the coerced schema is being used
-
-		// We can't directly test coercion with FromStruct because it expects
-		// the struct type. Instead, let's test that the coerced constructors
-		// are being used by checking the internals
-
-		// For now, we'll just verify that the schema construction works
-		if schema == nil {
-			t.Fatal("Schema should not be nil")
-		}
+		require.NotNil(t, schema, "Schema should not be nil")
 	})
 
 	t.Run("bool coercion", func(t *testing.T) {
@@ -843,17 +761,13 @@ func TestTagValidation_Coercion(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-		if schema == nil {
-			t.Fatal("Schema should not be nil")
-		}
+		require.NotNil(t, schema, "Schema should not be nil")
 
 		// Test with actual boolean value (coercion happens at parse time)
 		valid := TestStruct{Value: true}
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Should parse valid struct")
-		if result.Value != true {
-			t.Errorf("Expected Value to be true, got %v", result.Value)
-		}
+		assert.True(t, result.Value)
 	})
 
 	t.Run("float coercion", func(t *testing.T) {
@@ -862,16 +776,12 @@ func TestTagValidation_Coercion(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-		if schema == nil {
-			t.Fatal("Schema should not be nil")
-		}
+		require.NotNil(t, schema, "Schema should not be nil")
 
 		valid := TestStruct{Value: 3.14}
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Should parse valid struct")
-		if result.Value != 3.14 {
-			t.Errorf("Expected Value to be 3.14, got %f", result.Value)
-		}
+		assert.InDelta(t, 3.14, result.Value, 0.001)
 	})
 
 	t.Run("string coercion", func(t *testing.T) {
@@ -880,16 +790,12 @@ func TestTagValidation_Coercion(t *testing.T) {
 		}
 
 		schema := FromStruct[TestStruct]()
-		if schema == nil {
-			t.Fatal("Schema should not be nil")
-		}
+		require.NotNil(t, schema, "Schema should not be nil")
 
 		valid := TestStruct{Value: "test"}
 		result, err := schema.Parse(valid)
 		require.NoError(t, err, "Should parse valid struct")
-		if result.Value != "test" {
-			t.Errorf("Expected Value to be 'test', got %s", result.Value)
-		}
+		assert.Equal(t, "test", result.Value)
 	})
 }
 
@@ -1049,12 +955,10 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 		result2, err := schema.Parse(validWithValues)
 		require.NoError(t, err, "Valid query with values should pass")
 
-		if result2.Page == nil || *result2.Page != 2 {
-			t.Errorf("Expected page 2, got %v", result2.Page)
-		}
-		if result2.PageSize == nil || *result2.PageSize != 50 {
-			t.Errorf("Expected page size 50, got %v", result2.PageSize)
-		}
+		require.NotNil(t, result2.Page)
+		assert.Equal(t, 2, *result2.Page)
+		require.NotNil(t, result2.PageSize)
+		assert.Equal(t, 50, *result2.PageSize)
 	})
 }
 
@@ -1078,27 +982,17 @@ func TestTagValidation_ErrorMessages(t *testing.T) {
 	}
 
 	_, err := schema.Parse(invalid)
-	if err == nil {
-		t.Fatal("Should fail with validation errors")
-	}
+	require.Error(t, err, "Should fail with validation errors")
 
 	zodErr, ok := errors.AsType[*ZodError](err)
-	if !ok {
-		t.Fatal("Expected ZodError")
-	}
+	require.True(t, ok, "Expected ZodError")
 
-	if len(zodErr.Issues) < 3 {
-		t.Errorf("Expected at least 3 validation issues, got %d", len(zodErr.Issues))
-	}
+	assert.GreaterOrEqual(t, len(zodErr.Issues), 3, "Expected at least 3 validation issues")
 
 	// Check that error messages are meaningful
 	for _, issue := range zodErr.Issues {
-		if issue.Message == "" {
-			t.Error("Error message should not be empty")
-		}
-		if len(issue.Path) == 0 {
-			t.Error("Error path should not be empty")
-		}
+		assert.NotEmpty(t, issue.Message, "Error message should not be empty")
+		assert.NotEmpty(t, issue.Path, "Error path should not be empty")
 	}
 }
 

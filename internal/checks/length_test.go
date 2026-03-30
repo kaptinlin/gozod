@@ -3,6 +3,8 @@ package checks
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kaptinlin/gozod/core"
 )
 
@@ -13,15 +15,11 @@ func TestLengthChecks(t *testing.T) {
 		// Test valid case
 		payload := core.NewParsePayload("hello")
 		executeCheck(check, payload)
-		if len(payload.Issues()) != 0 {
-			t.Errorf("Expected no issues for valid length, got %d", len(payload.Issues()))
-		}
+		assert.Len(t, payload.Issues(), 0, "Expected no issues for valid length")
 
 		// Test invalid case
 		payload = core.NewParsePayload("hi")
 		executeCheck(check, payload)
-		if len(payload.Issues()) != 1 {
-			t.Errorf("Expected 1 issue for invalid length, got %d", len(payload.Issues()))
-		}
+		assert.Len(t, payload.Issues(), 1, "Expected 1 issue for invalid length")
 	})
 }

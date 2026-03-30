@@ -3,22 +3,19 @@ package utils
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kaptinlin/gozod/core"
 )
 
 func TestToErrorMap(t *testing.T) {
 	t.Run("string input", func(t *testing.T) {
 		m, ok := ToErrorMap("custom error")
-		if !ok {
-			t.Fatal("expected ok=true for string input")
-		}
-		if m == nil {
-			t.Fatal("expected non-nil error map")
-		}
+		require.True(t, ok, "expected ok=true for string input")
+		require.NotNil(t, m, "expected non-nil error map")
 		got := (*m)(core.ZodRawIssue{})
-		if got != "custom error" {
-			t.Errorf("got %q, want %q", got, "custom error")
-		}
+		assert.Equal(t, "custom error", got)
 	})
 
 	t.Run("ZodErrorMap input", func(t *testing.T) {
@@ -26,12 +23,8 @@ func TestToErrorMap(t *testing.T) {
 			return "mapped"
 		})
 		m, ok := ToErrorMap(fn)
-		if !ok {
-			t.Fatal("expected ok=true")
-		}
-		if (*m)(core.ZodRawIssue{}) != "mapped" {
-			t.Error("expected mapped result")
-		}
+		require.True(t, ok, "expected ok=true")
+		assert.Equal(t, "mapped", (*m)(core.ZodRawIssue{}))
 	})
 
 	t.Run("*ZodErrorMap input", func(t *testing.T) {
@@ -39,46 +32,28 @@ func TestToErrorMap(t *testing.T) {
 			return "ptr"
 		})
 		m, ok := ToErrorMap(&fn)
-		if !ok {
-			t.Fatal("expected ok=true")
-		}
-		if (*m)(core.ZodRawIssue{}) != "ptr" {
-			t.Error("expected ptr result")
-		}
+		require.True(t, ok, "expected ok=true")
+		assert.Equal(t, "ptr", (*m)(core.ZodRawIssue{}))
 	})
 
 	t.Run("func input", func(t *testing.T) {
 		fn := func(core.ZodRawIssue) string { return "func" }
 		m, ok := ToErrorMap(fn)
-		if !ok {
-			t.Fatal("expected ok=true")
-		}
-		if (*m)(core.ZodRawIssue{}) != "func" {
-			t.Error("expected func result")
-		}
+		require.True(t, ok, "expected ok=true")
+		assert.Equal(t, "func", (*m)(core.ZodRawIssue{}))
 	})
 
 	t.Run("unsupported input", func(t *testing.T) {
 		m, ok := ToErrorMap(42)
-		if ok {
-			t.Error("expected ok=false for int input")
-		}
-		if m != nil {
-			t.Error("expected nil map")
-		}
+		assert.False(t, ok, "expected ok=false for int input")
+		assert.Nil(t, m, "expected nil map")
 	})
 }
 
 func TestFirstParam(t *testing.T) {
-	if got := FirstParam(); got != nil {
-		t.Errorf("FirstParam() = %v, want nil", got)
-	}
-	if got := FirstParam("hello"); got != "hello" {
-		t.Errorf("FirstParam(hello) = %v, want hello", got)
-	}
-	if got := FirstParam(1, 2, 3); got != 1 {
-		t.Errorf("FirstParam(1,2,3) = %v, want 1", got)
-	}
+	assert.Nil(t, FirstParam())
+	assert.Equal(t, "hello", FirstParam("hello"))
+	assert.Equal(t, 1, FirstParam(1, 2, 3))
 }
 
 func TestOriginFromValue(t *testing.T) {
@@ -94,9 +69,7 @@ func TestOriginFromValue(t *testing.T) {
 		{struct{}{}, "unknown"},
 	}
 	for _, tt := range tests {
-		if got := OriginFromValue(tt.input); got != tt.want {
-			t.Errorf("OriginFromValue(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, OriginFromValue(tt.input))
 	}
 }
 
@@ -117,9 +90,7 @@ func TestNumericOrigin(t *testing.T) {
 		{true, "unknown"},
 	}
 	for _, tt := range tests {
-		if got := NumericOrigin(tt.input); got != tt.want {
-			t.Errorf("NumericOrigin(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, NumericOrigin(tt.input))
 	}
 }
 
@@ -137,9 +108,7 @@ func TestSizableOrigin(t *testing.T) {
 		{42, "unknown"},
 	}
 	for _, tt := range tests {
-		if got := SizableOrigin(tt.input); got != tt.want {
-			t.Errorf("SizableOrigin(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, SizableOrigin(tt.input))
 	}
 }
 
@@ -155,175 +124,126 @@ func TestLengthableOrigin(t *testing.T) {
 		{42, "unknown"},
 	}
 	for _, tt := range tests {
-		if got := LengthableOrigin(tt.input); got != tt.want {
-			t.Errorf("LengthableOrigin(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, LengthableOrigin(tt.input))
 	}
 }
 
 func TestCompareValues(t *testing.T) {
 	t.Run("both nil", func(t *testing.T) {
-		if got := CompareValues(nil, nil); got != 0 {
-			t.Errorf("got %d, want 0", got)
-		}
+		assert.Equal(t, 0, CompareValues(nil, nil))
 	})
 	t.Run("first nil", func(t *testing.T) {
-		if got := CompareValues(nil, 1); got != -1 {
-			t.Errorf("got %d, want -1", got)
-		}
+		assert.Equal(t, -1, CompareValues(nil, 1))
 	})
 	t.Run("second nil", func(t *testing.T) {
-		if got := CompareValues(1, nil); got != 1 {
-			t.Errorf("got %d, want 1", got)
-		}
+		assert.Equal(t, 1, CompareValues(1, nil))
 	})
 	t.Run("int equal", func(t *testing.T) {
-		if got := CompareValues(5, 5); got != 0 {
-			t.Errorf("got %d, want 0", got)
-		}
+		assert.Equal(t, 0, CompareValues(5, 5))
 	})
 	t.Run("int less", func(t *testing.T) {
-		if got := CompareValues(3, 5); got != -1 {
-			t.Errorf("got %d, want -1", got)
-		}
+		assert.Equal(t, -1, CompareValues(3, 5))
 	})
 	t.Run("int greater", func(t *testing.T) {
-		if got := CompareValues(5, 3); got != 1 {
-			t.Errorf("got %d, want 1", got)
-		}
+		assert.Equal(t, 1, CompareValues(5, 3))
 	})
 	t.Run("int64", func(t *testing.T) {
-		if got := CompareValues(int64(1), int64(2)); got != -1 {
-			t.Errorf("got %d, want -1", got)
-		}
+		assert.Equal(t, -1, CompareValues(int64(1), int64(2)))
 	})
 	t.Run("float64", func(t *testing.T) {
-		if got := CompareValues(1.5, 2.5); got != -1 {
-			t.Errorf("got %d, want -1", got)
-		}
+		assert.Equal(t, -1, CompareValues(1.5, 2.5))
 	})
 	t.Run("float32", func(t *testing.T) {
 		a, b := float32(3.0), float32(1.0)
-		if got := CompareValues(a, b); got != 1 {
-			t.Errorf("got %d, want 1", got)
-		}
+		assert.Equal(t, 1, CompareValues(a, b))
 	})
 	t.Run("string", func(t *testing.T) {
-		if got := CompareValues("a", "b"); got != -1 {
-			t.Errorf("got %d, want -1", got)
-		}
+		assert.Equal(t, -1, CompareValues("a", "b"))
 	})
 	t.Run("mismatched types", func(t *testing.T) {
-		if got := CompareValues(1, "a"); got != 0 {
-			t.Errorf("got %d, want 0", got)
-		}
+		assert.Equal(t, 0, CompareValues(1, "a"))
 	})
 	t.Run("pointer deref", func(t *testing.T) {
 		a, b := 10, 5
-		if got := CompareValues(&a, &b); got != 1 {
-			t.Errorf("got %d, want 1", got)
-		}
+		assert.Equal(t, 1, CompareValues(&a, &b))
 	})
 }
 
 func TestNormalizeParams(t *testing.T) {
 	t.Run("no args", func(t *testing.T) {
 		p := NormalizeParams()
-		if p == nil || p.Error != nil {
-			t.Error("expected empty SchemaParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("nil arg", func(t *testing.T) {
 		p := NormalizeParams(nil)
-		if p == nil || p.Error != nil {
-			t.Error("expected empty SchemaParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("string arg", func(t *testing.T) {
 		p := NormalizeParams("err msg")
-		if p.Error != "err msg" {
-			t.Errorf("got %v, want err msg", p.Error)
-		}
+		assert.Equal(t, "err msg", p.Error)
 	})
 	t.Run("SchemaParams value", func(t *testing.T) {
 		sp := core.SchemaParams{Error: "val"}
 		p := NormalizeParams(sp)
-		if p.Error != "val" {
-			t.Errorf("got %v, want val", p.Error)
-		}
+		assert.Equal(t, "val", p.Error)
 	})
 	t.Run("*SchemaParams", func(t *testing.T) {
 		sp := &core.SchemaParams{Error: "ptr"}
 		p := NormalizeParams(sp)
-		if p.Error != "ptr" {
-			t.Errorf("got %v, want ptr", p.Error)
-		}
+		assert.Equal(t, "ptr", p.Error)
 		// verify copy semantics
 		sp.Error = "changed"
-		if p.Error != "ptr" {
-			t.Error("expected copy, not reference")
-		}
+		assert.Equal(t, "ptr", p.Error, "expected copy, not reference")
 	})
 	t.Run("nil *SchemaParams", func(t *testing.T) {
 		var sp *core.SchemaParams
 		p := NormalizeParams(sp)
-		if p == nil || p.Error != nil {
-			t.Error("expected empty SchemaParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("unsupported type", func(t *testing.T) {
 		p := NormalizeParams(42)
-		if p == nil || p.Error != nil {
-			t.Error("expected empty SchemaParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 }
 
 func TestNormalizeCustomParams(t *testing.T) {
 	t.Run("no args", func(t *testing.T) {
 		p := NormalizeCustomParams()
-		if p == nil || p.Error != nil {
-			t.Error("expected empty CustomParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("nil arg", func(t *testing.T) {
 		p := NormalizeCustomParams(nil)
-		if p == nil || p.Error != nil {
-			t.Error("expected empty CustomParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("string arg", func(t *testing.T) {
 		p := NormalizeCustomParams("err")
-		if p.Error != "err" {
-			t.Errorf("got %v, want err", p.Error)
-		}
+		assert.Equal(t, "err", p.Error)
 	})
 	t.Run("CustomParams value", func(t *testing.T) {
 		cp := core.CustomParams{Error: "val"}
 		p := NormalizeCustomParams(cp)
-		if p.Error != "val" {
-			t.Errorf("got %v, want val", p.Error)
-		}
+		assert.Equal(t, "val", p.Error)
 	})
 	t.Run("*CustomParams", func(t *testing.T) {
 		cp := &core.CustomParams{Error: "ptr"}
 		p := NormalizeCustomParams(cp)
-		if p.Error != "ptr" {
-			t.Errorf("got %v, want ptr", p.Error)
-		}
+		assert.Equal(t, "ptr", p.Error)
 	})
 	t.Run("nil *CustomParams", func(t *testing.T) {
 		var cp *core.CustomParams
 		p := NormalizeCustomParams(cp)
-		if p == nil || p.Error != nil {
-			t.Error("expected empty CustomParams")
-		}
+		require.NotNil(t, p)
+		assert.Nil(t, p.Error)
 	})
 	t.Run("any as error", func(t *testing.T) {
 		p := NormalizeCustomParams(42)
-		if p.Error != 42 {
-			t.Errorf("got %v, want 42", p.Error)
-		}
+		assert.Equal(t, 42, p.Error)
 	})
 }
 
@@ -331,29 +251,21 @@ func TestApplySchemaParams(t *testing.T) {
 	t.Run("nil params", func(t *testing.T) {
 		def := &core.ZodTypeDef{}
 		ApplySchemaParams(def, nil)
-		if def.Error != nil {
-			t.Error("expected nil error")
-		}
+		assert.Nil(t, def.Error)
 	})
 	t.Run("with error string", func(t *testing.T) {
 		def := &core.ZodTypeDef{}
 		params := &core.SchemaParams{Error: "bad"}
 		ApplySchemaParams(def, params)
-		if def.Error == nil {
-			t.Fatal("expected non-nil error map")
-		}
+		require.NotNil(t, def.Error, "expected non-nil error map")
 		got := (*def.Error)(core.ZodRawIssue{})
-		if got != "bad" {
-			t.Errorf("got %q, want %q", got, "bad")
-		}
+		assert.Equal(t, "bad", got)
 	})
 	t.Run("nil error in params", func(t *testing.T) {
 		def := &core.ZodTypeDef{}
 		params := &core.SchemaParams{}
 		ApplySchemaParams(def, params)
-		if def.Error != nil {
-			t.Error("expected nil error")
-		}
+		assert.Nil(t, def.Error)
 	})
 }
 
@@ -374,9 +286,7 @@ func TestToDotPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ToDotPath(tt.input); got != tt.want {
-				t.Errorf("ToDotPath(%v) = %q, want %q", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, ToDotPath(tt.input))
 		})
 	}
 }
@@ -398,25 +308,18 @@ func TestNeedsBracketNotation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := needsBracketNotation(tt.input)
-		if got != tt.want {
-			t.Errorf("needsBracketNotation(%q) = %v, want %v",
-				tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got)
 	}
 }
 
 func TestIsIdentChar(t *testing.T) {
 	valid := []rune{'a', 'z', 'A', 'Z', '0', '9', '_'}
 	for _, c := range valid {
-		if !isIdentChar(c) {
-			t.Errorf("isIdentChar(%q) = false, want true", c)
-		}
+		assert.True(t, isIdentChar(c))
 	}
 	invalid := []rune{'-', ' ', '.', '!', '@', '[', '中'}
 	for _, c := range invalid {
-		if isIdentChar(c) {
-			t.Errorf("isIdentChar(%q) = true, want false", c)
-		}
+		assert.False(t, isIdentChar(c))
 	}
 }
 
@@ -424,27 +327,16 @@ func TestFormatErrorPath(t *testing.T) {
 	path := []any{"users", 0, "name"}
 
 	dot := FormatErrorPath(path, "dot")
-	if dot != "users[0].name" {
-		t.Errorf("dot style: got %q, want %q", dot, "users[0].name")
-	}
+	assert.Equal(t, "users[0].name", dot)
 
 	bracket := FormatErrorPath(path, "bracket")
-	want := `["users"][0]["name"]`
-	if bracket != want {
-		t.Errorf("bracket style: got %q, want %q", bracket, want)
-	}
+	assert.Equal(t, `["users"][0]["name"]`, bracket)
 
 	// default style falls back to dot
 	def := FormatErrorPath(path, "")
-	if def != dot {
-		t.Errorf("default style: got %q, want %q", def, dot)
-	}
+	assert.Equal(t, dot, def)
 
 	// empty path
-	if got := FormatErrorPath(nil, "dot"); got != "" {
-		t.Errorf("empty dot: got %q, want empty", got)
-	}
-	if got := FormatErrorPath(nil, "bracket"); got != "" {
-		t.Errorf("empty bracket: got %q, want empty", got)
-	}
+	assert.Equal(t, "", FormatErrorPath(nil, "dot"))
+	assert.Equal(t, "", FormatErrorPath(nil, "bracket"))
 }

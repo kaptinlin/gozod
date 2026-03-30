@@ -3,6 +3,8 @@ package regex
 import (
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // matchCase is a table-driven test case for regex matching.
@@ -17,9 +19,7 @@ func runCases(t *testing.T, re *regexp.Regexp, cases []matchCase) {
 	for _, tc := range cases {
 		t.Run(tc.input, func(t *testing.T) {
 			t.Helper()
-			if got := re.MatchString(tc.input); got != tc.want {
-				t.Errorf("MatchString(%q) = %v, want %v", tc.input, got, tc.want)
-			}
+			assert.Equal(t, tc.want, re.MatchString(tc.input))
 		})
 	}
 }
@@ -328,7 +328,5 @@ func TestStringRegex(t *testing.T) {
 func TestStringRegexCache(t *testing.T) {
 	re1 := StringRegex(1, 10)
 	re2 := StringRegex(1, 10)
-	if re1 != re2 {
-		t.Error("StringRegex(1, 10) returned different instances, want cached")
-	}
+	assert.Same(t, re1, re2, "StringRegex(1, 10) returned different instances, want cached")
 }

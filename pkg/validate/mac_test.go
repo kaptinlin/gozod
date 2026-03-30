@@ -3,6 +3,8 @@ package validate_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
@@ -39,9 +41,7 @@ func TestMAC(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := validate.MAC(tt.input)
-			if got != tt.want {
-				t.Errorf("MAC(%v) = %v, want %v", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -76,10 +76,7 @@ func TestMACWithOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			opts := validate.MACOptions{Delimiter: tt.delimiter}
 			got := validate.MACWithOptions(tt.input, opts)
-			if got != tt.want {
-				t.Errorf("MACWithOptions(%v, delimiter=%q) = %v, want %v",
-					tt.input, tt.delimiter, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -96,9 +93,7 @@ func TestMACCaseSensitivity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
-			if !validate.MAC(tc) {
-				t.Errorf("MAC(%q) should be valid", tc)
-			}
+			assert.True(t, validate.MAC(tc))
 		})
 	}
 }

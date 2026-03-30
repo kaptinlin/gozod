@@ -509,29 +509,19 @@ func TestRegistryCRUD(t *testing.T) {
 	meta := fieldMeta{Title: "User Name", Description: "The user's full name"}
 
 	// Initially registry should not contain the schema
-	if reg.Has(nameSchema) {
-		t.Fatalf("expected Has to be false for new registry entry")
-	}
+	require.False(t, reg.Has(nameSchema), "expected Has to be false for new registry entry")
 
 	// Add metadata and verify
 	reg.Add(nameSchema, meta)
-	if !reg.Has(nameSchema) {
-		t.Fatalf("expected Has to be true after Add")
-	}
+	require.True(t, reg.Has(nameSchema), "expected Has to be true after Add")
 
 	got, ok := reg.Get(nameSchema)
-	if !ok {
-		t.Fatalf("expected Get to return true after Add")
-	}
-	if got.Title != meta.Title {
-		t.Errorf("unexpected metadata title: got=%q want=%q", got.Title, meta.Title)
-	}
+	require.True(t, ok, "expected Get to return true after Add")
+	assert.Equal(t, meta.Title, got.Title, "unexpected metadata title")
 
 	// Remove entry and verify it's gone
 	reg.Remove(nameSchema)
-	if reg.Has(nameSchema) {
-		t.Fatalf("expected Has to be false after Remove")
-	}
+	require.False(t, reg.Has(nameSchema), "expected Has to be false after Remove")
 }
 
 func TestGlobalRegistry(t *testing.T) {
@@ -545,17 +535,11 @@ func TestGlobalRegistry(t *testing.T) {
 	// Store metadata in the global registry
 	GlobalRegistry.Add(emailSchema, meta)
 
-	if !GlobalRegistry.Has(emailSchema) {
-		t.Fatalf("expected schema to be present in GlobalRegistry")
-	}
+	require.True(t, GlobalRegistry.Has(emailSchema), "expected schema to be present in GlobalRegistry")
 
 	got, ok := GlobalRegistry.Get(emailSchema)
-	if !ok {
-		t.Fatalf("expected Get to succeed in GlobalRegistry")
-	}
-	if got.Title != meta.Title {
-		t.Errorf("unexpected title in GlobalRegistry: got=%q want=%q", got.Title, meta.Title)
-	}
+	require.True(t, ok, "expected Get to succeed in GlobalRegistry")
+	assert.Equal(t, meta.Title, got.Title, "unexpected title in GlobalRegistry")
 
 	// Cleanup to avoid side-effects on other tests
 	GlobalRegistry.Remove(emailSchema)
@@ -590,9 +574,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	// Registry should still contain a value for the schema
-	if !reg.Has(schema) {
-		t.Fatalf("registry lost metadata under concurrent access")
-	}
+	require.True(t, reg.Has(schema), "registry lost metadata under concurrent access")
 }
 
 // =============================================================================

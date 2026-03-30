@@ -3,6 +3,8 @@ package regex
 import (
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPrimitivesNegativeNumbers(t *testing.T) {
@@ -37,9 +39,7 @@ func TestPrimitivesNegativeNumbers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.re.MatchString(tt.input); got != tt.want {
-				t.Errorf("MatchString(%q) = %v, want %v", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.re.MatchString(tt.input))
 		})
 	}
 }
@@ -72,9 +72,7 @@ func TestBooleanNullUndefined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.re.MatchString(tt.input); got != tt.want {
-				t.Errorf("MatchString(%q) = %v, want %v", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, tt.re.MatchString(tt.input))
 		})
 	}
 }

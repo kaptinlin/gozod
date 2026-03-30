@@ -3,6 +3,9 @@ package types_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	z "github.com/kaptinlin/gozod"
 	"github.com/kaptinlin/gozod/core"
 )
@@ -13,22 +16,17 @@ func TestDescribe(t *testing.T) {
 	schema := z.String().Describe(desc)
 
 	// Validation should passes
-	if _, err := schema.Parse("user123"); err != nil {
-		t.Errorf("Validation failed: %v", err)
-	}
+	_, err := schema.Parse("user123")
+	require.NoError(t, err)
 
 	// Verify metadata registration
 	// We check if the schema instance is registered in the GlobalRegistry
 	// Note: schema returned by Describe is the one registered
 
 	meta, ok := core.GlobalRegistry.Get(schema)
-	if !ok {
-		t.Fatal("Metadata not found in GlobalRegistry")
-	}
+	require.True(t, ok, "Metadata not found in GlobalRegistry")
 
-	if meta.Description != desc {
-		t.Errorf("Description = %q, want %q", meta.Description, desc)
-	}
+	assert.Equal(t, desc, meta.Description)
 }
 
 // TestMeta tests the Meta method on ZodString
@@ -42,25 +40,14 @@ func TestMeta(t *testing.T) {
 
 	schema := z.String().Meta(metaData)
 
-	if _, err := schema.Parse("valid"); err != nil {
-		t.Errorf("Parse failed: %v", err)
-	}
+	_, err := schema.Parse("valid")
+	require.NoError(t, err)
 
 	registered, ok := core.GlobalRegistry.Get(schema)
-	if !ok {
-		t.Fatal("Metadata not found")
-	}
+	require.True(t, ok, "Metadata not found")
 
-	if registered.ID != metaData.ID {
-		t.Errorf("ID = %q, want %q", registered.ID, metaData.ID)
-	}
-	if registered.Title != metaData.Title {
-		t.Errorf("Title = %q, want %q", registered.Title, metaData.Title)
-	}
-	if registered.Description != metaData.Description {
-		t.Errorf("Description = %q, want %q", registered.Description, metaData.Description)
-	}
-	if len(registered.Examples) != 2 {
-		t.Errorf("Examples len = %d, want 2", len(registered.Examples))
-	}
+	assert.Equal(t, metaData.ID, registered.ID)
+	assert.Equal(t, metaData.Title, registered.Title)
+	assert.Equal(t, metaData.Description, registered.Description)
+	assert.Len(t, registered.Examples, 2)
 }
