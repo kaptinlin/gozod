@@ -1,5 +1,25 @@
 # Caching
 
+## `github.com/agentable/go-cache` — Store-Driven Cache
+
+Best for applications needing a unified cache interface across multiple backends with type safety.
+
+**Key features:**
+- Generic `Cache[T]` interface with compile-time type safety
+- Pluggable stores: memory (Ristretto), Redis, SQLite, PostgreSQL
+- Multi-layer caching (L1/L2/L3) with automatic backfill
+- Batch operations (`GetMany`/`SetMany`/`DeleteMany`)
+- Loader pattern with single-flight deduplication (`GetOrLoad`)
+- Pluggable serialization (JSON, MessagePack, Gob)
+- Built-in metrics with `WithMetrics()`
+- Context-aware operations
+
+**When to use:**
+- Need type-safe cache with pluggable backends
+- Multi-layer caching (memory + Redis/PostgreSQL)
+- Loader pattern with thundering herd protection
+- Batch operations for performance
+
 ## `github.com/samber/hot` — In-Memory Cache
 
 Best for read-heavy, single-instance applications needing advanced eviction.
@@ -41,10 +61,12 @@ Best for applications needing cache abstraction across multiple backends.
 
 ```
 Need caching?
+├── Type-safe cache with pluggable backends (memory/Redis/SQLite/PostgreSQL)?
+│   └── agentable/go-cache (default choice)
 ├── Single process, in-memory only?
 │   ├── Advanced eviction / stale-while-revalidate → samber/hot
 │   └── Simple TTL enough → sync.Map + time.AfterFunc (stdlib)
-├── Multi-tier (memory + Redis/Memcache)?
+├── Multi-tier with third-party backends (Bigcache, Memcache, Hazelcast)?
 │   └── eko/gocache (chain cache)
 └── Just Redis/Memcache client?
     └── Use the client directly, no cache wrapper

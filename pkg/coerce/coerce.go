@@ -195,7 +195,7 @@ func ToInt64(v any) (int64, error) {
 		if uint64(x) > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
 		}
-		return int64(x), nil //nolint:gosec // overflow checked above
+		return int64(x), nil
 	case uint64:
 		if x > math.MaxInt64 {
 			return 0, NewOverflowError(x, "int64")
@@ -373,7 +373,7 @@ func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uin
 		if uint64(x) > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
 		}
-		val = int64(x) //nolint:gosec // overflow checked above
+		val = int64(x)
 	case uint64:
 		if x > math.MaxInt64 {
 			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))

@@ -1,7 +1,8 @@
 ---
+description: Go code modernization guide covering Go 1.20-1.26 new features. Use when writing, reviewing, or refactoring Go code to adopt modern idioms — generics, iterators, error handling, concurrency patterns, stdlib collections, HTTP routing, testing, security APIs, and tooling.
 name: modernizing
-description: Go code modernization guide covering Go 1.20-1.26 new features. Use when writing, reviewing, or refactoring Go code to adopt modern idioms — generics, iterators, error handling, concurrency patterns, stdlib collections, HTTP routing, testing, security APIs, and tooling. Triggers on Go code optimization, modernization, or upgrade tasks.
 ---
+
 
 # Go Modernization Guide (1.20 → 1.26)
 

@@ -174,19 +174,40 @@ func GetUserID() string
 
 ## No Get Prefix for Getters
 
-Functions returning values should use noun names. Do not use `Get` or `get` prefix unless the underlying concept uses "get" (e.g., HTTP GET). Use `Compute` or `Fetch` for expensive operations.
+Functions returning values should usually use noun names. Prefer `Name()` over `GetName()`. Use `Compute` or `Fetch` for expensive operations.
 
-**Incorrect:**
-
-```go
-func (c *Config) GetJobName(key string) (value string, ok bool)
-```
-
-**Correct:**
+**Default (preferred):**
 
 ```go
 func (c *Config) JobName(key string) (value string, ok bool)
 ```
+
+**Allowed exception (paired setter APIs):**
+
+Use `GetX` when a type intentionally exposes a stable `GetX`/`SetX` pair for readability and discoverability.
+
+```go
+func (c *Config) GetName() string
+func (c *Config) SetName(name string)
+```
+
+**Allowed exception (interface-oriented CRUD APIs):**
+
+Use `GetX` when it makes the method set clearer and more symmetric with `SaveX/ListX/DeleteX`, or when a bare noun would be ambiguous at call sites.
+
+```go
+type MessageStore interface {
+    SaveMessage(ctx context.Context, msg MessageRecord) error
+    GetMessage(ctx context.Context, id string) (MessageRecord, error)
+    ListMessages(ctx context.Context, sessionID string) ([]MessageRecord, error)
+    DeleteMessage(ctx context.Context, id string) error
+}
+```
+
+Rules for this exception:
+- Keep style consistent within the same package/interface family (do not mix `Message()` and `GetMessage()` randomly).
+- Use `GetX` only for lookup/read semantics, not mutating actions.
+- Document the choice in package-level docs when introducing or changing API style.
 
 Functions performing actions should use verb names:
 

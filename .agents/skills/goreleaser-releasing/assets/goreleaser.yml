@@ -1,0 +1,115 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: myapp
+    main: ./cmd/myapp
+    binary: myapp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: myapp
+    ids:
+      - myapp
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE*
+    format_overrides:
+      - goos: windows
+        formats: [ zip ]
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  format: "{{.SHA}}: {{.Message}}"
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^style:'
+      - 'merge conflict'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: 'Refactors'
+      regexp: '^.*?refactor(\(.+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: OWNER
+    name: REPO
+  prerelease: auto
+  mode: replace
+  header: |
+    ## {{ .ProjectName }} {{ .Tag }}
+
+    Short project description.
+
+    ### Installation
+
+    #### Download Pre-built Binaries
+    Download the appropriate binary for your platform from the assets below.
+
+    #### Install with Go
+    ```bash
+    go install github.com/OWNER/REPO/cmd/myapp@{{ .Tag }}
+    ```
+  footer: |
+
+    **Full Changelog**: https://github.com/OWNER/REPO/compare/{{ .PreviousTag }}...{{ .Tag }}

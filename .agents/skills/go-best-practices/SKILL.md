@@ -1,7 +1,8 @@
 ---
+description: Google Go coding best practices and style guide for writing idiomatic, maintainable Go code. Use when writing, reviewing, or refactoring Go code. Triggers on Go naming conventions, error handling patterns, interface design, testing structure, concurrency patterns, formatting, and documentation.
 name: go-best-practices
-description: Google Go coding best practices and style guide for writing idiomatic, maintainable Go code. Applies when writing, reviewing, or refactoring Go code. Triggers on Go naming conventions, error handling patterns, interface design, testing structure, concurrency patterns, formatting, and documentation.
 ---
+
 
 # Google Go Best Practices
 

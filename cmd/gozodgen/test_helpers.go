@@ -42,7 +42,7 @@ func (h *TestHelper) CreateGoFile(filename, content string) string {
 		formatted = []byte(content)
 	}
 
-	if err := os.WriteFile(filePath, formatted, 0600); err != nil {
+	if err := os.WriteFile(filePath, formatted, 0600); err != nil { //nolint:gosec // test helper writes to controlled temp dir
 		h.t.Fatalf("Failed to write file %s: %v", filePath, err)
 	}
 
@@ -146,12 +146,12 @@ func (ts TestStruct) GenerateStructCode() string {
 	var sb strings.Builder
 
 	if ts.Package != "" {
-		sb.WriteString(fmt.Sprintf("package %s\n\n", ts.Package))
+		fmt.Fprintf(&sb, "package %s\n\n", ts.Package)
 	}
 
-	sb.WriteString(fmt.Sprintf("type %s struct {\n", ts.Name))
+	fmt.Fprintf(&sb, "type %s struct {\n", ts.Name)
 	for _, field := range ts.Fields {
-		sb.WriteString(fmt.Sprintf("\t%s %s", field.Name, field.Type))
+		fmt.Fprintf(&sb, "\t%s %s", field.Name, field.Type)
 
 		var tags []string
 		if field.JSONTag != "" {
@@ -162,7 +162,7 @@ func (ts TestStruct) GenerateStructCode() string {
 		}
 
 		if len(tags) > 0 {
-			sb.WriteString(fmt.Sprintf(" `%s`", strings.Join(tags, " ")))
+			fmt.Fprintf(&sb, " `%s`", strings.Join(tags, " "))
 		}
 		sb.WriteString("\n")
 	}

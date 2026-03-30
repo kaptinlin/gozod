@@ -1,0 +1,85 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/agentable/*
+      GONOPROXY: github.com/agentable/*
+      GOPROXY: direct
+      GOWORK: "off"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        # Do NOT initialize submodules
+
+      - name: Configure Git for private modules
+        env:
+          TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: task deps
+
+      - name: Run tests
+        run: task test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/agentable/*
+      GONOPROXY: github.com/agentable/*
+      GOPROXY: direct
+      GOWORK: "off"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        # Do NOT initialize submodules
+
+      - name: Configure Git for private modules
+        env:
+          TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: task deps
+
+      - name: Run linters
+        run: task lint

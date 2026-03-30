@@ -9,6 +9,32 @@
 
 **When NOT to use:** If `net/http` is sufficient for your use case (simple GET/POST).
 
+## `github.com/coder/websocket` — WebSocket Client/Server
+
+- Minimal, idiomatic WebSocket implementation
+- Supports both client and server
+- Context-aware, proper cancellation handling
+- Compression support (permessage-deflate)
+- Passes Autobahn test suite
+
+**When to use:** Real-time bidirectional communication, live updates, chat systems, streaming data, server push notifications.
+
+**When NOT to use:** Simple request/response patterns (use HTTP), server-sent events suffice (use SSE).
+
+## `github.com/tmaxmax/go-sse` — Server-Sent Events (SSE)
+
+- Fully spec-compliant HTML5 server-sent events implementation
+- Both server and client implementations (decoupled, unopinionated)
+- Built-in provider (Joe) with optional event replay/buffering
+- Pluggable provider interface for external pub/sub systems (Redis, Kafka, RabbitMQ)
+- Automatic reconnection handling on client side
+- LLM streaming response support (ChatGPT, Claude, etc.)
+- Topic-based event routing
+
+**When to use:** Server-to-client streaming (LLM responses, live feeds, notifications, progress updates), one-way real-time data push, simpler alternative to WebSocket when bidirectional communication isn't needed.
+
+**When NOT to use:** Client needs to send data frequently to server (use WebSocket), simple request/response (use HTTP).
+
 ## `github.com/agentable/openapi-generator` — OpenAPI Code Generation
 
 - Generates type-safe Go client code from OpenAPI 3.x specs
@@ -39,6 +65,8 @@
 Need HTTP/API functionality?
 ├── Simple HTTP client → net/http (stdlib)
 ├── Reduced boilerplate HTTP → kaptinlin/requests
+├── WebSocket client/server → coder/websocket
+├── Server-Sent Events (SSE) → tmaxmax/go-sse
 ├── Generate client from OpenAPI spec → agentable/openapi-generator
 ├── Type-safe OpenAPI client calls → agentable/openapi-request
 ├── Extract content from web pages → kaptinlin/defuddle-go

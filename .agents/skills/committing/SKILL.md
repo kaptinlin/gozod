@@ -1,11 +1,12 @@
 ---
+description: Creates conventional commits following project commit conventions. Use when committing code changes, creating commit messages, or when the user asks to commit staged changes.
 name: committing
-description: Creates conventional commits for Go packages following project commit conventions. Use when committing Go code changes, creating commit messages, or when the user asks to commit staged changes in a Go repository. Triggers on commit, git commit, or staged changes in Go projects.
 ---
 
-# Go Commit Guide
 
-Create conventional commits for Go packages. Follow these rules strictly.
+# Commit Guide
+
+Create conventional commits. Follow these rules strictly.
 
 ## Commit Message Format
 
@@ -54,18 +55,18 @@ anyOf with null type was not generating pointer fields correctly"
 
 ## Pre-Commit Checks
 
-Before committing, run verification:
+Before committing, run verification commands (see `references/commands.md` for language-specific commands):
 
 ```bash
-go fmt ./...
-task lint
-task test
+# Format code
+# Run linter
+# Run tests
 ```
 
-Or all at once:
+Or run all checks at once if available:
 
 ```bash
-task verify
+# Run verification (format + lint + test)
 ```
 
 Fix all issues before committing. Do not skip lint or test failures.

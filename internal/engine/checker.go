@@ -68,7 +68,7 @@ func executeChecks(
 	val := value
 
 	for i := range n {
-		c := checks[i]
+		c := checks[i] //nolint:gosec // safe: i < n == len(checks)
 		if c == nil {
 			continue
 		}

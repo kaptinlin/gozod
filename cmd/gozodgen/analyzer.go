@@ -59,7 +59,7 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 
 // AnalyzePackage analyzes all Go files in a package directory.
 func (a *StructAnalyzer) AnalyzePackage(pkgPath string) ([]*GenerationInfo, error) {
-	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments)
+	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments) //nolint:staticcheck // SA1019: replacing with go/packages is a larger refactor
 	if err != nil {
 		return nil, fmt.Errorf("parse package %s: %w", pkgPath, err)
 	}

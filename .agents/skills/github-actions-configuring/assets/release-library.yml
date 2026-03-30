@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/agentable/*
+      GONOPROXY: github.com/agentable/*
+      GOPROXY: direct
+      GOWORK: "off"
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git for private modules
+        env:
+          TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify
+        run: task verify
+
+      - name: Pin cross-module dependencies and create sub-module tags
+        id: pin
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          # Discover sub-modules
+          SUBMODULES=$(find . -mindepth 2 -name go.mod \
+            -not -path '*/vendor/*' \
+            -not -path '*/.*' \
+            -not -path '*/testdata/*' \
+            -exec dirname {} \; | sed 's|^\./||' | sort)
+
+          if [ -z "$SUBMODULES" ]; then
+            echo "No sub-modules found"
+            exit 0
+          fi
+
+          # Guard: skip if already processed
+          FIRST_SUB=$(echo "$SUBMODULES" | head -1)
+          if git ls-remote --tags origin "${FIRST_SUB}/v${VERSION}" 2>/dev/null | grep -q .; then
+            echo "Sub-module tags already exist, skipping"
+            exit 0
+          fi
+
+          # Collect all module paths
+          ROOT_MODULE=$(head -1 go.mod | awk '{print $2}')
+          declare -a ALL_MODULES=("$ROOT_MODULE")
+          declare -a ALL_DIRS=(".")
+          while IFS= read -r mod; do
+            [ -z "$mod" ] && continue
+            MOD_PATH=$(head -1 "${mod}/go.mod" | awk '{print $2}')
+            ALL_MODULES+=("$MOD_PATH")
+            ALL_DIRS+=("$mod")
+          done <<< "$SUBMODULES"
+
+          # Pin all cross-module dependencies (go mod edit only, NO tidy)
+          # NOTE: Do not run go mod tidy — replace directives are not transitive.
+          # Sub-module tidy fails because sibling module tags don't exist on the
+          # proxy yet. go mod edit -require is sufficient: only version numbers
+          # change, dependency graph is unchanged.
+          echo "Pinning cross-module dependencies to v${VERSION}..."
+          for dir in "${ALL_DIRS[@]}"; do
+            SELF_MODULE=$(head -1 "${dir}/go.mod" | awk '{print $2}')
+            for mod_path in "${ALL_MODULES[@]}"; do
+              [ "$mod_path" = "$SELF_MODULE" ] && continue
+              # Match both block-style (TAB-indented) and single-line require
+              if grep -q "${mod_path} v" "${dir}/go.mod" 2>/dev/null; then
+                echo "  ${dir}/go.mod: ${mod_path} -> v${VERSION}"
+                (cd "${dir}" && go mod edit -require="${mod_path}@v${VERSION}")
+              fi
+            done
+          done
+
+          # Commit if go.mod files changed
+          if ! git diff --quiet; then
+            find . -name 'go.mod' -o -name 'go.sum' | xargs git add
+            git commit -m "build(deps): pin cross-module dependencies to v${VERSION}"
+
+            # Force-move root tag to pinned commit
+            git tag -fa "v${VERSION}" -m "v${VERSION}"
+          fi
+
+          # Create sub-module tags
+          while IFS= read -r mod; do
+            [ -z "$mod" ] && continue
+            git tag -a "${mod}/v${VERSION}" -m "${mod}/v${VERSION}"
+            echo "Created tag: ${mod}/v${VERSION}"
+          done <<< "$SUBMODULES"
+
+      - name: Push tags
+        run: |
+          VERSION=${{ steps.pin.outputs.VERSION }}
+
+          # Switch to GITHUB_TOKEN for push (won't re-trigger workflows)
+          git config --global --unset-all 'url.https://x-access-token:.insteadOf' 2>/dev/null || true
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
+          # Push root tag (force — may have been moved to pinned commit)
+          git push origin "v${VERSION}" --force
+
+          # Push sub-module tags
+          SUBMODULES=$(find . -mindepth 2 -name go.mod \
+            -not -path '*/vendor/*' \
+            -not -path '*/.*' \
+            -not -path '*/testdata/*' \
+            -exec dirname {} \; | sed 's|^\./||' | sort)
+          while IFS= read -r mod; do
+            [ -z "$mod" ] && continue
+            git push origin "${mod}/v${VERSION}" 2>/dev/null || true
+          done <<< "$SUBMODULES"
