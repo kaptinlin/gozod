@@ -1,8 +1,10 @@
 package core
 
-// Describable defines schema types that support metadata chaining.
-// The self-referential constraint ensures Describe and Meta return
-// the concrete schema type for fluent method chaining.
+// Describable defines the fluent metadata contract.
+//
+// This is intentionally separate from ZodSchema/ZodType because metadata
+// chaining is not required by dynamic runtime code paths. The self-referential
+// constraint ensures Describe and Meta return the concrete schema type.
 //
 // Go 1.26 self-referential generic constraint.
 type Describable[S Describable[S]] interface {
@@ -11,9 +13,11 @@ type Describable[S Describable[S]] interface {
 	Internals() *ZodTypeInternals
 }
 
-// Refineable defines schema types that support custom validation.
-// The self-referential constraint ensures RefineAny returns the
-// concrete schema type for chaining additional validations.
+// Refineable defines the fluent refinement contract.
+//
+// This stays separate from the minimal runtime interfaces so callers can write
+// helpers against refinement-capable schemas without implying every runtime
+// dependency must also know about fluent validation APIs.
 //
 // Go 1.26 self-referential generic constraint.
 type Refineable[S Refineable[S]] interface {

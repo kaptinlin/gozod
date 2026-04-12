@@ -272,28 +272,28 @@ func (i *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
 	}
 }
 
-// Default sets a default value, preserving constraint type R.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (i *ZodIntersection[T, R]) Default(v T) *ZodIntersection[T, R] {
 	in := i.internals.Clone()
 	in.SetDefaultValue(v)
 	return i.withInternals(in)
 }
 
-// DefaultFunc sets a default value function, preserving constraint type R.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (i *ZodIntersection[T, R]) DefaultFunc(fn func() T) *ZodIntersection[T, R] {
 	in := i.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return i.withInternals(in)
 }
 
-// Prefault sets a prefault value that goes through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (i *ZodIntersection[T, R]) Prefault(v T) *ZodIntersection[T, R] {
 	in := i.internals.Clone()
 	in.SetPrefaultValue(v)
 	return i.withInternals(in)
 }
 
-// PrefaultFunc sets a prefault value function, preserving constraint type R.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (i *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R] {
 	in := i.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -385,27 +385,32 @@ func (i *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 func (i *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
-	return &ZodIntersection[T, *T]{internals: &ZodIntersectionInternals{
-		ZodTypeInternals: *in,
-		Def:              i.internals.Def,
-		Left:             i.internals.Left,
-		Right:            i.internals.Right,
-	}}
+	clone := &ZodIntersection[T, *T]{internals: i.newIntersectionInternals(in)}
+	core.CopyGlobalMeta(i, clone)
+	return clone
 }
 
 func (i *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntersection[T, R] {
-	return &ZodIntersection[T, R]{internals: &ZodIntersectionInternals{
-		ZodTypeInternals: *in,
-		Def:              i.internals.Def,
-		Left:             i.internals.Left,
-		Right:            i.internals.Right,
-	}}
+	clone := &ZodIntersection[T, R]{internals: i.newIntersectionInternals(in)}
+	core.CopyGlobalMeta(i, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (i *ZodIntersection[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodIntersection[T, R]); ok {
-		i.internals = src.internals
+	if src, ok := source.(*ZodIntersection[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, i, func() {
+			*i.internals = *src.newIntersectionInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (i *ZodIntersection[T, R]) newIntersectionInternals(in *core.ZodTypeInternals) *ZodIntersectionInternals {
+	return &ZodIntersectionInternals{
+		ZodTypeInternals: *in,
+		Def:              i.internals.Def,
+		Left:             i.internals.Left,
+		Right:            i.internals.Right,
 	}
 }
 

@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"reflect"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,7 +85,7 @@ func TestInt_BasicFunctionality(t *testing.T) {
 		schema := Int64(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeInt64, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeInt64, schema.Internals().Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)

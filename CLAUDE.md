@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed, zero-dependency data validation with intelligent type inference. It maintains API compatibility with TypeScript Zod v4 while leveraging Go's type system for compile-time safety and maximum performance.
+**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed data validation with intelligent type inference. It maintains API compatibility with TypeScript Zod v4 while leveraging Go's type system for compile-time safety and maximum performance.
 
 ### Zod v4 Reference
 
@@ -42,7 +42,7 @@ go test -run TestSpecificFunction ./types/
 
 ## Architecture
 
-```
+```text
 gozod/
 ├── .reference/    # TypeScript Zod v4 source (read-only)
 ├── .agents/rules/ # Implementation guides for AI agents
@@ -91,7 +91,7 @@ gozod/
 5. **Engine-First Architecture** - All parsing through `engine.ParsePrimitive` or `engine.ParseComplex`
 6. **Semantic Zod v4 Compatibility** - Identical behavior with Go-native naming (`"bool"` not `"boolean"`, `"nil"` not `"null"`)
 7. **Go Idioms First** - Error values, Go type names, interfaces over inheritance
-8. **Zero Dependencies** - Pure Go implementation, no external libraries
+8. **Curated Dependencies** - Keep dependencies intentional, minimal, and justified
 9. **Compile-Time Constraint Verification** - Self-referential generic constraints (`core.Describable`, `core.Refineable`) enforce API consistency across all 29 schema types at compile time
 
 ### Default vs Prefault Semantics
@@ -108,6 +108,7 @@ Every type has value and pointer constructors: `String()` / `StringPtr()`, `Int(
 All schema types must implement: `Parse`, `StrictParse`, `MustParse`, `MustStrictParse`, `ParseAny`, `GetInternals`, `IsOptional`, `IsNilable`, `Describe`, `Meta`.
 
 Engine API usage:
+
 - Primitive types: `engine.ParsePrimitive` / `engine.ParsePrimitiveStrict`
 - Complex types: `engine.ParseComplex` / `engine.ParseComplexStrict`
 - Never bypass engine APIs

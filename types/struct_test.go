@@ -1,6 +1,7 @@
 package types
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
@@ -39,6 +40,13 @@ type Person struct {
 // =============================================================================
 
 func TestStruct_BasicFunctionality(t *testing.T) {
+	t.Run("strict unknown keys mode", func(t *testing.T) {
+		schema := Struct[User]()
+
+		assert.Equal(t, ObjectModeStrict, schema.UnknownKeys())
+		assert.Nil(t, schema.Catchall())
+	})
+
 	t.Run("valid struct inputs", func(t *testing.T) {
 		schema := Struct[User]()
 
@@ -688,7 +696,15 @@ func TestStruct_ErrorHandling(t *testing.T) {
 		schema := Struct[User]()
 
 		_, err := schema.Parse("not a struct")
-		assert.Error(t, err)
+		require.Error(t, err)
+
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
+		require.Len(t, zodErr.Issues, 1)
+		assert.Equal(t, core.Custom, zodErr.Issues[0].Code)
+		assert.Equal(t, core.ZodTypeCode("types.User"), zodErr.Issues[0].Expected)
+		assert.Equal(t, core.ZodTypeCode("string"), zodErr.Issues[0].Received)
+		assert.Contains(t, zodErr.Issues[0].Message, "expected struct of type types.User")
 	})
 
 	t.Run("wrong struct type error", func(t *testing.T) {
@@ -705,6 +721,31 @@ func TestStruct_ErrorHandling(t *testing.T) {
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
 	})
+}
+
+func TestStruct_CloneFromDoesNotShareState(t *testing.T) {
+	source := Struct[User](core.StructSchema{
+		"name": String(),
+	}).Describe("source struct")
+	target := Struct[User](core.StructSchema{
+		"age": Int(),
+	}).Meta(core.GlobalMeta{Description: "target struct"})
+
+	target.CloneFrom(source)
+
+	assert.NotSame(t, source.internals, target.internals)
+	assert.NotEqual(t, reflect.ValueOf(source.internals.Shape).Pointer(), reflect.ValueOf(target.internals.Shape).Pointer())
+
+	target.internals.SetOptional(true)
+	target.internals.Shape["age"] = Int()
+
+	assert.False(t, source.IsOptional())
+	_, exists := source.internals.Shape["age"]
+	assert.False(t, exists)
+
+	meta, ok := core.GlobalRegistry.Get(target)
+	require.True(t, ok)
+	assert.Equal(t, "source struct", meta.Description)
 }
 
 func TestStruct_EdgeCases(t *testing.T) {

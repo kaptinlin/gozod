@@ -178,28 +178,28 @@ func (z *ZodFunction[T]) Nullish() *ZodFunction[*any] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a default value returned when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodFunction[T]) Default(v any) *ZodFunction[T] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a factory function for the default value.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodFunction[T]) DefaultFunc(fn func() any) *ZodFunction[T] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(fn)
 	return z.withInternals(in)
 }
 
-// Prefault sets a prefault value that goes through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodFunction[T]) Prefault(v any) *ZodFunction[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory function for the prefault value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodFunction[T]) PrefaultFunc(fn func() any) *ZodFunction[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(fn)
@@ -447,11 +447,13 @@ func (z *ZodFunction[T]) withInternals(in *core.ZodTypeInternals) *ZodFunction[T
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodFunction[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodFunction[T]); ok {
-		z.internals.ZodTypeInternals = src.internals.ZodTypeInternals
-		z.internals.Def = src.internals.Def
-		z.internals.Input = src.internals.Input
-		z.internals.Output = src.internals.Output
+	if src, ok := source.(*ZodFunction[T]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+			z.internals.Def = src.internals.Def
+			z.internals.Input = src.internals.Input
+			z.internals.Output = src.internals.Output
+		})
 	}
 }
 

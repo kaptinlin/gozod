@@ -8,6 +8,8 @@ import (
 	"maps"
 	"regexp"
 	"sync/atomic"
+
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 )
 
 // ErrSchemaNotZodSchema is a sentinel error returned when a value does not
@@ -23,16 +25,20 @@ func nextModifierPriority() int {
 	return int(modifierPriorityCounter.Add(1))
 }
 
-// ZodType is the universal interface for all validation schemas.
+// ZodSchema is the minimal non-generic runtime contract shared by all schemas.
 //
-// Generic Parameter:
-//   - T: The output type that this schema validates and returns.
-type ZodType[T any] interface {
-	// Parse validates the input and returns the typed result.
-	Parse(input any, ctx ...*ParseContext) (T, error)
-
-	// MustParse validates input and panics on error.
-	MustParse(input any, ctx ...*ParseContext) T
+// It is intentionally limited to the capabilities required by dynamic runtime
+// code paths:
+//   - parse an untyped input
+//   - inspect shared runtime flags
+//   - access core internals used by the engine and registries
+//
+// Fluent methods such as Describe/Meta/RefineAny and compile-time constrained
+// methods such as StrictParse are intentionally not part of this boundary.
+// Those capabilities live on typed schemas or on separate generic constraints.
+type ZodSchema interface {
+	// ParseAny validates input and returns an untyped result.
+	ParseAny(input any, ctx ...*ParseContext) (any, error)
 
 	// Internals provides access to the internal state of this schema.
 	Internals() *ZodTypeInternals
@@ -44,14 +50,38 @@ type ZodType[T any] interface {
 	IsNilable() bool
 }
 
-// ZodSchema is a non-generic version of the schema interface, used for
-// dynamic validation when the specific type T is not known.
-type ZodSchema interface {
-	// ParseAny validates input and returns an untyped result.
-	ParseAny(input any, ctx ...*ParseContext) (any, error)
+// ZodType is the typed parsing contract layered on top of ZodSchema.
+//
+// This is the boundary most concrete schema implementations satisfy. It keeps
+// runtime parsing typed without forcing every dynamic code path to depend on
+// compile-time constrained parsing or fluent chaining contracts.
+//
+// Generic Parameter:
+//   - T: The output type that this schema validates and returns.
+type ZodType[T any] interface {
+	ZodSchema
 
-	// Internals provides access to the internal state of this schema.
-	Internals() *ZodTypeInternals
+	// Parse validates the input and returns the typed result.
+	Parse(input any, ctx ...*ParseContext) (T, error)
+
+	// MustParse validates input and panics on error.
+	MustParse(input any, ctx ...*ParseContext) T
+}
+
+// StrictZodType extends ZodType with compile-time constrained parsing.
+//
+// Input and output are separate because many schemas accept a base type T
+// while returning a constraint type R such as *T. This interface models the
+// "strict side" of the API surface only; fluent metadata and refinement
+// contracts remain separate.
+type StrictZodType[In, Out any] interface {
+	ZodType[Out]
+
+	// StrictParse validates a compile-time constrained input.
+	StrictParse(input In, ctx ...*ParseContext) (Out, error)
+
+	// MustStrictParse validates constrained input and panics on error.
+	MustStrictParse(input In, ctx ...*ParseContext) Out
 }
 
 // Cloneable is an optional interface for schemas that support deep-copying.
@@ -108,6 +138,12 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 		return nil
 	}
 	cp := *z
+	if z.DefaultValue != nil {
+		cp.DefaultValue = cloneutil.Clone(z.DefaultValue)
+	}
+	if z.PrefaultValue != nil {
+		cp.PrefaultValue = cloneutil.Clone(z.PrefaultValue)
+	}
 	if len(z.Checks) > 0 {
 		cp.Checks = make([]ZodCheck, len(z.Checks))
 		copy(cp.Checks, z.Checks)

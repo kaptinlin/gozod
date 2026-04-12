@@ -301,6 +301,33 @@ func TestParsePrimitive(t *testing.T) {
 		assert.Contains(t, err.Error(), "transform failed")
 	})
 
+	t.Run("transform context exposes value and add issue", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetTransform(func(value any, ctx *core.RefinementContext) (any, error) {
+			assert.Equal(t, "test", value)
+			assert.Equal(t, "test", ctx.Value)
+			ctx.AddIssue(core.ZodIssue{
+				ZodIssueBase: core.ZodIssueBase{
+					Code:    core.Custom,
+					Message: "transform rejected value",
+				},
+			})
+			return value, nil
+		})
+		validator := mockValidator[string](false)
+
+		_, err := ParsePrimitive[string, string](
+			"test",
+			internals,
+			"string",
+			validator,
+			mockConverter[string],
+		)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transform rejected value")
+	})
+
 	t.Run("with parse context", func(t *testing.T) {
 		internals := createMockInternals()
 		validator := mockValidator[string](false)
@@ -448,6 +475,52 @@ func TestParseComplex(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, "transformed_test", result)
+	})
+}
+
+func TestParseComplexStrictNilModifiers(t *testing.T) {
+	typeExtractor := mockTypeExtractor[map[string]any](true)
+	ptrExtractor := mockPtrExtractor[map[string]any](true)
+	validator := mockValidator[map[string]any](false)
+
+	t.Run("default takes precedence over optional for nil input", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		internals.SetDefaultValue(map[string]any{"name": "default"})
+
+		var input *map[string]any
+		result, err := ParseComplexStrict[map[string]any, *map[string]any](
+			input,
+			internals,
+			"object",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "default"}, *result)
+	})
+
+	t.Run("prefault is applied for nil input when optional is also set", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.SetOptional(true)
+		internals.SetPrefaultValue(map[string]any{"name": "prefault"})
+
+		var input *map[string]any
+		result, err := ParseComplexStrict[map[string]any, *map[string]any](
+			input,
+			internals,
+			"object",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "prefault"}, *result)
 	})
 }
 

@@ -193,6 +193,29 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 			issue.Issues = []core.ZodIssue{finalizedElementIssue}
 		}
 	}
+
+	if unionErrors, ok := finalizeUnionErrors(properties["union_errors"]); ok {
+		issue.Errors = unionErrors
+		return
+	}
+
+	if unionErrors, ok := finalizeUnionErrors(properties["errors"]); ok {
+		issue.Errors = unionErrors
+	}
+}
+
+func finalizeUnionErrors(value any) ([][]core.ZodIssue, bool) {
+	rawIssues, ok := value.([]core.ZodRawIssue)
+	if !ok || len(rawIssues) == 0 {
+		return nil, false
+	}
+
+	finalized := make([][]core.ZodIssue, 0, len(rawIssues))
+	for _, rawIssue := range rawIssues {
+		finalized = append(finalized, []core.ZodIssue{FinalizeIssue(rawIssue, nil, nil)})
+	}
+
+	return finalized, true
 }
 
 // CopyRawIssueProperties copies raw issue properties.

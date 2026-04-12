@@ -5,6 +5,7 @@ Complete API documentation for GoZod - a TypeScript Zod v4-inspired validation l
 ## 🎯 Overview
 
 GoZod provides comprehensive data validation with:
+
 - **Type Safety**: Full Go generics support with preserved type information
 - **Complete Strict Type Semantics**: All methods require exact input types - no automatic conversions
 - **Maximum Performance**: Optimized validation pipeline with zero-overhead type handling
@@ -85,37 +86,6 @@ schema = gozod.Int().Check(func(v int, p *core.ParsePayload) {
 
 ---
 
-## 📋 Table of Contents
-
-### Core Concepts
-- [Core Types](#-core-types)
-- [Parse Methods](#-parse-methods)
-- [Modifiers](#-modifiers)
-
-### Primitive Types
-- [String Validation](#-string-validation)
-- [Number Validation](#-number-validation)
-- [Boolean Validation](#-boolean-validation)
-- [Time Validation](#-time-validation)
-
-### Complex Types
-- [Object Validation](#-object-validation)
-- [Struct Validation](#-struct-validation)
-- [Array/Slice Validation](#-arrayslice-validation)
-- [Map Validation](#-map-validation)
-
-### Advanced Types
-- [Union Types](#-union-types)
-- [Intersection Types](#-intersection-types)
-- [Lazy Types](#-lazy-types)
-- [Transform Types](#-transform-types)
-
-### Custom Validation
-- [Custom Validation](#-custom-validation)
-- [Struct Tags](#-struct-tags)
-
----
-
 ## 🧱 Core Types
 
 ### ZodType Interface
@@ -125,7 +95,7 @@ All GoZod schemas implement the core `ZodType[T]` interface:
 ```go
 type ZodType[T any] interface {
     Parse(input any, ctx ...*ParseContext) (T, error)
-    StrictParse(input T, ctx ...*ParseContext) (T, error)  
+    StrictParse(input T, ctx ...*ParseContext) (T, error)
     MustParse(input any, ctx ...*ParseContext) T
     MustStrictParse(input T, ctx ...*ParseContext) T
     ParseAny(input any, ctx ...*ParseContext) (any, error)
@@ -145,7 +115,7 @@ String()    // ZodString[string]
 Int()       // ZodInteger[int]
 Bool()      // ZodBoolean[bool]
 
-// Pointer constructors (return pointer types)  
+// Pointer constructors (return pointer types)
 StringPtr() // ZodString[*string]
 IntPtr()    // ZodInteger[*int]
 BoolPtr()   // ZodBoolean[*bool]
@@ -190,7 +160,7 @@ schema := gozod.String().Min(3)
 
 // Panic-based versions
 result := schema.MustParse("hello")         // ✅ Returns "hello"
-result = schema.MustStrictParse("hello")    // ✅ Returns "hello" 
+result = schema.MustStrictParse("hello")    // ✅ Returns "hello"
 // result := schema.MustParse(42)           // ⚠️ Panics
 ```
 
@@ -203,7 +173,7 @@ result = schema.MustStrictParse("hello")    // ✅ Returns "hello"
 ```go
 schema := gozod.String().Optional()  // Returns ZodString[*string]
 
-result, _ := schema.Parse("hello")   // ✅ "hello" → &"hello" 
+result, _ := schema.Parse("hello")   // ✅ "hello" → &"hello"
 result, _ = schema.Parse(nil)        // ✅ nil → nil
 result, _ = schema.Parse(undefined)  // ✅ undefined → nil
 ```
@@ -228,26 +198,26 @@ result, _ = schema.Parse(nil)        // ✅ nil → nil
 result, _ = schema.Parse(undefined)  // ✅ undefined → nil
 ```
 
-### Default() - Provides Default Values
+### Default() - Short-Circuit Fallback
 
 ```go
-// Default bypasses validation pipeline (Zod v4 compatible)
+// Default short-circuits validation when input is nil (Zod v4 compatible)
 schema := gozod.String().Min(5).Default("default")
 
 result, _ := schema.Parse("hello world") // ✅ "hello world" (passes validation)
 result, _ = schema.Parse("hi")           // ❌ Error: too small
-result, _ = schema.Parse(nil)            // ✅ "default" (bypasses validation)
+result, _ = schema.Parse(nil)            // ✅ "default" (short-circuits validation)
 ```
 
-### Prefault() - Preprocessing Fallback
+### Prefault() - Full-Pipeline Fallback
 
 ```go
-// Prefault goes through full validation pipeline (Zod v4 compatible)
+// Prefault runs the fallback through the full validation pipeline (Zod v4 compatible)
 schema := gozod.String().Min(5).Prefault("fallback")
 
-result, _ := schema.Parse("hello world") // ✅ "hello world" 
+result, _ := schema.Parse("hello world") // ✅ "hello world"
 result, _ = schema.Parse("hi")           // ❌ Error: too small
-result, _ = schema.Parse(nil)            // ✅ "fallback" (validates "fallback")
+result, _ = schema.Parse(nil)            // ✅ "fallback" (validated like normal input)
 ```
 
 ---
@@ -275,7 +245,7 @@ result, err = stringSchema.StrictParse(str)       // ✅ Optimal performance
 ```go
 schema := gozod.String().
     Min(3).              // Minimum length
-    Max(50).             // Maximum length  
+    Max(50).             // Maximum length
     Length(10)           // Exact length
 
 result, err := schema.Parse("hello")     // Length: 5, Min: 3 ✅
@@ -285,9 +255,9 @@ result, err = schema.Parse("hi")         // Length: 2, Min: 3 ❌
 ### Format Validation
 
 ```go
-// Basic string formats  
+// Basic string formats
 gozod.Email()                              // Email validation
-gozod.URL()                                // URL validation  
+gozod.URL()                                // URL validation
 
 // Network addresses (types/network.go)
 gozod.IPv4()                               // IPv4: "192.168.1.1"
@@ -314,7 +284,7 @@ gozod.IsoTime(types.IsoTimeOptions{Precision: &precision})
 gozod.Uuid()                               // UUID format
 gozod.Uuid("v4")                           // UUID v4 specific
 gozod.Cuid()                               // CUID v1
-gozod.Cuid2()                              // CUID v2 
+gozod.Cuid2()                              // CUID v2
 gozod.Ulid()                               // ULID format
 gozod.Nanoid()                             // NanoID format
 
@@ -375,7 +345,7 @@ schema = gozod.Uuid().Meta(core.GlobalMeta{
 ```go
 // Different integer types
 int8Schema := gozod.Int8()      // ZodInteger[int8]
-int16Schema := gozod.Int16()    // ZodInteger[int16] 
+int16Schema := gozod.Int16()    // ZodInteger[int16]
 int32Schema := gozod.Int32()    // ZodInteger[int32]
 int64Schema := gozod.Int64()    // ZodInteger[int64]
 intSchema := gozod.Int()        // ZodInteger[int]
@@ -504,7 +474,7 @@ result, err := basicSchema.Parse(user)     // ✅ Basic validation
 // Struct schema with field validation
 userSchema := gozod.Struct[User](gozod.StructSchema{
     "name":  gozod.String().Min(2).Max(50),
-    "age":   gozod.Int().Min(0).Max(120), 
+    "age":   gozod.Int().Min(0).Max(120),
     "email": gozod.Email(),
 })
 
@@ -519,7 +489,7 @@ type User struct {
     Name     string `gozod:"required,min=2,max=50"`
     Age      int    `gozod:"required,min=0,max=120"`
     Email    string `gozod:"required,email"`
-    Bio      string `gozod:"max=500"`           // Optional by default
+    Bio      string `gozod:"max=500"`           // Non-required => generated Optional()
     Internal string `gozod:"-"`                // Skip validation
 }
 
@@ -710,7 +680,7 @@ unionSchema := gozod.Union(
 )
 
 result, err := unionSchema.Parse("hello")  // ✅ Matches string
-result, err = unionSchema.Parse(42)        // ✅ Matches int  
+result, err = unionSchema.Parse(42)        // ✅ Matches int
 result, err = unionSchema.Parse(true)      // ❌ No union member matched
 ```
 
@@ -723,7 +693,7 @@ type Dog struct {
 }
 
 type Cat struct {
-    Type  string `json:"type"`  // "cat" 
+    Type  string `json:"type"`  // "cat"
     Lives int    `json:"lives"`
 }
 
@@ -759,6 +729,7 @@ _, err = schema.Parse("invalid")
 ```
 
 Xor schemas convert to JSON Schema `oneOf`:
+
 ```json
 {
   "oneOf": [
@@ -778,7 +749,7 @@ Intersection types must satisfy all provided schemas:
 // String that satisfies both min length and regex
 intersectionSchema := gozod.Intersection(
     gozod.String().Min(3),           // At least 3 chars
-    gozod.String().Max(10),          // At most 10 chars  
+    gozod.String().Max(10),          // At most 10 chars
     gozod.String().Regex(`^[a-z]+$`), // Only lowercase letters
 )
 
@@ -937,16 +908,16 @@ result, err := schema.Parse(form)  // ✅
 type User struct {
     // Basic validation
     Name string `gozod:"required,min=2,max=50"`
-    
+
     // Multiple rules
     Email string `gozod:"required,email,max=100"`
-    
-    // Optional field (default)
+
+    // Non-required field => generated Optional()
     Bio string `gozod:"max=500"`
-    
+
     // Skip validation
     Internal string `gozod:"-"`
-    
+
     // Custom validators
     Username string `gozod:"required,custom_username"`
     Age      int    `gozod:"required,min_age=18"`
@@ -956,9 +927,10 @@ type User struct {
 ### Available Tag Rules
 
 #### String Rules
+
 - `required` - Field must be present
 - `min=N` - Minimum length
-- `max=N` - Maximum length  
+- `max=N` - Maximum length
 - `length=N` - Exact length
 - `email` - Email format validation
 - `url` - URL format validation
@@ -966,6 +938,7 @@ type User struct {
 - `regex=pattern` - Custom regex pattern
 
 #### Numeric Rules
+
 - `min=N` - Minimum value
 - `max=N` - Maximum value
 - `positive` - Must be > 0
@@ -974,6 +947,7 @@ type User struct {
 - `nonpositive` - Must be <= 0
 
 #### Array/Slice Rules
+
 - `min=N` - Minimum number of elements
 - `max=N` - Maximum number of elements
 - `length=N` - Exact number of elements
@@ -988,18 +962,18 @@ type CompleteExample struct {
     Username string   `gozod:"required,regex=^[a-zA-Z0-9_]+$"`
     Email    string   `gozod:"required,email"`
     Website  string   `gozod:"url"`
-    
-    // Numeric validation  
+
+    // Numeric validation
     Age    int     `gozod:"required,min=18,max=120"`
     Score  float64 `gozod:"min=0,max=100"`
-    
+
     // Array validation
     Tags   []string `gozod:"min=1,max=10"`
-    
+
     // Optional fields
     Bio     string  `gozod:"max=500"`
     Avatar  *string `gozod:"url"`
-    
+
     // Skip validation
     Internal string `gozod:"-"`
 }
@@ -1022,13 +996,13 @@ _, err := schema.Parse("hi")
 if zodErr, ok := err.(*issues.ZodError); ok {
     // Access structured error information
     for _, issue := range zodErr.Issues {
-        fmt.Printf("Path: %v, Code: %s, Message: %s\n", 
+        fmt.Printf("Path: %v, Code: %s, Message: %s\n",
             issue.Path, issue.Code, issue.Message)
     }
-    
+
     // Pretty print errors
     fmt.Println(zodErr.PrettifyError())
-    
+
     // Get flattened field errors
     fieldErrors := zodErr.FlattenError()
     fmt.Printf("Field errors: %+v\n", fieldErrors.FieldErrors)
@@ -1063,7 +1037,7 @@ result, err := coercedSchema.Parse(42)        // 42 → "42"
 result, err = coercedSchema.Parse(true)       // true → "true"
 
 // Time coercion
-timeSchema := gozod.Time().Coerce()  
+timeSchema := gozod.Time().Coerce()
 result, err = timeSchema.Parse(1609459200)    // Unix timestamp → time.Time
 result, err = timeSchema.Parse("2021-01-01T00:00:00Z")  // ISO string → time.Time
 ```
@@ -1090,7 +1064,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
     }
-    
+
     // Validate with generated schema
     schema := gozod.FromStruct[CreateUserRequest]()
     validatedReq, err := schema.Parse(req)
@@ -1108,7 +1082,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-    
+
     // Use validated data
     createUser(validatedReq)
     w.WriteHeader(http.StatusCreated)
@@ -1140,19 +1114,19 @@ func loadConfig(filename string) (*AppConfig, error) {
     if err != nil {
         return nil, err
     }
-    
+
     var config AppConfig
     if err := json.Unmarshal(data, &config); err != nil {
         return nil, err
     }
-    
+
     // Validate configuration
     schema := gozod.FromStruct[AppConfig]()
     validatedConfig, err := schema.Parse(config)
     if err != nil {
         return nil, fmt.Errorf("configuration validation failed: %w", err)
     }
-    
+
     return &validatedConfig, nil
 }
 ```

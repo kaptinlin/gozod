@@ -1,8 +1,9 @@
-package types
+package types_test
 
 import (
 	"testing"
 
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

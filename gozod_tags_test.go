@@ -1,4 +1,4 @@
-package gozod
+package gozod_test
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/kaptinlin/gozod"
 )
 
 // =============================================================================

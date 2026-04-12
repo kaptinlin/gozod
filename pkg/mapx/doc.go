@@ -2,7 +2,8 @@
 //
 // The core generic functions [ValueOf] and [ValueOr] eliminate
 // boilerplate for typed map access. Convenience wrappers ([String],
-// [Bool], etc.) are provided for common types.
+// [Bool], etc.) are provided for common types. Numeric helpers use
+// explicit `Coerce` suffixes when they accept compatible numeric types.
 //
 // Usage:
 //

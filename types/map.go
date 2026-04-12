@@ -98,8 +98,10 @@ func (z *ZodMap[T, R]) ValueType() any {
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodMap[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodMap[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodMap[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newMapInternals(src.internals.Clone())
+		})
 	}
 }
 
@@ -223,28 +225,28 @@ func (z *ZodMap[T, R]) NonOptional() *ZodMap[T, T] {
 	}}
 }
 
-// Default sets a value returned when input is nil, bypassing validation.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodMap[T, R]) Default(v T) *ZodMap[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a factory for the default value when input is nil.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodMap[T, R]) DefaultFunc(fn func() T) *ZodMap[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault sets a value that goes through full validation when input is nil.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodMap[T, R]) Prefault(v T) *ZodMap[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory for the prefault value through full validation.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodMap[T, R]) PrefaultFunc(fn func() T) *ZodMap[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -385,21 +387,24 @@ func (z *ZodMap[T, R]) withCheck(c core.ZodCheck) *ZodMap[T, R] {
 }
 
 func (z *ZodMap[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodMap[T, *T] {
-	return &ZodMap[T, *T]{internals: &ZodMapInternals{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		KeyType:          z.internals.KeyType,
-		ValueType:        z.internals.ValueType,
-	}}
+	clone := &ZodMap[T, *T]{internals: z.newMapInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodMap[T, R]) withInternals(in *core.ZodTypeInternals) *ZodMap[T, R] {
-	return &ZodMap[T, R]{internals: &ZodMapInternals{
+	clone := &ZodMap[T, R]{internals: z.newMapInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
+}
+
+func (z *ZodMap[T, R]) newMapInternals(in *core.ZodTypeInternals) *ZodMapInternals {
+	return &ZodMapInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		KeyType:          z.internals.KeyType,
 		ValueType:        z.internals.ValueType,
-	}}
+	}
 }
 
 func (z *ZodMap[T, R]) extractType(value any, ctx *core.ParseContext) (map[any]any, error) {

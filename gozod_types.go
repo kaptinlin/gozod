@@ -1,0 +1,61 @@
+package gozod
+
+import "github.com/kaptinlin/gozod/types"
+
+// Public schema type aliases.
+type (
+	ZodString[T types.StringConstraint]          = types.ZodString[T]
+	ZodBool[T types.BoolConstraint]              = types.ZodBool[T]
+	ZodInteger[T types.IntegerConstraint, R any] = types.ZodInteger[T, R]
+	ZodFloat[T types.FloatConstraint, R any]     = types.ZodFloat[T, R]
+	ZodComplex[T types.ComplexConstraint]        = types.ZodComplex[T]
+	ZodTime[T types.TimeConstraint]              = types.ZodTime[T]
+	ZodEmail[T types.EmailConstraint]            = types.ZodEmail[T]
+	ZodEmoji[T types.StringConstraint]           = types.ZodEmoji[T]
+	ZodBase64[T types.StringConstraint]          = types.ZodBase64[T]
+	ZodBase64URL[T types.StringConstraint]       = types.ZodBase64URL[T]
+	ZodHex[T types.StringConstraint]             = types.ZodHex[T]
+	ZodIPv4[T types.StringConstraint]            = types.ZodIPv4[T]
+	ZodIPv6[T types.StringConstraint]            = types.ZodIPv6[T]
+	ZodCIDRv4[T types.StringConstraint]          = types.ZodCIDRv4[T]
+	ZodCIDRv6[T types.StringConstraint]          = types.ZodCIDRv6[T]
+	ZodURL[T types.StringConstraint]             = types.ZodURL[T]
+	ZodHostname[T types.StringConstraint]        = types.ZodHostname[T]
+	ZodMAC[T types.StringConstraint]             = types.ZodMAC[T]
+	ZodE164[T types.StringConstraint]            = types.ZodE164[T]
+	URLOptions                                   = types.URLOptions
+	ZodIso[T types.IsoConstraint]                = types.ZodIso[T]
+	IsoDatetimeOptions                           = types.IsoDatetimeOptions
+	IsoTimeOptions                               = types.IsoTimeOptions
+	ZodCUID[T types.StringConstraint]            = types.ZodCUID[T]
+	ZodCUID2[T types.StringConstraint]           = types.ZodCUID2[T]
+	ZodGUID[T types.StringConstraint]            = types.ZodGUID[T]
+	ZodULID[T types.StringConstraint]            = types.ZodULID[T]
+	ZodXID[T types.StringConstraint]             = types.ZodXID[T]
+	ZodKSUID[T types.StringConstraint]           = types.ZodKSUID[T]
+	ZodNanoID[T types.StringConstraint]          = types.ZodNanoID[T]
+	ZodUUID[T types.StringConstraint]            = types.ZodUUID[T]
+	ZodJWT[T types.StringConstraint]             = types.ZodJWT[T]
+	JWTOptions                                   = types.JWTOptions
+	ZodArray[T any, R any]                       = types.ZodArray[T, R]
+	ZodSlice[T any, R any]                       = types.ZodSlice[T, R]
+	ZodTuple[T any, R any]                       = types.ZodTuple[T, R]
+	ZodMap[T any, R any]                         = types.ZodMap[T, R]
+	ZodSet[T comparable, R any]                  = types.ZodSet[T, R]
+	ZodRecord[T any, R any]                      = types.ZodRecord[T, R]
+	ZodObject[T any, R any]                      = types.ZodObject[T, R]
+	ZodStruct[T any, R any]                      = types.ZodStruct[T, R]
+	ZodUnion[T any, R any]                       = types.ZodUnion[T, R]
+	ZodIntersection[T any, R any]                = types.ZodIntersection[T, R]
+	ZodDiscriminatedUnion[T any, R any]          = types.ZodDiscriminatedUnion[T, R]
+	ZodAny[T any, R any]                         = types.ZodAny[T, R]
+	ZodUnknown[T any, R any]                     = types.ZodUnknown[T, R]
+	ZodNever[T any, R any]                       = types.ZodNever[T, R]
+	ZodNil[T any, R any]                         = types.ZodNil[T, R]
+	ZodFile[T any, R any]                        = types.ZodFile[T, R]
+	ZodFunction[T types.FunctionConstraint]      = types.ZodFunction[T]
+	ZodStringBool[T types.StringBoolConstraint]  = types.ZodStringBool[T]
+	ZodLazy[T types.LazyConstraint]              = types.ZodLazy[T]
+	ZodEnum[T comparable, R any]                 = types.ZodEnum[T, R]
+	ZodLiteral[T comparable, R any]              = types.ZodLiteral[T, R]
+)

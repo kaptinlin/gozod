@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,7 +86,7 @@ func TestObject_BasicFunctionality(t *testing.T) {
 		}, core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeObject, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeObject, schema.Internals().Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
@@ -662,6 +663,24 @@ func TestObject_ValidationMethods(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("Property validation uses parse context error mapper", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		}).Property("name", String().Min(3))
+
+		_, err := schema.Parse(map[string]any{"name": "Jo"}, &core.ParseContext{
+			Error: func(issue core.ZodRawIssue) string {
+				if issue.Code == core.TooSmall {
+					return "context property error"
+				}
+				return ""
+			},
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "context property error")
+	})
+
 	t.Run("Multiple property validations", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name":  String(),
@@ -708,6 +727,16 @@ func TestObject_ValidationMethods(t *testing.T) {
 		}
 		_, err = schema.Parse(invalidAge)
 		assert.Error(t, err)
+	})
+
+	t.Run("metadata survives modifier chaining", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String(),
+		}).Meta(core.GlobalMeta{Title: "object schema"}).Optional()
+
+		meta, ok := core.GlobalRegistry.Get(schema)
+		require.True(t, ok)
+		assert.Equal(t, "object schema", meta.Title)
 	})
 }
 

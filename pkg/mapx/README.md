@@ -4,10 +4,10 @@ Lightweight helpers for working with Go maps (and structs) in a type-safe way.
 
 ## Features
 
-* **Generic accessors** – `ValueOf[T]`, `ValueOrDefault[T]` for any type
+* **Generic accessors** – `ValueOf[T]`, `ValueOr[T]` for any type
 * **Basic operations** – `Get`, `Set`, `Has`, `Count`, `Copy`, `Merge`
-* **Typed accessors** – `GetString`, `GetBool`, `GetInt`, `GetFloat64`, `GetStrings`, `GetAnySlice`, `GetMap`
-* **Default helpers** – `GetXxxDefault` variants for all typed accessors
+* **Typed accessors** – `String`, `Bool`, `IntCoerce`, `Float64Coerce`, `Strings`, `AnySlice`, `Map`
+* **Default helpers** – `StringOr`, `BoolOr`, `IntCoerceOr`, `Float64CoerceOr`, `StringsOr`, `AnySliceOr`, `MapOr`, `AnyOr`
 * **Object helpers** – `Keys` extracts field names from maps **or structs**
 * **Conversion** – `ToGeneric` converts any map to `map[any]any`
 
@@ -30,10 +30,10 @@ func main() {
 
     // Generic accessors (preferred)
     app, _ := mapx.ValueOf[string](cfg, "app")   // "demo"
-    port := mapx.ValueOrDefault(cfg, "port", 80)  // 3000
+    port := mapx.ValueOr(cfg, "port", 80)  // 3000
 
     // Typed convenience wrappers
-    debug := mapx.GetBoolDefault(cfg, "debug", false)
+    debug := mapx.BoolOr(cfg, "debug", false)
 
     // Copy & merge
     clone := mapx.Copy(cfg)
@@ -47,9 +47,9 @@ func main() {
 
 | Category       | Functions |
 |----------------|-----------|
-| Generic        | `ValueOf[T]`, `ValueOrDefault[T]` |
+| Generic        | `ValueOf[T]`, `ValueOr[T]` |
 | Basic ops      | `Get`, `Set`, `Has`, `Count`, `Copy`, `Merge` |
-| Accessors      | `GetString`, `GetBool`, `GetInt`, `GetFloat64`, `GetStrings`, `GetAnySlice`, `GetMap` |
-| Defaults       | `GetStringDefault`, `GetBoolDefault`, `GetIntDefault`, `GetFloat64Default`, `GetStringsDefault`, `GetAnySliceDefault`, `GetMapDefault`, `GetAnyDefault` |
+| Accessors      | `String`, `Bool`, `IntCoerce`, `Float64Coerce`, `Strings`, `AnySlice`, `Map` |
+| Defaults       | `StringOr`, `BoolOr`, `IntCoerceOr`, `Float64CoerceOr`, `StringsOr`, `AnySliceOr`, `MapOr`, `AnyOr` |
 | Object helpers | `Keys` |
 | Convert        | `ToGeneric` |

@@ -1,6 +1,6 @@
 # GoZod 🔷
 
-**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed, zero-dependency data validation with intelligent type inference and maximum performance.
+**GoZod** is a TypeScript Zod v4-inspired validation library for Go, providing strongly-typed data validation with intelligent type inference and maximum performance.
 
 [![Go Version](https://img.shields.io/badge/Go-%3E%3D1.26-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -15,7 +15,7 @@
 - **Native Go Struct Support** - First-class struct validation with field-level validation and JSON tag mapping
 - **Automatic Circular Reference Handling** - Lazy evaluation prevents stack overflow in recursive structures
 - **Maximum Performance** - Zero-overhead validation with optional code generation (5-10x faster)
-- **Zero Dependencies** - Pure Go implementation, no external libraries
+- **Curated Dependencies** - Small, intentional dependency surface with Go-first implementation
 - **Rich Validation Methods** - Comprehensive built-in validators for all Go types
 
 ## Why GoZod?
@@ -24,7 +24,7 @@
 - **⚡ Maximum Performance** - Zero-overhead abstractions with optional code generation
 - **🏷️ Developer Experience** - Familiar API with Go idioms and declarative struct tags
 - **🔒 Production Ready** - Battle-tested validation with comprehensive error handling
-- **🌟 Zero Dependencies** - Pure Go implementation, no external dependencies
+- **🌟 Go-First Implementation** - Minimal, intentional dependencies and predictable behavior
 
 GoZod brings TypeScript Zod's excellent developer experience to Go while embracing Go's type system and performance characteristics. Perfect for API validation, configuration parsing, data transformation, and any scenario where type-safe validation is critical.
 
@@ -49,7 +49,7 @@ import (
 func main() {
     // String validation with method chaining
     nameSchema := gozod.String().Min(2).Max(50)
-    
+
     // Parse - Runtime type checking (flexible)
     result, err := nameSchema.Parse("Alice")
     if err == nil {
@@ -87,30 +87,32 @@ type User struct {
     Name  string `gozod:"required,min=2,max=50"`
     Email string `gozod:"required,email"`
     Age   int    `gozod:"required,min=18,max=120"`
-    Bio   string `gozod:"max=500"`           // Optional by default
+    Bio   string `gozod:"max=500"`           // Non-required => generated Optional()
 }
 
 func main() {
     // Generate schema from struct tags
     schema := gozod.FromStruct[User]()
-    
+
     user := User{
         Name:  "Alice Johnson",
         Email: "alice@example.com",
         Age:   28,
         Bio:   "Software engineer",
     }
-    
+
     // Validate with generated schema
     validatedUser, err := schema.Parse(user)
     if err != nil {
         fmt.Printf("Validation error: %v\n", err)
         return
     }
-    
+
     fmt.Printf("Valid user: %+v\n", validatedUser)
 }
 ```
+
+For tag-derived schemas and `gozodgen`, structural tag rules such as `required` and `coerce` are handled separately from validation rules. The generated validation chain is built from the remaining rules, and `.Optional()` is appended for non-required or pointer fields.
 
 ### Runtime Struct Validation
 
@@ -151,7 +153,7 @@ func main() {
 package main
 
 import (
-    "fmt" 
+    "fmt"
     "github.com/kaptinlin/gozod"
 )
 
@@ -247,23 +249,23 @@ func main() {
             blacklist := map[string]bool{"admin": true, "root": true}
             return !blacklist[strings.ToLower(username)]
         }, "Username is not allowed")
-    
+
     // Valid username
     result, err := usernameSchema.Parse("johndoe")  // ✅ Valid
-    
-    // Invalid username  
+
+    // Invalid username
     _, err = usernameSchema.Parse("admin")  // ❌ Validation fails
     if err != nil {
         fmt.Printf("Validation failed: %v\n", err)
     }
-    
+
     // Struct validation with custom logic
     type User struct {
         Name  string `gozod:"required,min=2"`
         Email string `gozod:"required,email"`
         Age   int    `gozod:"min=18"`
     }
-    
+
     schema := gozod.FromStruct[User]().Refine(func(user User) bool {
         // Cross-field validation
         return user.Age >= 21 || !strings.Contains(user.Email, "company.com")
@@ -342,7 +344,7 @@ type User struct {
 // Generated Schema() method provides zero-reflection validation
 func main() {
     schema := gozod.FromStruct[User]() // Uses generated code automatically
-    
+
     user := User{Name: "Alice", Email: "alice@example.com", Age: 25}
     result, err := schema.Parse(user)  // 5-10x faster than reflection
 }
@@ -378,7 +380,7 @@ gozod.Hex()      // Hexadecimal string
 gozod.Base64()   // Base64 encoding
 gozod.JWT()      // JWT token format
 
-// Numbers with range validation  
+// Numbers with range validation
 gozod.Int().Min(0).Max(120).Positive()
 gozod.Float64().Min(0.0).Finite()
 
@@ -474,13 +476,13 @@ _, err := schema.Parse("hi")
 if zodErr, ok := err.(*issues.ZodError); ok {
     // Access structured error information
     for _, issue := range zodErr.Issues {
-        fmt.Printf("Path: %v, Code: %s, Message: %s\n", 
+        fmt.Printf("Path: %v, Code: %s, Message: %s\n",
             issue.Path, issue.Code, issue.Message)
     }
-    
+
     // Pretty print errors
     fmt.Println(zodErr.PrettifyError())
-    
+
     // Get flattened field errors for forms
     fieldErrors := zodErr.FlattenError()
     for field, errors := range fieldErrors.FieldErrors {
@@ -492,22 +494,26 @@ if zodErr, ok := err.(*issues.ZodError); ok {
 ## 🏷️ Complete Tag Reference
 
 ### String Tags
+
 - `required` - Field must be present
 - `min=N` / `max=N` - Length constraints
 - `email` / `url` / `uuid` - Format validation
 - `regex=pattern` - Custom regex patterns
 
-### Numeric Tags  
+### Numeric Tags
+
 - `min=N` / `max=N` - Value constraints
 - `positive` / `negative` - Sign validation
 - `nonnegative` / `nonpositive` - Zero-inclusive constraints
 
 ### Array Tags
+
 - `min=N` / `max=N` - Element count constraints
 - `nonempty` - At least one element
 - `length=N` - Exact element count
 
 ### Custom Validation
+
 Use `.Refine()` for custom validation logic on any schema:
 
 ```go
@@ -536,14 +542,14 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
     }
-    
+
     schema := gozod.FromStruct[CreateUserRequest]()
     validatedReq, err := schema.Parse(req)
     if err != nil {
         writeValidationError(w, err)
         return
     }
-    
+
     user := createUser(validatedReq)
     json.NewEncoder(w).Encode(user)
 }
@@ -604,7 +610,7 @@ GoZod schemas generate JSON Schema Draft 2020-12, which is **fully compatible wi
 
 GoZod is designed for maximum performance:
 
-- **Zero Dependencies** - Pure Go implementation
+- **Curated Dependencies** - Minimal dependency surface and predictable runtime behavior
 - **Strict Type Semantics** - No runtime type conversions
 - **StrictParse Method** - Compile-time type safety eliminates runtime checks
 - **Code Generation** - Optional zero-reflection validation (5-10x faster)

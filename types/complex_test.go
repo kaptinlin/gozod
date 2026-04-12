@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"math"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +95,7 @@ func TestComplex_BasicFunctionality(t *testing.T) {
 		schema := Complex128(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeComplex128, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeComplex128, schema.Internals().Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)

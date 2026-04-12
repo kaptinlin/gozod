@@ -38,6 +38,8 @@ type ZodTransform[In, Out any] struct {
 	internals *ZodTypeInternals
 }
 
+var _ ZodSchema = (*ZodTransform[any, any])(nil)
+
 // Parse validates input with the source schema, then applies the transformation.
 // When input is nil and the source has a default or default function, the default
 // value is returned directly without running the transformation (Zod v4 semantics).
@@ -64,9 +66,15 @@ func (t *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (out Out,
 	if err != nil {
 		return out, err
 	}
-	return t.transform(validated, &RefinementContext{
-		ParseContext: getOrCreateContext(ctx...),
-	})
+	refinementCtx := NewRefinementContext(getOrCreateContext(ctx...), validated)
+	result, err := t.transform(validated, refinementCtx)
+	if err != nil {
+		return out, err
+	}
+	if ctxErr := refinementCtx.Err(); ctxErr != nil {
+		return out, ctxErr
+	}
+	return result, nil
 }
 
 // MustParse validates and transforms input, panicking on error.
@@ -131,6 +139,8 @@ type ZodPipe[In, Out any] struct {
 	internals *ZodTypeInternals
 }
 
+var _ ZodSchema = (*ZodPipe[any, any])(nil)
+
 // Parse validates input through the source schema, then applies the target function.
 func (p *ZodPipe[In, Out]) Parse(input any, ctx ...*ParseContext) (out Out, _ error) {
 	intermediate, err := p.source.Parse(input, ctx...)
@@ -147,6 +157,11 @@ func (p *ZodPipe[In, Out]) MustParse(input any, ctx ...*ParseContext) Out {
 		panic(err)
 	}
 	return result
+}
+
+// ParseAny validates through the pipeline and returns an untyped result.
+func (p *ZodPipe[In, Out]) ParseAny(input any, ctx ...*ParseContext) (any, error) {
+	return p.Parse(input, ctx...)
 }
 
 // Internals returns the schema's internal configuration.

@@ -4,10 +4,13 @@
 package tagparser
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
 )
+
+const defaultTagName = "gozod"
 
 // unescaper handles escape sequences in tag parameters
 // using a single-pass replacer.
@@ -25,6 +28,10 @@ type TagRule struct {
 	Params []string // e.g., ["2"] for "min=2"
 }
 
+// ErrTypeMustBeStruct indicates that the input type is neither a
+// struct nor a pointer to struct.
+var ErrTypeMustBeStruct = errors.New("tagparser: type must be a struct or pointer to struct")
+
 // FieldInfo represents parsed information about a struct field.
 type FieldInfo struct {
 	Name     string       // Go field name
@@ -32,10 +39,10 @@ type FieldInfo struct {
 	TypeName string       // AST type name for circular reference detection
 	JSONName string       // from json tag, or Go field name
 	GoZodTag string       // raw gozod tag value
-	Rules    []TagRule    // parsed validation rules
-	Required bool         // has "required" rule
-	Optional bool         // pointer without required
-	Nilable  bool         // has "nilable" rule
+	Rules    []TagRule    // parsed tag rules before helper-level filtering
+	Required bool         // whether the parsed rules include "required"
+	Optional bool         // derived optionality for parsed-tag callers
+	Nilable  bool         // whether the parsed rules include "nilable"
 }
 
 // TagParser handles gozod tag parsing with configurable tag name.
@@ -45,25 +52,43 @@ type TagParser struct {
 
 // New creates a [TagParser] with the default "gozod" tag name.
 func New() *TagParser {
-	return &TagParser{tagName: "gozod"}
+	return &TagParser{tagName: defaultTagName}
 }
 
 // NewWithTagName creates a [TagParser] with a custom tag name.
 func NewWithTagName(name string) *TagParser {
+	if strings.TrimSpace(name) == "" {
+		name = defaultTagName
+	}
 	return &TagParser{tagName: name}
 }
 
 // ParseStructTags parses all gozod tags in a struct type
 // and returns [FieldInfo] for each exported field.
+//
+// Non-struct input returns an empty slice and no error. Use
+// [ParseStructTagsStrict] when non-struct input should fail.
 func (p *TagParser) ParseStructTags(typ reflect.Type) ([]FieldInfo, error) {
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
+	structType, ok := normalizedStructType(typ)
+	if !ok {
+		return []FieldInfo{}, nil
 	}
 
-	if typ.Kind() != reflect.Struct {
-		return nil, nil
+	return p.parseStructFields(structType)
+}
+
+// ParseStructTagsStrict parses all gozod tags in a struct type
+// and returns [ErrTypeMustBeStruct] for non-struct input.
+func (p *TagParser) ParseStructTagsStrict(typ reflect.Type) ([]FieldInfo, error) {
+	structType, ok := normalizedStructType(typ)
+	if !ok {
+		return nil, ErrTypeMustBeStruct
 	}
 
+	return p.parseStructFields(structType)
+}
+
+func (p *TagParser) parseStructFields(typ reflect.Type) ([]FieldInfo, error) {
 	fields := make([]FieldInfo, 0, typ.NumField())
 
 	for f := range typ.Fields() {
@@ -98,6 +123,16 @@ func (p *TagParser) ParseStructTags(typ reflect.Type) ([]FieldInfo, error) {
 	}
 
 	return fields, nil
+}
+
+func normalizedStructType(typ reflect.Type) (reflect.Type, bool) {
+	if typ == nil {
+		return nil, false
+	}
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	return typ, typ.Kind() == reflect.Struct
 }
 
 // ParseTagString parses a single tag string into [TagRule] values.

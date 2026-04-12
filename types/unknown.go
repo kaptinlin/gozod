@@ -144,28 +144,28 @@ func (z *ZodUnknown[T, R]) NonOptional() *ZodUnknown[T, T] {
 	}
 }
 
-// Default sets a default value used when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodUnknown[T, R]) Default(v T) *ZodUnknown[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a function-based default value.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodUnknown[T, R]) DefaultFunc(fn func() T) *ZodUnknown[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides a fallback value through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodUnknown[T, R]) Prefault(v T) *ZodUnknown[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides a dynamic fallback value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodUnknown[T, R]) PrefaultFunc(fn func() T) *ZodUnknown[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -278,29 +278,34 @@ func (z *ZodUnknown[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 func (z *ZodUnknown[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodUnknown[T, *T] {
-	return &ZodUnknown[T, *T]{
+	clone := &ZodUnknown[T, *T]{
 		internals: &ZodUnknownInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodUnknown[T, R]) withInternals(in *core.ZodTypeInternals) *ZodUnknown[T, R] {
-	return &ZodUnknown[T, R]{
+	clone := &ZodUnknown[T, R]{
 		internals: &ZodUnknownInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodUnknown[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodUnknown[T, R]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodUnknown[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

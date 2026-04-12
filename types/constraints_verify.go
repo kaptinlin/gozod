@@ -1,13 +1,14 @@
 package types
 
-// Compile-time interface constraint verification.
+// Compile-time interface contract verification.
 //
-// These assertions use Go 1.26 self-referential generic constraints
-// (core.Describable, core.Refineable) to guarantee at compile time
-// that all schema types implement the expected chaining API.
+// These assertions keep three layers aligned:
+//   - minimal runtime contracts in core/interfaces.go
+//   - fluent contracts in core/constraints.go
+//   - concrete schema implementations in types/
 //
-// If a schema type is missing a required method (Describe, Meta,
-// RefineAny, or Internals), compilation will fail with a clear error.
+// If a schema type drifts from the expected interface surface, compilation
+// fails with a clear type error.
 
 import (
 	"math/big"
@@ -83,4 +84,27 @@ var (
 	_ core.Refineable[*ZodUnion[any, any]]                        = (*ZodUnion[any, any])(nil)
 	_ core.Refineable[*ZodUnknown[any, any]]                      = (*ZodUnknown[any, any])(nil)
 	_ core.Refineable[*ZodXor[any, any]]                          = (*ZodXor[any, any])(nil)
+)
+
+// --- StrictZodType contract verification ---
+// Ensures representative schema types satisfy the strict parsing contract.
+
+var (
+	_ core.StrictZodType[any, any]                                 = (*ZodAny[any, any])(nil)
+	_ core.StrictZodType[map[string]any, map[string]any]           = (*ZodObject[map[string]any, map[string]any])(nil)
+	_ core.StrictZodType[map[string]any, map[string]any]           = (*ZodRecord[map[string]any, map[string]any])(nil)
+	_ core.StrictZodType[[]any, []any]                             = (*ZodTuple[[]any, []any])(nil)
+	_ core.StrictZodType[any, any]                                 = (*ZodUnion[any, any])(nil)
+	_ core.StrictZodType[any, any]                                 = (*ZodIntersection[any, any])(nil)
+	_ core.StrictZodType[any, any]                                 = (*ZodDiscriminatedUnion[any, any])(nil)
+	_ core.StrictZodType[any, any]                                 = (*ZodUnknown[any, any])(nil)
+	_ core.StrictZodType[any, any]                                 = (*ZodXor[any, any])(nil)
+	_ core.StrictZodType[string, string]                           = (*ZodString[string])(nil)
+	_ core.StrictZodType[bool, bool]                               = (*ZodBool[bool])(nil)
+	_ core.StrictZodType[int, int]                                 = (*ZodIntegerTyped[int, int])(nil)
+	_ core.StrictZodType[float64, float64]                         = (*ZodFloatTyped[float64, float64])(nil)
+	_ core.StrictZodType[complex128, complex128]                   = (*ZodComplex[complex128])(nil)
+	_ core.StrictZodType[time.Time, time.Time]                     = (*ZodTime[time.Time])(nil)
+	_ core.StrictZodType[*big.Int, *big.Int]                       = (*ZodBigInt[*big.Int])(nil)
+	_ core.StrictZodType[map[string]struct{}, map[string]struct{}] = (*ZodSet[string, map[string]struct{}])(nil)
 )

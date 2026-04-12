@@ -155,28 +155,28 @@ func (z *ZodAny[T, R]) NonOptional() *ZodAny[T, T] {
 	}
 }
 
-// Default sets a default value to use when the input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodAny[T, R]) Default(v T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a function-based default value.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodAny[T, R]) DefaultFunc(fn func() T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault provides a fallback value that goes through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodAny[T, R]) Prefault(v T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides a dynamic fallback value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodAny[T, R]) PrefaultFunc(fn func() T) *ZodAny[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -316,29 +316,34 @@ func (z *ZodAny[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 func (z *ZodAny[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodAny[T, *T] {
-	return &ZodAny[T, *T]{
+	clone := &ZodAny[T, *T]{
 		internals: &ZodAnyInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodAny[T, R]) withInternals(in *core.ZodTypeInternals) *ZodAny[T, R] {
-	return &ZodAny[T, R]{
+	clone := &ZodAny[T, R]{
 		internals: &ZodAnyInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodAny[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodAny[T, R]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodAny[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

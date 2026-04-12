@@ -1,9 +1,10 @@
-package types
+package types_test
 
 import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,7 +71,7 @@ func TestUnion_BasicFunctionality(t *testing.T) {
 			core.SchemaParams{Error: "Expected string or boolean"})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeUnion, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeUnion, schema.Internals().Type)
 
 		_, err := schema.Parse(123)
 		assert.Error(t, err)
@@ -215,6 +216,7 @@ func TestUnion_Chaining(t *testing.T) {
 		assert.Nil(t, got)
 	})
 }
+
 func TestUnion_DefaultAndPrefault(t *testing.T) {
 	t.Run("Default over Prefault", func(t *testing.T) {
 		schema := Union([]any{String(), Int()}).Default("default_value").Prefault("prefault_value")

@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,6 +176,14 @@ func TestUnknown_Modifiers(t *testing.T) {
 		result, err := defaultSchema.Parse("input_value")
 		require.NoError(t, err)
 		assert.Equal(t, "input_value", result)
+	})
+
+	t.Run("metadata survives modifier chaining", func(t *testing.T) {
+		schema := Unknown().Describe("unknown schema").Nilable()
+
+		meta, ok := core.GlobalRegistry.Get(schema)
+		require.True(t, ok)
+		assert.Equal(t, "unknown schema", meta.Description)
 	})
 }
 

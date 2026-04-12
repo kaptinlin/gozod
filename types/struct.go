@@ -87,8 +87,8 @@ func (z *ZodStruct[T, R]) Shape() core.StructSchema {
 }
 
 // UnknownKeys returns the unknown keys handling mode.
-func (z *ZodStruct[T, R]) UnknownKeys() string {
-	return "strict"
+func (z *ZodStruct[T, R]) UnknownKeys() ObjectMode {
+	return ObjectModeStrict
 }
 
 // Catchall returns nil because struct schemas are always strict.
@@ -131,8 +131,7 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		parseCtx,
 	)
 	if err != nil {
-		// Check if this is a generic struct type error that we can improve
-		if errStr := err.Error(); strings.Contains(errStr, "Invalid input: expected struct, received") {
+		if z.shouldWrapStructTypeError(err) {
 			return zero, z.createStructTypeError(input, parseCtx)
 		}
 		return zero, err
@@ -157,6 +156,16 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 	}
 
 	return zero, issues.CreateTypeConversionError(fmt.Sprintf("%T", result), "struct", input, parseCtx)
+}
+
+func (z *ZodStruct[T, R]) shouldWrapStructTypeError(err error) bool {
+	var zodErr *issues.ZodError
+	if !issues.IsZodError(err, &zodErr) || len(zodErr.Issues) != 1 {
+		return false
+	}
+
+	expected, ok := zodErr.Issues[0].ExpectedType()
+	return ok && expected == core.ZodTypeStruct
 }
 
 // MustParse panics on validation failure.
@@ -245,14 +254,14 @@ func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
 	}
 }
 
-// Default sets the default value.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodStruct[T, R]) Default(v T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets the default value function.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -261,14 +270,14 @@ func (z *ZodStruct[T, R]) DefaultFunc(fn func() T) *ZodStruct[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault sets the prefault value.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodStruct[T, R]) Prefault(v T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets the prefault value function.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -449,31 +458,33 @@ func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
 // =============================================================================
 
 func (z *ZodStruct[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodStruct[T, *T] {
-	return &ZodStruct[T, *T]{internals: &ZodStructInternals{
-		ZodTypeInternals:  *in,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		IsPartial:         z.internals.IsPartial,
-		PartialExceptions: z.internals.PartialExceptions,
-	}}
+	clone := &ZodStruct[T, *T]{internals: z.newStructInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T, R] {
-	return &ZodStruct[T, R]{internals: &ZodStructInternals{
-		ZodTypeInternals:  *in,
-		Def:               z.internals.Def,
-		Shape:             z.internals.Shape,
-		IsPartial:         z.internals.IsPartial,
-		PartialExceptions: z.internals.PartialExceptions,
-	}}
+	clone := &ZodStruct[T, R]{internals: z.newStructInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from a source.
 func (z *ZodStruct[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodStruct[T, R]); ok {
-		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+	if src, ok := source.(*ZodStruct[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newStructInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (z *ZodStruct[T, R]) newStructInternals(in *core.ZodTypeInternals) *ZodStructInternals {
+	return &ZodStructInternals{
+		ZodTypeInternals:  *in,
+		Def:               z.internals.Def,
+		Shape:             maps.Clone(z.internals.Shape),
+		IsPartial:         z.internals.IsPartial,
+		PartialExceptions: maps.Clone(z.internals.PartialExceptions),
 	}
 }
 
@@ -1727,7 +1738,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName
 	// Convert parsed fields to schemas
 	for _, field := range fields {
 		// Skip fields without gozod tags
-		if len(field.Rules) == 0 && !field.Required {
+		if !field.HasSchemaSpec() {
 			continue
 		}
 
@@ -1778,13 +1789,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 		}
 
 		// Check if coercion is enabled
-		hasCoerce := false
-		for _, rule := range fieldInfo.Rules {
-			if rule.Name == "coerce" {
-				hasCoerce = true
-				break
-			}
-		}
+		hasCoerce := fieldInfo.HasCoerceRule()
 
 		if hasCoerce && actualType == reflect.TypeFor[time.Time]() {
 			// Handle time.Time with coercion
@@ -1817,7 +1822,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 		}
 		if isPointer && schema != nil {
 			// Make nested struct nilable if it's a pointer and not required
-			if !fieldInfo.Required {
+			if fieldInfo.NeedsPointerNilable() {
 				if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
 					schema = nilableSchema.Nilable()
 				}
@@ -1906,7 +1911,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 		}
 
 		// Handle pointer wrapper if needed
-		if isPointer && !capturedInfo.Required {
+		if isPointer && capturedInfo.NeedsPointerNilable() {
 			if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
 				schema = nilableSchema.Nilable()
 			}
@@ -1934,13 +1939,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 	}
 
 	// Check if coercion is enabled
-	hasCoerce := false
-	for _, rule := range fieldInfo.Rules {
-		if rule.Name == "coerce" {
-			hasCoerce = true
-			break
-		}
-	}
+	hasCoerce := fieldInfo.HasCoerceRule()
 
 	// Handle pointer types
 	isPointer := fieldType.Kind() == reflect.Pointer
@@ -2192,7 +2191,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 				}
 			} else {
 				if isPointer {
-					if fieldInfo.Required {
+					if !fieldInfo.NeedsPointerNilable() {
 						schema = TimePtr()
 					} else {
 						schema = Time().Nilable()
@@ -2208,7 +2207,7 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 			schema = createNestedStructSchema(fieldType)
 			if isPointer {
 				// Make nested struct nilable if it's a pointer and not required
-				if !fieldInfo.Required {
+				if fieldInfo.NeedsPointerNilable() {
 					if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
 						schema = nilableSchema.Nilable()
 					}
@@ -2241,8 +2240,8 @@ func createSchemaFromType(fieldType reflect.Type) core.ZodSchema {
 func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) core.ZodSchema {
 	// We'll apply optional at the end, after all other rules
 
-	// Apply each parsed rule
-	for _, rule := range fieldInfo.Rules {
+	// Apply tag-driven validation rules; structural flags are handled elsewhere.
+	for _, rule := range fieldInfo.ValidationRules() {
 		// Handle simple rules without parameters
 		switch rule.Name {
 		case "required":
@@ -2414,12 +2413,10 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 	}
 
 	// Apply optional/required for pointer fields AFTER all other rules
-	if fieldInfo.Type.Kind() == reflect.Pointer {
-		if !fieldInfo.Required {
-			// Make pointer fields optional (accept nil) unless marked as required
-			// Use type switch to handle each schema type's Optional() method
-			schema = applyOptionalToSchema(schema)
-		}
+	if fieldInfo.NeedsPointerOptional() {
+		// Make pointer fields optional (accept nil) unless marked as required
+		// Use type switch to handle each schema type's Optional() method
+		schema = applyOptionalToSchema(schema)
 		// If required, leave as is - pointer constructors by default don't accept nil for Parse
 	}
 

@@ -166,7 +166,7 @@ func (z *ZodSlice[T, R]) NonOptional() *ZodSlice[T, []T] {
 	}
 }
 
-// Default sets a default value used when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 // Short-circuits validation and returns the default immediately.
 func (z *ZodSlice[T, R]) Default(v []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
@@ -174,21 +174,21 @@ func (z *ZodSlice[T, R]) Default(v []T) *ZodSlice[T, R] {
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a function that provides the default value.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodSlice[T, R]) DefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault sets a fallback value used through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodSlice[T, R]) Prefault(v []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a function that provides the fallback value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodSlice[T, R]) PrefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -351,32 +351,36 @@ func (z *ZodSlice[T, R]) With(
 
 // withInternals creates a new ZodSlice keeping the constraint type R.
 func (z *ZodSlice[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSlice[T, R] {
-	return &ZodSlice[T, R]{
-		internals: &ZodSliceInternals[T]{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Element:          z.internals.Element,
-		},
+	clone := &ZodSlice[T, R]{
+		internals: z.newSliceInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withPtrInternals creates a new ZodSlice with pointer constraint *[]T.
 func (z *ZodSlice[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSlice[T, *[]T] {
-	return &ZodSlice[T, *[]T]{
-		internals: &ZodSliceInternals[T]{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Element:          z.internals.Element,
-		},
+	clone := &ZodSlice[T, *[]T]{
+		internals: z.newSliceInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodSlice[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodSlice[T, R]); ok {
-		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+	if src, ok := source.(*ZodSlice[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newSliceInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (z *ZodSlice[T, R]) newSliceInternals(in *core.ZodTypeInternals) *ZodSliceInternals[T] {
+	return &ZodSliceInternals[T]{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Element:          z.internals.Element,
 	}
 }
 

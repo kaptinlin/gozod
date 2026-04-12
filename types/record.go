@@ -223,14 +223,14 @@ func (z *ZodRecord[T, R]) Partial() *ZodRecord[T, R] {
 	return z.withInternals(newInternals)
 }
 
-// Default sets a default value when input is nil (short-circuit, bypasses validation).
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodRecord[T, R]) Default(v T) *ZodRecord[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a dynamic default value using a function.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodRecord[T, R]) DefaultFunc(fn func() T) *ZodRecord[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -239,14 +239,14 @@ func (z *ZodRecord[T, R]) DefaultFunc(fn func() T) *ZodRecord[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault provides a fallback value that goes through full validation.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodRecord[T, R]) Prefault(v T) *ZodRecord[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc provides a dynamic fallback value using a function.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any { return fn() })
@@ -342,33 +342,37 @@ func (z *ZodRecord[T, R]) withCheck(check core.ZodCheck) *ZodRecord[T, R] {
 }
 
 func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord[T, *T] {
-	return &ZodRecord[T, *T]{
-		internals: &ZodRecordInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			KeyType:          z.internals.KeyType,
-			ValueType:        z.internals.ValueType,
-			Loose:            z.internals.Loose,
-		},
+	clone := &ZodRecord[T, *T]{
+		internals: z.newRecordInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T, R] {
-	return &ZodRecord[T, R]{
-		internals: &ZodRecordInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			KeyType:          z.internals.KeyType,
-			ValueType:        z.internals.ValueType,
-			Loose:            z.internals.Loose,
-		},
+	clone := &ZodRecord[T, R]{
+		internals: z.newRecordInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema
 func (z *ZodRecord[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodRecord[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodRecord[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newRecordInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (z *ZodRecord[T, R]) newRecordInternals(in *core.ZodTypeInternals) *ZodRecordInternals {
+	return &ZodRecordInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		KeyType:          z.internals.KeyType,
+		ValueType:        z.internals.ValueType,
+		Loose:            z.internals.Loose,
 	}
 }
 

@@ -400,30 +400,35 @@ func (z *ZodTime[T]) withCheck(check core.ZodCheck) *ZodTime[T] {
 
 // withPtrInternals creates a new *time.Time schema from cloned internals.
 func (z *ZodTime[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodTime[*time.Time] {
-	return &ZodTime[*time.Time]{
+	clone := &ZodTime[*time.Time]{
 		internals: &ZodTimeInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type T.
 func (z *ZodTime[T]) withInternals(in *core.ZodTypeInternals) *ZodTime[T] {
-	return &ZodTime[T]{
+	clone := &ZodTime[T]{
 		internals: &ZodTimeInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodTime[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodTime[T]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodTime[T]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

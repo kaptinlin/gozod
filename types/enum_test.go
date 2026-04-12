@@ -1,10 +1,11 @@
-package types
+package types_test
 
 import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -206,6 +207,14 @@ func TestZodEnumPtr_BasicFunctionality(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.Equal(t, "b", *result)
+	})
+
+	t.Run("metadata survives modifier chaining", func(t *testing.T) {
+		schema := Enum("red", "green").Meta(core.GlobalMeta{Title: "color enum"}).Optional()
+
+		meta, ok := core.GlobalRegistry.Get(schema)
+		require.True(t, ok)
+		assert.Equal(t, "color enum", meta.Title)
 	})
 }
 

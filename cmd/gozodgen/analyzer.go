@@ -148,8 +148,8 @@ func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, 
 
 	var gozodFields []tagparser.FieldInfo
 	for _, pf := range parsed {
-		if len(pf.info.Rules) > 0 || pf.info.Required || pf.hasGozodTag || hasGenerate {
-			pf.info.Optional = pf.info.Type != nil && pf.info.Type.Kind() == reflect.Pointer && !pf.info.Required
+		if pf.info.HasSchemaSpec() || pf.hasGozodTag || hasGenerate {
+			pf.info.Optional = pf.info.NeedsPointerOptional()
 			gozodFields = append(gozodFields, pf.info)
 		}
 	}
@@ -231,11 +231,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 							return nil, fmt.Errorf("parse gozod tag for field %s: %w", name.Name, err)
 						}
 						info.Rules = rules
-						for _, rule := range rules {
-							if rule.Name == "required" {
-								info.Required = true
-							}
-						}
+						info.Required = info.HasRule("required")
 					}
 				}
 			}
@@ -372,7 +368,7 @@ func NeedsGeneration(info *GenerationInfo) bool {
 		return true
 	}
 	for _, field := range info.Fields {
-		if len(field.Rules) > 0 || field.Required {
+		if field.HasSchemaSpec() {
 			return true
 		}
 	}

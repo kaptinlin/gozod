@@ -256,24 +256,31 @@ func (z *ZodNever[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodNever[T
 
 // withPtrInternals creates a new ZodNever instance with pointer constraint type.
 func (z *ZodNever[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNever[T, *T] {
-	return &ZodNever[T, *T]{internals: &ZodNeverInternals{
+	clone := &ZodNever[T, *T]{internals: &ZodNeverInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new ZodNever instance preserving the current constraint type.
 func (z *ZodNever[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNever[T, R] {
-	return &ZodNever[T, R]{internals: &ZodNeverInternals{
+	clone := &ZodNever[T, R]{internals: &ZodNeverInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies the configuration from another schema of the same type.
 func (z *ZodNever[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodNever[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodNever[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

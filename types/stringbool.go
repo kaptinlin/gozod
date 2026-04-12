@@ -384,7 +384,7 @@ func (z *ZodStringBool[T]) withCheck(check core.ZodCheck) *ZodStringBool[T] {
 
 // withPtrInternals creates a new *bool schema from cloned internals.
 func (z *ZodStringBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodStringBool[*bool] {
-	return &ZodStringBool[*bool]{
+	clone := &ZodStringBool[*bool]{
 		internals: &ZodStringBoolInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
@@ -392,11 +392,13 @@ func (z *ZodStringBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodStrin
 			Falsy:            z.internals.Falsy,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type T.
 func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBool[T] {
-	return &ZodStringBool[T]{
+	clone := &ZodStringBool[T]{
 		internals: &ZodStringBoolInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
@@ -404,14 +406,17 @@ func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBo
 			Falsy:            z.internals.Falsy,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodStringBool[T]) CloneFrom(source any) {
-	if src, ok := source.(*ZodStringBool[T]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodStringBool[T]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

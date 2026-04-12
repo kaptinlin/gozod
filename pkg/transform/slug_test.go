@@ -1,10 +1,12 @@
-package transform
+package transform_test
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	. "github.com/kaptinlin/gozod/pkg/transform"
 )
 
 func TestSlugify(t *testing.T) {

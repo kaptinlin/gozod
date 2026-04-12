@@ -5,8 +5,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
-	"github.com/kaptinlin/gozod/pkg/mapx"
-	"github.com/kaptinlin/gozod/pkg/reflectx"
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 )
 
 // ----------------------------------------------------------------------------
@@ -104,7 +103,15 @@ func applyTransformIfPresent(
 	if internals.Transform == nil {
 		return result, nil
 	}
-	return internals.Transform(result, &core.RefinementContext{ParseContext: ctx})
+	refinementCtx := core.NewRefinementContext(ctx, result)
+	transformed, err := internals.Transform(result, refinementCtx)
+	if err != nil {
+		return nil, err
+	}
+	if ctxErr := refinementCtx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	return transformed, nil
 }
 
 // filterNilChecks returns only checks applicable to nil values
@@ -139,33 +146,10 @@ func resolveDefault(internals *core.ZodTypeInternals) any {
 	return nil
 }
 
-// cloneDefaultValue creates a shallow copy of map/slice default values.
+// cloneDefaultValue creates a deep copy of supported composite default values.
 func cloneDefaultValue(v any) any {
 	if v == nil {
 		return nil
 	}
-
-	if reflectx.IsSlice(v) {
-		rv := reflect.ValueOf(v)
-		s := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
-		reflect.Copy(s, rv)
-		return s.Interface()
-	}
-
-	if reflectx.IsMap(v) {
-		if m, ok := v.(map[string]any); ok {
-			return mapx.Copy(m)
-		}
-		rv := reflect.ValueOf(v)
-		if rv.Kind() == reflect.Map {
-			m := reflect.MakeMap(rv.Type())
-			iter := rv.MapRange()
-			for iter.Next() {
-				m.SetMapIndex(iter.Key(), iter.Value())
-			}
-			return m.Interface()
-		}
-	}
-
-	return v
+	return cloneutil.Clone(v)
 }

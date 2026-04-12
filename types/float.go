@@ -179,14 +179,14 @@ func (z *ZodFloatTyped[T, R]) NonOptional() *ZodFloatTyped[T, T] {
 	}
 }
 
-// Default sets a default value, keeping the current constraint type R.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodFloatTyped[T, R]) Default(v float64) *ZodFloatTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(convertDefaultValue[R](v))
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a lazy default value, keeping the current constraint type R.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodFloatTyped[T, R]) DefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -195,14 +195,14 @@ func (z *ZodFloatTyped[T, R]) DefaultFunc(fn func() float64) *ZodFloatTyped[T, R
 	return z.withInternals(in)
 }
 
-// Prefault sets a prefault value, keeping the current constraint type R.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodFloatTyped[T, R]) Prefault(v float64) *ZodFloatTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(convertDefaultValue[R](v))
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a lazy prefault value, keeping the current constraint type R.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -540,29 +540,34 @@ func (z *ZodFloatTyped[T, R]) withCheck(check core.ZodCheck) *ZodFloatTyped[T, R
 
 // withInternals creates a new instance preserving the constraint type R.
 func (z *ZodFloatTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFloatTyped[T, R] {
-	return &ZodFloatTyped[T, R]{internals: &ZodFloatInternals{
+	clone := &ZodFloatTyped[T, R]{internals: &ZodFloatInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withPtrInternals creates a new instance with pointer constraint type *T.
 func (z *ZodFloatTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFloatTyped[T, *T] {
-	return &ZodFloatTyped[T, *T]{internals: &ZodFloatInternals{
+	clone := &ZodFloatTyped[T, *T]{internals: &ZodFloatInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodFloatTyped[T, R]) CloneFrom(source any) {
 	src, ok := source.(*ZodFloatTyped[T, R])
-	if !ok {
+	if !ok || src == nil {
 		return
 	}
-	orig := z.internals.Checks
-	*z.internals = *src.internals
-	z.internals.Checks = orig
+	cloneWithPreservedChecks(src, z, func() {
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals = *src.internals.Clone()
+	})
 }
 
 // floatTypeCode returns the ZodTypeCode for the given float type T.

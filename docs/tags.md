@@ -20,19 +20,19 @@ type User struct {
 
 func main() {
     schema := gozod.FromStruct[User]()
-    
+
     user := User{
         Name:  "Alice Smith",
         Email: "alice@example.com",
         Age:   28,
     }
-    
+
     validatedUser, err := schema.Parse(user)
     if err != nil {
         fmt.Printf("Validation error: %v\n", err)
         return
     }
-    
+
     fmt.Printf("Valid user: %+v\n", validatedUser)
 }
 ```
@@ -71,6 +71,7 @@ func main() {
 ```
 
 **When to use `ValidateStruct`:**
+
 - Generic validators that work with any struct type
 - Framework integration (CLI, web, etc.)
 - Dynamic validation scenarios
@@ -107,13 +108,16 @@ schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
 ```
 
 This is useful when:
+
 - Migrating from other validation libraries
 - Following team conventions
 - Avoiding tag name conflicts
 
 ### Core Rules
 
-- **Optional by Default**: Fields are optional unless marked `required`
+- **Non-required fields generate `.Optional()`**: Fields without `required` are generated as optional in tag-derived schemas.
+- **Pointers also generate `.Optional()` by default**: Pointer fields accept `nil` unless marked `required`.
+- **`nilable` is additive**: `nilable` enables nil semantics for the schema itself; it does not replace the generated optionality rules.
 - **Comma Separated**: `"required,min=2,max=50"`
 - **Parameters**: `"min=5"` or `"enum=red green blue"`
 - **Skip Validation**: `gozod:"-"` to exclude field completely
@@ -121,11 +125,14 @@ This is useful when:
 ```go
 type Example struct {
     Required string `gozod:"required"`        // Must be present
-    Optional string                           // Optional by default  
-    Skipped  string `gozod:"-"`              // Skip validation
+    Optional string                           // Non-required field => generated Optional()
+    Ptr      *string                          // Pointer field => generated Optional() unless required
+    Skipped  string `gozod:"-"`               // Skip validation
     Multiple string `gozod:"required,min=2,max=100,email"`
 }
 ```
+
+For code generation and struct-derived schemas, GoZod treats `required`, `optional`, and `coerce` as structural tag rules. The validation chain is built from the remaining rules, and `.Optional()` is appended at the end when the field is non-required or pointer-backed.
 
 ### Field Processing
 
@@ -186,10 +193,10 @@ schema := gozod.FromStruct[User]()
 ```go
 type User struct {
     Name     string `gozod:"required,min=2,max=50"`
-    Username string `gozod:"required,regex=^[a-zA-Z0-9_]+$"`  
+    Username string `gozod:"required,regex=^[a-zA-Z0-9_]+$"`
     Email    string `gozod:"required,email"`
     Age      int    `gozod:"required,min=18,max=120"`
-    Bio      string `gozod:"max=500"`                         // Optional
+    Bio      string `gozod:"max=500"`                         // Non-required => generated Optional()
 }
 
 schema := gozod.FromStruct[User]()
@@ -198,7 +205,7 @@ schema := gozod.FromStruct[User]()
 user := User{
     Name:     "Alice Johnson",
     Username: "alice_j",
-    Email:    "alice@example.com", 
+    Email:    "alice@example.com",
     Age:      28,
     Bio:      "Software engineer",
 }
@@ -214,13 +221,13 @@ type CreatePostRequest struct {
     Content  string   `json:"content" gozod:"required,min=10"`
     Tags     []string `json:"tags" gozod:"min=1,max=10"`
     AuthorID int      `json:"author_id" gozod:"required,positive"`
-    Draft    bool     `json:"draft"`                               // Optional boolean
+    Draft    bool     `json:"draft"`                               // Non-required => generated Optional()
 }
 
 func createPostHandler(w http.ResponseWriter, r *http.Request) {
     var req CreatePostRequest
     json.NewDecoder(r.Body).Decode(&req)
-    
+
     schema := gozod.FromStruct[CreatePostRequest]()
     validatedReq, err := schema.Parse(req)
     if err != nil {
@@ -228,7 +235,7 @@ func createPostHandler(w http.ResponseWriter, r *http.Request) {
         writeErrorResponse(w, err)
         return
     }
-    
+
     // Use validated request
     createPost(validatedReq)
 }
@@ -260,12 +267,12 @@ func LoadConfig(path string) (*AppConfig, error) {
     if err != nil {
         return nil, err
     }
-    
+
     var config AppConfig
     if err := yaml.Unmarshal(data, &config); err != nil {
         return nil, err
     }
-    
+
     schema := gozod.FromStruct[AppConfig]()
     return schema.Parse(config)
 }
@@ -327,7 +334,7 @@ alice := &User{
 }
 
 bob := &User{
-    Name:    "Bob", 
+    Name:    "Bob",
     Email:   "bob@example.com",
     Friends: []*User{alice},  // Reference to Alice
 }
@@ -401,13 +408,13 @@ type Company struct {
 func main() {
     // Create schema from struct tags
     schema := gozod.FromStruct[Company]()
-    
+
     // Add custom validation with Refine
     schemaWithCustomValidation := schema.Refine(func(c Company) bool {
         // Domain must end with .com or .org
         return strings.HasSuffix(c.Domain, ".com") || strings.HasSuffix(c.Domain, ".org")
     }, "Domain must end with .com or .org")
-    
+
     // Valid company
     validCompany := Company{
         Name:   "Acme Corp",
@@ -415,7 +422,7 @@ func main() {
         Email:  "contact@acme.com",
     }
     result, err := schemaWithCustomValidation.Parse(validCompany)  // ✅ Success
-    
+
     // Invalid company
     invalidCompany := Company{
         Name:   "Tech Inc",
@@ -493,7 +500,7 @@ type User struct {
 // Generated Schema() method in user_gen.go provides zero-reflection validation
 func main() {
     schema := gozod.FromStruct[User]()  // Automatically uses generated code
-    
+
     user := User{Name: "Alice", Email: "alice@example.com", Age: 25}
     result, err := schema.Parse(user)   // 5-10x faster than reflection
 }
@@ -537,10 +544,10 @@ if err != nil {
         for _, issue := range zodErr.Issues {
             fmt.Printf("Field: %v, Error: %s\n", issue.Path, issue.Message)
         }
-        
+
         // Pretty formatted errors
         fmt.Println(zodErr.PrettifyError())
-        
+
         // Field-specific errors for forms
         fieldErrors := zodErr.FlattenError()
         for field, errors := range fieldErrors.FieldErrors {
@@ -591,14 +598,14 @@ func createProduct(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid JSON", 400)
         return
     }
-    
+
     schema := gozod.FromStruct[Product]()
     validProduct, err := schema.Parse(product)
     if err != nil {
         writeValidationError(w, err)
         return
     }
-    
+
     // Save validated product
     savedProduct := saveProduct(validProduct)
     json.NewEncoder(w).Encode(savedProduct)
@@ -626,20 +633,20 @@ func registerUser(c *gin.Context) {
         c.JSON(400, gin.H{"error": "Form binding failed"})
         return
     }
-    
+
     // Additional custom validation
     if form.Password != form.ConfirmPassword {
         c.JSON(400, gin.H{"error": "Passwords do not match"})
         return
     }
-    
+
     schema := gozod.FromStruct[RegistrationForm]()
     validForm, err := schema.Parse(form)
     if err != nil {
         c.JSON(400, gin.H{"validation_errors": formatValidationErrors(err)})
         return
     }
-    
+
     // Create user account
     user := createUserAccount(validForm)
     c.JSON(201, gin.H{"user": user})
@@ -673,18 +680,18 @@ func validateTenantConfig(configPath string) (*TenantConfig, error) {
     if err != nil {
         return nil, fmt.Errorf("reading config: %w", err)
     }
-    
+
     var config TenantConfig
     if err := yaml.Unmarshal(data, &config); err != nil {
         return nil, fmt.Errorf("parsing YAML: %w", err)
     }
-    
+
     schema := gozod.FromStruct[TenantConfig]()
     validConfig, err := schema.Parse(config)
     if err != nil {
         return nil, fmt.Errorf("validation failed: %w", err)
     }
-    
+
     return &validConfig, nil
 }
 ```
@@ -703,7 +710,7 @@ func setupValidatedRoutes(r *gin.Engine) {
             c.JSON(400, gin.H{"error": err.Error()})
             return
         }
-        
+
         schema := gozod.FromStruct[User]()
         if validUser, err := schema.Parse(user); err != nil {
             c.JSON(422, gin.H{"validation_error": err.Error()})
@@ -724,13 +731,13 @@ func setupFiberRoutes(app *fiber.App) {
         if err := c.BodyParser(&product); err != nil {
             return c.Status(400).JSON(fiber.Map{"error": "Invalid JSON"})
         }
-        
+
         schema := gozod.FromStruct[Product]()
         validProduct, err := schema.Parse(product)
         if err != nil {
             return c.Status(422).JSON(fiber.Map{"validation_error": err.Error()})
         }
-        
+
         result := saveProduct(validProduct)
         return c.Status(201).JSON(result)
     })

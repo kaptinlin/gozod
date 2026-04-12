@@ -1,13 +1,24 @@
-package types
+package types_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func extractTime(value any) time.Time {
+	if ptr, ok := value.(*time.Time); ok {
+		if ptr != nil {
+			return *ptr
+		}
+		return time.Time{}
+	}
+	return value.(time.Time)
+}
 
 // =============================================================================
 // Basic functionality tests
@@ -74,7 +85,7 @@ func TestTime_BasicFunctionality(t *testing.T) {
 		schema := Time(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeTime, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeTime, schema.Internals().Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)
@@ -883,14 +894,14 @@ func TestTime_EdgeCases(t *testing.T) {
 		timeVal := testTime
 		ptrVal := &timeVal
 
-		extracted1 := extractTime[time.Time](timeVal)
+		extracted1 := extractTime(timeVal)
 		assert.True(t, extracted1.Equal(testTime))
 
-		extracted2 := extractTime[*time.Time](ptrVal)
+		extracted2 := extractTime(ptrVal)
 		assert.True(t, extracted2.Equal(testTime))
 
 		nilPtr := (*time.Time)(nil)
-		extracted3 := extractTime[*time.Time](nilPtr)
+		extracted3 := extractTime(nilPtr)
 		assert.True(t, extracted3.IsZero())
 	})
 
@@ -931,17 +942,17 @@ func TestTime_HelperFunctions(t *testing.T) {
 		testTime := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
 
 		// Test with time.Time
-		extracted := extractTime[time.Time](testTime)
+		extracted := extractTime(testTime)
 		assert.True(t, extracted.Equal(testTime))
 
 		// Test with *time.Time
 		ptrTime := &testTime
-		extracted = extractTime[*time.Time](ptrTime)
+		extracted = extractTime(ptrTime)
 		assert.True(t, extracted.Equal(testTime))
 
 		// Test with nil pointer
 		var nilPtr *time.Time
-		extracted = extractTime[*time.Time](nilPtr)
+		extracted = extractTime(nilPtr)
 		assert.True(t, extracted.IsZero())
 	})
 

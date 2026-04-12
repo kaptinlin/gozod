@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"fmt"
@@ -6,9 +6,20 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func extractBool(value any) bool {
+	if ptr, ok := value.(*bool); ok {
+		if ptr != nil {
+			return *ptr
+		}
+		return false
+	}
+	return value.(bool)
+}
 
 // =============================================================================
 // Basic functionality tests
@@ -58,7 +69,7 @@ func TestBool_BasicFunctionality(t *testing.T) {
 		schema := Bool(core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeBool, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeBool, schema.Internals().Type)
 
 		_, err := schema.Parse("invalid")
 		assert.Error(t, err)

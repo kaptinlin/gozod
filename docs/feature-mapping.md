@@ -205,6 +205,8 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 
 GoZod's declarative struct tag system provides a unique approach to validation through Go struct tags. Each tag rule directly corresponds to programmatic API methods:
 
+Structural rules such as `required`, `optional`, and `coerce` are interpreted outside the validation chain itself. Tag-derived schemas build their modifier/check chain from the remaining rules, then append `.Optional()` for non-required or pointer-backed fields.
+
 ### Core Tag Rules
 
 | Struct Tag Rule | Programmatic API Equivalent | Example | Status |
@@ -360,6 +362,7 @@ result, err = schema.StrictParse(str)       // ✅ Compile-time guarantee
 ### TypeScript Zod vs GoZod: Syntax Comparison
 
 **TypeScript Zod:**
+
 ```typescript
 import { z } from 'zod';
 
@@ -386,6 +389,7 @@ type User = z.infer<typeof UserSchema>;
 ```
 
 **GoZod Programmatic:**
+
 ```go
 import "github.com/kaptinlin/gozod"
 
@@ -416,10 +420,11 @@ validUser, err := userSchema.StrictParse(existingUser)
 ```
 
 **GoZod Struct Tags:**
+
 ```go
 type User struct {
     Name  string `json:"name" gozod:"required,min=2"`
-    Age   *int   `json:"age" gozod:"min=0"`             // Optional by default
+    Age   *int   `json:"age" gozod:"min=0"`             // Non-required pointer => generated Optional()
     Email string `json:"email" gozod:"required,email"`
 }
 
@@ -431,11 +436,11 @@ user, err := schema.Parse(data)
 ### Default vs Prefault Behavior (Zod v4 Compatible)
 
 ```go
-// Default: Short-circuits validation (Zod v4 behavior)
+// Default: Short-circuits validation when input is nil (Zod v4 behavior)
 defaultSchema := gozod.String().Min(5).Default("fallback")
 result, _ := defaultSchema.Parse(nil)  // "fallback" (bypasses Min validation)
 
-// Prefault: Goes through full validation pipeline (Zod v4 behavior)
+// Prefault: Runs the fallback through the full validation pipeline (Zod v4 behavior)
 prefaultSchema := gozod.String().Min(5).Prefault("fallback")
 result, _ := prefaultSchema.Parse(nil)  // "fallback" (validates "fallback" >= 5)
 ```

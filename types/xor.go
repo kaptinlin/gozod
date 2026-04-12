@@ -340,32 +340,42 @@ func (z *ZodXor[T, R]) withCheck(c core.ZodCheck) *ZodXor[T, R] {
 }
 
 func (z *ZodXor[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodXor[T, *T] {
-	return &ZodXor[T, *T]{
+	clone := &ZodXor[T, *T]{
 		internals: &ZodXorInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 			Options:          z.internals.Options,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodXor[T, R]) withInternals(in *core.ZodTypeInternals) *ZodXor[T, R] {
-	return &ZodXor[T, R]{
+	clone := &ZodXor[T, R]{
 		internals: &ZodXorInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 			Options:          z.internals.Options,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodXor[T, R]) CloneFrom(source any) {
 	src, ok := source.(*ZodXor[T, R])
-	if !ok {
+	if !ok || src == nil {
 		return
 	}
-	z.internals = src.internals
+	cloneWithPreservedChecks(src, z, func() {
+		z.internals = &ZodXorInternals{
+			ZodTypeInternals: *src.internals.Clone(),
+			Def:              src.internals.Def,
+			Options:          src.internals.Options,
+		}
+	})
 }
 
 // =============================================================================

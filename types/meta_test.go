@@ -3,17 +3,16 @@ package types_test
 import (
 	"testing"
 
+	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	z "github.com/kaptinlin/gozod"
-	"github.com/kaptinlin/gozod/core"
 )
 
 // TestDescribe tests the Describe method on ZodString
 func TestDescribe(t *testing.T) {
 	desc := "A valid user ID"
-	schema := z.String().Describe(desc)
+	schema := String().Describe(desc)
 
 	// Validation should passes
 	_, err := schema.Parse("user123")
@@ -38,7 +37,7 @@ func TestMeta(t *testing.T) {
 		Examples:    []any{"example1", "example2"},
 	}
 
-	schema := z.String().Meta(metaData)
+	schema := String().Meta(metaData)
 
 	_, err := schema.Parse("valid")
 	require.NoError(t, err)

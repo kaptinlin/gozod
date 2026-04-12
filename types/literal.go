@@ -228,18 +228,22 @@ func (z *ZodLiteral[T, R]) Contains(v T) bool {
 
 // withInternals creates a new instance preserving the generic constraint type R.
 func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[T, R] {
-	return &ZodLiteral[T, R]{internals: &ZodLiteralInternals[T]{
+	clone := &ZodLiteral[T, R]{internals: &ZodLiteralInternals[T]{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withPtrInternals creates a new instance with pointer constraint type *T.
 func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiteral[T, *T] {
-	return &ZodLiteral[T, *T]{internals: &ZodLiteralInternals[T]{
+	clone := &ZodLiteral[T, *T]{internals: &ZodLiteralInternals[T]{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // newZodLiteralFromDef constructs a new ZodLiteral from the given definition.

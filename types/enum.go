@@ -441,31 +441,36 @@ func (z *ZodEnum[T, R]) withCheck(check core.ZodCheck) *ZodEnum[T, R] {
 
 // withPtrInternals creates a new ZodEnum with *T constraint.
 func (z *ZodEnum[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodEnum[T, *T] {
-	return &ZodEnum[T, *T]{internals: &ZodEnumInternals[T]{
+	clone := &ZodEnum[T, *T]{internals: &ZodEnumInternals[T]{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Entries:          z.internals.Entries,
 		Values:           z.internals.Values,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new ZodEnum preserving generic type R.
 func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] {
-	return &ZodEnum[T, R]{internals: &ZodEnumInternals[T]{
+	clone := &ZodEnum[T, R]{internals: &ZodEnumInternals[T]{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Entries:          z.internals.Entries,
 		Values:           z.internals.Values,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema while preserving the
 // original checks.
 func (z *ZodEnum[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodEnum[T, R]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodEnum[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

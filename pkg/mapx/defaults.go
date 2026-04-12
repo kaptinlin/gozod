@@ -10,22 +10,36 @@ func BoolOr(m map[string]any, key string, def bool) bool {
 	return ValueOr(m, key, def)
 }
 
-// IntOr returns the int value for key (with numeric coercion),
-// or def.
-func IntOr(m map[string]any, key string, def int) int {
-	if v, ok := Int(m, key); ok {
+// IntCoerceOr returns the int value for key (with numeric
+// coercion), or def.
+func IntCoerceOr(m map[string]any, key string, def int) int {
+	if v, ok := IntCoerce(m, key); ok {
 		return v
 	}
 	return def
 }
 
-// FloatOr returns the float64 value for key (with numeric
-// coercion), or def.
-func FloatOr(m map[string]any, key string, def float64) float64 {
-	if v, ok := Float64(m, key); ok {
+// IntOr returns the int value for key, or def.
+//
+// Deprecated: use [IntCoerceOr] for explicit numeric coercion.
+func IntOr(m map[string]any, key string, def int) int {
+	return IntCoerceOr(m, key, def)
+}
+
+// Float64CoerceOr returns the float64 value for key (with
+// numeric coercion), or def.
+func Float64CoerceOr(m map[string]any, key string, def float64) float64 {
+	if v, ok := Float64Coerce(m, key); ok {
 		return v
 	}
 	return def
+}
+
+// FloatOr returns the float64 value for key, or def.
+//
+// Deprecated: use [Float64CoerceOr] for explicit numeric coercion.
+func FloatOr(m map[string]any, key string, def float64) float64 {
+	return Float64CoerceOr(m, key, def)
 }
 
 // AnyOr returns the value for key, or def.

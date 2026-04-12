@@ -527,10 +527,12 @@ func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 // CloneFrom copies the internal state from another schema.
 func (z *ZodString[T]) CloneFrom(source any) {
 	if src, ok := source.(*ZodString[T]); ok && src != nil {
-		z.internals = &ZodStringInternals{
-			ZodTypeInternals: *src.internals.Clone(),
-			Def:              src.internals.Def,
-		}
+		cloneWithPreservedChecks(src, z, func() {
+			z.internals = &ZodStringInternals{
+				ZodTypeInternals: *src.internals.Clone(),
+				Def:              src.internals.Def,
+			}
+		})
 	}
 }
 

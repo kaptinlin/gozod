@@ -1,23 +1,24 @@
-package types
+package types_test
 
 import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// extractNetworkString extracts string value from generic network type T.
+// extractNetworkString extracts string values from string/*string test results.
 // Test-only helper moved from network.go to avoid dead code in production.
-func extractNetworkString[T StringConstraint](value T) string {
-	if ptr, ok := any(value).(*string); ok {
+func extractNetworkString(value any) string {
+	if ptr, ok := value.(*string); ok {
 		if ptr != nil {
 			return *ptr
 		}
 		return ""
 	}
-	return any(value).(string)
+	return value.(string)
 }
 
 // =============================================================================
@@ -634,14 +635,14 @@ func TestIPv4_EdgeCases(t *testing.T) {
 		ipVal := "192.168.1.1"
 		ptrVal := &ipVal
 
-		extracted1 := extractNetworkString[string](ipVal)
+		extracted1 := extractNetworkString(ipVal)
 		assert.Equal(t, "192.168.1.1", extracted1)
 
-		extracted2 := extractNetworkString[*string](ptrVal)
+		extracted2 := extractNetworkString(ptrVal)
 		assert.Equal(t, "192.168.1.1", extracted2)
 
 		nilPtr := (*string)(nil)
-		extracted3 := extractNetworkString[*string](nilPtr)
+		extracted3 := extractNetworkString(nilPtr)
 		assert.Equal(t, "", extracted3)
 	})
 

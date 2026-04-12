@@ -575,33 +575,38 @@ func (z *ZodComplex[T]) withCheck(check core.ZodCheck) *ZodComplex[T] {
 
 // withPtrInternals creates a new *complex128 schema from cloned internals.
 func (z *ZodComplex[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodComplex[*complex128] {
-	return &ZodComplex[*complex128]{
+	clone := &ZodComplex[*complex128]{
 		internals: &ZodComplexInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type T.
 func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] {
-	return &ZodComplex[T]{
+	clone := &ZodComplex[T]{
 		internals: &ZodComplexInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodComplex[T]) CloneFrom(source any) {
 	src, ok := source.(*ZodComplex[T])
-	if !ok {
+	if !ok || src == nil {
 		return
 	}
-	orig := z.internals.Checks
-	*z.internals = *src.internals
-	z.internals.Checks = orig
+	cloneWithPreservedChecks(src, z, func() {
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals = *src.internals.Clone()
+	})
 }
 
 // Helper functions for type conversion.

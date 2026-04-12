@@ -72,19 +72,23 @@ func (z *ZodIntegerTyped[T, R]) withCheck(check core.ZodCheck) *ZodIntegerTyped[
 // withInternals creates a new ZodIntegerTyped that keeps the original generic
 // types.
 func (z *ZodIntegerTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, R] {
-	return &ZodIntegerTyped[T, R]{internals: &ZodIntegerInternals{
+	clone := &ZodIntegerTyped[T, R]{internals: &ZodIntegerInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withPtrInternals creates a new ZodIntegerTyped with pointer constraint type
 // *T.
 func (z *ZodIntegerTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntegerTyped[T, *T] {
-	return &ZodIntegerTyped[T, *T]{internals: &ZodIntegerInternals{
+	clone := &ZodIntegerTyped[T, *T]{internals: &ZodIntegerInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // Coerce converts the input to the target integer type.
@@ -245,14 +249,14 @@ func (z *ZodIntegerTyped[T, R]) NonOptional() *ZodIntegerTyped[T, T] {
 	}
 }
 
-// Default sets a default value for nil inputs.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodIntegerTyped[T, R]) Default(v int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(convertIntDefaultValue[T](v))
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a lazy default value using a function.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -261,14 +265,14 @@ func (z *ZodIntegerTyped[T, R]) DefaultFunc(fn func() int64) *ZodIntegerTyped[T,
 	return z.withInternals(in)
 }
 
-// Prefault sets a prefault value that goes through the full validation pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodIntegerTyped[T, R]) Prefault(v int64) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(convertIntDefaultValue[T](v))
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a lazy prefault value using a function.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -596,12 +600,13 @@ func (z *ZodIntegerTyped[T, R]) RefineAny(fn func(any) bool, params ...any) *Zod
 // CloneFrom copies configuration from another schema.
 func (z *ZodIntegerTyped[T, R]) CloneFrom(source any) {
 	src, ok := source.(*ZodIntegerTyped[T, R])
-	if !ok {
+	if !ok || src == nil {
 		return
 	}
-	orig := z.internals.Checks
-	*z.internals = *src.internals
-	z.internals.Checks = orig
+	cloneWithPreservedChecks(src, z, func() {
+		*z.internals = *src.internals
+		z.internals.ZodTypeInternals = *src.internals.Clone()
+	})
 }
 
 // extractIntegerValue extracts the base integer value T from constraint type R.

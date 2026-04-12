@@ -1370,12 +1370,32 @@ func isCompositeType(t core.ZodTypeCode) bool {
 
 // convertLazy resolves inner schema and delegates conversion.
 func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
+	resolveLazyInner := func(inner any) core.ZodSchema {
+		current := inner
+		for range 8 {
+			if current == nil {
+				return nil
+			}
+			if unwrapAny, ok := current.(interface{ Inner() any }); ok {
+				next := unwrapAny.Inner()
+				if next != nil && next != current {
+					current = next
+					continue
+				}
+			}
+			if zodSchema, ok := current.(core.ZodSchema); ok {
+				return zodSchema
+			}
+			break
+		}
+		return nil
+	}
+
 	// Use interface assertion to get inner schema
 	if s, ok := schema.(unwrapper); ok {
 		inner := s.Unwrap()
 
-		// Try core.ZodSchema first
-		if zodSchema, ok := inner.(core.ZodSchema); ok {
+		if zodSchema := resolveLazyInner(inner); zodSchema != nil {
 			// Check if this creates a cycle by looking for the inner schema in our path
 			if _, found := c.seen[zodSchema]; found {
 				// This is a cycle, return a reference to the root or $defs if available
@@ -1393,8 +1413,7 @@ func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
 		// `inner` is already a core.ZodType[any]; attempt to call Inner via reflection to unwrap further
 		if method := reflect.ValueOf(inner).MethodByName("Inner"); method.IsValid() {
 			if results := method.Call(nil); len(results) == 1 {
-				actualInner := results[0].Interface()
-				if zodSchema, ok := actualInner.(core.ZodSchema); ok {
+				if zodSchema := resolveLazyInner(results[0].Interface()); zodSchema != nil {
 					// Detect potential cycles
 					if _, found := c.seen[zodSchema]; found {
 						if id := c.getID(zodSchema); id != "" {

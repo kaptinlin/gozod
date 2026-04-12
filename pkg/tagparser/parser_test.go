@@ -1,44 +1,45 @@
-package tagparser
+package tagparser_test
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTagParser_ParseTagString(t *testing.T) {
-	parser := New()
+	parser := tagparser.New()
 
 	tests := []struct {
 		name     string
 		tag      string
-		expected []TagRule
+		expected []tagparser.TagRule
 	}{
 		{
 			name:     "empty tag",
 			tag:      "",
-			expected: []TagRule{},
+			expected: []tagparser.TagRule{},
 		},
 		{
 			name: "simple rule without params",
 			tag:  "required",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "required", Params: nil},
 			},
 		},
 		{
 			name: "rule with single param",
 			tag:  "min=2",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "min", Params: []string{"2"}},
 			},
 		},
 		{
 			name: "multiple rules",
 			tag:  "required,min=2,max=50",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "required", Params: nil},
 				{Name: "min", Params: []string{"2"}},
 				{Name: "max", Params: []string{"50"}},
@@ -47,28 +48,28 @@ func TestTagParser_ParseTagString(t *testing.T) {
 		{
 			name: "rule with multiple params",
 			tag:  "enum=red green blue",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "enum", Params: []string{"red", "green", "blue"}},
 			},
 		},
 		{
 			name: "rule with quoted param",
 			tag:  "regex='^[A-Za-z0-9_]+$'",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "regex", Params: []string{"^[A-Za-z0-9_]+$"}},
 			},
 		},
 		{
 			name: "escaped comma in param",
 			tag:  "custom='hello\\, world'",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "custom", Params: []string{"hello, world"}},
 			},
 		},
 		{
 			name: "complex mix of rules",
 			tag:  "required,min=2,max=50,regex='^[A-Z]+$',enum=ACTIVE INACTIVE",
-			expected: []TagRule{
+			expected: []tagparser.TagRule{
 				{Name: "required", Params: nil},
 				{Name: "min", Params: []string{"2"}},
 				{Name: "max", Params: []string{"50"}},
@@ -100,7 +101,7 @@ func TestTagParser_ParseTagString(t *testing.T) {
 }
 
 func TestTagParser_ParseStructTags(t *testing.T) {
-	parser := New()
+	parser := tagparser.New()
 
 	type TestStruct struct {
 		Name          string  `gozod:"required,min=2,max=50" json:"name"`
@@ -144,7 +145,7 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 }
 
 func TestTagParser_CustomTagName(t *testing.T) {
-	parser := NewWithTagName("validate")
+	parser := tagparser.NewWithTagName("validate")
 
 	type TestStruct struct {
 		Name  string `validate:"required,min=2"`
@@ -171,7 +172,7 @@ func TestTagParser_CustomTagName(t *testing.T) {
 }
 
 func TestTagParser_PointerToStruct(t *testing.T) {
-	parser := New()
+	parser := tagparser.New()
 
 	type TestStruct struct {
 		Name string `gozod:"required"`
@@ -191,7 +192,7 @@ func TestTagParser_PointerToStruct(t *testing.T) {
 }
 
 func TestTagParser_NonStructType(t *testing.T) {
-	parser := New()
+	parser := tagparser.New()
 
 	// Test with non-struct type
 	stringType := reflect.TypeFor[string]()
@@ -200,106 +201,44 @@ func TestTagParser_NonStructType(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, fields, 0)
+	assert.NotNil(t, fields)
 }
 
-func TestJSONFieldName(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    reflect.StructField
-		expected string
-	}{
-		{
-			name: "no json tag",
-			field: reflect.StructField{
-				Name: "TestField",
-				Tag:  "",
-			},
-			expected: "TestField",
-		},
-		{
-			name: "json tag with name",
-			field: reflect.StructField{
-				Name: "TestField",
-				Tag:  `json:"test_field"`,
-			},
-			expected: "test_field",
-		},
-		{
-			name: "json tag with omitempty",
-			field: reflect.StructField{
-				Name: "TestField",
-				Tag:  `json:"test_field,omitempty"`,
-			},
-			expected: "test_field",
-		},
-		{
-			name: "json tag with dash (skip)",
-			field: reflect.StructField{
-				Name: "TestField",
-				Tag:  `json:"-"`,
-			},
-			expected: "TestField",
-		},
-		{
-			name: "json tag omitempty only",
-			field: reflect.StructField{
-				Name: "TestField",
-				Tag:  `json:",omitempty"`,
-			},
-			expected: "TestField",
-		},
-	}
+func TestTagParser_ParseStructTagsStrict(t *testing.T) {
+	parser := tagparser.New()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := jsonFieldName(tt.field)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	t.Run("struct input", func(t *testing.T) {
+		type TestStruct struct {
+			Name string `gozod:"required"`
+		}
+
+		fields, err := parser.ParseStructTagsStrict(reflect.TypeFor[TestStruct]())
+		require.NoError(t, err)
+		require.Len(t, fields, 1)
+		assert.Equal(t, "Name", fields[0].Name)
+	})
+
+	t.Run("non struct input", func(t *testing.T) {
+		fields, err := parser.ParseStructTagsStrict(reflect.TypeFor[string]())
+		require.ErrorIs(t, err, tagparser.ErrTypeMustBeStruct)
+		assert.Nil(t, fields)
+	})
 }
 
-func TestHasRule(t *testing.T) {
-	rules := []TagRule{
-		{Name: "required", Params: nil},
-		{Name: "min", Params: []string{"2"}},
-		{Name: "max", Params: []string{"50"}},
+func TestNewWithTagName_DefaultFallback(t *testing.T) {
+	parser := tagparser.NewWithTagName("  ")
+
+	type TestStruct struct {
+		Name string `gozod:"required"`
 	}
 
-	assert.True(t, hasRule(rules, "required"), "hasRule should find 'required' rule")
-	assert.True(t, hasRule(rules, "min"), "hasRule should find 'min' rule")
-	assert.False(t, hasRule(rules, "email"), "hasRule should not find 'email' rule")
-	assert.False(t, hasRule([]TagRule{}, "required"), "hasRule should return false for empty rules")
+	fields, err := parser.ParseStructTags(reflect.TypeFor[TestStruct]())
+	require.NoError(t, err)
+	require.Len(t, fields, 1)
+	assert.True(t, fields[0].Required)
 }
 
-func TestIsOptional(t *testing.T) {
-	requiredField := reflect.StructField{
-		Name: "RequiredField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.False(t, isOptional(requiredField, true, false), "Required field should not be optional")
-
-	pointerField := reflect.StructField{
-		Name: "PointerField",
-		Type: reflect.TypeFor[*string](),
-	}
-	assert.True(t, isOptional(pointerField, false, false), "Pointer field should be optional by default")
-	assert.False(t, isOptional(pointerField, true, false), "Required pointer field should not be optional")
-
-	nilableField := reflect.StructField{
-		Name: "NilableField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.True(t, isOptional(nilableField, false, true), "Nilable field should be optional")
-
-	regularField := reflect.StructField{
-		Name: "RegularField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.False(t, isOptional(regularField, false, false), "Regular field should not be optional")
-}
-
-// Helper function to find a field by name
-func findField(fields []FieldInfo, name string) *FieldInfo {
+func findField(fields []tagparser.FieldInfo, name string) *tagparser.FieldInfo {
 	for i := range fields {
 		if fields[i].Name == name {
 			return &fields[i]

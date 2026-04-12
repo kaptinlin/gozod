@@ -510,23 +510,27 @@ func (z *ZodObject[T, R]) newObjectInternals(in *core.ZodTypeInternals) *ZodObje
 	return &ZodObjectInternals{
 		ZodTypeInternals:   *in,
 		Def:                z.internals.Def,
-		Shape:              z.internals.Shape,
+		Shape:              maps.Clone(z.internals.Shape),
 		Catchall:           z.internals.Catchall,
 		UnknownKeys:        z.internals.UnknownKeys,
 		IsPartial:          z.internals.IsPartial,
-		PartialExceptions:  z.internals.PartialExceptions,
+		PartialExceptions:  maps.Clone(z.internals.PartialExceptions),
 		HasUserRefinements: z.internals.HasUserRefinements,
 	}
 }
 
 // withPtrInternals creates a new instance with pointer constraint type.
 func (z *ZodObject[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodObject[T, *T] {
-	return &ZodObject[T, *T]{internals: z.newObjectInternals(in)}
+	clone := &ZodObject[T, *T]{internals: z.newObjectInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new instance preserving the constraint type.
 func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T, R] {
-	return &ZodObject[T, R]{internals: z.newObjectInternals(in)}
+	clone := &ZodObject[T, R]{internals: z.newObjectInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withUnknownKeys creates a new instance with the specified unknown keys mode.
@@ -539,10 +543,10 @@ func (z *ZodObject[T, R]) withUnknownKeys(mode ObjectMode) *ZodObject[T, R] {
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodObject[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodObject[T, R]); ok {
-		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+	if src, ok := source.(*ZodObject[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newObjectInternals(src.internals.Clone())
+		})
 	}
 }
 

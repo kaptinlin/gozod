@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"sync"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -131,7 +132,7 @@ func TestLazy_BasicFunctionality(t *testing.T) {
 		}, core.SchemaParams{Error: customError})
 
 		require.NotNil(t, schema)
-		assert.Equal(t, core.ZodTypeLazy, schema.internals.Def.Type)
+		assert.Equal(t, core.ZodTypeLazy, schema.Internals().Type)
 
 		_, err := schema.Parse(123)
 		assert.Error(t, err)

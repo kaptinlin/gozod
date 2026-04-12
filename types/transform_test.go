@@ -1,4 +1,4 @@
-package types
+package types_test
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -113,6 +114,34 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, "FUNC_PREFAULT", result)
 		assert.True(t, prefaultCalled)
 		assert.True(t, transformCalled)
+	})
+
+	t.Run("RefinementContext exposes current value", func(t *testing.T) {
+		schema := String().Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			assert.Equal(t, "hello", input)
+			assert.Equal(t, "hello", ctx.Value)
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "HELLO", result)
+	})
+
+	t.Run("RefinementContext AddIssue returns validation error", func(t *testing.T) {
+		schema := String().Transform(func(input string, ctx *core.RefinementContext) (any, error) {
+			ctx.AddIssue(core.ZodIssue{
+				ZodIssueBase: core.ZodIssueBase{
+					Code:    core.Custom,
+					Message: "transform issue",
+				},
+			})
+			return input, nil
+		})
+
+		_, err := schema.Parse("hello")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transform issue")
 	})
 }
 

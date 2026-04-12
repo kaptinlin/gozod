@@ -200,7 +200,7 @@ func (z *ZodTuple[T, R]) Nullish() *ZodTuple[T, *[]any] {
 	return z.withPtrInternals(in)
 }
 
-// Default sets a default value for nil input.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodTuple[T, R]) Default(v []any) *ZodTuple[T, R] {
 	newInternals := z.internals.Clone()
 	newInternals.SetDefaultValue(v)
@@ -424,24 +424,28 @@ func toSliceAny(input any) ([]any, bool) {
 
 // withInternals creates a new instance while preserving type parameters.
 func (z *ZodTuple[T, R]) withInternals(in *core.ZodTypeInternals) *ZodTuple[T, R] {
-	return &ZodTuple[T, R]{internals: &ZodTupleInternals{
+	clone := &ZodTuple[T, R]{internals: &ZodTupleInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Items:            z.internals.Items,
 		Rest:             z.internals.Rest,
 		RequiredCount:    z.internals.RequiredCount,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withPtrInternals creates a new ZodTuple with pointer constraint *[]any.
 func (z *ZodTuple[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodTuple[T, *[]any] {
-	return &ZodTuple[T, *[]any]{internals: &ZodTupleInternals{
+	clone := &ZodTuple[T, *[]any]{internals: &ZodTupleInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Items:            z.internals.Items,
 		Rest:             z.internals.Rest,
 		RequiredCount:    z.internals.RequiredCount,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // convertToTupleConstraintType converts []any to the constraint type R.

@@ -187,10 +187,7 @@ func ParseComplexStrict[T any, R any](
 	if err != nil {
 		return zero, err
 	}
-	if cr, ok := r.(R); ok {
-		return cr, nil
-	}
-	return zero, issues.CreateInvalidTypeError(expectedType, r, pc)
+	return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
 }
 
 // ConvertToConstraintType converts a parsed result to constraint type R (T, *T, or **T).
@@ -630,9 +627,13 @@ func validateAndReturn[R any](
 		return value, nil
 	}
 
-	transformed, err := internals.Transform(any(value), &core.RefinementContext{ParseContext: ctx})
+	refinementCtx := core.NewRefinementContext(ctx, any(value))
+	transformed, err := internals.Transform(any(value), refinementCtx)
 	if err != nil {
 		return value, err
+	}
+	if ctxErr := refinementCtx.Err(); ctxErr != nil {
+		return value, ctxErr
 	}
 	if r, ok := transformed.(R); ok {
 		return r, nil
@@ -842,9 +843,13 @@ func applyTransformToResult[R any](
 	expectedType core.ZodTypeCode,
 	pc *core.ParseContext,
 ) (R, error) {
-	transformed, err := internals.Transform(any(result), &core.RefinementContext{ParseContext: pc})
+	refinementCtx := core.NewRefinementContext(pc, any(result))
+	transformed, err := internals.Transform(any(result), refinementCtx)
 	if err != nil {
 		return result, err
+	}
+	if ctxErr := refinementCtx.Err(); ctxErr != nil {
+		return result, ctxErr
 	}
 	if r, ok := transformed.(R); ok {
 		return r, nil
@@ -892,10 +897,6 @@ func parseComplexStrictNil[T any, R any](
 ) (R, error) {
 	var zero R
 
-	if internals.Optional || internals.Nilable {
-		return input, nil
-	}
-
 	r, handled, err := processModifiersStrict[T](
 		zero, internals, expectedType,
 		func(v any) (any, error) {
@@ -906,10 +907,7 @@ func parseComplexStrictNil[T any, R any](
 		if err != nil {
 			return zero, err
 		}
-		if cr, ok := r.(R); ok {
-			return cr, nil
-		}
-		return zero, issues.CreateInvalidTypeError(expectedType, r, pc)
+		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
 	}
 
 	// Prefault values: full parsing and validation.
@@ -918,9 +916,7 @@ func parseComplexStrictNil[T any, R any](
 		if err != nil {
 			return zero, err
 		}
-		if cr, ok := r.(R); ok {
-			return cr, nil
-		}
+		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
 	}
 
 	if internals.PrefaultFunc != nil {
@@ -928,9 +924,7 @@ func parseComplexStrictNil[T any, R any](
 		if err != nil {
 			return zero, err
 		}
-		if cr, ok := r.(R); ok {
-			return cr, nil
-		}
+		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
 	}
 
 	return zero, issues.CreateNonOptionalError(pc)
@@ -967,6 +961,64 @@ func tryComplexValidationOnly[T any, R any](
 		return zero, true, err
 	}
 	return input, true, nil
+}
+
+func convertComplexResultToConstraint[T any, R any](
+	result any,
+	typeExtractor func(any) (T, bool),
+	ptrExtractor func(any) (*T, bool),
+	expectedType core.ZodTypeCode,
+	ctx *core.ParseContext,
+) (R, error) {
+	if r, ok := result.(R); ok {
+		return r, nil
+	}
+
+	if result == nil {
+		var zero R
+		return zero, nil
+	}
+
+	if ptr, ok := ptrExtractor(result); ok {
+		return convertExtractedComplexResult[T, R](ptr, expectedType, ctx)
+	}
+
+	if value, ok := typeExtractor(result); ok {
+		return convertExtractedComplexResult[T, R](value, expectedType, ctx)
+	}
+
+	var zero R
+	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
+}
+
+func convertExtractedComplexResult[T any, R any](
+	result any,
+	expectedType core.ZodTypeCode,
+	ctx *core.ParseContext,
+) (R, error) {
+	if r, ok := result.(R); ok {
+		return r, nil
+	}
+
+	rType := reflect.TypeFor[R]()
+	if rType.Kind() == reflect.Pointer {
+		if value, ok := result.(T); ok {
+			return any(new(value)).(R), nil
+		}
+	}
+
+	if ptr, ok := result.(*T); ok {
+		if ptr == nil {
+			var zero R
+			return zero, nil
+		}
+		if r, ok := any(*ptr).(R); ok {
+			return r, nil
+		}
+	}
+
+	var zero R
+	return zero, issues.CreateInvalidTypeError(expectedType, result, ctx)
 }
 
 // ----------------------------------------------------------------------------

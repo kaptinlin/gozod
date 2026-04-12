@@ -253,6 +253,40 @@ func TestMapPropertiesToIssue(t *testing.T) {
 		assert.Equal(t, core.ZodTypeCode("new_value"), issue.Received)
 		assert.Equal(t, 100, issue.Maximum)
 	})
+
+	t.Run("maps union_errors into finalized nested issue groups", func(t *testing.T) {
+		props := map[string]any{
+			"union_errors": []core.ZodRawIssue{
+				NewRawIssue(core.InvalidType, 123, WithExpected("string"), WithReceived("number")),
+				NewRawIssue(core.TooSmall, "x", WithMinimum(3)),
+			},
+		}
+
+		issue := core.ZodIssue{}
+		MapPropertiesToIssue(&issue, props)
+
+		require.Len(t, issue.Errors, 2)
+		require.Len(t, issue.Errors[0], 1)
+		require.Len(t, issue.Errors[1], 1)
+		assert.Equal(t, core.InvalidType, issue.Errors[0][0].Code)
+		assert.Equal(t, core.TooSmall, issue.Errors[1][0].Code)
+	})
+
+	t.Run("maps errors into finalized nested issue groups", func(t *testing.T) {
+		props := map[string]any{
+			"errors": []core.ZodRawIssue{
+				NewRawIssue(core.InvalidType, true, WithExpected("string"), WithReceived("bool")),
+			},
+		}
+
+		issue := core.ZodIssue{}
+		MapPropertiesToIssue(&issue, props)
+
+		require.Len(t, issue.Errors, 1)
+		require.Len(t, issue.Errors[0], 1)
+		assert.Equal(t, core.InvalidType, issue.Errors[0][0].Code)
+		assert.Equal(t, core.ZodTypeBool, issue.Errors[0][0].Received)
+	})
 }
 
 func TestErrorResolutionChain(t *testing.T) {

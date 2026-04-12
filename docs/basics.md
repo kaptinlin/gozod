@@ -163,10 +163,10 @@ if err != nil {
         // Human-readable format
         pretty := gozod.PrettifyError(zodErr)
         fmt.Println(pretty)
-        
+
         // Nested tree structure format
         tree := gozod.TreeifyError(zodErr)
-        
+
         // Flat structure for forms
         flattened := gozod.FlattenError(zodErr)
         for field, errors := range flattened.FieldErrors {
@@ -191,7 +191,7 @@ stringSchema := gozod.String()
 result1, _ := stringSchema.Parse("hello")      // ✅ string → string
 // result1, _ := stringSchema.Parse(&value)    // ❌ Error: requires string, got *string
 
-// Pointer schemas: strict pointer input only  
+// Pointer schemas: strict pointer input only
 ptrSchema := gozod.StringPtr()
 result2, _ := ptrSchema.Parse(&value)          // ✅ *string → *string (preserves identity)
 // result2, _ := ptrSchema.Parse("hello")      // ❌ Error: requires *string, got string
@@ -226,8 +226,9 @@ result, _ = nilableSchema.Parse(nil)          // result: (*string)(nil)
 Schemas like `gozod.StringPtr()` and `gozod.IntPtr()` are useful when you need to distinguish between a field that was not provided versus a field that was explicitly set to its zero value (e.g., `""` or `0`). These schemas require strict pointer input and preserve pointer identity, making them ideal for handling partial data updates.
 
 **Important**: All GoZod schemas use type-safe requirements:
+
 - `gozod.String()` only accepts `string` input
-- `gozod.StringPtr()` only accepts `*string` input  
+- `gozod.StringPtr()` only accepts `*string` input
 - `gozod.Struct[T]()` only accepts `T` input
 - `gozod.StructPtr[T]()` only accepts `*T` input
 
@@ -288,7 +289,7 @@ name := "Alice"
 result1, err := valueSchema.Parse("Alice")  // ✅ string → string
 // result1, err := valueSchema.Parse(&name) // ❌ Error: requires string, got *string
 
-// Pointer schema requires pointer input  
+// Pointer schema requires pointer input
 result2, err := ptrSchema.Parse(&name)      // ✅ *string → *string
 // result2, err := ptrSchema.Parse("Alice") // ❌ Error: requires *string, got string
 
@@ -343,7 +344,7 @@ timestampDefault := gozod.String().DefaultFunc(func() string {
     return time.Now().Format(time.RFC3339)
 })
 
-// Prefault provides pre-parse default for nil input (goes through full parsing)
+// Prefault runs the fallback through the full validation pipeline for nil input
 safeValue := gozod.String().Transform(func(s string) string { return strings.ToUpper(s) }).Prefault("fallback")
 result, err := safeValue.Parse(nil)  // "FALLBACK" (nil input uses prefault, then transforms)
 ```
@@ -405,7 +406,7 @@ passwordSchema2 := gozod.String().Min(8, "Password too short").Refine(func(s str
 stringOrNumber := gozod.Union(gozod.String(), gozod.Int())
 
 // Discriminated union for better performance
-apiResponse := gozod.DiscriminatedUnion("status", 
+apiResponse := gozod.DiscriminatedUnion("status",
     gozod.Object(gozod.ObjectSchema{
         "status": gozod.Literal("success"),
         "data":   gozod.String(),
@@ -434,19 +435,19 @@ func handleAPIRequest(w http.ResponseWriter, r *http.Request) {
         var zodErr *gozod.ZodError
         if errors.As(err, &zodErr) {
             flattened := gozod.FlattenError(zodErr)
-            
+
             errorResponse := map[string]any{
                 "success": false,
                 "errors":  flattened.FieldErrors,
             }
-            
+
             w.Header().Set("Content-Type", "application/json")
             w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(errorResponse)
             return
         }
     }
-    
+
     // Process validated data
     validData := result.(map[string]any)
     processAPIRequest(validData)
@@ -475,17 +476,17 @@ func loadConfig(filename string) (*AppConfig, error) {
     if err != nil {
         return nil, err
     }
-    
+
     var configData map[string]any
     if err := json.Unmarshal(data, &configData); err != nil {
         return nil, err
     }
-    
+
     validated, err := ConfigSchema.Parse(configData)
     if err != nil {
         return nil, fmt.Errorf("invalid configuration: %w", err)
     }
-    
+
     // Convert to struct
     validConfig := validated.(map[string]any)
     return &AppConfig{

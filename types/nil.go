@@ -318,26 +318,31 @@ func (z *ZodNil[T, R]) withCheck(check core.ZodCheck) *ZodNil[T, R] {
 
 // withPtrInternals creates a new *T schema from cloned internals.
 func (z *ZodNil[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNil[T, *T] {
-	return &ZodNil[T, *T]{internals: &ZodNilInternals{
+	clone := &ZodNil[T, *T]{internals: &ZodNilInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type R.
 func (z *ZodNil[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNil[T, R] {
-	return &ZodNil[T, R]{internals: &ZodNilInternals{
+	clone := &ZodNil[T, R]{internals: &ZodNilInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodNil[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodNil[T, R]); ok {
-		orig := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = orig
+	if src, ok := source.(*ZodNil[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.internals
+			z.internals.ZodTypeInternals = *src.internals.Clone()
+		})
 	}
 }
 

@@ -369,10 +369,11 @@ func (z *ZodBigInt[T]) RefineAny(fn func(any) bool, params ...any) *ZodBigInt[T]
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodBigInt[T]) CloneFrom(src any) {
-	if s, ok := src.(*ZodBigInt[T]); ok {
-		prev := z.internals.Checks
-		*z.internals = *s.internals
-		z.internals.Checks = prev
+	if s, ok := src.(*ZodBigInt[T]); ok && s != nil {
+		cloneWithPreservedChecks(s, z, func() {
+			*z.internals = *s.internals
+			z.internals.ZodTypeInternals = *s.internals.Clone()
+		})
 	}
 }
 
@@ -443,22 +444,26 @@ func (z *ZodBigInt[T]) parseNilInput(
 func (z *ZodBigInt[T]) withPtrInternals(
 	in *core.ZodTypeInternals,
 ) *ZodBigInt[**big.Int] {
-	return &ZodBigInt[**big.Int]{
+	clone := &ZodBigInt[**big.Int]{
 		internals: &ZodBigIntInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type T.
 func (z *ZodBigInt[T]) withInternals(in *core.ZodTypeInternals) *ZodBigInt[T] {
-	return &ZodBigInt[T]{
+	clone := &ZodBigInt[T]{
 		internals: &ZodBigIntInternals{
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 		},
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // Package-level helper functions

@@ -175,7 +175,7 @@ func (z *ZodSet[T, R]) NonOptional() *ZodSet[T, map[T]struct{}] {
 	}}
 }
 
-// Default sets a value returned when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 // The default value bypasses validation.
 func (z *ZodSet[T, R]) Default(v map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
@@ -183,21 +183,21 @@ func (z *ZodSet[T, R]) Default(v map[T]struct{}) *ZodSet[T, R] {
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a factory for the default value when input is nil.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodSet[T, R]) DefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any { return fn() })
 	return z.withInternals(in)
 }
 
-// Prefault sets a value that goes through full validation when input is nil.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodSet[T, R]) Prefault(v map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory for the prefault value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 // The prefault value goes through full validation.
 func (z *ZodSet[T, R]) PrefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 	in := z.internals.Clone()
@@ -296,25 +296,31 @@ func (z *ZodSet[T, R]) Or(other any) *ZodUnion[any, any] {
 }
 
 func (z *ZodSet[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSet[T, R] {
-	return &ZodSet[T, R]{internals: &ZodSetInternals[T]{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		ValueType:        z.internals.ValueType,
-	}}
+	clone := &ZodSet[T, R]{internals: z.newSetInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodSet[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSet[T, *map[T]struct{}] {
-	return &ZodSet[T, *map[T]struct{}]{internals: &ZodSetInternals[T]{
-		ZodTypeInternals: *in,
-		Def:              z.internals.Def,
-		ValueType:        z.internals.ValueType,
-	}}
+	clone := &ZodSet[T, *map[T]struct{}]{internals: z.newSetInternals(in)}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodSet[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodSet[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodSet[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newSetInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (z *ZodSet[T, R]) newSetInternals(in *core.ZodTypeInternals) *ZodSetInternals[T] {
+	return &ZodSetInternals[T]{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		ValueType:        z.internals.ValueType,
 	}
 }
 

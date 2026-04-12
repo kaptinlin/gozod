@@ -96,3 +96,13 @@ type GlobalMeta struct {
 // GlobalRegistry is the default, framework-provided global registry for
 // convenient, shared metadata collection.
 var GlobalRegistry = NewRegistry[GlobalMeta]()
+
+// CopyGlobalMeta copies metadata from one schema instance to another.
+func CopyGlobalMeta(from, to ZodSchema) {
+	if from == nil || to == nil {
+		return
+	}
+	if meta, ok := GlobalRegistry.Get(from); ok {
+		GlobalRegistry.Add(to, meta)
+	}
+}

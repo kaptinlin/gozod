@@ -61,6 +61,78 @@ func TestDefaultValueCloning(t *testing.T) {
 		assert.Equal(t, 1, defaultMap["a"], "Original default map should not be modified")
 	})
 
+	t.Run("Nested composite default cloning", func(t *testing.T) {
+		defaultValue := map[string]any{
+			"items": []any{
+				map[string]any{"name": "first"},
+			},
+			"meta": map[string]any{
+				"count": 1,
+			},
+		}
+		schema := Any().Default(defaultValue)
+
+		res1, err := schema.Parse(nil)
+		require.NoError(t, err, "First parse failed")
+
+		items1, ok := res1.(map[string]any)["items"].([]any)
+		require.True(t, ok, "Expected nested items slice")
+		item1, ok := items1[0].(map[string]any)
+		require.True(t, ok, "Expected nested item map")
+		item1["name"] = "modified"
+
+		meta1, ok := res1.(map[string]any)["meta"].(map[string]any)
+		require.True(t, ok, "Expected nested meta map")
+		meta1["count"] = 999
+
+		res2, err := schema.Parse(nil)
+		require.NoError(t, err, "Second parse failed")
+
+		items2 := res2.(map[string]any)["items"].([]any)
+		item2 := items2[0].(map[string]any)
+		meta2 := res2.(map[string]any)["meta"].(map[string]any)
+
+		assert.Equal(t, "modified", item1["name"], "First result should stay modified")
+		assert.Equal(t, "first", item2["name"], "Nested map in second result should be isolated")
+		assert.Equal(t, 999, meta1["count"], "First result nested map should stay modified")
+		assert.Equal(t, 1, meta2["count"], "Nested map in second result should be isolated")
+
+		origItems := defaultValue["items"].([]any)
+		origItem := origItems[0].(map[string]any)
+		origMeta := defaultValue["meta"].(map[string]any)
+		assert.Equal(t, "first", origItem["name"], "Original nested map should not be modified")
+		assert.Equal(t, 1, origMeta["count"], "Original nested meta map should not be modified")
+	})
+
+	t.Run("Modifier cloning keeps default internals isolated", func(t *testing.T) {
+		defaultValue := map[string]any{
+			"items": []any{
+				map[string]any{"name": "first"},
+			},
+		}
+		source := Any().Default(defaultValue)
+		clone := source.Optional().NonOptional()
+
+		clonedDefault, ok := clone.internals.DefaultValue.(map[string]any)
+		require.True(t, ok, "Expected cloned default map")
+
+		clonedItems, ok := clonedDefault["items"].([]any)
+		require.True(t, ok, "Expected cloned items slice")
+
+		clonedItem, ok := clonedItems[0].(map[string]any)
+		require.True(t, ok, "Expected cloned item map")
+		clonedItem["name"] = "modified"
+
+		res, err := source.Parse(nil)
+		require.NoError(t, err)
+
+		items, ok := res.(map[string]any)["items"].([]any)
+		require.True(t, ok, "Expected source items slice")
+		item, ok := items[0].(map[string]any)
+		require.True(t, ok, "Expected source item map")
+		assert.Equal(t, "first", item["name"], "Source default should remain isolated from cloned schema internals")
+	})
+
 	t.Run("String default (immutable - no cloning needed)", func(t *testing.T) {
 		// Strings are immutable, so no cloning is needed
 		// But we test the behavior is correct

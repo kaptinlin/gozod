@@ -208,28 +208,28 @@ func (z *ZodLazy[T]) NonOptional() *ZodLazy[any] {
 	}}
 }
 
-// Default sets a value returned when input is nil, bypassing validation.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodLazy[T]) Default(v any) *ZodLazy[T] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a factory for the default value when input is nil.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodLazy[T]) DefaultFunc(fn func() any) *ZodLazy[T] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(fn)
 	return z.withInternals(in)
 }
 
-// Prefault sets a value that goes through full validation when input is nil.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodLazy[T]) Prefault(v any) *ZodLazy[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a factory for the prefault value through full validation.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(fn)
@@ -352,18 +352,18 @@ func (z *ZodLazy[T]) cloneState(in *core.ZodTypeInternals) *ZodLazyInternals {
 // CloneFrom copies configuration from another schema.
 func (z *ZodLazy[T]) CloneFrom(source any) {
 	src, ok := source.(*ZodLazy[T])
-	if !ok {
+	if !ok || src == nil {
 		return
 	}
-	origChecks := z.internals.Checks
-	z.internals.ZodTypeInternals = src.internals.ZodTypeInternals
-	z.internals.Def = src.internals.Def
-	z.internals.Getter = src.internals.Getter
-	z.internals.innerType = src.internals.innerType
-	if src.internals.innerType != nil {
-		z.internals.once.Do(func() {})
-	}
-	z.internals.Checks = origChecks
+	cloneWithPreservedChecks(src, z, func() {
+		z.internals.ZodTypeInternals = *src.internals.Clone()
+		z.internals.Def = src.internals.Def
+		z.internals.Getter = src.internals.Getter
+		z.internals.innerType = src.internals.innerType
+		if src.internals.innerType != nil {
+			z.internals.once.Do(func() {})
+		}
+	})
 }
 
 // resolveInner implements lazy evaluation with thread-safe caching.
@@ -493,6 +493,10 @@ func (w *schemaWrapper) MustParse(input any, ctx ...*core.ParseContext) any {
 		panic(err)
 	}
 	return result
+}
+
+func (w *schemaWrapper) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	return w.Parse(input, ctx...)
 }
 
 func (w *schemaWrapper) Internals() *core.ZodTypeInternals {

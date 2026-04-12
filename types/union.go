@@ -332,27 +332,37 @@ func (z *ZodUnion[T, R]) Or(other any) *ZodUnion[any, any] {
 func (z *ZodUnion[T, R]) withPtrInternals(
 	in *core.ZodTypeInternals,
 ) *ZodUnion[T, *T] {
-	return &ZodUnion[T, *T]{internals: &ZodUnionInternals{
+	clone := &ZodUnion[T, *T]{internals: &ZodUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 func (z *ZodUnion[T, R]) withInternals(
 	in *core.ZodTypeInternals,
 ) *ZodUnion[T, R] {
-	return &ZodUnion[T, R]{internals: &ZodUnionInternals{
+	clone := &ZodUnion[T, R]{internals: &ZodUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodUnion[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodUnion[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodUnion[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			z.internals = &ZodUnionInternals{
+				ZodTypeInternals: *src.internals.Clone(),
+				Def:              src.internals.Def,
+				Options:          src.internals.Options,
+			}
+		})
 	}
 }
 

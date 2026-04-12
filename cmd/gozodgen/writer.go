@@ -134,50 +134,10 @@ func (w *FileWriter) generateImports(info *GenerationInfo) []string {
 	// Always include gozod core
 	imports["github.com/kaptinlin/gozod"] = true
 
-	// Check if any transformations are used (strings package needed)
-	needsStrings := false
-	needsRegexp := false
-	needsCore := false
-
 	for _, field := range info.Fields {
-		// Check for time.Time fields
-		if strings.Contains(field.Type.String(), "time.Time") {
-			imports["time"] = true
+		for _, imp := range field.RequiredImports() {
+			imports[imp] = true
 		}
-
-		// Note: Lazy evaluation now uses gozod.ZodType instead of core.ZodType
-		// so we don't need to import core for lazy evaluation
-
-		// Check for validators that need specific imports
-		for _, rule := range field.Rules {
-			switch rule.Name {
-			case "trim", "lowercase", "uppercase":
-				needsStrings = true
-			case "regex":
-				needsRegexp = true
-			case "uuid":
-				// UUID validation doesn't need additional imports
-			case "url":
-				// Only URL validation needs net/url, not email
-				imports["net/url"] = true
-			case "ipv4", "ipv6":
-				// IP validation might need net package
-				imports["net"] = true
-			case "refine", "check":
-				// These might need core types if using complex validation
-				needsCore = true
-			}
-		}
-	}
-
-	if needsStrings {
-		imports["strings"] = true
-	}
-	if needsRegexp {
-		imports["regexp"] = true
-	}
-	if needsCore {
-		imports["github.com/kaptinlin/gozod/core"] = true
 	}
 
 	// Convert map to sorted slice
@@ -207,30 +167,25 @@ func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structNa
 
 // generateFieldSchemaCode generates GoZod schema code for a single field.
 func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structName string) (string, error) {
-	typeName := field.TypeName
-	if typeName == "" {
-		typeName = field.Type.String()
-	}
+	typeName := field.EffectiveTypeName()
 
 	// UUID special case
-	if hasUUIDRule(field.Rules) && isStringType(field.Type) {
+	if field.IsUUIDStringField() {
 		var b strings.Builder
 		b.WriteString("gozod.UUID()")
-		for _, rule := range field.Rules {
-			if rule.Name != "uuid" {
-				if code := generateValidatorChain(rule, field.Type); code != "" {
-					b.WriteString(code)
-				}
+		for _, rule := range field.ValidationRulesExcept("uuid") {
+			if code := generateValidatorChain(rule, field.Type); code != "" {
+				b.WriteString(code)
 			}
 		}
-		if !field.Required && !isPointerType(field.Type) {
+		if field.NeedsGeneratedOptional() {
 			b.WriteString(".Optional()")
 		}
 		return b.String(), nil
 	}
 
 	// Enum special case
-	if rule := findEnumRule(field.Rules); rule != nil && isStringType(field.Type) {
+	if rule := field.EnumRule(); rule != nil && field.IsEnumStringField() {
 		values := make([]string, 0, len(rule.Params))
 		for _, param := range rule.Params {
 			values = append(values, fmt.Sprintf(`"%s"`, param))
@@ -239,14 +194,12 @@ func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structNa
 		b.WriteString("gozod.Enum(")
 		b.WriteString(strings.Join(values, ", "))
 		b.WriteByte(')')
-		for _, r := range field.Rules {
-			if r.Name != "enum" {
-				if code := generateValidatorChain(r, field.Type); code != "" {
-					b.WriteString(code)
-				}
+		for _, r := range field.ValidationRulesExcept("enum") {
+			if code := generateValidatorChain(r, field.Type); code != "" {
+				b.WriteString(code)
 			}
 		}
-		if !field.Required && !isPointerType(field.Type) {
+		if field.NeedsGeneratedOptional() {
 			b.WriteString(".Optional()")
 		}
 		return b.String(), nil
@@ -255,12 +208,12 @@ func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structNa
 	// General case
 	var b strings.Builder
 	b.WriteString(baseConstructor(typeName, structName))
-	for _, rule := range field.Rules {
+	for _, rule := range field.ValidationRules() {
 		if code := generateValidatorChain(rule, field.Type); code != "" {
 			b.WriteString(code)
 		}
 	}
-	if isPointerType(field.Type) || !field.Required {
+	if field.NeedsGeneratedOptional() {
 		b.WriteString(".Optional()")
 	}
 	return b.String(), nil
@@ -411,17 +364,6 @@ func basicTypeConstructor(typeName string) string {
 	return "gozod.Any()"
 }
 
-// isPointerType reports whether t is a pointer type.
-func isPointerType(t reflect.Type) bool {
-	return t.Kind() == reflect.Pointer
-}
-
-// isStringType reports whether t is string or *string.
-func isStringType(t reflect.Type) bool {
-	return t.Kind() == reflect.String ||
-		(t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.String)
-}
-
 // generateDefaultValue returns a .Default(...) call formatted for the field type.
 func generateDefaultValue(value string, fieldType reflect.Type) string {
 	return generateTypedValue("Default", value, fieldType)
@@ -539,26 +481,6 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 	}
 
 	return fmt.Sprintf(".%s(%s)", method, value)
-}
-
-// hasUUIDRule reports whether rules contain a UUID validation rule.
-func hasUUIDRule(rules []tagparser.TagRule) bool {
-	for _, rule := range rules {
-		if rule.Name == "uuid" {
-			return true
-		}
-	}
-	return false
-}
-
-// findEnumRule returns the enum rule if present, or nil.
-func findEnumRule(rules []tagparser.TagRule) *tagparser.TagRule {
-	for _, rule := range rules {
-		if rule.Name == "enum" {
-			return new(rule)
-		}
-	}
-	return nil
 }
 
 // outputPath generates the output file path based on source file location.

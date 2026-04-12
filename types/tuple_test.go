@@ -3,9 +3,9 @@ package types_test
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod"
 	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/types"
+	"github.com/kaptinlin/gozod/internal/issues"
+	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,28 +16,28 @@ import (
 
 func TestTuple_Basic(t *testing.T) {
 	t.Run("validates tuple with string and int", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		result, err := schema.Parse([]any{"hello", 42})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"hello", 42}, result)
 	})
 
 	t.Run("validates tuple with three elements", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int(), gozod.Bool())
+		schema := Tuple(String(), Int(), Bool())
 		result, err := schema.Parse([]any{"test", 123, true})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"test", 123, true}, result)
 	})
 
 	t.Run("validates empty tuple", func(t *testing.T) {
-		schema := types.Tuple()
+		schema := Tuple()
 		result, err := schema.Parse([]any{})
 		require.NoError(t, err)
 		assert.Equal(t, []any{}, result)
 	})
 
 	t.Run("validates single element tuple", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		result, err := schema.Parse([]any{"solo"})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"solo"}, result)
@@ -50,7 +50,7 @@ func TestTuple_Basic(t *testing.T) {
 
 func TestTuple_TypeValidation(t *testing.T) {
 	t.Run("fails on wrong element type", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		_, err := schema.Parse([]any{"hello", "not-int"})
 		require.Error(t, err)
 		// Error message indicates invalid type for int
@@ -58,20 +58,20 @@ func TestTuple_TypeValidation(t *testing.T) {
 	})
 
 	t.Run("fails on wrong first element type", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		_, err := schema.Parse([]any{123, 42})
 		require.Error(t, err)
 	})
 
 	t.Run("fails on non-array input", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		_, err := schema.Parse("not-array")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tuple")
 	})
 
 	t.Run("fails on nil input (non-optional)", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		_, err := schema.Parse(nil)
 		require.Error(t, err)
 	})
@@ -83,21 +83,21 @@ func TestTuple_TypeValidation(t *testing.T) {
 
 func TestTuple_Length(t *testing.T) {
 	t.Run("fails when too few elements", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int(), gozod.Bool())
+		schema := Tuple(String(), Int(), Bool())
 		_, err := schema.Parse([]any{"hello"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at least")
 	})
 
 	t.Run("fails when too many elements (no rest)", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		_, err := schema.Parse([]any{"hello", 42, "extra"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at most")
 	})
 
 	t.Run("exact length required without rest", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		_, err := schema.Parse([]any{"hello", 42, true, "extra"})
 		require.Error(t, err)
 	})
@@ -109,9 +109,9 @@ func TestTuple_Length(t *testing.T) {
 
 func TestTuple_Rest(t *testing.T) {
 	t.Run("allows additional elements with rest schema", func(t *testing.T) {
-		schema := types.TupleWithRest(
-			[]core.ZodSchema{gozod.String(), gozod.Int()},
-			gozod.Bool(),
+		schema := TupleWithRest(
+			[]core.ZodSchema{String(), Int()},
+			Bool(),
 		)
 		result, err := schema.Parse([]any{"hello", 42, true, false, true})
 		require.NoError(t, err)
@@ -119,18 +119,18 @@ func TestTuple_Rest(t *testing.T) {
 	})
 
 	t.Run("validates rest elements", func(t *testing.T) {
-		schema := types.TupleWithRest(
-			[]core.ZodSchema{gozod.String()},
-			gozod.Int(),
+		schema := TupleWithRest(
+			[]core.ZodSchema{String()},
+			Int(),
 		)
 		_, err := schema.Parse([]any{"hello", "not-int"})
 		require.Error(t, err)
 	})
 
 	t.Run("works with no rest elements provided", func(t *testing.T) {
-		schema := types.TupleWithRest(
-			[]core.ZodSchema{gozod.String(), gozod.Int()},
-			gozod.Bool(),
+		schema := TupleWithRest(
+			[]core.ZodSchema{String(), Int()},
+			Bool(),
 		)
 		result, err := schema.Parse([]any{"hello", 42})
 		require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestTuple_Rest(t *testing.T) {
 	})
 
 	t.Run("rest method creates new tuple with rest", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int()).WithRest(gozod.Bool())
+		schema := Tuple(String(), Int()).WithRest(Bool())
 		result, err := schema.Parse([]any{"hello", 42, true, false})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"hello", 42, true, false}, result)
@@ -151,9 +151,9 @@ func TestTuple_Rest(t *testing.T) {
 
 func TestTuple_OptionalElements(t *testing.T) {
 	t.Run("validates tuple with optional element", func(t *testing.T) {
-		schema := types.Tuple(
-			gozod.String(),
-			gozod.Int().Optional(),
+		schema := Tuple(
+			String(),
+			Int().Optional(),
 		)
 		// All elements provided
 		result, err := schema.Parse([]any{"hello", 42})
@@ -168,9 +168,9 @@ func TestTuple_OptionalElements(t *testing.T) {
 	})
 
 	t.Run("allows missing optional elements at end", func(t *testing.T) {
-		schema := types.Tuple(
-			gozod.String(),
-			gozod.Int().Optional(),
+		schema := Tuple(
+			String(),
+			Int().Optional(),
 		)
 		// Optional element omitted
 		result, err := schema.Parse([]any{"hello"})
@@ -179,10 +179,10 @@ func TestTuple_OptionalElements(t *testing.T) {
 	})
 
 	t.Run("multiple optional elements", func(t *testing.T) {
-		schema := types.Tuple(
-			gozod.String(),
-			gozod.Int().Optional(),
-			gozod.Bool().Optional(),
+		schema := Tuple(
+			String(),
+			Int().Optional(),
+			Bool().Optional(),
 		)
 		// Only required element provided
 		result, err := schema.Parse([]any{"test"})
@@ -197,14 +197,14 @@ func TestTuple_OptionalElements(t *testing.T) {
 
 func TestTuple_Optional(t *testing.T) {
 	t.Run("optional tuple accepts nil", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Optional()
+		schema := Tuple(String()).Optional()
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("optional tuple accepts valid value", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Optional()
+		schema := Tuple(String()).Optional()
 		result, err := schema.Parse([]any{"hello"})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
@@ -214,14 +214,14 @@ func TestTuple_Optional(t *testing.T) {
 
 func TestTuple_Nilable(t *testing.T) {
 	t.Run("nilable tuple accepts nil", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Nilable()
+		schema := Tuple(String()).Nilable()
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("nilable tuple accepts valid value", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Nilable()
+		schema := Tuple(String()).Nilable()
 		result, err := schema.Parse([]any{"hello"})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
@@ -230,7 +230,7 @@ func TestTuple_Nilable(t *testing.T) {
 
 func TestTuple_Nullish(t *testing.T) {
 	t.Run("nullish tuple accepts nil", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Nullish()
+		schema := Tuple(String()).Nullish()
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
@@ -241,7 +241,7 @@ func TestTuple_Default(t *testing.T) {
 	t.Run("default value used for nil input with optional", func(t *testing.T) {
 		// Default must be used with Optional to accept nil
 		// When Default is set, it returns the default value for nil input
-		schema := types.Tuple(gozod.String()).Optional().Default([]any{"default"})
+		schema := Tuple(String()).Optional().Default([]any{"default"})
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		// Default value should be returned
@@ -250,7 +250,7 @@ func TestTuple_Default(t *testing.T) {
 	})
 
 	t.Run("non-optional tuple rejects nil", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		_, err := schema.Parse(nil)
 		require.Error(t, err)
 	})
@@ -262,21 +262,21 @@ func TestTuple_Default(t *testing.T) {
 
 func TestTuple_StrictParse(t *testing.T) {
 	t.Run("strict parse with correct type", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		result, err := schema.StrictParse([]any{"hello", 42})
 		require.NoError(t, err)
 		assert.Equal(t, []any{"hello", 42}, result)
 	})
 
 	t.Run("must parse panics on error", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		assert.Panics(t, func() {
 			schema.MustParse("not-array")
 		})
 	})
 
 	t.Run("must strict parse panics on error", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		assert.Panics(t, func() {
 			schema.MustStrictParse([]any{123}) // wrong type
 		})
@@ -289,36 +289,36 @@ func TestTuple_StrictParse(t *testing.T) {
 
 func TestTuple_ValidationMethods(t *testing.T) {
 	t.Run("min validation", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int()).Min(2)
+		schema := Tuple(String(), Int()).Min(2)
 		result, err := schema.Parse([]any{"hello", 42})
 		require.NoError(t, err)
 		assert.Len(t, result, 2)
 	})
 
 	t.Run("max validation", func(t *testing.T) {
-		schema := types.TupleWithRest(
-			[]core.ZodSchema{gozod.String()},
-			gozod.Int(),
+		schema := TupleWithRest(
+			[]core.ZodSchema{String()},
+			Int(),
 		).Max(3)
 		_, err := schema.Parse([]any{"hello", 1, 2, 3, 4})
 		require.Error(t, err)
 	})
 
 	t.Run("length validation", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int()).Length(2)
+		schema := Tuple(String(), Int()).Length(2)
 		result, err := schema.Parse([]any{"hello", 42})
 		require.NoError(t, err)
 		assert.Len(t, result, 2)
 	})
 
 	t.Run("non-empty validation", func(t *testing.T) {
-		schema := types.Tuple().NonEmpty()
+		schema := Tuple().NonEmpty()
 		_, err := schema.Parse([]any{})
 		require.Error(t, err)
 	})
 
 	t.Run("refine validation", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int()).Refine(func(arr []any) bool {
+		schema := Tuple(String(), Int()).Refine(func(arr []any) bool {
 			if len(arr) >= 2 {
 				if num, ok := arr[1].(int); ok {
 					return num > 0
@@ -337,14 +337,14 @@ func TestTuple_ValidationMethods(t *testing.T) {
 
 func TestTuple_Metadata(t *testing.T) {
 	t.Run("describe adds description", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Describe("A simple tuple")
+		schema := Tuple(String()).Describe("A simple tuple")
 		meta, ok := core.GlobalRegistry.Get(schema)
 		require.True(t, ok)
 		assert.Equal(t, "A simple tuple", meta.Description)
 	})
 
 	t.Run("meta stores metadata", func(t *testing.T) {
-		schema := types.Tuple(gozod.String()).Meta(core.GlobalMeta{
+		schema := Tuple(String()).Meta(core.GlobalMeta{
 			Title:       "Test Tuple",
 			Description: "A test tuple schema",
 		})
@@ -361,35 +361,35 @@ func TestTuple_Metadata(t *testing.T) {
 
 func TestTuple_Internals(t *testing.T) {
 	t.Run("get internals returns valid internals", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		internals := schema.Internals()
 		assert.NotNil(t, internals)
 		assert.Equal(t, core.ZodTypeTuple, internals.Type)
 	})
 
 	t.Run("get items returns item schemas", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		items := schema.Items()
 		assert.Len(t, items, 2)
 	})
 
 	t.Run("get rest returns nil when no rest", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		rest := schema.Rest()
 		assert.Nil(t, rest)
 	})
 
 	t.Run("get rest returns rest schema", func(t *testing.T) {
-		schema := types.TupleWithRest(
-			[]core.ZodSchema{gozod.String()},
-			gozod.Int(),
+		schema := TupleWithRest(
+			[]core.ZodSchema{String()},
+			Int(),
 		)
 		rest := schema.Rest()
 		assert.NotNil(t, rest)
 	})
 
 	t.Run("is optional returns correct value", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		assert.False(t, schema.IsOptional())
 
 		optSchema := schema.Optional()
@@ -397,7 +397,7 @@ func TestTuple_Internals(t *testing.T) {
 	})
 
 	t.Run("is nilable returns correct value", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		assert.False(t, schema.IsNilable())
 
 		nilableSchema := schema.Nilable()
@@ -411,7 +411,7 @@ func TestTuple_Internals(t *testing.T) {
 
 func TestTuple_InputConversion(t *testing.T) {
 	t.Run("converts typed slice to []any", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		// Using a slice literal that gets converted
 		input := []any{"hello", 42}
 		result, err := schema.Parse(input)
@@ -420,7 +420,7 @@ func TestTuple_InputConversion(t *testing.T) {
 	})
 
 	t.Run("works with array input", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		input := [2]any{"hello", 42}
 		result, err := schema.Parse(input)
 		require.NoError(t, err)
@@ -434,7 +434,7 @@ func TestTuple_InputConversion(t *testing.T) {
 
 func TestTuple_ParseAny(t *testing.T) {
 	t.Run("parse any returns any type", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		result, err := schema.ParseAny([]any{"hello", 42})
 		require.NoError(t, err)
 		assert.NotNil(t, result)
@@ -447,15 +447,15 @@ func TestTuple_ParseAny(t *testing.T) {
 
 func TestTuple_Constructors(t *testing.T) {
 	t.Run("TuplePtr creates pointer-returning tuple", func(t *testing.T) {
-		schema := types.TuplePtr(gozod.String())
+		schema := TuplePtr(String())
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
 	})
 
 	t.Run("TupleTyped with explicit types", func(t *testing.T) {
-		schema := types.TupleTyped[[]any, []any](
-			[]core.ZodSchema{gozod.String(), gozod.Int()},
+		schema := TupleTyped[[]any, []any](
+			[]core.ZodSchema{String(), Int()},
 			nil,
 		)
 		result, err := schema.Parse([]any{"hello", 42})
@@ -471,7 +471,7 @@ func TestTuple_Constructors(t *testing.T) {
 func TestTuple_EnhancedCoverage(t *testing.T) {
 	t.Run("sparse array input fails validation", func(t *testing.T) {
 		// Zod v4: sparse arrays should fail - elements with undefined holes are invalid
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		// Simulate sparse array behavior with nil elements
 		_, err := schema.Parse([]any{nil, nil})
 		require.Error(t, err)
@@ -480,10 +480,10 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 	t.Run("optional element followed by required element", func(t *testing.T) {
 		// Zod v4 pattern: [string, number?, string]
 		// Optional in the middle, required at the end
-		schema := types.Tuple(
-			gozod.String(),
-			gozod.Int().Optional(),
-			gozod.String(),
+		schema := Tuple(
+			String(),
+			Int().Optional(),
+			String(),
 		)
 
 		// Valid: all elements provided (optional has value)
@@ -504,10 +504,10 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 
 	t.Run("all optional elements allows empty array", func(t *testing.T) {
 		// Zod v4: tuple with all optional elements accepts empty array
-		schema := types.Tuple(
-			gozod.String().Optional(),
-			gozod.Int().Optional(),
-			gozod.Bool().Optional(),
+		schema := Tuple(
+			String().Optional(),
+			Int().Optional(),
+			Bool().Optional(),
 		)
 
 		// Empty array should be valid (all items optional)
@@ -536,13 +536,13 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 
 	t.Run("optional elements with rest schema", func(t *testing.T) {
 		// Zod v4: [string, number?, string?, ...boolean[]]
-		schema := types.TupleWithRest(
+		schema := TupleWithRest(
 			[]core.ZodSchema{
-				gozod.String(),
-				gozod.Int().Optional(),
-				gozod.String().Optional(),
+				String(),
+				Int().Optional(),
+				String().Optional(),
 			},
-			gozod.Bool(),
+			Bool(),
 		)
 
 		// Valid combinations
@@ -571,8 +571,8 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 	})
 
 	t.Run("tuple immutability - Rest returns new instance", func(t *testing.T) {
-		original := types.Tuple(gozod.String(), gozod.Int())
-		withRest := original.WithRest(gozod.Bool())
+		original := Tuple(String(), Int())
+		withRest := original.WithRest(Bool())
 
 		// Original should still reject extra elements
 		_, err := original.Parse([]any{"hello", 42, true})
@@ -585,7 +585,7 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 	})
 
 	t.Run("tuple immutability - modifiers return new instance", func(t *testing.T) {
-		original := types.Tuple(gozod.String())
+		original := Tuple(String())
 		optional := original.Optional()
 		nilable := original.Nilable()
 
@@ -605,7 +605,7 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 	})
 
 	t.Run("tuple with Refine returns new instance", func(t *testing.T) {
-		original := types.Tuple(gozod.String(), gozod.Int())
+		original := Tuple(String(), Int())
 		refined := original.Refine(func(arr []any) bool {
 			if len(arr) >= 2 {
 				if num, ok := arr[1].(int); ok {
@@ -629,27 +629,27 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 	})
 
 	t.Run("error paths for nested tuple validation", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 
 		// Error at path [1] for wrong type
 		_, err := schema.Parse([]any{"hello", "not-int"})
 		require.Error(t, err)
-		var zodErr *gozod.ZodError
-		require.True(t, gozod.IsZodError(err, &zodErr))
+		var zodErr *issues.ZodError
+		require.True(t, issues.IsZodError(err, &zodErr))
 		assert.Len(t, zodErr.Issues, 1)
 		// Path should indicate index 1
 		assert.Contains(t, zodErr.Issues[0].Path, 1)
 	})
 
 	t.Run("error message for too many elements", func(t *testing.T) {
-		schema := types.Tuple(gozod.String(), gozod.Int())
+		schema := Tuple(String(), Int())
 		_, err := schema.Parse([]any{"hello", 42, true})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at most")
 	})
 
 	t.Run("error message for wrong input type", func(t *testing.T) {
-		schema := types.Tuple(gozod.String())
+		schema := Tuple(String())
 		_, err := schema.Parse(map[string]any{"key": "value"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tuple")
@@ -662,8 +662,8 @@ func TestTuple_EnhancedCoverage(t *testing.T) {
 
 func TestTuple_EdgeCases(t *testing.T) {
 	t.Run("handles nested tuples", func(t *testing.T) {
-		innerTuple := types.Tuple(gozod.String(), gozod.Int())
-		outerTuple := types.Tuple(gozod.String(), innerTuple)
+		innerTuple := Tuple(String(), Int())
+		outerTuple := Tuple(String(), innerTuple)
 
 		result, err := outerTuple.Parse([]any{"outer", []any{"inner", 42}})
 		require.NoError(t, err)
@@ -671,10 +671,10 @@ func TestTuple_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles tuple with object schema", func(t *testing.T) {
-		objSchema := gozod.Object(core.ObjectSchema{
-			"name": gozod.String(),
+		objSchema := Object(core.ObjectSchema{
+			"name": String(),
 		})
-		tupleSchema := types.Tuple(gozod.String(), objSchema)
+		tupleSchema := Tuple(String(), objSchema)
 
 		result, err := tupleSchema.Parse([]any{"label", map[string]any{"name": "test"}})
 		require.NoError(t, err)
@@ -682,8 +682,8 @@ func TestTuple_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles tuple with slice schema", func(t *testing.T) {
-		sliceSchema := gozod.Slice[string](gozod.String())
-		tupleSchema := types.Tuple(gozod.Int(), sliceSchema)
+		sliceSchema := Slice[string](String())
+		tupleSchema := Tuple(Int(), sliceSchema)
 
 		result, err := tupleSchema.Parse([]any{42, []any{"a", "b", "c"}})
 		require.NoError(t, err)

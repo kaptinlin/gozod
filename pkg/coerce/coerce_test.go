@@ -1,4 +1,4 @@
-package coerce
+package coerce_test
 
 import (
 	"math"
@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/kaptinlin/gozod/pkg/coerce"
 )
 
 func TestToBool(t *testing.T) {

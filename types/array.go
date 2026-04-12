@@ -201,14 +201,14 @@ func (z *ZodArray[T, R]) NonOptional() *ZodArray[T, T] {
 	}
 }
 
-// Default sets a default value used when input is nil.
+// Default sets a fallback value returned when input is nil (short-circuits validation).
 func (z *ZodArray[T, R]) Default(v T) *ZodArray[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultValue(v)
 	return z.withInternals(in)
 }
 
-// DefaultFunc sets a function that provides the default value.
+// DefaultFunc sets a fallback function called when input is nil (short-circuits validation).
 func (z *ZodArray[T, R]) DefaultFunc(fn func() T) *ZodArray[T, R] {
 	in := z.internals.Clone()
 	in.SetDefaultFunc(func() any {
@@ -217,14 +217,14 @@ func (z *ZodArray[T, R]) DefaultFunc(fn func() T) *ZodArray[T, R] {
 	return z.withInternals(in)
 }
 
-// Prefault sets a fallback value used through the full parsing pipeline.
+// Prefault sets a fallback value that goes through the full validation pipeline.
 func (z *ZodArray[T, R]) Prefault(v T) *ZodArray[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultValue(v)
 	return z.withInternals(in)
 }
 
-// PrefaultFunc sets a function that provides the fallback value.
+// PrefaultFunc sets a fallback function that goes through the full validation pipeline.
 func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
 	in := z.internals.Clone()
 	in.SetPrefaultFunc(func() any {
@@ -390,34 +390,37 @@ func (z *ZodArray[T, R]) Or(other any) *ZodUnion[any, any] {
 
 // withPtrInternals creates a new ZodArray with pointer constraint *T.
 func (z *ZodArray[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodArray[T, *T] {
-	return &ZodArray[T, *T]{
-		internals: &ZodArrayInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Items:            z.internals.Items,
-			Rest:             z.internals.Rest,
-		},
+	clone := &ZodArray[T, *T]{
+		internals: z.newArrayInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new ZodArray keeping the constraint type R.
 func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R] {
-	return &ZodArray[T, R]{
-		internals: &ZodArrayInternals{
-			ZodTypeInternals: *in,
-			Def:              z.internals.Def,
-			Items:            z.internals.Items,
-			Rest:             z.internals.Rest,
-		},
+	clone := &ZodArray[T, R]{
+		internals: z.newArrayInternals(in),
 	}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema.
 func (z *ZodArray[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodArray[T, R]); ok {
-		originalChecks := z.internals.Checks
-		*z.internals = *src.internals
-		z.internals.Checks = originalChecks
+	if src, ok := source.(*ZodArray[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			*z.internals = *src.newArrayInternals(src.internals.Clone())
+		})
+	}
+}
+
+func (z *ZodArray[T, R]) newArrayInternals(in *core.ZodTypeInternals) *ZodArrayInternals {
+	return &ZodArrayInternals{
+		ZodTypeInternals: *in,
+		Def:              z.internals.Def,
+		Items:            append([]core.ZodSchema(nil), z.internals.Items...),
+		Rest:             z.internals.Rest,
 	}
 }
 

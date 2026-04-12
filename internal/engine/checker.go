@@ -52,7 +52,7 @@ func executeChecks(
 	value any,
 	checks []core.ZodCheck,
 	payload *core.ParsePayload,
-	_ *core.ParseContext,
+	ctx *core.ParseContext,
 ) *core.ParsePayload {
 	n := len(checks)
 	if n == 0 {
@@ -87,12 +87,14 @@ func executeChecks(
 				continue
 			}
 			wp := core.NewParsePayloadWithPath(val, payload.Path())
+			wp.SetContext(ctx)
 			if !ci.When(wp) {
 				continue
 			}
 		}
 
 		cp := core.NewParsePayloadWithPath(val, path)
+		cp.SetContext(ctx)
 		ci.Check(cp)
 		val = cp.Value()
 

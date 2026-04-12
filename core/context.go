@@ -81,6 +81,7 @@ func (p *ParsePayload) Clone() *ParsePayload {
 		value:  p.value,
 		issues: slices.Clone(p.issues),
 		path:   slices.Clone(p.path),
+		ctx:    p.ctx,
 	}
 }
 
@@ -100,6 +101,7 @@ func (p *ParsePayload) WithCleanIssues() *ParsePayload {
 		value:  p.value,
 		issues: make([]ZodRawIssue, 0, 2),
 		path:   slices.Clone(p.path),
+		ctx:    p.ctx,
 	}
 }
 
@@ -145,4 +147,14 @@ func (p *ParsePayload) Value() any {
 // Issues returns a copy of the current validation issues.
 func (p *ParsePayload) Issues() []ZodRawIssue {
 	return slices.Clone(p.issues)
+}
+
+// SetContext attaches the parse context driving this payload.
+func (p *ParsePayload) SetContext(ctx *ParseContext) {
+	p.ctx = ctx
+}
+
+// Context returns the parse context driving this payload, if any.
+func (p *ParsePayload) Context() *ParseContext {
+	return p.ctx
 }

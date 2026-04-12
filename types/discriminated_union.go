@@ -295,30 +295,42 @@ func (z *ZodDiscriminatedUnion[T, R]) withCheck(c core.ZodCheck) *ZodDiscriminat
 
 // withPtrInternals creates a new pointer-constraint schema from cloned internals.
 func (z *ZodDiscriminatedUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodDiscriminatedUnion[T, *T] {
-	return &ZodDiscriminatedUnion[T, *T]{internals: &ZodDiscriminatedUnionInternals{
+	clone := &ZodDiscriminatedUnion[T, *T]{internals: &ZodDiscriminatedUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Discriminator:    z.internals.Discriminator,
 		Options:          z.internals.Options,
 		DiscMap:          z.internals.DiscMap,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // withInternals creates a new schema preserving generic type parameters.
 func (z *ZodDiscriminatedUnion[T, R]) withInternals(in *core.ZodTypeInternals) *ZodDiscriminatedUnion[T, R] {
-	return &ZodDiscriminatedUnion[T, R]{internals: &ZodDiscriminatedUnionInternals{
+	clone := &ZodDiscriminatedUnion[T, R]{internals: &ZodDiscriminatedUnionInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 		Discriminator:    z.internals.Discriminator,
 		Options:          z.internals.Options,
 		DiscMap:          z.internals.DiscMap,
 	}}
+	core.CopyGlobalMeta(z, clone)
+	return clone
 }
 
 // CloneFrom copies configuration from another schema of the same type.
 func (z *ZodDiscriminatedUnion[T, R]) CloneFrom(source any) {
-	if src, ok := source.(*ZodDiscriminatedUnion[T, R]); ok {
-		z.internals = src.internals
+	if src, ok := source.(*ZodDiscriminatedUnion[T, R]); ok && src != nil {
+		cloneWithPreservedChecks(src, z, func() {
+			z.internals = &ZodDiscriminatedUnionInternals{
+				ZodTypeInternals: *src.internals.Clone(),
+				Def:              src.internals.Def,
+				Discriminator:    src.internals.Discriminator,
+				Options:          src.internals.Options,
+				DiscMap:          src.internals.DiscMap,
+			}
+		})
 	}
 }
 

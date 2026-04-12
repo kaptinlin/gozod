@@ -499,7 +499,7 @@ func executePropertyCheck(payload *core.ParsePayload, pi *ZodCheckPropertyIntern
 		return
 	}
 
-	_, err := pi.Def.Schema.ParseAny(val)
+	_, err := pi.Def.Schema.ParseAny(val, payload.Context())
 	if err == nil {
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"maps"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 	"github.com/kaptinlin/gozod/pkg/mapx"
 )
 
@@ -193,13 +194,13 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 
 	// Merge modifiers.
 	if src.DefaultValue != nil {
-		dst.SetDefaultValue(src.DefaultValue)
+		dst.SetDefaultValue(cloneutil.Clone(src.DefaultValue))
 	}
 	if src.DefaultFunc != nil {
 		dst.SetDefaultFunc(src.DefaultFunc)
 	}
 	if src.PrefaultValue != nil {
-		dst.SetPrefaultValue(src.PrefaultValue)
+		dst.SetPrefaultValue(cloneutil.Clone(src.PrefaultValue))
 	}
 	if src.PrefaultFunc != nil {
 		dst.SetPrefaultFunc(src.PrefaultFunc)
