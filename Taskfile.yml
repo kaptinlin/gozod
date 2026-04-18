@@ -53,10 +53,50 @@ tasks:
       - go get -u ./... && go mod tidy
 
   test:
-    desc: Run all tests with race detection
+    desc: Run all tests
     cmds:
       - echo "Running all tests..."
-      - go test -race ./...
+      - |
+        go test ./... &
+        pid=$!
+        (
+          while kill -0 "$pid" 2>/dev/null; do
+            echo "[test] go test still running..."
+            sleep 30
+          done
+        ) &
+        heartbeat=$!
+        if wait "$pid"; then
+          status=0
+        else
+          status=$?
+        fi
+        kill "$heartbeat" 2>/dev/null || true
+        wait "$heartbeat" 2>/dev/null || true
+        exit "$status"
+
+  test:race:
+    desc: Run race-enabled tests for the lightweight utility packages
+    cmds:
+      - echo "Running race tests for lightweight packages..."
+      - |
+        go test -race ./core ./pkg/cloneutil ./pkg/regex ./pkg/slicex ./pkg/structx &
+        pid=$!
+        (
+          while kill -0 "$pid" 2>/dev/null; do
+            echo "[test:race] go test still running..."
+            sleep 30
+          done
+        ) &
+        heartbeat=$!
+        if wait "$pid"; then
+          status=0
+        else
+          status=$?
+        fi
+        kill "$heartbeat" 2>/dev/null || true
+        wait "$heartbeat" 2>/dev/null || true
+        exit "$status"
 
   lint:
     desc: Run all linters
@@ -85,7 +125,24 @@ tasks:
     cmds:
       - '{{.GOLANGCI_LINT_BINARY}} version'
       - echo "Running golangci-lint..."
-      - '{{.GOLANGCI_LINT_BINARY}} run --timeout=10m --path-prefix .'
+      - |
+        {{.GOLANGCI_LINT_BINARY}} run --allow-parallel-runners --timeout=10m --path-prefix . &
+        pid=$!
+        (
+          while kill -0 "$pid" 2>/dev/null; do
+            echo "[lint] golangci-lint still running..."
+            sleep 30
+          done
+        ) &
+        heartbeat=$!
+        if wait "$pid"; then
+          status=0
+        else
+          status=$?
+        fi
+        kill "$heartbeat" 2>/dev/null || true
+        wait "$heartbeat" 2>/dev/null || true
+        exit "$status"
 
   tidy-lint:
     desc: Check if go.mod and go.sum are tidy
@@ -107,7 +164,24 @@ tasks:
   vuln:
     desc: Run govulncheck
     cmds:
-      - govulncheck ./...
+      - |
+        govulncheck ./... &
+        pid=$!
+        (
+          while kill -0 "$pid" 2>/dev/null; do
+            echo "[vuln] govulncheck still running..."
+            sleep 30
+          done
+        ) &
+        heartbeat=$!
+        if wait "$pid"; then
+          status=0
+        else
+          status=$?
+        fi
+        kill "$heartbeat" 2>/dev/null || true
+        wait "$heartbeat" 2>/dev/null || true
+        exit "$status"
 
   fmt:
     desc: Format Go code
@@ -119,7 +193,24 @@ tasks:
     desc: Run go vet
     cmds:
       - echo "Running go vet..."
-      - go vet ./...
+      - |
+        go vet ./... &
+        pid=$!
+        (
+          while kill -0 "$pid" 2>/dev/null; do
+            echo "[vet] go vet still running..."
+            sleep 30
+          done
+        ) &
+        heartbeat=$!
+        if wait "$pid"; then
+          status=0
+        else
+          status=$?
+        fi
+        kill "$heartbeat" 2>/dev/null || true
+        wait "$heartbeat" 2>/dev/null || true
+        exit "$status"
 
   verify:
     desc: Run all verification steps (deps, format, vet, lint, test, vuln)

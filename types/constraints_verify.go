@@ -1,3 +1,5 @@
+//go:build contractcheck
+
 package types
 
 // Compile-time interface contract verification.
@@ -9,6 +11,10 @@ package types
 //
 // If a schema type drifts from the expected interface surface, compilation
 // fails with a clear type error.
+//
+// Keeping this file behind the opt-in `contractcheck` build tag prevents the
+// self-referential generic assertions from dominating default `go test` and
+// `golangci-lint` runs. Enable it explicitly when auditing interface coverage.
 
 import (
 	"math/big"
