@@ -11,22 +11,22 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
 // ZodEnumDef defines the configuration for enum validation.
 type ZodEnumDef[T comparable] struct {
 	core.ZodTypeDef
+	// Entries maps enum keys to enum values.
 	Entries map[string]T
 }
 
 // ZodEnumInternals contains the internal state for enum validators.
 type ZodEnumInternals[T comparable] struct {
 	core.ZodTypeInternals
-	Def     *ZodEnumDef[T]
+	// Def points to the schema definition.
+	Def *ZodEnumDef[T]
+	// Entries maps enum keys to enum values.
 	Entries map[string]T
-	Values  map[T]struct{}
+	// Values stores the allowed enum values for membership checks.
+	Values map[T]struct{}
 }
 
 // ZodEnum represents a type-safe enum validation schema.
@@ -35,10 +35,6 @@ type ZodEnumInternals[T comparable] struct {
 type ZodEnum[T comparable, R any] struct {
 	internals *ZodEnumInternals[T]
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodEnum[T, R]) Internals() *core.ZodTypeInternals {
@@ -104,10 +100,6 @@ func (z *ZodEnum[T, R]) MustStrictParse(input R, ctx ...*core.ParseContext) R {
 func (z *ZodEnum[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional returns a new schema that accepts nil, with *T constraint.
 func (z *ZodEnum[T, R]) Optional() *ZodEnum[T, *T] {
@@ -208,10 +200,6 @@ func (z *ZodEnum[T, R]) Describe(desc string) *ZodEnum[T, R] {
 	return clone
 }
 
-// =============================================================================
-// ENUM SPECIFIC METHODS
-// =============================================================================
-
 // Enum returns a copy of the enum key-value mapping.
 func (z *ZodEnum[T, R]) Enum() map[string]T {
 	result := make(map[string]T, len(z.internals.Entries))
@@ -257,10 +245,6 @@ func (z *ZodEnum[T, R]) Exclude(keys []string, params ...any) *ZodEnum[T, R] {
 	return EnumMapTyped[T, R](newEntries, params...)
 }
 
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
-
 // Transform applies a transformation function to the parsed enum value.
 func (z *ZodEnum[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
@@ -276,10 +260,6 @@ func (z *ZodEnum[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 	return core.NewZodPipe[R, any](z, target, targetFn)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine applies type-safe validation matching the schema's output type R. The
 // callback receives nil for *T schemas when the value is nil (Zod v4 semantics).
@@ -352,10 +332,6 @@ func (z *ZodEnum[T, R]) With(fn func(value R, payload *core.ParsePayload), param
 	return z.Check(fn, params...)
 }
 
-// =============================================================================
-// VALIDATION METHODS
-// =============================================================================
-
 // validateEnum validates the enum value and applies checks, collecting all
 // issues encountered during validation.
 func (z *ZodEnum[T, R]) validateEnum(
@@ -401,10 +377,6 @@ func (z *ZodEnum[T, R]) validateEnum(
 	return value, nil
 }
 
-// =============================================================================
-// COMPOSITION METHODS
-// =============================================================================
-
 // And creates an intersection with another schema.
 func (z *ZodEnum[T, R]) And(other any) *ZodIntersection[any, any] {
 	return Intersection(z, other)
@@ -427,10 +399,6 @@ func (z *ZodEnum[T, R]) NonOptional() *ZodEnum[T, T] {
 		Values:           z.internals.Values,
 	}}
 }
-
-// =============================================================================
-// HELPER AND PRIVATE METHODS
-// =============================================================================
 
 // withCheck clones internals, adds a check, and returns a new schema.
 func (z *ZodEnum[T, R]) withCheck(check core.ZodCheck) *ZodEnum[T, R] {
@@ -474,8 +442,7 @@ func (z *ZodEnum[T, R]) CloneFrom(source any) {
 	}
 }
 
-// extractEnumValue extracts the base value T from constraint type R.
-// This is an unexported helper function for internal use.
+// extractEnumValue returns the base enum value from constraint type R.
 func extractEnumValue[T comparable, R any](value R) T {
 	if ptr, ok := any(value).(*T); ok {
 		if ptr != nil {
@@ -526,10 +493,6 @@ func newZodEnumFromDef[T comparable, R any](def *ZodEnumDef[T]) *ZodEnum[T, R] {
 
 	return &ZodEnum[T, R]{internals: in}
 }
-
-// =============================================================================
-// CONSTRUCTORS AND FACTORY FUNCTIONS
-// =============================================================================
 
 // Enum creates an enum schema from the provided values with automatic type
 // inference.

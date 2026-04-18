@@ -1,4 +1,3 @@
-// Package types provides validation schemas for Go types.
 package types
 
 import (
@@ -11,8 +10,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 	"github.com/kaptinlin/gozod/pkg/coerce"
 )
-
-// Type constraints for complex number validation.
 
 // ComplexConstraint restricts values to complex64, complex128, or their pointers.
 type ComplexConstraint interface {

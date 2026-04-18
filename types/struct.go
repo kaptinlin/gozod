@@ -21,11 +21,13 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
-// Static error variables
 var (
+	// ErrFieldNotFoundOrNotSettable is returned when a struct field cannot be found or set.
 	ErrFieldNotFoundOrNotSettable = errors.New("field not found or not settable")
-	ErrCannotAssignToField        = errors.New("cannot assign value to field of type")
-	ErrValueMustBeStruct          = errors.New("value must be a struct or pointer to struct")
+	// ErrCannotAssignToField is returned when a value cannot be assigned to a struct field.
+	ErrCannotAssignToField = errors.New("cannot assign value to field of type")
+	// ErrValueMustBeStruct is returned when a value is not a struct or pointer to struct.
+	ErrValueMustBeStruct = errors.New("value must be a struct or pointer to struct")
 )
 
 // anyType is the reflect.Type for interface{}/any, cached to avoid repeated allocation.
@@ -37,34 +39,30 @@ func jsonTagName(tag string) string {
 	return name
 }
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
-// ZodStructDef defines the schema definition for struct validation
+// ZodStructDef defines the configuration for struct validation.
 type ZodStructDef struct {
 	core.ZodTypeDef
-	Shape core.StructSchema // Field schemas for struct validation
+	// Shape maps field names to field schemas.
+	Shape core.StructSchema
 }
 
-// ZodStructInternals contains the internal state for struct schema
+// ZodStructInternals contains the internal state for struct schemas.
 type ZodStructInternals struct {
 	core.ZodTypeInternals
-	Def               *ZodStructDef     // Schema definition reference
-	Shape             core.StructSchema // Field schemas for runtime validation
-	IsPartial         bool              // Whether this is a partial struct (fields can be zero values)
-	PartialExceptions map[string]bool   // Fields that should remain required in partial mode
+	// Def points to the schema definition.
+	Def *ZodStructDef
+	// Shape maps field names to field schemas.
+	Shape core.StructSchema
+	// IsPartial reports whether omitted fields are allowed.
+	IsPartial bool
+	// PartialExceptions marks fields that remain required in partial mode.
+	PartialExceptions map[string]bool
 }
 
-// ZodStruct represents a type-safe struct validation schema with dual generic parameters
-// T is the base comparable type, R is the constraint type (T | *T)
+// ZodStruct represents a type-safe struct validation schema.
 type ZodStruct[T any, R any] struct {
 	internals *ZodStructInternals
 }
-
-// =============================================================================
-// CORE METHODS
-// =============================================================================
 
 // Internals returns the internal state of the schema.
 func (z *ZodStruct[T, R]) Internals() *core.ZodTypeInternals {
@@ -105,11 +103,8 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		parseCtx = ctx[0]
 	}
 
-	// Check if constraint type R is a pointer type
 	isPointerConstraint := reflect.TypeFor[R]().Kind() == reflect.Pointer
 
-	// Temporarily enable Optional flag for pointer constraint types to ensure pointer identity preservation in ParseComplex
-	// But only if no other modifiers (Optional, Nilable, Prefault) are set
 	originalInternals := &z.internals.ZodTypeInternals
 	if isPointerConstraint &&
 		!originalInternals.Optional &&
@@ -137,12 +132,10 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		return zero, err
 	}
 
-	// Convert result to constraint type R
 	if structVal, ok := result.(T); ok {
 		return convertToStructConstraintType[T, R](structVal), nil
 	}
 
-	// Handle pointer to T
 	if structPtr, ok := result.(*T); ok {
 		if structPtr == nil {
 			return zero, nil
@@ -150,7 +143,6 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		return convertToStructConstraintType[T, R](*structPtr), nil
 	}
 
-	// Handle nil result for optional/nilable schemas
 	if result == nil {
 		return zero, nil
 	}
@@ -179,7 +171,6 @@ func (z *ZodStruct[T, R]) MustParse(input any, ctx ...*core.ParseContext) R {
 
 // StrictParse validates input with compile-time type safety.
 func (z *ZodStruct[T, R]) StrictParse(input T, ctx ...*core.ParseContext) (R, error) {
-	// Convert T to R for ParseComplexStrict
 	constraintInput := convertToStructConstraintType[T, R](input)
 
 	result, err := engine.ParseComplexStrict[T, R](
@@ -212,10 +203,6 @@ func (z *ZodStruct[T, R]) MustStrictParse(input T, ctx ...*core.ParseContext) R 
 func (z *ZodStruct[T, R]) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
 	return z.Parse(input, ctx...)
 }
-
-// =============================================================================
-// MODIFIER METHODS
-// =============================================================================
 
 // Optional returns a schema that accepts nil values with pointer constraint.
 func (z *ZodStruct[T, R]) Optional() *ZodStruct[T, *T] {
@@ -308,11 +295,7 @@ func (z *ZodStruct[T, R]) Describe(description string) *ZodStruct[T, R] {
 	return clone
 }
 
-// =============================================================================
-// TRANSFORMATION AND PIPELINE METHODS
-// =============================================================================
-
-// Transform creates a type-safe transformation.
+// Transform applies a transformation to the parsed struct value.
 func (z *ZodStruct[T, R]) Transform(fn func(T, *core.RefinementContext) (any, error)) *core.ZodTransform[R, any] {
 	wrapperFn := func(input R, ctx *core.RefinementContext) (any, error) {
 		structValue := extractStructValue[T, R](input)
@@ -321,18 +304,14 @@ func (z *ZodStruct[T, R]) Transform(fn func(T, *core.RefinementContext) (any, er
 	return core.NewZodTransform[R, any](z, wrapperFn)
 }
 
-// Overwrite transforms the input value while preserving the original type.
+// Overwrite transforms the parsed value while preserving the original type.
 func (z *ZodStruct[T, R]) Overwrite(transform func(R) R, params ...any) *ZodStruct[T, R] {
-	// Create a transformation function that works with the constraint type R
 	transformAny := func(input any) any {
-		// Try to convert input to constraint type R
 		converted, ok := convertToStructType[T, R](input)
 		if !ok {
-			// If conversion fails, return original value
 			return input
 		}
 
-		// Apply transformation directly on constraint type R
 		return transform(converted)
 	}
 
@@ -350,10 +329,6 @@ func (z *ZodStruct[T, R]) Pipe(target core.ZodType[any]) *core.ZodPipe[R, any] {
 	}
 	return core.NewZodPipe[R, any](z, target, wrapperFn)
 }
-
-// =============================================================================
-// REFINEMENT METHODS
-// =============================================================================
 
 // Refine adds a custom validation function.
 func (z *ZodStruct[T, R]) Refine(fn func(R) bool, params ...any) *ZodStruct[T, R] {
@@ -375,18 +350,12 @@ func (z *ZodStruct[T, R]) RefineAny(fn func(any) bool, params ...any) *ZodStruct
 	return z.withInternals(in)
 }
 
-// =============================================================================
-// TYPE-SPECIFIC METHODS
-// =============================================================================
-
-// Extend creates a new struct with additional fields.
+// Extend returns a schema with additional field schemas.
 func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) *ZodStruct[T, R] {
-	// Create new shape combining existing + extension fields
 	newShape := make(core.StructSchema)
 	maps.Copy(newShape, z.internals.Shape)
 	maps.Copy(newShape, augmentation)
 
-	// Create new definition with extended shape
 	schemaParams := utils.NormalizeParams(params...)
 	def := &ZodStructDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -396,7 +365,6 @@ func (z *ZodStruct[T, R]) Extend(augmentation core.StructSchema, params ...any) 
 		Shape: newShape,
 	}
 
-	// Apply schema parameters if provided
 	if schemaParams != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
@@ -1369,15 +1337,8 @@ func newZodStructFromDef[T any, R any](def *ZodStructDef) *ZodStruct[T, R] {
 	return schema
 }
 
-// =============================================================================
-// FACTORY FUNCTIONS
-// =============================================================================
-
-// Struct creates a struct schema for validating Go struct instances directly
-// Usage: Struct[User]() validates User struct instances
-// Usage: Struct[User](core.StructSchema{...}) validates User with field schemas
+// Struct creates a struct schema for type T.
 func Struct[T any](params ...any) *ZodStruct[T, T] {
-	// Parse first parameter as StructSchema if provided
 	var shape core.StructSchema
 	var remainingParams []any
 
@@ -1400,7 +1361,6 @@ func Struct[T any](params ...any) *ZodStruct[T, T] {
 		Shape: shape,
 	}
 
-	// Use utils.ApplySchemaParams for consistent parameter handling
 	if schemaParams != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
@@ -1408,11 +1368,8 @@ func Struct[T any](params ...any) *ZodStruct[T, T] {
 	return newZodStructFromDef[T, T](def)
 }
 
-// StructPtr creates a struct schema for validating pointer to Go struct instances
-// Usage: StructPtr[User]() validates *User (can be nil)
-// Usage: StructPtr[User](core.StructSchema{...}) validates *User with field schemas
+// StructPtr creates a struct schema for *T.
 func StructPtr[T any](params ...any) *ZodStruct[T, *T] {
-	// Parse first parameter as StructSchema if provided
 	var shape core.StructSchema
 	var remainingParams []any
 
@@ -1435,7 +1392,6 @@ func StructPtr[T any](params ...any) *ZodStruct[T, *T] {
 		Shape: shape,
 	}
 
-	// Use utils.ApplySchemaParams for consistent parameter handling
 	if schemaParams != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
@@ -1480,10 +1436,6 @@ func (z *ZodStruct[T, R]) Check(fn func(value R, payload *core.ParsePayload), pa
 func (z *ZodStruct[T, R]) With(fn func(value R, payload *core.ParsePayload), params ...any) *ZodStruct[T, R] {
 	return z.Check(fn, params...)
 }
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
 
 // convertMapToStructStrict converts a map to a struct with strict field matching.
 func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
@@ -1532,18 +1484,14 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 	return v.Interface().(T), true
 }
 
-// =============================================================================
-// STRUCT TAG SUPPORT
-// =============================================================================
-
-// FromStructOption configures FromStruct behavior
+// FromStructOption configures FromStruct and FromStructPtr.
 type FromStructOption func(*fromStructConfig)
 
 type fromStructConfig struct {
 	tagName string
 }
 
-// WithTagName sets a custom tag name (default: "gozod")
+// WithTagName sets the struct tag name used by FromStruct helpers.
 func WithTagName(name string) FromStructOption {
 	return func(c *fromStructConfig) {
 		c.tagName = name
@@ -1639,7 +1587,7 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	return result.Interface(), nil
 }
 
-// FromStruct creates a ZodStruct schema from struct tags
+// FromStruct builds a struct schema from tags on T.
 func FromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
 	cfg := &fromStructConfig{tagName: "gozod"}
 	for _, opt := range opts {
@@ -1661,7 +1609,7 @@ func FromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
 	return Struct[T](fieldSchemas)
 }
 
-// FromStructPtr creates a ZodStruct schema for pointer types from struct tags
+// FromStructPtr builds a struct schema for *T from tags on T.
 func FromStructPtr[T any](opts ...FromStructOption) *ZodStruct[T, *T] {
 	cfg := &fromStructConfig{tagName: "gozod"}
 	for _, opt := range opts {

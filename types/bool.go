@@ -1,5 +1,3 @@
-// Package types provides public schema implementations for all validation types
-// supported by gozod, with one type per file following a consistent structure.
 package types
 
 import (

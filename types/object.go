@@ -14,41 +14,58 @@ import (
 	"github.com/kaptinlin/gozod/internal/utils"
 )
 
-// Sentinel errors for object schema operations.
 var (
-	ErrNilObjectPointer  = errors.New("nil pointer cannot convert to object")
-	ErrPickRefinements   = errors.New("pick cannot be used on schemas with refinements")
-	ErrOmitRefinements   = errors.New("omit cannot be used on schemas with refinements")
+	// ErrNilObjectPointer is returned when a nil pointer is converted to an object.
+	ErrNilObjectPointer = errors.New("nil pointer cannot convert to object")
+	// ErrPickRefinements is returned when Pick is used on a schema with refinements.
+	ErrPickRefinements = errors.New("pick cannot be used on schemas with refinements")
+	// ErrOmitRefinements is returned when Omit is used on a schema with refinements.
+	ErrOmitRefinements = errors.New("omit cannot be used on schemas with refinements")
+	// ErrExtendRefinements is returned when Extend would overwrite keys on a schema with refinements.
 	ErrExtendRefinements = errors.New("extend cannot overwrite keys on schemas with refinements, use SafeExtend")
-	ErrUnrecognizedKey   = errors.New("unrecognized key")
+	// ErrUnrecognizedKey is returned when strict object parsing encounters an unknown key.
+	ErrUnrecognizedKey = errors.New("unrecognized key")
 )
 
-// ObjectMode defines how to handle unknown keys in object validation.
+// ObjectMode defines how object validation handles unknown keys.
 type ObjectMode string
 
 const (
-	ObjectModeStrict      ObjectMode = "strict"
-	ObjectModeStrip       ObjectMode = "strip"
+	// ObjectModeStrict rejects unknown keys.
+	ObjectModeStrict ObjectMode = "strict"
+	// ObjectModeStrip removes unknown keys from the parsed result.
+	ObjectModeStrip ObjectMode = "strip"
+	// ObjectModePassthrough preserves unknown keys in the parsed result.
 	ObjectModePassthrough ObjectMode = "passthrough"
 )
 
 // ZodObjectDef defines the configuration for an object schema.
 type ZodObjectDef struct {
 	core.ZodTypeDef
-	Shape       core.ObjectSchema
-	Catchall    core.ZodSchema
+	// Shape maps field names to field schemas.
+	Shape core.ObjectSchema
+	// Catchall validates unknown keys when passthrough behavior is enabled.
+	Catchall core.ZodSchema
+	// UnknownKeys controls how unknown keys are handled.
 	UnknownKeys ObjectMode
 }
 
 // ZodObjectInternals contains object validator internal state.
 type ZodObjectInternals struct {
 	core.ZodTypeInternals
-	Def                *ZodObjectDef
-	Shape              core.ObjectSchema
-	Catchall           core.ZodSchema
-	UnknownKeys        ObjectMode
-	IsPartial          bool
-	PartialExceptions  map[string]bool
+	// Def points to the schema definition.
+	Def *ZodObjectDef
+	// Shape maps field names to field schemas.
+	Shape core.ObjectSchema
+	// Catchall validates unknown keys when passthrough behavior is enabled.
+	Catchall core.ZodSchema
+	// UnknownKeys controls how unknown keys are handled.
+	UnknownKeys ObjectMode
+	// IsPartial reports whether omitted fields are allowed.
+	IsPartial bool
+	// PartialExceptions marks fields that remain required in partial mode.
+	PartialExceptions map[string]bool
+	// HasUserRefinements reports whether user-defined refinements are attached.
 	HasUserRefinements bool
 }
 
