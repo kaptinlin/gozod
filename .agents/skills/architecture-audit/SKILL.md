@@ -41,10 +41,12 @@ Architecture audit performs **seven-phase systematic review** from code quality 
 - Checks logic/presentation mixing
 - Audits state management patterns
 
-**Phase 4: Pattern Consistency**
+**Phase 4: Pattern Consistency & API Usability**
 - Verifies architectural pattern uniformity across packages
 - Checks API design consistency
 - Audits error handling architecture
+- Evaluates API from consumer perspective (entry point, cognitive load, naming)
+- **Detects truth gaps**: factories/registries that promise capabilities they cannot deliver at runtime
 
 **Phase 5: Quantitative Metrics**
 - Measures package-level metrics (size, coupling, cohesion)
@@ -122,9 +124,9 @@ Don't use architecture-audit for:
 
 **Pattern:** Pure functions accept data, return results. I/O happens in outer layers.
 
-### Phase 4: Pattern Consistency
+### Phase 4: Pattern Consistency & API Usability
 
-**Goal:** Verify architectural pattern uniformity across packages
+**Goal:** Verify architectural pattern uniformity across packages, and evaluate API from consumer perspective
 
 **Checks:**
 - API design consistency (similar operations use similar signatures across packages)
@@ -132,7 +134,37 @@ Don't use architecture-audit for:
 - Constructor patterns (New vs With* options consistency)
 - Error handling architecture (sentinel error organization, wrapping strategy)
 
-**Note:** Individual error handling issues (missing wraps, nil checks) are caught by golangci-lint. Focus on system-wide patterns.
+**API Usability Checks (consumer perspective, language-agnostic):**
+
+| Dimension | Audit question |
+|------|---------|
+| Default entry point | Is there a single obvious top-level entry for the common path, or must users understand internal layers and manually assemble components? |
+| 90% path simplicity | Can most users get value by learning one package/module and one constructor/factory, without platform branching or subsystem knowledge? |
+| Progressive disclosure | Is the public API layered by frequency of use, with advanced extension points clearly secondary to the default path? |
+| Step count | How many steps are required for common tasks? Can cross-module calls, intermediate conversions, or manual wiring be collapsed? |
+| Naming intuition | Do names feel natural in their language/module namespace, or do users pay repeated cognitive tax from redundant prefixes and implementation-shaped names? |
+| Semantic helpers | Do core domain objects provide convenience operations, or must callers repeatedly compare enum values, inspect flags, or reimplement common decisions? |
+| Single concept model | Is one concept expressed one way, or are there multiple competing abstractions for the same job? If multiple exist, is the boundary obvious? |
+| Platform opacity | Are platform/runtime/environment differences absorbed behind the public API instead of exposed as part of the consumer's mental model? |
+| **Truth gap** | Do all factories, registries, and constructors fulfill their advertised contract? If `New*()` succeeds, can the caller use the result for its full purpose — or will it fail later with "not implemented" / "not available"? Registration-time capability must equal runtime capability. |
+
+**Truth Gap Checks (contract honesty):**
+
+Truth gaps are one of the most damaging architectural problems — they erode user trust silently. A factory that returns success is a promise. Breaking that promise at call time is worse than failing at construction time.
+
+| Check | What to look for |
+|-------|-----------------|
+| Factory-then-fail | Constructor/factory returns an instance that throws "not implemented" or "unavailable" on its primary method. The factory succeeded; the contract failed. |
+| Stub registrations | Side-effect registrations (e.g., `init()` hooks) that register capability entries for implementations that cannot actually perform the work. Registry says "available"; runtime says "no." |
+| Capability inflation | Discovery APIs (`Available*`, `Supports*`, `CanDo*`) that report theoretical compatibility instead of actual runtime truth. If the system reports it can decode FLAC but the decoder returns "unavailable", the discovery API lied. |
+| Partial capability masking | An instance that works for some operations but silently degrades or fails for others without the caller having a way to know upfront. E.g., a decoder that can parse headers but not produce PCM, registered as a full decoder. |
+| Option theater | Options/config accepted by a constructor or method that are silently ignored because the implementation doesn't support them. The API shape promises tunability; the runtime ignores it. |
+
+**Severity:** Truth gaps are always **HIGH** — they affect the public API contract and cause runtime surprises that users cannot predict from the API surface.
+
+**Consumer-first rule:** Prefer architectures where the natural path is also the correct path. A high-quality public API hides internal assembly details and lets the majority of users succeed without learning package/module internals.
+
+**Note:** Keep this review language-agnostic. Focus on system-wide patterns and consumer experience rather than language-specific style rules.
 
 ### Phase 5: Quantitative Metrics
 
@@ -393,6 +425,8 @@ This skill provides language-agnostic audit phases. For language-specific comman
 | Vague recommendations | Provide specific, actionable fix steps in plan |
 | Missing estimates | Include time estimates for each fix in action plan |
 | No prioritization | Clearly mark HIGH/MEDIUM/LOW severity |
+| Only auditing from implementer view | Simulate the consumer's first-use path — check entry point, step count, naming friction |
+| Ignoring truth gaps | Trace every factory/registry/constructor to its primary method — if construction succeeds but usage fails with "not available", that's a HIGH finding, not a documentation issue |
 
 ## Success Criteria
 

@@ -39,35 +39,51 @@
 
 **When to use:** Translating document content across languages, batch translation pipelines.
 
-## `github.com/agentable/mathconv` — Math Formula Conversion
+## `github.com/agentable/go-mathconv` — Math Formula Conversion
 
 - Bidirectional: LaTeX ↔ MathML ↔ OMML ↔ Typst
 - High performance
 
 **When to use:** Academic publishing, Word ↔ LaTeX workflows, documents with formulas.
 
-## `github.com/cshum/vipsgen` — Image Processing
+## `github.com/agentable/go-image` — Image Processing
 
-- Auto-generated type-safe Go bindings for libvips (~300 operations)
-- Streaming via `io.Reader`/`io.Writer`
-- 4-8x faster than ImageMagick, lower memory
-- Pre-generated packages for common libvips versions
+- Gamma-correct image processing with fluent API and pure-Go default backend
+- Resize, crop, rotate, blur, sharpen, masks, compositing, and SVG rasterization
+- Optional libvips acceleration later without changing the core abstraction
 
-**Requires:** libvips C library installed on the system.
+**When to use:** General image processing pipelines, thumbnails, image transforms, and pure-Go image workflows.
 
-**When to use:** Image resizing/cropping, thumbnail generation, format conversion, watermarking, high-throughput image pipelines.
+## `github.com/agentable/go-audio` — Audio Processing
+
+- Probe-first audio library with explicit decoder/encoder activation
+- WAV encode/decode is the stable pure-Go path today
+- Supports probing, inspection, validation, and transcode workflows
+
+**When to use:** Audio format detection, validation, WAV workflows, and controlled codec-based audio pipelines.
+
+## `github.com/agentable/go-video` — Video Processing
+
+- Probe metadata, trim clips, generate thumbnails, and run FFmpeg-backed transcodes
+- Reader-based APIs, audio replacement, frame extraction, and hardware acceleration support
+- Structured errors for missing FFmpeg/FFprobe and unsupported operations
+
+**When to use:** Video metadata inspection, thumbnails, clip extraction, and FFmpeg-backed media pipelines.
+
 
 ## Decision Tree
 
 ```
-Need document/image processing?
+Need document/image/media processing?
 ├── Create/edit Word (.docx) → agentable/godocx
 ├── Create/edit PDF → agentable/pdfkit
 ├── Markdown → DOCX/Typst → agentable/markconv
 ├── Parse documents (multi-format) → agentable/polyparse
 ├── Translate documents → agentable/polytrans
-├── Math formulas across formats → agentable/mathconv
-└── Image processing → cshum/vipsgen (requires libvips)
+├── Math formulas across formats → agentable/go-mathconv
+├── General image processing → agentable/go-image
+├── Audio probing / transcode pipeline → agentable/go-audio
+└── Video probing / thumbnails / transcode → agentable/go-video
 ```
 
 ## Do NOT Use
@@ -76,5 +92,5 @@ Need document/image processing?
 |---------|--------|
 | `unidoc/unioffice` | Commercial license |
 | `jung-kurt/gofpdf` | Archived |
-| `h2non/bimg` | Use vipsgen for comprehensive auto-generated bindings |
-| `disintegration/imaging` | Pure Go but much slower than vips |
+| `h2non/bimg` | Prefer `agentable/go-image` for our default image pipeline |
+| `disintegration/imaging` | Prefer `agentable/go-image` for our default image pipeline |

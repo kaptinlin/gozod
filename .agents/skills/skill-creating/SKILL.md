@@ -4,449 +4,323 @@ name: skill-creating
 ---
 
 
+# Skill Creating
 
-# Writing Skills
+## Purpose
 
-## Overview
+Write skills that help future agents make better decisions, not just follow longer instructions.
 
-**Writing skills IS Test-Driven Development applied to process documentation.**
+A good skill is easy to discover, clear about when it applies, explicit about its boundaries, concise in its main file, and testable before deployment.
 
-**Personal skills live in agent-specific directories (`~/.claude/skills` for Claude Code, `~/.agents/skills/` for Codex)**
+**Personal skills live in agent-specific directories (`~/.claude/skills` for Claude Code, `~/.agents/skills/` for Codex).**
 
-You write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
+**REQUIRED BACKGROUND:** You MUST understand `superpowers:test-driven-development` before using this skill. That skill defines RED-GREEN-REFACTOR. This skill applies the same discipline to skill authoring.
 
-**Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill teaches the right thing.
+## Core Principles
 
-**REQUIRED BACKGROUND:** You MUST understand superpowers:test-driven-development before using this skill. That skill defines the fundamental RED-GREEN-REFACTOR cycle. This skill adapts TDD to documentation.
+### 1. Intent Before Procedure
+State what the skill is trying to optimize for before listing steps. A skill should teach better judgment, not just a ritual.
 
-**Official guidance:** For Anthropic's official skill authoring best practices, see anthropic-best-practices.md. This document provides additional patterns and guidelines that complement the TDD-focused approach in this skill.
+### 2. Constraint-First Authoring
+Define scope, non-goals, and failure modes early. If a behavior matters, encode it as an explicit rule or boundary.
 
-## Supporting Documentation
+### 3. Concise Main File
+Keep `SKILL.md` lean. Put heavy reference material, large examples, and reusable tooling in supporting files.
 
-This skill has several supporting documents for deep dives into specific topics. Read them progressively as needed:
+### 4. Deterministic Outputs
+A good skill makes success legible. State required sections, expected outputs, and how the result is validated.
 
-**Core References:**
-- **`references/skill-creation-checklist.md`** - Complete TDD-adapted checklist for deployment. Read when ready to validate your skill before deployment.
-- **`assets/skill-template.md`** - Ready-to-use template for new skills. Copy this when starting a new skill.
+### 5. Reusable Over Narrative
+Write reusable guidance, patterns, and decision rules. Do not write a story about how one past task was solved.
 
-**Deep Dives:**
-- **`testing-skills-with-subagents.md`** - Complete testing methodology including pressure scenarios, baseline testing, and plugging holes. Read when you need to test a discipline-enforcing skill.
-- **`anthropic-best-practices.md`** - Anthropic's official skill authoring guidelines covering conciseness, degrees of freedom, and token efficiency. Read for official best practices.
-- **`persuasion-principles.md`** - Psychology-based techniques (Cialdini, 2021) for making skills resistant to rationalization. Read when creating discipline-enforcing skills.
-- **`references/cso-guidelines.md`** - Detailed CSO examples, naming conventions, token efficiency, and cross-referencing patterns. Read when writing descriptions or naming skills.
-- **`references/bulletproofing.md`** - Techniques for closing loopholes and building rationalization tables. Read when creating discipline-enforcing skills.
-- **`references/error-handling.md`** - Common failure modes and recovery steps during skill creation. Read when troubleshooting metadata, context bloat, testing, or deployment issues.
-- **`references/testing-skill-types.md`** - Test approaches for discipline, technique, pattern, and reference skills. Read when choosing a testing strategy.
+### 6. Test What Matters
+Do not trust a skill because it sounds good. Validate that an agent can discover it, apply it, and avoid the failures it is meant to prevent.
 
-**Tools:**
-- **`scripts/validate-metadata.py`** - Automated validation for name and description. Run before deployment.
-- **`scripts/init_skill.py`** - Initialize new skill directory structure. Use when starting a new skill.
-
-**When to Read Each:**
-- Starting new skill -> Use `init_skill.py` or copy `skill-template.md`
-- Writing description -> Review CSO section below + `references/cso-guidelines.md`
-- Testing skill -> Read `testing-skills-with-subagents.md`
-- Making skill bulletproof -> Read `references/bulletproofing.md` + `persuasion-principles.md`
-- Before deployment -> Check `references/skill-creation-checklist.md` + run `validate-metadata.py`
-- Troubleshooting -> Read `references/error-handling.md`
-
-## Quick Start Procedure
-
-**New to skill creation? Follow these steps:**
-
-1. **Validate Metadata First**
-   - Define skill name (lowercase, numbers, hyphens only, 1-64 chars)
-   - Draft description (max 1024 chars, starts with "Use when...", third person)
-   - Run: `python3 scripts/validate-metadata.py --name "skill-name" --description "..."`
-   - Fix any errors and re-validate
-
-2. **Create Directory Structure**
-   - Create skill directory: `mkdir skill-name/`
-   - Add subdirectories: `scripts/`, `references/`, `assets/` (only as needed)
-   - Copy template: `cp assets/skill-template.md skill-name/SKILL.md`
-
-3. **Run Baseline Tests (RED Phase)**
-   - Create pressure scenarios WITHOUT the skill
-   - Document exact agent behavior and rationalizations
-   - Identify patterns in failures
-
-4. **Write Minimal Skill (GREEN Phase)**
-   - Fill in template sections addressing baseline failures
-   - Keep SKILL.md under 500 lines
-   - Extract heavy content to `references/` if needed
-   - Add scripts to `scripts/` for fragile/deterministic tasks
-
-5. **Test and Refactor**
-   - Run scenarios WITH skill - verify compliance
-   - Identify new rationalizations -> add counters
-   - Re-test until bulletproof
-
-6. **Validate and Deploy**
-   - Run: `python3 scripts/validate-metadata.py --file SKILL.md`
-   - Check: `wc -l SKILL.md` (should be <500)
-   - Review: `references/skill-creation-checklist.md`
-   - Commit and push
-
-**Detailed guidance for each step is in the sections below.**
-
-## What is a Skill?
-
-A **skill** is a reference guide for proven techniques, patterns, or tools. Skills help future Claude instances find and apply effective approaches.
-
-**Skills are:** Reusable techniques, patterns, tools, reference guides
-
-**Skills are NOT:** Narratives about how you solved a problem once
-
-## TDD Mapping for Skills
-
-| TDD Concept | Skill Creation |
-|-------------|----------------|
-| **Test case** | Pressure scenario with subagent |
-| **Production code** | Skill document (SKILL.md) |
-| **Test fails (RED)** | Agent violates rule without skill (baseline) |
-| **Test passes (GREEN)** | Agent complies with skill present |
-| **Refactor** | Close loopholes while maintaining compliance |
-| **Write test first** | Run baseline scenario BEFORE writing skill |
-| **Watch it fail** | Document exact rationalizations agent uses |
-| **Minimal code** | Write skill addressing those specific violations |
-| **Watch it pass** | Verify agent now complies |
-| **Refactor cycle** | Find new rationalizations -> plug -> re-verify |
-
-The entire skill creation process follows RED-GREEN-REFACTOR.
+### 7. Match Instruction Strength to Task Fragility
+Use hard constraints for fragile or safety-critical work. Use lighter guidance where context and judgment should stay flexible.
 
 ## When to Create a Skill
 
-**Create when:**
-- Technique wasn't intuitively obvious to you
-- You'd reference this again across projects
-- Pattern applies broadly (not project-specific)
-- Others would benefit
+**Create a skill when:**
+- the technique or judgment was not obvious
+- you expect to reuse it across tasks or projects
+- the pattern is broader than one repository's local convention
+- future agents would benefit from having the guidance discoverable
 
-**Don't create for:**
-- One-off solutions
-- Standard practices well-documented elsewhere
-- Project-specific conventions (put in CLAUDE.md)
-- Mechanical constraints (if it's enforceable with regex/validation, automate it -- save documentation for judgment calls)
+**Do not create a skill for:**
+- one-off fixes or historical writeups
+- project-specific conventions that belong in `CLAUDE.md`
+- information that is already well covered by an existing canonical skill or reference
+- mechanical constraints that should be enforced by code, validation, or automation instead of prose
 
-## Progressive Disclosure Guidelines
+## Hard Boundaries
 
-**Core principle:** Keep SKILL.md lean. Extract content progressively as it grows.
+A skill you write **MUST**:
+- define when it should be used
+- define when it should not be used
+- describe the core decision rule, pattern, or workflow it teaches
+- include enough searchable terms for discovery
+- keep the main file focused and move heavy detail out of `SKILL.md`
+- make verification possible before deployment
 
-### Line Count Thresholds
+A skill you write **MUST NOT**:
+- be a narrative case study
+- duplicate large chunks of canonical guidance from supporting references
+- explain basic concepts the model already knows unless the explanation changes behavior
+- add sections that do not improve discovery, decision-making, or execution quality
+- force rigid process where contextual judgment is the real requirement
 
+## Authoring Workflow
+
+Use this loop:
+
+1. **Define the job**
+   - What problem does the skill solve?
+   - What should change in agent behavior after reading it?
+   - What is explicitly out of scope?
+
+2. **Define triggers and boundaries**
+   - Write the discovery conditions first.
+   - Capture positive triggers, negative triggers, and key searchable phrases.
+
+3. **Draft the minimum useful skill**
+   - Write a lean `SKILL.md` with the required sections.
+   - Prefer principles, rules, and compact examples over long explanation.
+
+4. **Extract heavy content**
+   - Move large references to `references/`.
+   - Move deterministic tooling to `scripts/`.
+   - Move reusable templates and schemas to `assets/`.
+
+5. **Validate and tighten**
+   - Test discoverability.
+   - Test application.
+   - Tighten weak wording, loopholes, and vague boundaries.
+
+## What a Good Skill Contains
+
+A strong `SKILL.md` usually has these parts:
+
+1. **Overview / Purpose**
+   - What the skill helps with
+   - The core idea in 1-2 short paragraphs
+
+2. **When to Use**
+   - concrete triggers, symptoms, or contexts
+
+3. **When Not to Use**
+   - explicit non-goals
+   - adjacent cases that should use another tool, skill, or document
+
+4. **Core Principles or Decision Rules**
+   - the judgment model the agent should apply
+
+5. **Workflow / Implementation Guidance**
+   - short, high-signal steps
+   - conditional references to deeper docs when needed
+
+6. **Verification / Quality Checks**
+   - how to know the skill is correct, complete, and ready
+
+7. **Supporting Files**
+   - only when justified by size, reuse, or determinism
+
+Use `assets/skill-template.md` when you need a starting point, but tailor the structure to the actual skill type.
+
+## Frontmatter and Discovery
+
+Future Claude finds skills through metadata first. Bad frontmatter makes good skills invisible.
+
+### Name
+- lowercase letters, numbers, and hyphens only
+- maximum 64 characters
+- use clear, searchable naming
+- prefer gerund or action-oriented names when they fit
+
+### Description
+- write in third person
+- describe when to use the skill
+- include concrete triggers, symptoms, contexts, and keywords
+- keep it specific enough to disambiguate from nearby skills
+- do not summarize the full workflow in the description
+
+**Good pattern:**
+```yaml
+name: skill-creating
+description: Use when creating a new skill, rewriting an existing SKILL.md, improving skill discoverability, tightening skill boundaries, validating skill metadata, or deciding how to structure supporting references, assets, and scripts.
 ```
-SKILL.md size decision tree:
-|- Under 300 lines -> Keep everything inline
-|- 300-500 lines -> Consider extracting heavy reference material
-|- Over 500 lines -> MUST extract content (see extraction criteria below)
+
+**Bad pattern:**
+```yaml
+description: Helps write skills by following a six-step workflow.
 ```
 
-### When to Extract Content
+Why this is bad: it describes the skill's internals instead of the situations that should trigger it.
 
-**Extract to `references/`:** API docs (>100 lines), syntax guides, schema definitions, troubleshooting guides, testing methodology
+For deeper naming and CSO guidance, read `references/cso-guidelines.md`.
 
-**Extract to `scripts/`:** Validation logic, transformation/parsing code, deterministic operations, CLI tools for repetitive tasks
+## Progressive Disclosure
 
-**Extract to `assets/`:** Code templates, JSON schemas, configuration examples, output format templates
+Keep `SKILL.md` under 500 lines. Shorter is better if clarity is preserved.
 
-### How to Reference Extracted Content
+**Keep inline:**
+- principles
+- concise decision rules
+- short examples
+- compact workflows
 
-Use just-in-time loading instructions:
+**Move to `references/`:**
+- long documentation
+- testing methodology
+- troubleshooting guides
+- detailed catalogs and tables
+
+**Move to `scripts/`:**
+- validation commands
+- parsing/transformation logic
+- repetitive deterministic operations
+
+**Move to `assets/`:**
+- templates
+- schemas
+- reusable examples or skeletons
+
+Prefer just-in-time references:
 
 ```markdown
-# GOOD: Load only when needed
-Read `references/api-spec.md` to identify the correct endpoint.
-
-# GOOD: Conditional loading
-If validation fails, read `references/troubleshooting.md` for recovery steps.
-
-# BAD: Force-loading with @
-See @references/api-spec.md for details.
+Read `references/testing-skill-types.md` when choosing a testing strategy.
+If validation fails, read `references/error-handling.md`.
 ```
 
-**Why avoid @:** The `@` syntax force-loads files immediately, consuming context before you need them.
+Avoid force-loading large files unless they are immediately needed.
 
-### Verification
+## Structure Supporting Files Deliberately
 
-```bash
-# Check line count
-wc -l SKILL.md
-# Target: <500 lines for main skill
+Use this directory shape only as needed:
+
+```text
+skill-name/
+├── SKILL.md
+├── scripts/
+├── references/
+├── assets/
+├── agents/
+└── examples/
 ```
 
-## Skill Types
+### Use each directory for a distinct job
+- `scripts/` — executable helpers and validation logic
+- `references/` — heavy docs and deep guidance
+- `assets/` — templates, schemas, reusable scaffolds
+- `agents/` — testing prompts or specialized evaluation prompts
+- `examples/` — complete worked examples when they truly teach something the main file cannot
 
-### Technique
-Concrete method with steps to follow (condition-based-waiting, root-cause-tracing)
+Do not create empty structure just because the folders are available.
 
-### Pattern
-Way of thinking about problems (flatten-with-flags, test-invariants)
+## Examples and Flowcharts
 
-### Reference
-API docs, syntax guides, tool documentation (office docs)
+### Examples
+Use one excellent example instead of many weak ones.
 
-## Directory Structure
+A good example is:
+- directly relevant
+- complete enough to adapt
+- small enough to scan quickly
+- chosen because it resolves ambiguity, not because examples feel nice to include
 
-```
-skills/
-  skill-name/
-    SKILL.md              # Main reference (required, <500 lines)
-    scripts/              # Validation, transformation, CLI tools
-    references/           # Heavy docs, API specs, troubleshooting
-    assets/               # Templates, schemas, examples
-    agents/               # Testing subagent prompts (optional)
-    examples/             # Real-world skill examples (optional)
-```
+Do not dilute the skill with many parallel examples in different languages unless the language difference is essential.
 
-**Flat namespace** - all skills in one searchable namespace
+### Flowcharts
+Use flowcharts only when a decision is genuinely non-obvious.
 
-### Directory Purposes
+Good use cases:
+- branching choice between adjacent approaches
+- stop/continue loops
+- non-trivial decision points
 
-**`scripts/`** - Tiny CLI tools, validation scripts, transformation/parsing logic, repetitive operations. Example: `validate-metadata.py`, `init-skill.py`
+Bad use cases:
+- linear procedures
+- reference material
+- code examples
 
-**`references/`** - API documentation (>100 lines), syntax guides, schema definitions, troubleshooting guides. Keep files flat (one level deep). Example: `skill-creation-checklist.md`
+For graph conventions, see `graphviz-conventions.dot`.
 
-**`assets/`** - Code templates, JSON schemas, configuration examples, output format templates. Example: `skill-template.md`
+## Testing Skills Before Trusting Them
 
-**`agents/`** - Subagent prompts for testing skills (grader, comparator, analyzer agents). Optional.
+Writing skills is TDD for process documentation.
 
-**`examples/`** - Complete examples of skills in action, real scenarios, testing examples. Optional.
+### The rule
+Do not treat a skill as done until you have evidence that it changes behavior in the intended way.
 
-### File Organization Principles
+### RED
+Run a baseline scenario without the skill. Observe what the agent does naturally.
 
-**Separate files for:** Heavy reference (100+ lines), reusable tools/scripts/templates
+### GREEN
+Write the minimum skill that addresses the actual failure, ambiguity, or missing guidance.
 
-**Keep inline:** Principles, concepts, code patterns (<50 lines), everything else
+### REFACTOR
+Tighten wording, close loopholes, and re-test until the skill is reliable.
 
-## SKILL.md Structure
+### What to test
+At minimum, verify:
+- **discovery** — would the metadata cause the right agent to load the skill?
+- **application** — does the skill help the agent act better, not just describe itself?
+- **boundaries** — does the skill prevent misuse or overreach?
 
-**Frontmatter (YAML):**
-- Only two fields supported: `name` and `description`
-- Max 1024 characters total
-- `name`: Use letters, numbers, and hyphens only (no parentheses, special chars)
-- `description`: Third-person, describes ONLY when to use (NOT what it does)
-  - Start with "Use when..." to focus on triggering conditions
-  - Include specific symptoms, situations, and contexts
-  - **NEVER summarize the skill's process or workflow** (see CSO section for why)
-  - Keep under 500 characters if possible
+For detailed testing methods, read:
+- `testing-skills-with-subagents.md`
+- `references/testing-skill-types.md`
+- `references/bulletproofing.md`
 
-```markdown
----
-name: Skill-Name-With-Hyphens
-description: Use when [specific triggering conditions and symptoms]
----
+## Quality Bar
 
-# Skill Name
+Before considering a skill complete, confirm:
+- the metadata is valid
+- the description is discoverable and specific
+- the main file is concise
+- the skill has explicit scope and non-scope
+- the guidance teaches judgment, not just ceremony
+- supporting files exist only where they earn their keep
+- testing matches the skill type
+- the skill is better because of what it omits, not just what it includes
 
-## Overview
-What is this? Core principle in 1-2 sentences.
+Use `references/skill-creation-checklist.md` as the final pass.
 
-## When to Use
-[Small inline flowchart IF decision non-obvious]
+## Validation
 
-Bullet list with SYMPTOMS and use cases
-When NOT to use
-
-## Core Pattern (for techniques/patterns)
-Before/after code comparison
-
-## Quick Reference
-Table or bullets for scanning common operations
-
-## Implementation
-Inline code for simple patterns
-Link to file for heavy reference or reusable tools
-
-## Common Mistakes
-What goes wrong + fixes
-
-## Real-World Impact (optional)
-Concrete results
-```
-
-## Claude Search Optimization (CSO)
-
-**Critical for discovery:** Future Claude needs to FIND your skill.
-
-**Key rules:**
-- Description = WHEN to use, NOT what the skill does. Start with "Use when..."
-- Include positive triggers (conditions/symptoms) AND negative triggers (when NOT to use)
-- Write in third person -- never use "I", "you", "we"
-- **NEVER summarize the skill's workflow in the description** -- this causes Claude to follow the description shortcut instead of reading the full skill
-- Use searchable keywords (error messages, symptoms, synonyms, tool names)
-- Name skills with `{domain}-{action}` pattern using gerund form (e.g., `tdd-planning`, `spec-writing`)
-
-Read `references/cso-guidelines.md` for detailed examples, the unified naming system, token efficiency techniques, and cross-referencing patterns.
-
-## Flowchart Usage
-
-**Use flowcharts ONLY for:** Non-obvious decision points, process loops where you might stop too early, "When to use A vs B" decisions
-
-**Never use flowcharts for:** Reference material (use tables/lists), code examples (use markdown blocks), linear instructions (use numbered lists)
-
-See @graphviz-conventions.dot for graphviz style rules.
-
-**Visualizing for your human partner:** Use `render-graphs.js` to render a skill's flowcharts to SVG:
-```bash
-./render-graphs.js ../some-skill           # Each diagram separately
-./render-graphs.js ../some-skill --combine # All diagrams in one SVG
-```
-
-## Code Examples
-
-**One excellent example beats many mediocre ones**
-
-Choose most relevant language (testing -> TypeScript/JavaScript, debugging -> Shell/Python, data -> Python).
-
-**Good example:** Complete and runnable, well-commented explaining WHY, from real scenario, shows pattern clearly, ready to adapt
-
-**Don't:** Implement in 5+ languages, create fill-in-the-blank templates, write contrived examples. You're good at porting -- one great example is enough.
-
-## File Organization
-
-### Self-Contained Skill
-```
-defense-in-depth/
-  SKILL.md    # Everything inline
-```
-When: All content fits, no heavy reference needed
-
-### Skill with Reusable Tool
-```
-condition-based-waiting/
-  SKILL.md    # Overview + patterns
-  example.ts  # Working helpers to adapt
-```
-When: Tool is reusable code, not just narrative
-
-### Skill with Heavy Reference
-```
-pptx/
-  SKILL.md       # Overview + workflows
-  pptxgenjs.md   # 600 lines API reference
-  ooxml.md       # 500 lines XML structure
-  scripts/       # Executable tools
-```
-When: Reference material too large for inline
-
-## The Iron Law (Same as TDD)
-
-```
-NO SKILL WITHOUT A FAILING TEST FIRST
-```
-
-This applies to NEW skills AND EDITS to existing skills.
-
-Write skill before testing? Delete it. Start over.
-Edit skill without testing? Same violation.
-
-**No exceptions:**
-- Not for "simple additions"
-- Not for "just adding a section"
-- Not for "documentation updates"
-- Don't keep untested changes as "reference"
-- Don't "adapt" while running tests
-- Delete means delete
-
-**REQUIRED BACKGROUND:** The superpowers:test-driven-development skill explains why this matters. Same principles apply to documentation.
-
-## Testing All Skill Types
-
-Different skill types need different test approaches. Read `references/testing-skill-types.md` for detailed test strategies covering discipline-enforcing, technique, pattern, and reference skills.
-
-**Quick summary:** Discipline skills need pressure scenarios. Technique skills need application scenarios. Pattern skills need recognition and counter-example scenarios. Reference skills need retrieval and gap testing.
-
-## Bulletproofing Skills Against Rationalization
-
-Skills that enforce discipline need to resist rationalization. Read `references/bulletproofing.md` for the complete methodology including loophole closing, rationalization tables, red flags lists, and common testing excuses.
-
-**Key techniques (brief):**
-- Close every loophole explicitly -- forbid specific workarounds, not just the violation
-- Address "spirit vs letter" arguments with: "Violating the letter of the rules IS violating the spirit"
-- Build rationalization tables from baseline testing -- every agent excuse gets a counter
-- Create red flags lists for agent self-checking
-- See also `persuasion-principles.md` for the psychology foundation (Cialdini, 2021)
-
-## Error Handling
-
-Read `references/error-handling.md` for detailed failure modes and recovery steps covering metadata validation, context bloat, testing failures, and deployment issues.
-
-**Quick validation:**
 ```bash
 python3 scripts/validate-metadata.py --file SKILL.md
-wc -l SKILL.md  # Should be <500
+wc -l SKILL.md
 ```
 
-## RED-GREEN-REFACTOR for Skills
+Target: valid metadata and a lean main file under 500 lines.
 
-Follow the TDD cycle:
-
-### RED: Write Failing Test (Baseline)
-
-Run pressure scenario with subagent WITHOUT the skill. Document exact behavior:
-- What choices did they make?
-- What rationalizations did they use (verbatim)?
-- Which pressures triggered violations?
-
-This is "watch the test fail" - you must see what agents naturally do before writing the skill.
-
-### GREEN: Write Minimal Skill
-
-Write skill that addresses those specific rationalizations. Don't add extra content for hypothetical cases.
-
-Run same scenarios WITH skill. Agent should now comply.
-
-### REFACTOR: Close Loopholes
-
-Agent found new rationalization? Add explicit counter. Re-test until bulletproof.
-
-**Testing methodology:** See `testing-skills-with-subagents.md` for the complete testing methodology (pressure scenarios, pressure types, plugging holes, meta-testing).
+If you hit issues with metadata, testing, or file organization, read `references/error-handling.md`.
 
 ## Anti-Patterns
 
-**Narrative Example:** "In session 2025-10-03, we found empty projectDir caused..." -- Too specific, not reusable
+Avoid these:
+- **Narrative skills** — historical story instead of reusable guidance
+- **Verbose theory dumps** — long explanation that does not change behavior
+- **Vague descriptions** — metadata that cannot trigger reliably
+- **Workflow-only skills** — steps with no underlying decision rule
+- **Duplicate policy text** — copying large reference content into `SKILL.md`
+- **Cargo-cult structure** — adding sections, folders, or diagrams with no clear payoff
+- **Example sprawl** — many weak examples instead of one decisive one
 
-**Multi-Language Dilution:** example-js.js, example-py.py, example-go.go -- Mediocre quality, maintenance burden
+## Reference Map
 
-**Code in Flowcharts:** `step1 [label="import fs"]` -- Can't copy-paste, hard to read
+Read supporting files only when needed:
+- `assets/skill-template.md` — starting template for new skills
+- `references/skill-creation-checklist.md` — final validation checklist
+- `references/testing-skill-types.md` — choose the right test strategy for the skill type
+- `testing-skills-with-subagents.md` — baseline, pressure, and loophole-focused testing
+- `references/cso-guidelines.md` — naming and discoverability guidance
+- `references/bulletproofing.md` — closing rationalization loopholes in discipline-enforcing skills
+- `references/error-handling.md` — troubleshooting metadata, context bloat, and testing issues
+- `anthropic-best-practices.md` — official authoring guidance on concision and instruction shape
+- `persuasion-principles.md` — pressure/compliance background for discipline-oriented skills
 
-**Generic Labels:** helper1, helper2, step3, pattern4 -- Labels should have semantic meaning
+## Bottom Line
 
-## STOP: Before Moving to Next Skill
-
-**After writing ANY skill, you MUST STOP and complete the deployment process.**
-
-**Do NOT:** Create multiple skills in batch without testing each, move to next skill before current one is verified, skip testing because "batching is more efficient"
-
-**The deployment checklist is MANDATORY for EACH skill.**
-
-## Skill Creation Checklist
-
-See `references/skill-creation-checklist.md` for the complete TDD-adapted checklist covering RED, GREEN, REFACTOR phases, quality checks, and deployment steps.
-
-**Quick validation:**
-```bash
-python3 scripts/validate-metadata.py --file SKILL.md
-```
-
-## Discovery Workflow
-
-How future Claude finds your skill:
-
-1. **Encounters problem** ("tests are flaky")
-3. **Finds SKILL** (description matches)
-4. **Scans overview** (is this relevant?)
-5. **Reads patterns** (quick reference table)
-6. **Loads example** (only when implementing)
-
-**Optimize for this flow** - put searchable terms early and often.
-
-## The Bottom Line
-
-**Creating skills IS TDD for process documentation.**
-
-Same Iron Law: No skill without failing test first.
-Same cycle: RED (baseline) -> GREEN (write skill) -> REFACTOR (close loopholes).
-Same benefits: Better quality, fewer surprises, bulletproof results.
-
-If you follow TDD for code, follow it for skills. It's the same discipline applied to documentation.
+A strong skill is not the longest explanation. It is the smallest reliable instruction set that helps a future agent discover the right guidance, apply it correctly, stay inside the boundary, and verify the result.

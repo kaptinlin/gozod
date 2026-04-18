@@ -186,7 +186,7 @@ good := server.New(ctx, server.Options{Port: 42})
 
 ## Variable Declaration Conventions
 
-Use `:=` for non-zero initialization. Use `var` for zero-value declarations. Use `new()` for pointer-to-zero-value.
+Use `:=` for non-zero initialization. Use `var` for zero-value declarations. Use `new()` for pointer-to-zero-value. In Go 1.26+, `new(expr)` is acceptable when inline pointer creation is clearer than a temporary variable.
 
 ```go
 // Non-zero — use :=
@@ -202,6 +202,12 @@ var (
 // Pointer to zero value
 buf := new(bytes.Buffer)
 msg := new(pb.Message)
+
+// Go 1.26+: inline pointer to computed value
+person := Person{
+    Name: name,
+    Age:  new(yearsSince(born)),
+}
 ```
 
 Maps must be explicitly initialized before modification, but reading from a zero-value map is safe.

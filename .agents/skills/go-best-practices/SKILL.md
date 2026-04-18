@@ -1,12 +1,12 @@
 ---
-description: Google Go coding best practices and style guide for writing idiomatic, maintainable Go code. Use when writing, reviewing, or refactoring Go code. Triggers on Go naming conventions, error handling patterns, interface design, testing structure, concurrency patterns, formatting, and documentation.
+description: Use when writing, reviewing, or refactoring Go code for idiomatic API design, naming, error handling, testing structure, testify usage boundaries, concurrency patterns, formatting, and documentation. Pair with modernizing when adopting Go 1.20+ stdlib and language improvements.
 name: go-best-practices
 ---
 
 
 # Google Go Best Practices
 
-Comprehensive Go coding guide based on Google's internal style guide. Contains 47 rules across 8 categories, prioritized by impact to guide code review, refactoring, and generation.
+Comprehensive Go coding guide based on Google's internal style guide, tuned for modern Go codebases. Use it for durable judgment first: API shape, naming, errors, tests, readability, and maintainability. Then layer in version-gated modernization when newer Go features make the code simpler.
 
 ## When to Apply
 
@@ -16,6 +16,26 @@ Reference these guidelines when:
 - Refactoring existing Go code
 - Designing Go APIs (interfaces, option patterns, error types)
 - Writing or improving Go tests
+
+## Relationship to `modernizing`
+
+Use this skill for durable rules that stay true across Go versions:
+- API shape and package boundaries
+- naming and documentation
+- error contracts
+- test readability and maintainability
+- concurrency ownership and lifecycle
+
+Use `modernizing` for version-gated upgrades:
+- `errors.Join`, `errors.AsType`, `context.WithCancelCause`
+- `sync.WaitGroup.Go`, `sync.OnceValue`
+- `b.Loop`, `t.Context`, `testing/synctest`
+- `slices`, `maps`, `cmp`, `min`, `max`, `clear`
+
+When both skills apply:
+1. Keep the durable rule from this skill.
+2. Prefer the newer stdlib API when it reduces code and keeps intent obvious.
+3. Do not modernize mechanically if it conflicts with repository convention or makes the code harder to read.
 
 ## Rule Categories by Priority
 
@@ -49,6 +69,7 @@ Reference these guidelines when:
 - Add Non-Redundant Context — meaningful wrapping without duplication
 - %v vs %w — `%v` at boundaries, `%w` for programmatic inspection
 - %w Position — place at end: `"context: %w"`
+- Modern Error APIs — prefer `errors.Join`, `errors.AsType`, and cause-aware contexts when they simplify the code
 - Return error Interface — not concrete types
 - Handle Errors Explicitly — never silently discard with `_`
 - Indent Error Flow — handle errors first, keep success path unindented
@@ -74,7 +95,7 @@ Reference these guidelines when:
 - Struct Literal Fields — use field names; omit zero values
 - Nil Slices — prefer `var t []string` over `t := []string{}`
 - Function Formatting — keep signatures on one line; extract locals
-- Variable Declarations — `:=` for non-zero, `var` for zero, `new()` for pointers
+- Variable Declarations — `:=` for non-zero, `var` for zero, `new()` for pointers, `new(expr)` when inline pointer creation is clearer
 - Conditions — extract complex conditions; no Yoda; no redundant `break`
 
 ### 5. Documentation (MEDIUM) — See [rules/doc.md](rules/doc.md)
@@ -88,9 +109,10 @@ Reference these guidelines when:
 ### 6. Testing (MEDIUM) — See [rules/testing.md](rules/testing.md)
 
 - Table-Driven Tests — with named fields and descriptions
-- No Assertion Libraries — `testing` package only
+- Assertion Style — prefer `testing` and `cmp`; `testify` is acceptable when repo conventions or clarity justify it
 - Got Before Want — format: `Func(%v) = %v, want %v`
 - Test Helpers — call `t.Helper()`; prefix must-succeed with `must`
+- Modern Test APIs — use `b.Loop`, `t.Context`, `t.Chdir`, and `testing/synctest` when Go version and test shape fit
 - Scoped Setup — explicit per test; no package-level `init()`
 - Error Semantics — test with `errors.Is`, not strings
 - Goroutine Fatal — use `t.Error` not `t.Fatal` from goroutines
@@ -98,6 +120,7 @@ Reference these guidelines when:
 ### 7. Concurrency (MEDIUM) — See [rules/concurrency.md](rules/concurrency.md)
 
 - Goroutine Lifetimes — use WaitGroup to bound lifetimes
+- Modern Sync Helpers — prefer `WaitGroup.Go`, `OnceValue`, and newer timer semantics when they remove boilerplate
 - Synchronous Functions — prefer sync; callers add concurrency
 - Channel Direction — specify `<-chan` or `chan<-` in signatures
 - No Copy — never copy `sync.Mutex` or types with pointer methods
@@ -107,6 +130,7 @@ Reference these guidelines when:
 ### 8. Performance (LOW-MEDIUM) — See [rules/perf.md](rules/perf.md)
 
 - String Concatenation — `+` for simple, `Sprintf` for format, `Builder` for loops
+- Modern Stdlib Helpers — prefer `slices`, `maps`, `cmp`, `bytes.Clone`, `min`, `max`, and `clear` before hand-rolled helpers
 - Size Hints — pre-allocate with justified hints only
 - %q Format — use for readable string output
 - crypto/rand — for keys, never `math/rand`

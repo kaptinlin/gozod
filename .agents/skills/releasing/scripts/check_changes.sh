@@ -2,7 +2,7 @@
 # Check for changes since the latest tag that warrant a new release.
 # Exit 0 = tag needed, Exit 1 = no tag needed.
 #
-# Usage: bash scripts/check_changes.sh
+# Usage: bash "$SKILL_SCRIPTS/check_changes.sh"  (where SKILL_SCRIPTS is resolved per SKILL.md)
 
 set -euo pipefail
 

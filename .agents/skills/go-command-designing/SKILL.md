@@ -32,6 +32,7 @@ Design world-class CLI commands following Docker/Git conventions and CLIG princi
 | Fail with guidance | Errors include what went wrong + how to fix | Hint field in Error |
 | Dry-run for writes | `DryRunOption()` on every write command | `deploy -n` to preview |
 | Structured response | `Respond[T]()` for typed output | Auto JSON envelope in Agent |
+| **Type-safe config** | **`ctx.Bind()` + `gozod.FromStruct[T]()`** | **Typed struct + validation** |
 | **Thin handlers** | **50-150 lines, delegate to internal/** | **See layering.md** |
 
 ## Design Rules
@@ -112,16 +113,27 @@ Options: []command.Option{
 Command handlers should be 50-150 lines: parse input, call business logic, format output. Extract complex logic to `internal/` packages.
 
 ```go
-// Good -- thin handler (40 lines)
+// Good -- thin handler with type-safe config
+type DeployConfig struct {
+    Version string `flag:"version" validate:"required"`
+    Force   bool   `flag:"force"`
+}
+
 func deployHandler(ctx *command.Context) error {
     env := ctx.Args[0]
-    version := ctx.String("version")
+
+    var cfg DeployConfig
+    if err := ctx.Bind(&cfg); err != nil {
+        return err
+    }
+
+    schema := gozod.FromStruct[DeployConfig](gozod.WithTagName("validate"))
+    if _, err := schema.Parse(cfg); err != nil {
+        return err
+    }
 
     deployer := service.NewDeployer(config)
-    result, err := deployer.Deploy(ctx.Context(), service.DeployInput{
-        Environment: env,
-        Version:     version,
-    })
+    result, err := deployer.Deploy(ctx.Context(), env, cfg.Version, cfg.Force)
     if err != nil {
         return err
     }
@@ -131,8 +143,9 @@ func deployHandler(ctx *command.Context) error {
 
 // Bad -- fat handler (200+ lines)
 func deployHandler(ctx *command.Context) error {
-    // Validation logic (should be in service)
-    if !isValidEnv(ctx.Args[0]) { ... }
+    // Manual validation (should use Bind + gozod)
+    version := ctx.String("version")
+    if version == "" { ... }
 
     // API calls (should be in client)
     resp, err := http.Post(...)
@@ -155,6 +168,55 @@ pkg/           → Core types (zero dependencies)
 **When to extract:** Handler > 150 lines, repeated logic, need testing without CLI, planning API interface.
 
 **Full guide** -- See [references/layering.md](references/layering.md)
+
+### Rule 4.5: Use Optional[T] for Non-Required Fields
+
+Use `command.Optional[T]` to distinguish "not set" from "zero value" in config structs.
+
+```go
+type ServerConfig struct {
+    Host string `flag:"host" validate:"required"`
+
+    // Optional fields - distinguish unset from zero
+    Port    command.Optional[int]  `flag:"port" validate:"min=1000,max=9999"`
+    Workers command.Optional[int]  `flag:"workers" validate:"min=1,max=100"`
+    Debug   command.Optional[bool] `flag:"debug"`
+}
+
+Handler: func(ctx *command.Context) error {
+    var cfg ServerConfig
+    if err := ctx.Bind(&cfg); err != nil {
+        return err
+    }
+
+    // Use OrDefault for optional fields
+    port := cfg.Port.OrDefault(8080)
+    workers := cfg.Workers.OrDefault(4)
+
+    // Check if explicitly set
+    if cfg.Debug.IsSet() {
+        enableDebug(cfg.Debug.Value)
+    }
+
+    return startServer(cfg.Host, port, workers)
+}
+```
+
+**Why Optional[T]?**
+
+```go
+// ❌ Without Optional - can't distinguish unset from zero
+type Config struct {
+    Port int `flag:"port"` // 0 means unset or explicitly set to 0?
+}
+
+// ✓ With Optional - explicit distinction
+type Config struct {
+    Port command.Optional[int] `flag:"port"`
+}
+cfg.Port.IsSet()           // false if not provided
+cfg.Port.OrDefault(8080)   // 8080 if not provided
+```
 
 ### Rule 5: Declare Constraints, Don't Code Them
 
@@ -489,6 +551,139 @@ return command.Respond(ctx, result, command.ResponseMeta{
 ```
 
 For human-only output, use `ctx.Successf()` + `ctx.Printf()` with suggested commands.
+
+### Rule 15: Struct Binding -- Eliminate Boilerplate
+
+Use `ctx.Bind()` to map options to struct fields. Reduces handler code by 60-80%.
+
+```go
+// Good -- declarative binding (15 lines)
+type DeployParams struct {
+    Env     string `flag:"env" desc:"Target environment"`
+    DryRun  bool   `flag:"dry-run" desc:"Preview changes"`
+    Workers int    `flag:"workers" default:"4" desc:"Worker count"`
+}
+
+Handler: func(ctx *command.Context) error {
+    var params DeployParams
+    if err := ctx.Bind(&params); err != nil {
+        return err
+    }
+
+    // Validate required fields
+    if params.Env == "" {
+        return fmt.Errorf("--env is required")
+    }
+
+    return deploy(params.Env, params.Workers, params.DryRun)
+}
+
+// Bad -- manual extraction (70+ lines)
+Handler: func(ctx *command.Context) error {
+    env := ctx.String("env")
+    if env == "" {
+        return fmt.Errorf("--env required")
+    }
+    workers := 4
+    if w := ctx.String("workers"); w != "" {
+        parsed, err := strconv.Atoi(w)
+        if err != nil {
+            return fmt.Errorf("invalid --workers: %w", err)
+        }
+        workers = parsed
+    }
+    // ... repeated for each option
+}
+```
+
+**Supported tags**: `flag`, `short`, `desc`, `default`, `env`, `persistent`
+
+### Rule 16: Optional[T] -- Handle Optional Values
+
+Use `Optional[T]` when you need to distinguish "not set" from "set to zero value". Common for ports, timeouts, and feature flags.
+
+```go
+type ServerParams struct {
+    Host string              `flag:"host"`
+    Port command.Optional[int] `flag:"port" default:"8080"`
+}
+
+Handler: func(ctx *command.Context) error {
+    var params ServerParams
+    if err := ctx.Bind(&params); err != nil {
+        return err
+    }
+
+    // Validate required fields
+    if params.Host == "" {
+        return fmt.Errorf("--host is required")
+    }
+
+    // Use Optional[T] for truly optional values
+    port := params.Port.OrDefault(8080)
+    return startServer(params.Host, port)
+}
+```
+
+**When to use**:
+- Distinguish `--port 0` from not providing `--port`
+- Optional config that changes behavior when explicitly set
+- Need to detect if user provided a value
+
+**Pattern**: Use plain types for required fields, validate in handler. Use `Optional[T]` only for truly optional values.
+
+### Rule 17: Validation Integration
+
+Integrate validation libraries via `command.Validator` interface. Example with gozod:
+
+```go
+// Define validator
+type GozodValidator struct {
+    tagName string
+}
+
+func (v *GozodValidator) Validate(target any) error {
+    schema := gozod.FromStruct(target, gozod.WithTagName(v.tagName))
+    _, err := schema.Parse(target)
+    return err
+}
+
+// Register with app
+app := command.New(command.Config{
+    Name:      "myapp",
+    Validator: &GozodValidator{tagName: "validate"},
+})
+
+// Use in handler
+type CreateParams struct {
+    Name  string              `flag:"name" validate:"min=3,max=50"`
+    Port  command.Optional[int] `flag:"port" validate:"min=1000,max=9999"`
+    Email string              `flag:"email" validate:"email"`
+}
+
+Handler: func(ctx *command.Context) error {
+    var params CreateParams
+    if err := ctx.Bind(&params); err != nil {
+        return err
+    }
+
+    // Manual validation for required fields
+    if params.Name == "" {
+        return fmt.Errorf("--name is required")
+    }
+
+    // Optional: use validator for complex rules
+    if err := ctx.Validate(&params); err != nil {
+        return err
+    }
+
+    return createResource(params)
+}
+```
+
+**Pattern**: Bind → Validate → Execute. Validation is optional; only call `ctx.Validate()` if you registered a validator.
+
+See `examples/validate/` for complete gozod integration.
 
 ## Command Patterns
 

@@ -1,13 +1,13 @@
 # Query & Filtering
 
-## `github.com/agentable/queryparse` — URL Query String Parsing
+## `github.com/agentable/go-queryparse` — URL Query String Parsing
 
 - Complete URL Query Language specification
 - Filtering, sorting, pagination, field selection, resource loading
 
 **When to use:** RESTful API query parameter parsing, complex filter/sort/page from URL.
 
-## `github.com/agentable/queryschema` — Query Schema Building
+## `github.com/agentable/go-queryschema` — Query Schema Building
 
 - 100% Query Protocol v1.0 compliant
 - Smart JSON serialization, fluent API
@@ -16,7 +16,7 @@
 
 **When to use:** Building query schemas for API responses, defining filterable/sortable fields, API specification.
 
-## `github.com/agentable/condeval` — Dynamic Condition Evaluation
+## `github.com/agentable/go-condeval` — Dynamic Condition Evaluation
 
 - Evaluates dynamic filter expressions based on Query Protocol
 - Type-safe operations, extensible architecture
@@ -24,11 +24,32 @@
 
 **When to use:** Runtime filter evaluation, dynamic query conditions, rule engine expressions.
 
-## `github.com/agentable/filterschema` — Filter Schema Validation
+## `github.com/agentable/go-filterschema` — Filter Schema Validation
 
 - Type-safe filter validators for QuerySchema expressions
 
 **When to use:** Validating incoming filter parameters against a schema, ensuring query safety.
+
+## `github.com/agentable/go-grep` — Code/File Content Search
+
+- Pure Go grep library with regex, glob filtering, `.gitignore` support, and optional ripgrep acceleration
+- Optimized for agentic and programmatic search use cases
+
+**When to use:** Searching source trees, logs, or file collections by regex/literal patterns.
+
+## `github.com/agentable/go-search` — Full-Text Search Engine
+
+- Framework-agnostic full-text search with pluggable backends
+- Unified root API for indexing, searching, and backend failover
+
+**When to use:** Application-level full-text indexing and search across documents or records.
+
+## `github.com/agentable/go-schema` — App Data Schema Engine
+
+- Dynamic/code-defined collection schema engine with records, predicates, relations, hooks, and access rules
+- Database-agnostic across SQLite, PostgreSQL, and TiDB
+
+**When to use:** Airtable-like backends, dynamic data models, or schema-driven app data layers.
 
 ## How They Fit Together
 
@@ -47,3 +68,8 @@ Typical usage:
 2. **queryparse** parses incoming URL query strings
 3. **filterschema** validates parsed filters against the schema
 4. **condeval** evaluates conditions at runtime
+
+Related but distinct concerns:
+- **go-grep** for source tree / file content search
+- **go-search** for full-text indexing and retrieval in applications
+- **go-schema** for application data modeling and record/query layers

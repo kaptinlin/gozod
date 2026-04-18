@@ -6,7 +6,48 @@ name: multimodule-initializing
 
 # Multi-Module Go Library Initialization
 
-Set up or convert a Go library to multi-module structure with go.work, sub-module go.mod files, Taskfile, CI, and dependabot.
+Set up or convert a Go library to multi-module structure with `go.work`, sub-module `go.mod` files, Taskfile, CI, and dependabot.
+
+## Coupling Model First
+
+Before choosing the exact setup, decide which of these two models you have:
+
+### Model A — Strongly Coupled Monorepo Modules (Default)
+
+Use this when sub-modules are developed, tested, and released together.
+
+Typical signs:
+
+- sub-modules are framework adapters, provider integrations, or companion tooling for the same core library
+- cross-module changes often happen in the same PR
+- versioning is coordinated across modules
+- the modules are not intended to behave like a public extension marketplace
+
+**Best practice for this model:**
+
+- keep local `replace` directives between sibling modules
+- also use `go.work` for local developer convenience
+- require `GOWORK=off` verification in CI and release validation
+
+This is the common case for internal or tightly coupled Go monorepos.
+
+### Model B — Independently Consumable Extension Modules
+
+Use this only when sub-modules are meant to behave like independently consumable extensions.
+
+Typical signs:
+
+- modules should be usable and versioned more independently
+- local development should not be encoded into published `go.mod` files
+- users consume extension modules like a separate product surface
+
+**Best practice for this model:**
+
+- prefer `go.work` for local development
+- avoid local `replace` directives by default
+- publish and tag each module as a true independently consumable module
+
+**Default assumption:** Most multi-module Go libraries are **Model A**, not Model B.
 
 ## When to Use
 
@@ -112,11 +153,16 @@ go list -f '{{.ImportPath}}: {{join .Imports ", "}}' ./...
 
 Build a simple table (see Quick Dependency Check above). Only proceed if you find packages with >5 MB dependencies that most users don't need.
 
-### Step 2: Create Sub-Module go.mod Files
+### Step 2: Create Sub-Module `go.mod` Files
 
-For each sub-module directory, create a `go.mod` file:
+For each sub-module directory, create a `go.mod` file.
 
-**Template:**
+Choose the template based on the coupling model.
+
+#### Model A Template — Strongly Coupled Modules (Default)
+
+For strongly coupled modules, keep the local `replace`. This makes each sub-module directly testable and developable even without a workspace, while `GOWORK=off` still verifies published-module behavior.
+
 ```go
 module github.com/<org>/<repo>/<subdir>
 
@@ -127,22 +173,19 @@ require github.com/<org>/<repo> v0.0.0
 replace github.com/<org>/<repo> => <relative-path>
 ```
 
-**Example 1 — PostgreSQL driver sub-module:**
+#### Model B Template — Independently Consumable Extensions
+
+For independently consumable modules, prefer a publishable `go.mod` without local `replace`, and rely on `go.work` for local multi-module development.
+
 ```go
-// postgres/go.mod
-module github.com/org/repo/postgres
+module github.com/<org>/<repo>/<subdir>
 
-go 1.26
+go <version>
 
-require (
-    github.com/org/repo v0.0.0
-    github.com/jackc/pgx/v5 v5.5.0
-)
-
-replace github.com/org/repo => ..
+require github.com/<org>/<repo> v0.0.0
 ```
 
-**Example 2 — CLI sub-module:**
+**Model A Example — CLI sub-module:**
 ```go
 // cli/go.mod
 module github.com/org/repo/cli
@@ -152,10 +195,22 @@ go 1.26
 require (
     github.com/org/repo v0.0.0
     github.com/spf13/cobra v1.10.2
-    github.com/spf13/viper v1.19.0
 )
 
 replace github.com/org/repo => ..
+```
+
+**Model B Example — independently consumable extension:**
+```go
+// echoext/go.mod
+module github.com/org/repo/echoext
+
+go 1.26
+
+require (
+    github.com/org/repo v0.0.0
+    github.com/labstack/echo/v4 v4.13.4
+)
 ```
 
 After creating each go.mod, run `go mod tidy` in that directory.
@@ -185,7 +240,7 @@ require (
 
 Run `go mod tidy` in root after trimming.
 
-### Step 4: Create go.work
+### Step 4: Create `go.work`
 
 Create a workspace file listing all modules:
 
@@ -204,7 +259,21 @@ use (
 )
 ```
 
-### Step 5: Update .gitignore
+For existing repositories with several modules, prefer auto-discovery:
+
+```bash
+go work init
+go work use -r .
+```
+
+**Workspace rules:**
+
+- `go.work` is for local multi-module development, not for publishing module relationships
+- the `go` version in `go.work` must be greater than or equal to every module listed in `use`
+- in Model A, `go.work` complements local `replace`
+- in Model B, `go.work` usually replaces local `replace`
+
+### Step 5: Update `.gitignore`
 
 Append if not already present:
 
@@ -213,6 +282,8 @@ Append if not already present:
 go.work
 go.work.sum
 ```
+
+**Best practice:** for libraries, do not commit `go.work` by default. A checked-in workspace can override a developer's parent workspace and can cause CI to test the wrong dependency graph. Treat `go.work.sum` the same way: ignore it and keep it developer-local.
 
 ### Step 6: Update Taskfile
 
@@ -279,7 +350,7 @@ tasks:
       - go work sync
 ```
 
-**Why `deps:update` needs special handling:** Replace directives are module-local and not transitive. When `go get -u ./...` runs in a sub-module, it follows the replace to the root, but the root's replace directives for sibling modules don't apply — Go tries to fetch them from the proxy at `v0.0.0` and fails. The solution: update only direct external (non-replaced) dependencies in each sub-module, then sync the workspace.
+**Why `deps:update` needs special handling:** Multi-module repos must keep every module independently resolvable. Run dependency updates per module, keep local development wiring explicit, and verify each module with `GOWORK=off`.
 
 ### Step 7: Create Dependabot Config
 
@@ -307,7 +378,7 @@ updates:
 
 Use the `github-actions-configuring` skill with `private-package.yml` template. Key settings:
 
-- Set `GOWORK: "off"` in env (validates published go.mod files)
+- Set `GOWORK: "off"` in env (validates published `go.mod` files instead of local workspace wiring)
 - Run `task test` and `task lint` for root module only
 - Don't use matrix per-module CI before v1.0.0 release
 
@@ -336,16 +407,34 @@ Test the setup:
 # Tidy all modules
 task tidy:all
 
-# Test root without workspace (simulates CI)
+# Test root without workspace (simulates CI and consumer resolution)
 GOWORK=off task test
 
 # Test all modules locally
 task test:all
+
+# Test each published module independently
+for mod in . ./postgres ./cli; do
+  (cd "$mod" && GOWORK=off go test ./...)
+done
 ```
+
+**Verification rule by model:**
+
+- Model A: local `replace` is allowed, but every module must still pass `GOWORK=off go test ./...`
+- Model B: avoid local `replace`, and every module must pass `GOWORK=off go test ./...`
 
 ### Step 11: Set Up Release Automation
 
 Multi-module repos need coordinated release tagging. The release scripts pin cross-module `v0.0.0` references to the release version before creating tags.
+
+**Tagging rule:** sub-directory modules must be tagged with the directory prefix:
+
+```text
+v0.3.0              # root module
+postgres/v0.3.0     # postgres sub-module
+cli/v0.3.0          # cli sub-module
+```
 
 **Copy release scripts:**
 
@@ -383,7 +472,7 @@ git push origin v0.1.0
 ```
 
 **Key design decisions:**
-- `go mod edit` only (no `go mod tidy`) — replace directives are not transitive
+- `go mod edit` only (no `go mod tidy`) — release pinning should update module requirements without relying on local workspace state
 - grep pattern `"${mod_path} v"` matches both block and single-line require formats
 - CI force-moves root tag to pinned commit, creates sub-module tags
 - `GITHUB_TOKEN` for push prevents workflow re-trigger
@@ -392,11 +481,14 @@ git push origin v0.1.0
 
 To add a new sub-module to an existing multi-module repo:
 
-1. Create `<subdir>/go.mod` with replace directive (see Step 2)
+1. Decide whether the new module is Model A or Model B
+2. Create `<subdir>/go.mod` using the matching template (see Step 2)
 2. Add to workspace: `go work use ./<subdir>`
 3. Add entry in `.github/dependabot.yml`
 4. Run `go mod tidy` in the new directory
-5. Verify: `task test:all` (module is auto-discovered via MODULES variable)
+5. Verify locally: `task test:all`
+6. Verify publishability: `cd <subdir> && GOWORK=off go test ./...`
+7. When releasing, tag with `<subdir>/vX.Y.Z`
 
 ## Common Mistakes
 
@@ -404,11 +496,14 @@ To add a new sub-module to an existing multi-module repo:
 |---------|-----|
 | Splitting stdlib-only packages | Keep in root — no dependency savings |
 | Module path doesn't match directory | `github.com/org/repo/postgres` must be in `postgres/` |
-| Missing replace directive | Add `replace github.com/org/repo => ..` |
+| Treating all sub-modules like independent extensions | Most repos are Model A — use local `replace` when modules are strongly coupled |
+| Removing local `replace` from strongly coupled modules too early | Keep `replace` for Model A; rely on `GOWORK=off` to validate publishability |
+| Using local `replace` in a module meant for independent consumption | Prefer Model B — use `go.work` for local development and keep `go.mod` publishable |
 | Using real version instead of v0.0.0 | Always use `v0.0.0` for local modules |
-| Forgetting go.work in .gitignore | Always gitignore for libraries |
-| Running `go mod tidy` without workspace | Use go.work locally, `GOWORK=off` in CI |
+| Forgetting `go.work` and `go.work.sum` in `.gitignore` | Always ignore both for libraries unless you have a deliberate repo-wide reason to commit them |
+| Only testing with `go.work` enabled | Also run `GOWORK=off go test ./...` in each module |
 | Too many modules | 1-2 sub-modules is typical; 5+ is too many |
-| Running `go get -u ./...` in sub-modules | Replace directives aren't transitive — use selective external dep update (see `deps:update` task) |
+| Tagging sub-modules with root-style tags | Use `<subdir>/vX.Y.Z` for sub-directory modules |
 | Hardcoding MODULES list in Taskfile | Use `find`-based auto-discovery so new modules are picked up automatically |
-| Forgetting `go work sync` after updating deps | Always sync workspace after updating any module's deps |
+| Committing `go.work` for a library by default | Keep it developer-local unless you have a specific repo-level reason to commit it |
+| Forgetting `go.work` version constraints | Keep `go.work` `go` version >= every module's `go` version |

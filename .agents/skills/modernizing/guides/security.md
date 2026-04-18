@@ -240,6 +240,26 @@ type Event struct {
 
 ---
 
+## Heap base address randomization (Go 1.26+)
+
+On 64-bit platforms, the runtime now randomizes the heap base address at startup. Makes memory address prediction harder for attackers exploiting cgo code.
+
+- No code changes needed — automatic
+- Disable with `GOEXPERIMENT=norandomizedheapbase64` if it causes issues (opt-out expected to be removed)
+- Only relevant when using cgo — pure Go code is already memory-safe
+
+---
+
+## Post-quantum TLS enabled by default (Go 1.26+)
+
+Hybrid post-quantum key exchanges `SecP256r1MLKEM768` and `SecP384r1MLKEM1024` are now enabled by default in `crypto/tls`.
+
+- No code changes needed — TLS connections automatically use post-quantum hybrid KEM when both sides support it
+- Disable with `GODEBUG=tlssecpmlkem=0` or by setting `tls.Config.CurvePreferences` explicitly
+- Protects recorded traffic against future quantum decryption ("harvest now, decrypt later")
+
+---
+
 ## Migration strategy
 
 1. Replace manual path sanitization with `os.Root` for user-facing file access
@@ -247,3 +267,4 @@ type Event struct {
 3. Replace manual nonce management with `NewGCMWithRandomNonce`
 4. Replace `omitempty` with `omitzero` for `time.Time` and struct fields in JSON
 5. Remove error checks on `crypto/rand.Read` (always nil since Go 1.24)
+6. Post-quantum TLS is automatic in Go 1.26+ — verify no `CurvePreferences` override blocks it

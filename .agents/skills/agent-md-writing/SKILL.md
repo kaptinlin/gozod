@@ -70,6 +70,38 @@ CLAUDE.md/AGENTS.md follows SPEC core principles:
 ### Must Include When Project Has SPEC/
 - **No documentation masquerading as code** — When a project uses SPEC-driven development, the Forbidden section must include a rule prohibiting over-encoding: translating spec prose into code that no program consumes at runtime. Judgment: does a program read this value to drive behavior?
 
+### Must Include: Dependency Issue Reporting
+
+Every generated CLAUDE.md **must** include a dependency issue reporting rule in the Forbidden section and a corresponding workflow instruction. When a project depends on external libraries, agents must not work around dependency bugs by reimplementing functionality — this creates hidden tech debt that accumulates silently.
+
+**Add to Forbidden section:**
+```markdown
+- No working around dependency bugs — if a bug or limitation is in a dependency library, do NOT bypass it by reimplementing the dependency's functionality. Instead, create a report file in `reports/` (see Dependency Issue Reporting below).
+```
+
+**Add as a standalone section (after Coding Rules or after Agent Workflow):**
+```markdown
+## Dependency Issue Reporting
+
+When you encounter a bug, limitation, or unexpected behavior in a dependency library:
+
+1. **Do NOT** work around it by reimplementing the dependency's functionality
+2. **Do NOT** skip or ignore the dependency and write your own version
+3. **Do** create a report file: `reports/<dependency-name>.md`
+4. **Do** include in the report:
+   - Dependency name and version
+   - Problem description (what went wrong)
+   - Trigger scenario (what you were doing when you hit it)
+   - Expected behavior vs actual behavior
+   - Relevant error messages or stack traces
+   - Workaround suggestion (if any, without implementing it)
+5. **Do** continue with other tasks that don't depend on the broken functionality
+
+The `reports/` directory is checked by team members after each work cycle. Reports are routed to the appropriate dependency maintainer for resolution.
+```
+
+**Section inclusion rule:** Always include this section. It applies to all projects with external dependencies.
+
 ## AGENTS.md vs README
 
 | Dimension | AGENTS.md | README |
@@ -138,7 +170,8 @@ Generate CLAUDE.md following the template in [references/claude-md-template.md](
 | Agent Workflow | **REQUIRED** when project has `SPECS/` or `.references/` directories (not optional) |
 | SPECS Index | When project has `SPECS/` directory |
 | References Index | When project has `.references/` directory |
-| Design Philosophy | When project has clear architectural principles — select 2-5 principles, customize with project-specific examples |
+| Design Philosophy | When project has clear architectural principles — select 2-5 SOLID principles + 2-4 Craft Philosophy principles, customize with project-specific examples. Always include "Never" line |
+| API Design Principles | When project is a library/SDK exposing public APIs — detect Progressive Disclosure and Default Passthrough patterns |
 | Naming Conventions | When project has a naming spec or explicit naming rules |
 | CLI Command Design | When project is a CLI tool with command pattern conventions |
 | Coding Rules | Use layered approach: Universal Baseline (always) + Project-Specific (detected) + Domain-Specific (link to SPECS) |
@@ -212,10 +245,12 @@ source code, and adapt proven patterns rather than inventing from scratch.
 ### Selection Rules
 
 1. **Read source code first** — Analyze patterns actually used in the project
-2. **Select 2-5 principles** — Not all 8, choose what the project truly demonstrates
-3. **Customize explanation** — Don't copy generic definitions, write project-specific examples
+2. **Select 2-5 SOLID principles** — Not all 8, choose what the project truly demonstrates
+3. **Select 2-4 Craft Philosophy principles** — Choose the ones that resonate with the project's character
+4. **Customize explanation** — Don't copy generic definitions, write project-specific examples
+5. **Always include the "Never" line** — accidental complexity, feature gravity, abstraction theater, configurability cope
 
-### Selection Criteria
+### SOLID Principles Selection Criteria
 
 | Principle | When to Select | How to Customize |
 |-----------|---------------|------------------|
@@ -227,6 +262,18 @@ source code, and adapt proven patterns rather than inventing from scratch.
 | LSP | Interface implementations substitutable | Example: all StateStore implementations fully substitutable |
 | ISP | Small interfaces | Example: StateStore has only 2 methods |
 | DIP | Depends on abstractions | Example: Machine depends on StateStore interface, not concrete implementation |
+
+### Craft Philosophy Selection Criteria
+
+| Principle | When to Select | How to Customize |
+|-----------|---------------|------------------|
+| Simplicity as art | Project has minimal API surface | Example: Fire() takes an event and returns an error — that's the entire mutation API |
+| Precision over cleverness | Project has deliberate naming/typing | Example: `Guard` not `Validator`, `Action` not `Handler` — names match the domain |
+| Elegance through reduction | Project actively removes unnecessary code | Example: no Stringer interface — ASCII() is the only representation |
+| Craft over shipping | Project polishes API ergonomics | Example: fluent builder API reads like a specification |
+| APIs as language | Public API reads like natural speech | Example: `machine.Fire(EventLock)` not `machine.ProcessEvent(EventConfig{Type: Lock})` |
+| Errors as teachers | Error messages guide the developer | Example: "transition from Locked to Active via Unlock is not permitted" |
+| Beauty is structural | Architecture is visible in the code | Example: package layout mirrors the domain model exactly |
 
 ### Bad Example (Generic)
 
@@ -246,7 +293,42 @@ source code, and adapt proven patterns rather than inventing from scratch.
 - **KISS** — Each concept has exactly one representation. No sub-states, no parallel states, no five kinds of trigger behaviour.
 - **DRY** — The transition table serves Fire() dispatch, Build() validation, and Mermaid()/ASCII() export simultaneously.
 - **YAGNI** — No Actor model, no JSON config, no Graphviz. Add when needed — the cost of adding later is far lower than maintaining unused features.
+- **Simplicity as art** — Fire() takes an event and returns an error. That's the entire public API surface for state changes.
+- **Errors as teachers** — "transition from Locked to Active via Unlock is not permitted" tells you the state, the event, and the rule.
+- **Never:** accidental complexity, feature gravity, abstraction theater, configurability cope.
 ```
+
+## API Design Principles — Detection and Inclusion
+
+When the project exposes a public API (library, SDK, CLI), detect and include applicable API design principles in the generated CLAUDE.md. These are **separate from Design Philosophy** — philosophy governs internal code quality, API principles govern the consumer experience.
+
+### Available Principles
+
+| Principle | When to Include | One-liner for CLAUDE.md |
+|-----------|----------------|------------------------|
+| **Progressive Disclosure** | Project has both convenience functions and low-level APIs | Simple things one-liner, complex things possible. Ask "Do 80% of developers need this?" — if no, move it deeper. |
+| **Default Passthrough** | Project uses functional options or config structs | Option zero values = preserve source attributes, not hardcoded defaults. |
+
+### Detection Method
+
+- **Progressive Disclosure**: Look for both high-level facade functions and low-level component APIs coexisting. Example: a top-level `Convert()` plus separate `Encoder`/`Decoder` interfaces.
+- **Default Passthrough**: Look for `Option` structs or functional options where zero values are documented as "use default" or "preserve source".
+
+### Section Format
+
+```markdown
+## API Design Principles
+
+- **Progressive Disclosure**: Simple things one-liner, complex things possible. Ask "Do 80% of developers need this?" — if no, move it deeper.
+- **Default Passthrough**: Option zero values = preserve source attributes, not hardcoded defaults.
+```
+
+### Inclusion Rules
+
+- Include this section **only for library/SDK projects** that expose public APIs for other developers to consume
+- Do NOT include for internal services, CLI tools without library components, or scripts
+- Keep it concise — 1 line per principle, no lengthy explanations
+- Place after Design Philosophy, before Coding Rules
 
 ## Coding Rules — Layered Approach
 
@@ -421,7 +503,9 @@ After generation, verify:
 | Omitting Agent Workflow section | Agents won't know to read SPECS or references | Always include when SPECS/ or .references/ exist |
 | Encoding spec prose as code | Creates dead code no program consumes at runtime | Specs are the SSOT; code executes rules, not redescribes them |
 | Duplicating README installation instructions | Responsibility overlap, high maintenance cost | Link to README |
-| Listing all 8 design principles | Generic definitions add no value | Select 2-5 principles project actually demonstrates |
+| Working around dependency bugs inline | Creates hidden tech debt, redundant implementations that persist after the bug is fixed | Create a `reports/<dependency-name>.md` report and move on |
+| Listing all 8 SOLID principles | Generic definitions add no value | Select 2-5 SOLID + 2-4 Craft Philosophy principles project actually demonstrates |
+| Omitting Craft Philosophy | Misses the spirit behind the code | Include 2-4 craft principles + "Never" anti-patterns line |
 | 50+ coding rules in AGENTS.md | Context bloat | Keep core rules, move detailed rules to SPECS/43-coding-standards.md |
 | Listing unused conditional skills | Wastes context | Only list skills that actually exist and are relevant |
 | Including type definitions in AGENTS.md | Concrete design details belong in SPECS/ | Provide SPECS Index, Agent reads on-demand |

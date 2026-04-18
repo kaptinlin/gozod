@@ -60,7 +60,7 @@ Collect the following from the user before generating:
 | `Description` | Short project description | required | `A finite state machine library` |
 | `Author` | Author or organization | default: `Agentable` | `Agentable` |
 | `GoVersion` | Minimum Go version | default: `1.26` | `1.26` |
-| `GolangciVersion` | golangci-lint version | default: `2.9.0` | `2.9.0` |
+| `GolangciVersion` | golangci-lint version | default: `2.11.4` | `2.11.4` |
 
 ## Step 3: Generate the Project
 
@@ -83,7 +83,7 @@ gendog generate golang-scaffold \
   --set Description="A finite state machine library" \
   --set Author=Agentable \
   --set GoVersion=1.26 \
-  --set GolangciVersion=2.9.0
+  --set GolangciVersion=2.11.4
 ```
 
 ### Option C: Values file
@@ -96,7 +96,7 @@ ModulePath: github.com/agentable/go-fsm
 Description: A finite state machine library
 Author: Agentable
 GoVersion: "1.26"
-GolangciVersion: "2.9.0"
+GolangciVersion: "2.11.4"
 ```
 
 ```bash
@@ -111,21 +111,27 @@ gendog generate golang-scaffold --values values.yaml
 
 ### Generated Structure
 
-```
+```text
 <ProjectName>/
-├── doc.go              # Package documentation
-├── errors.go           # Common error definitions
-├── example_test.go     # Example tests
-├── go.mod              # Go module definition
-├── Taskfile.yml        # Task runner (lint, test, verify, fmt, etc.)
-├── .golangci.yml       # Linter configuration
-├── .golangci.version   # Pinned golangci-lint version
-├── .gitignore          # Standard Go gitignore
-├── .editorconfig       # Editor configuration
-├── .ralphy/config.yaml # Ralphy AI configuration
-├── README.md           # Project documentation
-├── CLAUDE.md           # Claude AI guidelines
-└── LICENSE             # MIT License
+├── doc.go                       # Package documentation
+├── errors.go                    # Common error definitions
+├── go.mod                       # Go module definition
+├── Taskfile.yml                 # Task runner (lint, test, verify, vuln, etc.)
+├── lefthook.yml                 # Git hooks (pre-commit: lint, test, gitleaks, markdownlint, yamllint)
+├── .gitleaks.toml               # Gitleaks secret detection config
+├── .markdownlint-cli2.yaml      # Markdownlint rules + ignores
+├── .yamllint.yml                # YAML lint rules
+├── .golangci.yml                # golangci-lint configuration
+├── .golangci.version            # Pinned golangci-lint version
+├── .gitignore                   # Standard Go gitignore
+├── .editorconfig                # Editor configuration
+├── .github/workflows/ci.yml    # CI: test, lint, security (PAT_TOKEN for private deps)
+├── .ralphy/config.yaml          # Ralphy AI configuration
+├── .references/.gitkeep         # Reference implementations directory
+├── SPECS/.gitkeep               # Specifications directory
+├── README.md                    # Project documentation
+├── CLAUDE.md                    # Claude AI guidelines
+└── LICENSE                      # MIT License
 ```
 
 ## Step 4: Post-Generation Setup
@@ -133,25 +139,49 @@ gendog generate golang-scaffold --values values.yaml
 ```bash
 cd <ProjectName>
 
-# Initialize git (if not already in a repo)
+# Initialize git
 git init
+
+# Install pre-commit hooks
+lefthook install
 
 # Download dependencies
 task deps
 
-# Run full verification
+# Run full verification (includes govulncheck)
 task verify
 ```
 
 For **monorepo** projects, also integrate with workspace:
 
 ```bash
-# Add to go.work (if using Go workspaces)
-cd ..
-go work use ./<ProjectName>
+# Add to mani.yaml
+# Edit mani.yaml to include the new project with path and tags
 
-# Add to mani.yaml (if using mani)
-# Edit mani.yaml to include the new project
+# Add as git submodule (if applicable)
+cd ..
+git submodule add https://github.com/agentable/<ProjectName>.git
+```
+
+### Configure PAT_TOKEN for CI
+
+The generated CI workflow uses `PAT_TOKEN` for private Go module access. This secret **must** be configured in the GitHub repository:
+
+1. Go to the repository's **Settings → Secrets and variables → Actions**
+2. Click **New repository secret**
+3. Name: `PAT_TOKEN`
+4. Value: A GitHub personal access token with `repo` scope and read access to `agentable` private repos
+
+**When is PAT_TOKEN required?**
+
+- **Always** for packages under `github.com/agentable/*` that depend on other agentable packages
+- The scaffold CI template includes PAT_TOKEN by default — if the package has no private deps, it still works (the token is simply unused)
+
+**Without PAT_TOKEN**, CI will fail with:
+
+```
+fatal: could not read Username for 'https://github.com'
+go: github.com/agentable/package@version: invalid version: git ls-remote failed
 ```
 
 ## Step 5: Setup Skills (Monorepo)
@@ -170,9 +200,12 @@ ln -s "$(pwd)/.agents/skills" .claude/skills
 Confirm:
 
 1. All generated files exist in `<ProjectName>/`
-2. `task verify` passes (deps, fmt, vet, lint, test)
-3. `.ralphy/config.yaml` has correct project name and description
-4. `CLAUDE.md` exists with project guidelines
+2. `task verify` passes (deps, fmt, vet, lint, test, vuln)
+3. `lefthook run pre-commit` passes (gitleaks, lint, test, markdownlint, yamllint)
+4. `.ralphy/config.yaml` has correct project name and description
+5. `CLAUDE.md` exists with project guidelines
+6. GitHub repo has `PAT_TOKEN` secret configured (if package has agentable private deps)
+7. `.github/workflows/ci.yml` includes `GOPRIVATE`, `GONOPROXY`, `GOPROXY` env vars and PAT_TOKEN git config step
 
 ## Available Task Commands
 
@@ -182,7 +215,10 @@ Confirm:
 | `task lint` | Run golangci-lint + tidy check |
 | `task fmt` | Format Go code |
 | `task vet` | Run go vet |
-| `task verify` | Full verification (deps, fmt, vet, lint, test) |
+| `task verify` | Full verification (deps, fmt, vet, lint, test, vuln) |
+| `task vuln` | Run govulncheck |
+| `task markdownlint` | Run markdownlint (local only) |
+| `task yamllint` | Run yamllint (local only) |
 | `task deps` | Download and tidy dependencies |
 | `task deps:update` | Update all dependencies |
 | `task clean` | Clean build artifacts and caches |

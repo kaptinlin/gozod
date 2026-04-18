@@ -47,6 +47,9 @@ Reads all research reports in `.research/` and produces a structured analysis do
 1. **Scope** — Which specifications need to be written based on research findings
 2. **Priority** — Execution order for spec writing (high/medium/low or numbered)
 3. **Structure** — Proposed SPEC/ file structure with numbering and naming
+4. **Consumer API Spec Need** — Which consumer-facing API design spec must exist so the public surface is defined from the user's perspective rather than from implementation structure
+
+**Consumer-first requirement:** The analysis must explicitly identify at least one API design specification document whenever the project exposes a public library/module API. This API spec is not implementation code and not low-level package plumbing. It must define the consumer-facing entry path, default constructor/factory, common workflows, naming expectations, and progressive disclosure strategy following Apple philosophy: the 90% path should be obvious, short, and not require understanding internal layering.
 
 ## Output: ANALYSIS.md
 
@@ -86,6 +89,9 @@ The generated `ANALYSIS.md` must be placed at **project root** (not in `.researc
 
 ## Philosophy Updates
 {Principles or trade-offs from research that should update existing philosophy docs, not create new specs}
+
+## Consumer API Spec
+{Which SPEC defines the public API from the consumer's perspective, including default entry path, default constructor/factory, common tasks, progressive disclosure, and what internal complexity must stay hidden from the 90% path}
 
 ## Notes
 {overall direction, risks, suggestions}
@@ -195,7 +201,7 @@ Each proposed spec should indicate which domain section patterns it will primari
 
 ## Workflow
 
-### Step 1: Scan Research Reports and Existing Specs
+### Step 1: Scan Research Reports, Existing Specs, and Dependency Landscape
 
 Read all files in `.research/` directory and existing `SPEC/` files:
 
@@ -208,6 +214,20 @@ For each report, extract:
 For existing specs, identify:
 - Concepts already defined (SSOT — don't re-define)
 - Gaps or updates needed
+
+**Dependency survey (mandatory):** before proposing any spec, consult
+`.agents/skills/dependency-selecting` to find libraries that already own the
+problem. Preference order:
+1. Libraries recommended by `.agents/skills/dependency-selecting`
+2. Libraries already tracked under `.references/` — only when the recommended
+   set has no fit
+3. Other external libraries — require explicit justification (fit, license,
+   weight, maintenance)
+4. From-scratch spec — last resort
+
+For each topic, record: candidate library, fit verdict, one-line rejection
+reason when skipped. Topics with credible upstream coverage feed Step 3 as
+**integration specs**, not green-field design specs.
 
 ### Step 2: Apply Content Boundary Test
 
@@ -224,9 +244,18 @@ Filter out non-SPEC content before proposing spec structure.
 
 Group research findings into logical specification documents:
 
+**Mandatory check:** If the project exposes a public library/module API, one of the proposed specs must be a consumer-facing API design spec. That spec should define the public product surface from the consumer's perspective, not the internal implementation decomposition.
+
+**Mandatory check (library reuse):** cross-reference Step 1's dependency
+survey. If an upstream owns the problem, the spec becomes an **integration
+spec** (contracts, adapters, failure handling) — the library is the SSOT, the
+spec only owns the boundary.
+
 - **Consolidate related topics** — Multiple research reports may inform a single spec
 - **Separate concerns** — Distinct domains should have separate specs (high cohesion)
 - **Respect SSOT** — Each concept defined in exactly ONE spec
+- **Prefer integration over reimplementation** — if Step 1's dependency landscape surfaced a credible upstream, the spec owns the boundary, not the internals
+- **Require consumer API coverage** — If the project has a public library/module API, propose one dedicated API design spec from the consumer perspective
 - **Consider dependencies** — Identify which specs depend on others
 - **Size limit** — 单个 SPEC 文件不超过 1000 行
 
@@ -261,6 +290,15 @@ Generate the analysis document at project root with all required sections.
 
 ## Each Proposed Spec Must Have
 
+For any consumer-facing API spec, require these sections in addition to normal spec structure:
+
+- **Default Entry Path** — what most users import first
+- **Default Constructor / Factory** — the one memorable way to start
+- **Common Workflows** — shortest paths for the top user tasks
+- **Progressive Disclosure** — what stays advanced/secondary
+- **Hidden Complexity Boundary** — which internal layers, platform branches, backends, or assembly details must not leak into the 90% path
+
+
 Every spec entry in the analysis must describe content that follows the standard spec structure:
 
 ```
@@ -280,6 +318,7 @@ When listing Items for a proposed spec, frame them as **violable rules**, not de
 
 Required:
 - `.research/` directory with at least one research report (`.research/*.md`)
+- `.agents/skills/dependency-selecting` — consulted in Step 1 before proposing any spec
 
 Optional:
 - Existing `SPEC/` directory to understand current state and avoid re-specification
@@ -297,6 +336,8 @@ Optional:
 - **Distinguish philosophy from spec** — principles guide, specs constrain
 - **SSOT is non-negotiable** — one concept, one definition, one location
 - **Every spec item must be violable** — if it can't be violated, it doesn't belong in a spec
+- **Consumer-facing libraries need consumer API spec** — public API projects must include a dedicated API design spec focused on entry path, default constructor/factory, common workflows, and hidden complexity boundaries
+- **Library survey precedes spec scope** — Step 1 must consult `.agents/skills/dependency-selecting` first. Preference: recommended → `.references/` → other external (justified) → from-scratch spec. Topics with upstream coverage become integration specs.
 - **Size limit** — 单个 SPEC 文件不超过 1000 行
 
 ## Common Mistakes
@@ -329,6 +370,11 @@ Optional:
 **❌ Proposing specs with non-violable content**
 - Apply the violation test to every proposed item
 - Facts, tutorials, and process docs don't belong in specs
+
+**❌ Skipping the library survey**
+- Step 1 must consult `.agents/skills/dependency-selecting` before proposing any spec
+- Re-speccing what an upstream already owns is an SSOT violation in disguise
+- External libraries (not recommended, not under `.references/`) need explicit justification
 
 **❌ Vague priorities**
 - Use concrete ordering (1, 2, 3 or High/Medium/Low)

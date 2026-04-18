@@ -19,6 +19,14 @@
 
 **When to use:** Async tasks (email, reports), scheduled/delayed jobs, distributed workers, job persistence.
 
+## `github.com/agentable/go-mailsmtp` — Outbound Email Delivery
+
+- Unified outbound layer for SMTP, relays, and provider adapters
+- Retry, failover, structured results, and observability hooks
+- Stable API for one-off sends or reusable concurrent-safe senders
+
+**When to use:** Transactional email, notifications, relay/provider failover, and SMTP-backed outbound delivery.
+
 ## `github.com/ThreeDotsLabs/watermill` — Distributed Messaging
 
 - Simple handler: `func(*Message) ([]*Message, error)`
@@ -36,6 +44,8 @@ Need event/message handling?
 ├── Within a single process?
 │   ├── Event bus / observer pattern → kaptinlin/emitter
 │   └── Background jobs with persistence → kaptinlin/queue
+├── Send outbound email?
+│   └── agentable/go-mailsmtp
 └── Across services / distributed?
     └── watermill (choose appropriate pub/sub backend)
 ```

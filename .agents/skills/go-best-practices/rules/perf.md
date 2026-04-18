@@ -4,6 +4,7 @@ String concatenation strategies, pre-allocation hints, and value passing optimiz
 
 ## Contents
 - String Concatenation
+- Prefer Modern Stdlib Helpers Before Hand-Rolled Helpers
 - Size Hints for Pre-allocation
 - Use %q for String Formatting
 - Use crypto/rand for Keys
@@ -42,6 +43,29 @@ str := b.String()
 ```
 
 When output target is `io.Writer`, use `fmt.Fprintf` directly instead of building a string first. Use backtick literals for multi-line constant strings.
+
+---
+
+## Prefer Modern Stdlib Helpers Before Hand-Rolled Helpers
+
+Before adding custom helpers or clever loops, check whether the modern standard library already gives you a simpler version:
+
+- `min`, `max`, `clear`
+- `slices.Contains`, `slices.SortFunc`, `slices.Concat`
+- `maps.Clone`, `maps.Equal`
+- `cmp.Or` for default-value fallback chains
+- `bytes.Clone` instead of manual `make` plus `copy`
+
+**Correct:**
+
+```go
+clone := maps.Clone(src)          // Go 1.21+
+port := cmp.Or(cfg.Port, 8080)    // Go 1.22+
+buf := bytes.Clone(payload)       // Go 1.20+
+limit = min(max(limit, lo), hi)   // Go 1.21+
+```
+
+These replacements usually improve readability and are often at least as efficient as local helper code. Do not churn hot-path code blindly, but prefer the stdlib baseline before writing custom utilities.
 
 ---
 
@@ -119,10 +143,18 @@ import (
 
 func Key() string {
     buf := make([]byte, 16)
-    if _, err := rand.Read(buf); err != nil {
+    if _, err := rand.Read(buf); err != nil { // Go 1.24-: still check
         log.Fatalf("out of randomness: %v", err)
     }
     return fmt.Sprintf("%x", buf)
+}
+```
+
+On Go 1.24+, `rand.Text()` is often an even better fit for textual tokens:
+
+```go
+func Token() string {
+    return rand.Text()
 }
 ```
 

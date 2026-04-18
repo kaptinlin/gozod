@@ -5,8 +5,8 @@
 #   - root → sub-module
 #   - sub-module → sub-module
 #
-# Usage: bash scripts/tag_release.sh <VERSION>
-# Example: bash scripts/tag_release.sh 1.3.0
+# Usage: bash "$SKILL_SCRIPTS/tag_release.sh" <VERSION>  (where SKILL_SCRIPTS is resolved per SKILL.md)
+# Example: bash "$SKILL_SCRIPTS/tag_release.sh" 1.3.0
 
 set -euo pipefail
 

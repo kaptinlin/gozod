@@ -43,10 +43,10 @@ Research {module name} from {reference-paths} and use research-writing skill to 
 - `{module name}` = human-readable module name from ANALYSIS.md (e.g., "token type system", "authentication patterns")
 - `{reference-paths}` = comma-separated list of `.references/` paths to analyze
 - `{output-path}` = target report path (e.g., `.research/R01-token-type-system.md`)
-- Keep title to **one line** — be concise
+- Keep title to **one line** — be concise but self-contained (include focus areas in title)
 - Always specify which `.references/` projects to analyze
 - Output goes to `.research/` directory with R{XX} prefix
-- Add `description` field with research focus areas
+- **No `description` field** — put all info in the title
 
 ## TODO.yaml Format
 
@@ -54,21 +54,19 @@ Research {module name} from {reference-paths} and use research-writing skill to 
 tasks:
   # ═══════════════════════════════════════════════════════════════
   # Module R{XX} — {Module Name}
-  # References: {reference-list}
   # ═══════════════════════════════════════════════════════════════
 
-  - title: "Research {module name} from {reference-paths} and use research-writing skill to write {output-path}"
-    description: |
-      Focus on: {research goals from ANALYSIS.md}
+  - title: "Research {module name} from {reference-paths} and use research-writing skill to write {output-path}. Focus on: {research goals}"
     completed: false
 
   # ... more research tasks ...
 ```
 
 **YAML rules:**
-- Three fields per task: `title`, `description` (optional but recommended), `completed` (always `false`)
+- **Two fields only per task: `title` and `completed`** — never add `description`
+- Title must be self-contained: include module name, reference paths, output path, and focus areas
 - Use YAML block comments (`#`) for module separators with `═` box lines
-- No blank lines between a title and its fields
+- No blank lines between a task's fields
 - Blank line between tasks for readability
 - Tasks ordered by module priority from ANALYSIS.md
 
@@ -103,16 +101,16 @@ For each module in ANALYSIS.md, generate one research writing task:
 1. Extract module ID (e.g., R01)
 2. Extract module name (e.g., "Token Type System")
 3. Extract reference projects from "Reference Projects" table
-4. Extract research goals for description field
+4. Extract research goals (include in title)
 5. Generate output path: `.research/{ID}-{slug}.md`
-6. Create task using template
+6. Create task using template (title + completed only)
 
 ### Step 4: Write TODO.yaml
 
 Write the final `TODO.yaml` at project root with:
 - Module separator comments
 - Research writing tasks in module order
-- Focus areas in description fields
+- Focus areas included in task titles
 
 ### Step 5: Announce Completion
 
@@ -141,7 +139,7 @@ Optional:
 
 - This skill is the **second step** after `research-analyzing` — it does not analyze scope or determine modules
 - Task titles must include reference paths so executors know which projects to analyze
-- Research goals from ANALYSIS.md go into the `description` field for context
+- Research goals from ANALYSIS.md go into the task `title` (no separate description field)
 - Output paths use R{XX} prefix matching ANALYSIS.md module IDs
 - `.research/` directory contains the generated research reports
 - Tasks are executed by `research-writing` skill, which analyzes references and produces structured reports

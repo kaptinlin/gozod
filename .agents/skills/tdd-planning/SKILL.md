@@ -88,18 +88,26 @@ For full TDD execution guidance: `tdd-implementing` skill.
 
 - A spec document (from `spec-writing`)
 - A PRD or requirements document
-- A design document
+- A design document (DESIGN.md, ARCHITECTURE.md)
+- An improvement plan (improve.md, REFACTOR.md)
 - Inline description
 
-**If ambiguous**, ask: "Which feature should I plan? Point me to the spec/PRD, or describe the feature."
+**If ambiguous**, ask: "Which feature should I plan? Point me to the spec/PRD/improve doc, or describe the feature."
 
 ### Before Writing
 
-1. Read the input document thoroughly
-2. Identify the single feature — if multiple, ask which one
-3. Explore existing code: package names, existing interfaces, error conventions
-4. Draft the phase breakdown — present to user for granularity check
-5. Confirm: "I'll write a plan for **[feature name]** with these phases: [...]. Does that look right?"
+1. **Read the input document** thoroughly — identify the single feature
+2. **Study reference implementations** — check `.references/` for similar features in reference projects. Read their actual code to understand API patterns, error handling, and edge cases. This is not optional; real-world patterns prevent over-engineering and catch missed edge cases.
+3. **Study existing codebase patterns** — read at least 2 existing similar implementations in the project (e.g., existing stores, plugins, commands) to understand:
+   - Constructor/option patterns the project uses
+   - Error sentinel conventions
+   - Interface compliance patterns (compile-time checks, type annotations)
+   - Test patterns (assertion frameworks, table-driven tests, setup helpers)
+   - Concurrency patterns (mutexes, atomic flags, async/await, close semantics)
+4. **Draft the phase breakdown** — present to user for granularity check
+5. **Confirm**: "I'll write a plan for **[feature name]** with these phases: [...]. Does that look right?"
+
+**Reference study is critical.** Plans without reference study produce over-engineered abstractions and miss provider-specific edge cases that real implementations reveal.
 
 ### Output Location
 
@@ -112,6 +120,7 @@ Save to: `.plans/YYYY-MM-DD-<feature-name>.md`
 ```
 # [Feature] — Implementation Plan
 ## Constraints          ← TDD / KISS / DRY (required, verbatim)
+## Reference Study      ← What was learned from .references/ and existing code
 ## Architecture         ← Key decisions, packages, data flow
 ## Interface Contract   ← All exported signatures and types for the feature
 ## Phases               ← Behavioral vertical slices
@@ -120,24 +129,45 @@ Save to: `.plans/YYYY-MM-DD-<feature-name>.md`
 ## References
 ```
 
+### Reference Study Section
+
+Summarize what was learned from reference implementations and existing codebase patterns:
+
+```markdown
+## Reference Study
+
+### From .references/
+- **[reference-name]**: [What was learned — API patterns, error handling, edge cases]
+- **Key insight**: [The most important design decision borrowed from reference]
+
+### From existing codebase
+- **[existing-package]**: [Pattern to follow for consistency — constructor, options, errors, tests]
+- **Convention**: [Specific project convention this implementation must follow]
+```
+
+This section prevents re-inventing patterns that already exist and ensures consistency. The implementer reads this first to understand the design rationale.
+
 ### Interface Contract Section
 
 Signatures only — no bodies. All phases reference this section.
 
-```go
-type Token struct {
-    UserID    string
-    ExpiresAt time.Time
+```language-agnostic
+// Type definitions
+type Token {
+    userID: string
+    expiresAt: DateTime
 }
 
-var (
-    ErrExpired = errors.New("token expired")
-    ErrInvalid = errors.New("token invalid")
-)
+// Error definitions
+ErrExpired = "token expired"
+ErrInvalid = "token invalid"
 
-func ParseToken(raw string) (Token, error)
-func ValidateToken(tok Token, secret []byte) error
+// Function signatures
+function ParseToken(raw: string): Result<Token, Error>
+function ValidateToken(token: Token, secret: Bytes): Result<void, Error>
 ```
+
+**Note:** See `references/code-patterns.md` in your project templates for language-specific interface contract syntax.
 
 ### Phase Structure
 
@@ -148,10 +178,12 @@ func ValidateToken(tok Token, secret []byte) error
 
 ### Interface additions
 
-```go
+```language-agnostic
 // Signatures introduced or modified in this phase
-func NewThing(cfg Config) (*Thing, error)
+function NewThing(config: Config): Result<Thing, Error>
 ```
+
+**Note:** See `references/code-patterns.md` in your project templates for language-specific syntax.
 
 ### Acceptance criteria
 
@@ -266,9 +298,32 @@ Ask: *If I delete this code, does the program's behavior change?*
 
 The **test** is where the constraint lives — executable verification that survives refactoring. The SPEC describes why the constraint exists. Type declarations alone cannot enforce it.
 
+## Acceptance Criteria from References
+
+When `.references/` contains a similar implementation, mine it for acceptance criteria you might miss:
+
+1. **Read the reference's error handling** — each distinct error case becomes an acceptance criterion
+2. **Read the reference's test file** — test names reveal edge cases the reference author discovered
+3. **Read the reference's auth chain** — for cloud stores, auth fallback order matters and each step needs testing
+4. **Read the reference's API mapping** — scope/name/key conventions need explicit criteria
+
+Do not copy reference code into the plan. Extract the **behaviors** and **edge cases**, then express them as acceptance criteria in the plan's own terms.
+
+## Sub-Module Awareness
+
+When the feature requires a new sub-module (e.g., separate package/module):
+
+- Note in Architecture: "New sub-module with separate module configuration"
+- Include in Phase 1: sub-module setup (module config, dependencies for local dev)
+- Acceptance criteria should include: compile-time interface compliance check
+- Note external SDK dependencies and their version constraints
+
+**Note:** See `references/code-patterns.md` in your project templates for language-specific sub-module setup.
+
 ## Key Principles
 
 - **Interface Contract** is the single source of truth — all phases reference it, no duplication
+- **Reference Study** prevents over-engineering — borrow patterns, don't invent
 - **Acceptance criteria** are behavioral: Given/When/Then, no implementation detail
 - **TDD notes** point to where to start and where the boundary is — not how to implement
 - **One commit** at the end of the whole plan, not after each phase

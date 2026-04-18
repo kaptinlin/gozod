@@ -6,14 +6,15 @@
 - Start with the smallest layer that solves the real problem.
 - Avoid multi-source config frameworks for tiny env-only cases.
 
-## `github.com/joho/godotenv` — `.env` Loader
+## `github.com/agentable/go-dotenv` — `.env` Loader
 
-- Loads `.env` files into process environment variables
-- Tiny API surface (`Load`, `Overload`, `Read`)
+- Loads `.env` files with variable expansion and multi-environment discovery
+- Supports `${secret:name}` resolution via `agentable/go-secrets`
+- Can inject values into `os.Environ` for downstream config providers
 
-**When to use:** Local dev, examples, tests, and CI that rely on `.env` files.
+**When to use:** Local dev, examples, tests, and CI that rely on `.env` files, especially when secrets resolution should stay in our ecosystem.
 
-**When NOT to use:** As a replacement for env-to-struct parsing/validation.
+**When NOT to use:** As a replacement for full application config composition.
 
 ## `github.com/agentable/go-config` — Application Configuration
 
@@ -96,16 +97,15 @@ fmt.Printf("server=%s:%d\n", v.Server.Host, v.Server.Port)
 go cfg.Watch(ctx)
 ```
 
-## `github.com/caarlos0/env/v11` — Environment Variables
+## `github.com/agentable/go-command` — CLI Framework
 
-- Zero dependencies, struct tag based: `env:"VAR_NAME"`
-- Supports all Go types + `time.Duration`, `url.URL`, pointers, slices, maps
-- Tag options: `,expand`, `,file`, `,required`, `,notEmpty`
-- Feature-complete (stable, mature)
+- Web-like command API with middleware, typed binding, help generation, and mode-aware output
+- Supports app-level options, struct binding, examples, shell completion, and schema export
+- Works well with `go-config` and `go-dotenv` for CLI-first applications
 
-**When to use:** env-to-struct binding with typed defaults/validation in env-driven apps.
+**When to use:** Building full CLI applications with subcommands, middleware, typed option binding, and agent/CI-aware output.
 
-**When NOT to use:** If you only need `.env` loading (use `godotenv`) or need multi-source config (use `agentable/go-config`).
+**When NOT to use:** If you only need config loading without a CLI surface.
 
 ## `github.com/agentable/go-secrets` — Secrets Management
 
@@ -115,27 +115,26 @@ go cfg.Watch(ctx)
 
 **When to use:** Sensitive config values referenced via `${secret:NAME}` in configuration.
 
-## `github.com/spf13/cobra` — CLI Framework
+## `github.com/agentable/go-version` — Version Metadata
 
-- Hierarchical subcommands: `app server`, `app migrate`
-- Auto-generated help, man pages, shell completions (bash/zsh/fish/PowerShell)
-- POSIX flags via pflag
-- Used by Kubernetes, Docker, Hugo, GitHub CLI
+- Single source of truth for version, commit, branch, build date, and runtime metadata
+- Stable simple/text/JSON/header output for CLIs, services, and diagnostics
+- Build-time injection via `-ldflags -X`
 
-**When to use:** Building full CLI applications with subcommands.
+**When to use:** Exposing version/build identity in CLIs or HTTP services without ad-hoc formatting code.
 
-**When NOT to use:** If you only need CLI flags for config, use `spf13/pflag` directly via go-config/provider/flag.
+**When NOT to use:** As a replacement for app configuration or command routing.
 
 ## Decision Tree
 
 ```
 Need configuration handling?
-├── Only load `.env` into process env?
-│   └── joho/godotenv
-├── Bind env vars to typed struct with defaults/required?
-│   └── caarlos0/env/v11
-└── Multi-source config (file + env + flags), optional hot reload?
-    └── agentable/go-config
+├── Only load `.env` / resolve `${secret:...}`?
+│   └── agentable/go-dotenv
+├── Multi-source config (file + env + flags + secrets), optional hot reload?
+│   └── agentable/go-config
+└── Full CLI app with commands, middleware, and typed binding?
+    └── agentable/go-command
 ```
 
 ## Do NOT Use
@@ -144,6 +143,8 @@ Need configuration handling?
 |---------|--------|-------------|
 | `spf13/viper` | We have go-config | `agentable/go-config` |
 | `knadh/koanf/v2` | We have go-config | `agentable/go-config` |
+| `joho/godotenv` | Prefer our `.env` loader with secret resolution | `github.com/agentable/go-dotenv` |
+| `spf13/cobra` | Prefer our CLI framework for new apps | `github.com/agentable/go-command` |
 | `gopkg.in/yaml.v3` | **Archived 2025-04** | `github.com/goccy/go-yaml` |
 | `BurntSushi/toml` | 2-5x slower | `pelletier/go-toml/v2` |
 | `hashicorp/hcl` | YAGNI — Terraform-specific | — |

@@ -45,48 +45,49 @@ STYLE ERROR: Description contains first/second person terms: {'you', 'your'}
 
 ## Testing Failures
 
-**Problem:** Agent doesn't comply with skill even when loaded.
+**Problem:** Agent does not behave better even when the skill is loaded.
 
 **Diagnosis:**
-1. Check if description summarizes workflow (anti-pattern)
-2. Verify skill addresses specific baseline failures
-3. Look for loopholes in instructions
+1. Determine whether this is a discovery, application, or boundary failure
+2. Check whether the description is trigger-focused or workflow-heavy
+3. Verify the skill addresses real observed failures, not hypothetical ones
+4. Look for loopholes, vague boundaries, or buried critical guidance
 
 **Recovery:**
-1. Review baseline test results - what rationalizations did agent use?
-2. Add explicit counters for each rationalization
-3. Build rationalization table
-4. Re-test with same pressure scenarios
+1. Review baseline test results - what did the agent actually do?
+2. Capture exact rationalizations, ambiguity, or failure patterns
+3. Tighten the skill with clearer rules, boundaries, placement, or examples
+4. Re-test using the same scenario shape
 
-**Problem:** Agent follows description instead of reading full skill.
+**Problem:** Agent follows description but not the full skill.
 
-**Fix:** Remove workflow summary from description. Description should only describe WHEN to use, not HOW it works.
+**Fix:** Remove workflow summary from the description. The description should describe WHEN to use the skill, not HOW the skill works internally.
 
 ## Deployment Issues
 
 **Problem:** Skill not discoverable by Claude.
 
 **Diagnosis:**
-1. Check description starts with "Use when..."
-2. Verify keywords match search terms
-3. Ensure name is descriptive (verb-first, gerunds)
+1. Check whether the description starts with clear triggering conditions
+2. Verify keywords match likely user phrasing, symptoms, and contexts
+3. Ensure the skill is distinguishable from adjacent skills
 
 **Recovery:**
-1. Add concrete triggers and symptoms to description
-2. Include error messages and tool names in content
-3. Test discoverability: "When would I use this skill?"
+1. Add concrete triggers and symptoms to the description
+2. Add searchable terms to headings and body content
+3. Test discoverability by asking when this skill should be used
 
 **Problem:** Skill loaded but not applied correctly.
 
 **Diagnosis:**
-1. Instructions too vague or abstract
-2. Missing decision points
-3. No examples provided
+1. Instructions are too vague or too abstract
+2. Decision rules are missing or weak
+3. The skill lacks a strong example or clear verification steps
 
 **Recovery:**
-1. Add concrete examples with code
-2. Include decision trees for non-obvious choices
-3. Add "Common Mistakes" section
+1. Add clearer decision rules or workflow guidance
+2. Add one strong example if prose is not enough
+3. Add verification or common-mistake guidance
 
 ## Validation Commands
 

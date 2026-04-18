@@ -16,6 +16,15 @@ A spec is a **unified document** that combines project requirements with decisio
 
 **Core principle:** Specs define rules that can be violated. If content cannot be violated by execution, it doesn't belong in a spec.
 
+**Design philosophy — think like a founder, not a contractor:**
+
+Say no to a thousand things. The complexity is in the thinking, not in the artifact.
+
+- **Simplicity is the ultimate sophistication** — the best spec has the fewest rules that fully define the system. Every sentence must earn its place. If removing a section doesn't change what gets built, remove it. Bloated specs produce bloated software
+- **Complete, not over-engineered** — specs define the production-quality system, not an MVP. But complete ≠ verbose. A well-designed system has fewer moving parts, not more. Don't add abstractions "just in case" — add them when the design demands it
+- **Extensible through simplicity** — extensibility comes from clean, minimal interfaces — not from extra layers, plugin systems, or configurability nobody asked for. One well-designed interface beats three "flexible" ones
+- **Cohesive** — each spec must consider how it fits into the broader system. Isolated specs create isolated code that later needs glue
+
 ## When to Use
 
 Use this skill when:

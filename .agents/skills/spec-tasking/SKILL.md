@@ -6,7 +6,7 @@ name: spec-tasking
 
 # Spec Tasking
 
-**Two-phase workflow:** First audits `ANALYSIS.md` accuracy by checking existing specs and research, then generates `TODO.yaml` with spec-writing tasks.
+**Four-phase workflow:** First audits `ANALYSIS.md` accuracy, then generates `TODO.yaml` with spec-writing tasks, then appends a modernizing task to revise specs with modern language features, then appends a final spec-reviewing task for cross-spec alignment.
 
 **Announce at start:** "I'm using the spec-tasking skill."
 
@@ -40,17 +40,17 @@ For each spec identified in ANALYSIS.md:
 
 **Before audit:**
 ```markdown
-## Priority 1: Token System (SPECS/02)
+## Priority 1: Authentication (SPECS/02)
 Status: Missing
-Source: .research/R01-token-system.md
+Source: .research/R01-auth-patterns.md
 ```
 
 **After audit (if spec exists):**
 ```markdown
-## Priority 1: Token System (SPECS/02)
+## Priority 1: Authentication (SPECS/02)
 Status: ✅ Exists
-Source: .research/R01-token-system.md
-Audit Notes: Found SPECS/02-token-system.md (complete). No task needed.
+Source: .research/R01-auth-patterns.md
+Audit Notes: Found SPECS/02-authentication.md (complete). No task needed.
 ```
 
 ### Audit Checklist
@@ -71,95 +71,127 @@ Before proceeding to Phase 2:
 
 Skip specs marked ✅ (already exist) - they don't need tasks.
 
+## Phase 3: Append Modernizing Task
+
+**After all spec-writing tasks, append a modernizing task** that uses `modernizing` skill to revise specs with modern language features and idioms. This is language-agnostic — the modernizing skill applied depends on the project's language distribution (e.g., Go modernizing for golang-skills, TypeScript modernizing for typescript-skills).
+
+This ensures specs reference current language APIs and patterns before the final review.
+
+## Phase 4: Append Reviewing Task
+
+**After the modernizing task, append a final spec-reviewing task** that uses `spec-reviewing` skill to verify cross-spec alignment, decision consistency, and fix any contradictions.
+
+This ensures the entire batch of specs is coherent before entering implementation.
+
 ## Pipeline Position
 
 ```
-spec-analyzing ──▶ Phase 1: Audit ──▶ Phase 2: Generate
-     │                  │                   │
-     ▼                  ▼                   ▼
- ANALYSIS.md    Updated ANALYSIS.md    TODO.yaml
-(may have errors) (verified accurate) (only missing specs)
+spec-analyzing ──▶ Phase 1: Audit ──▶ Phase 2: Generate ──▶ Phase 3: Modernize ──▶ Phase 4: Review Task
+     │                  │                   │                      │                      │
+     ▼                  ▼                   ▼                      ▼                      ▼
+ ANALYSIS.md    Updated ANALYSIS.md    TODO.yaml            TODO.yaml              TODO.yaml (final)
+(may have errors) (verified accurate) (writing tasks)    (+ modernizing task)   (+ reviewing task)
 ```
 
-This skill is the second step in the spec writing workflow — it audits analysis accuracy, then converts verified gaps into actionable tasks.
+This skill is the second step in the spec writing workflow — it audits analysis accuracy, converts verified gaps into actionable tasks, appends a modernizing pass, and appends a final quality gate.
+
+**Design philosophy — think like a founder, not a contractor:**
+
+Say no to a thousand things. Fewer, deeper specs — not more, shallower ones.
+
+- **Simplicity first** — if two specs can be one without loss of clarity, merge them. A well-designed spec prevents future rewrites. Spec bloat is the precursor to code bloat
+- **Complete, not over-engineered** — tasks should produce production-quality specifications, not MVP stubs. But don't add sections, rules, or abstractions "just in case"
+- **System coherence** — each task must emphasize how this spec integrates with the whole system, not just define its own island
+- **No premature flexibility** — don't spec extension points, plugin architectures, or configurability unless the analysis explicitly identifies concrete growth vectors
 
 ## Task Structure
 
-Each specification identified in ANALYSIS.md produces exactly **one task** that uses `spec-writing` skill.
+Each specification identified in ANALYSIS.md produces exactly **one task** that uses `spec-writing` skill. The second-to-last task uses `modernizing` skill. The final task uses `spec-reviewing` skill.
 
-### Spec Writing Task
+### Task Format
 
-Writes a specification document based on research reports.
+**CRITICAL: Tasks have only `title` and `completed` fields. No `description` field.**
 
-**Template:**
-```
-Write {spec topic} specification and use spec-writing skill to generate SPECS/{spec-number}-{spec-slug}.md
-```
-
-**Rules:**
-- `{spec topic}` = human-readable topic name (e.g., "token system", "component system", "configuration management")
-- `{spec-number}` = spec numbering from ANALYSIS.md (e.g., 02, 30, 50)
-- `{spec-slug}` = kebab-case of the spec topic (e.g., token-system, component-system)
-- Keep title to **one line** — be concise
-- Use the language specified in ANALYSIS.md (Chinese or English)
-- Add `description` field with: "Based on .research/{research-file}.md, define {key-aspects}"
-
-**Example:**
+**Spec-writing task template:**
 ```yaml
-- title: "Write token system specification and use spec-writing skill to generate SPECS/02-token-system.md"
-  description: "Based on .research/R01-token-system.md, define token types, naming conventions, transformation rules"
+- title: "Write {spec topic} specification based on ANALYSIS.md, use spec-writing skill — spec: SPECS/{number}-{slug}.md | research: .research/{source}.md — define {key-aspects}"
   completed: false
 ```
 
-## No Planning or Review Checkpoints
+**Spec-modernizing task template (second-to-last):**
+```yaml
+- title: "Modernize all SPECS with current language features based on ANALYSIS.md, use modernizing skill — spec: {all spec paths} | research: {context docs} — revise APIs, types, patterns, and code examples to use modern idioms"
+  completed: false
+```
 
-Unlike code implementation workflows, spec writing tasks are relatively independent and don't require:
-- Separate Plan+Execute pairs (spec-writing skill handles planning internally)
-- Quality review checkpoints (specs are reviewed during human approval of ANALYSIS.md)
+**Spec-reviewing task template (always last):**
+```yaml
+- title: "Review all SPECS for alignment and consistency based on ANALYSIS.md, use spec-reviewing skill — spec: {all spec paths} | research: {context docs} — verify cross-spec type consistency, decision alignment, API coherence, dependency boundaries, fix contradictions"
+  completed: false
+```
 
-Spec writing tasks are independent documents that don't build on each other's code, so refactor reviews and cohesion checks are unnecessary.
+**Rules:**
+- `title` contains ALL information: topic, target file, source, and key aspects — everything in one line
+- **Both spec and research paths are MANDATORY** — every task must include `spec:` and `research:` plain paths
+- **No `description` field** — this is a hard constraint, never include it
+- `completed` is always `false`
+- Keep title concise but self-contained
+- Use the language specified in ANALYSIS.md (Chinese or English)
+- Use plain paths (e.g., `SPECS/10-foo.md`) — no markdown link syntax
 
-Each task directly produces a specification document.
+**Path format:**
+```
+spec: SPECS/XX-slug.md | research: .research/RXX-slug.md
+```
+
+- `spec:` — the SPECS document that defines the contract for this task
+- `research:` — the research report containing reference project analysis and evidence
+- Both paths are plain relative paths from project root — no markdown link syntax
+- If a task spans multiple research reports, list all: `research: .research/R01-xxx.md, .research/R02-xxx.md`
 
 ## TODO.yaml Format
 
 ```yaml
 tasks:
   # ═══════════════════════════════════════════════════════════════
-  # Priority 1: Token System (SPECS/02)
-  # Source: .research/R01-token-system.md
+  # Priority 1: Core Module (SPECS/02)
   # ═══════════════════════════════════════════════════════════════
 
-  - title: "Write token system specification and use spec-writing skill to generate SPECS/02-token-system.md"
-    description: "Based on .research/R01-token-system.md, define token types, naming conventions, transformation rules"
+  - title: "Write core module specification based on ANALYSIS.md, use spec-writing skill — spec: SPECS/02-core-module.md | research: .research/R01-core-patterns.md — define types, interfaces, algorithm choices"
     completed: false
 
   # ═══════════════════════════════════════════════════════════════
-  # Priority 2: Component System (SPECS/30)
-  # Source: .research/R02-component-system.md
+  # Priority 2: Integration Layer (SPECS/03)
   # ═══════════════════════════════════════════════════════════════
 
-  - title: "Write component system specification and use spec-writing skill to generate SPECS/30-component-system.md"
-    description: "Based on .research/R02-component-system.md, define component interfaces, lifecycle, composition patterns"
+  - title: "Write integration layer specification based on ANALYSIS.md, use spec-writing skill — spec: SPECS/03-integration.md | research: .research/R02-integration.md — define adapters, error handling, configuration"
     completed: false
 
   # ═══════════════════════════════════════════════════════════════
-  # Priority 3: Configuration (SPECS/50)
-  # Source: .research/R03-configuration-management.md
+  # Modernize — Revise Specs with Current Language Features
   # ═══════════════════════════════════════════════════════════════
 
-  - title: "Write configuration management specification and use spec-writing skill to generate SPECS/50-configuration-management.md"
-    description: "Based on .research/R03-configuration-management.md, define configuration loading, validation, override rules"
+  - title: "Modernize all SPECS with current language features based on ANALYSIS.md, use modernizing skill — spec: SPECS/02-core-module.md, SPECS/03-integration.md | research: SPECS/01-requirements.md, DECISIONS.md — revise APIs, types, patterns, and code examples to use modern idioms"
+    completed: false
+
+  # ═══════════════════════════════════════════════════════════════
+  # Final — Cross-spec Review: Alignment & Consistency
+  # ═══════════════════════════════════════════════════════════════
+
+  - title: "Review all SPECS for alignment and consistency based on ANALYSIS.md, use spec-reviewing skill — spec: SPECS/02-core-module.md, SPECS/03-integration.md | research: SPECS/01-requirements.md, DECISIONS.md — verify cross-spec type consistency, decision alignment, API coherence, dependency boundaries, fix contradictions"
     completed: false
 ```
 
 **YAML rules:**
-- Three fields per task: `title`, `description` (recommended), `completed` (always `false`)
-- No blank lines between a title and its fields
+- **ANALYSIS.md reference:** Every task title MUST include `based on ANALYSIS.md` to maintain traceability
+- **Two fields only per task: `title` and `completed`** — never add `description`
+- No blank lines between a task's fields
 - Blank line between tasks for readability
 - Use YAML block comments (`#`) with `═` for visual separation between priority groups
-- Comment headers include priority level and source research file
+- Comment headers include priority level
 - Tasks ordered by priority from ANALYSIS.md
+- **Second-to-last task is always spec-modernizing** — it modernizes ALL specs with current language features
+- **Final task is always spec-reviewing** — it reviews ALL specs generated by preceding tasks
 
 ## Workflow
 
@@ -182,27 +214,7 @@ Read updated `ANALYSIS.md` and extract only missing/incomplete specs:
 
 **Skip ✅ items** - they don't need tasks.
 
-**Example ANALYSIS.md structure:**
-```markdown
-# Spec Analysis
-
-## Scope
-- 基于 R01 编写 token 系统规范
-- 基于 R02 编写组件系统规范
-- 基于 R03 编写配置管理规范
-
-## Priority
-1. Token 系统规范（SPECS/02）
-2. 组件系统规范（SPECS/30）
-3. 配置管理规范（SPECS/50）
-
-## Structure
-- SPECS/02-token-system.md
-- SPECS/30-component-system.md
-- SPECS/50-configuration-management.md
-```
-
-### Step 2: Determine Task Order
+### Step 3: Determine Task Order
 
 Order tasks by priority from audited ANALYSIS.md:
 1. High priority specs first
@@ -211,26 +223,45 @@ Order tasks by priority from audited ANALYSIS.md:
 
 Within each priority level, maintain the order specified in ANALYSIS.md.
 
-### Step 3: Generate Tasks
+### Step 4: Generate Spec-Writing Tasks
 
-For each missing/incomplete spec in audited ANALYSIS.md, generate exactly one task using the template:
-```
-Write {spec topic} specification and use spec-writing skill to generate SPECS/{spec-number}-{spec-slug}.md
-```
+For each missing/incomplete spec in audited ANALYSIS.md, generate exactly one task:
 
-With description field:
 ```
-Based on .research/{research-file}.md, define {key-aspects}
+Write {spec topic} specification based on ANALYSIS.md, use spec-writing skill — spec: SPECS/{number}-{slug}.md | research: .research/{source}.md — define {key-aspects}
 ```
 
-Extract:
-- Research file from the Structure section
-- Spec number and slug from the Structure section
-- Key aspects from the Scope section
+### Step 5: Append Spec-Modernizing Task
 
-### Step 4: Write TODO.yaml
+After all spec-writing tasks, append one modernizing task:
 
-Write the final `TODO.yaml` at project root with tasks ordered by priority.
+```
+Modernize all SPECS with current language features based on ANALYSIS.md, use modernizing skill — spec: {comma-separated list of ALL spec paths from steps above} | research: {context docs: SPECS/01-requirements.md, DECISIONS.md, IMPROVE.md as applicable} — revise APIs, types, patterns, and code examples to use modern idioms
+```
+
+The modernizing task:
+- Lists ALL spec paths generated above in its `spec:` field
+- Lists context documents (requirements, decisions, improve) in its `research:` field
+- Uses `modernizing` skill — this is language-agnostic; the actual modernizing skill applied depends on the project's language distribution
+- Comes after all spec-writing tasks but before the reviewing task
+
+### Step 6: Append Spec-Reviewing Task
+
+After the modernizing task, append one final task that uses `spec-reviewing` skill:
+
+```
+Review all SPECS for alignment and consistency based on ANALYSIS.md, use spec-reviewing skill — spec: {comma-separated list of ALL spec paths from steps above} | research: {context docs: SPECS/01-requirements.md, DECISIONS.md, IMPROVE.md as applicable} — verify cross-spec type consistency, decision alignment, API coherence, dependency boundaries, fix contradictions
+```
+
+The reviewing task:
+- Lists ALL spec paths generated above in its `spec:` field
+- Lists context documents (requirements, decisions, improve) in its `research:` field
+- Is always the last task in TODO.yaml
+- Uses `spec-reviewing` skill (not `spec-writing`)
+
+### Step 7: Write TODO.yaml
+
+Write the final `TODO.yaml` at project root with spec-writing tasks ordered by priority, followed by the modernizing task, then the reviewing task.
 
 ## Inputs
 
@@ -244,14 +275,21 @@ Optional:
 
 ## Outputs
 
-- `TODO.yaml` — task list at project root
+- `TODO.yaml` — task list at project root (spec-writing tasks + final reviewing task)
 
 ## Remember
 
 - This skill reads `ANALYSIS.md` from root directory — not SPECS or .plans/PLAN.md
-- Each task directly uses `spec-writing` skill — no separate Plan+Execute pairs
-- Tasks are ordered by priority from ANALYSIS.md
-- No quality review checkpoints — specs are independent documents
-- Task titles should be concise and include key aspects to define
+- Each spec task uses `spec-writing` skill — no separate Plan+Execute pairs
+- **Second-to-last task always uses `modernizing` skill** — language-agnostic spec modernization
+- **Final task always uses `spec-reviewing` skill** — this is not optional
+- Tasks are ordered by priority from ANALYSIS.md, modernizing task second-to-last, reviewing task always last
+- **Task has only `title` and `completed` — NEVER add `description`**
+- Title must be self-contained: include topic, target file, source, and key aspects
+- **Every task title MUST include both `spec:` and `research:` relative paths**
+- If a task relates to multiple research reports, list all of them in the `research:` field
+- Use plain paths (e.g., `SPECS/10-foo.md`) — no markdown link syntax
 - Use the same language as ANALYSIS.md (Chinese or English)
 - Research reports in `.research/` are inputs, SPECS/*.md are outputs
+- The modernizing task's `spec:` field lists all specs from writing tasks; its `research:` field lists context docs
+- The reviewing task's `spec:` field lists all specs from writing tasks; its `research:` field lists context docs (requirements, decisions)

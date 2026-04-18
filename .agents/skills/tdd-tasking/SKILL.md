@@ -6,237 +6,352 @@ name: tdd-tasking
 
 # TDD Tasking
 
-Reads `ANALYSIS.md` (produced by `tdd-analyzing`) and generates a structured `TODO.yaml` with three task types: **Plan** tasks, **Impl** tasks, and **Refactor Review** checkpoints interleaved every 4 categories.
+Read a selected source document and generate a structured `TODO.yaml` for Code phase execution.
+
+Primary source types:
+- `ANALYSIS.md` from `tdd-analyzing` (**analysis mode**)
+- implementation-oriented docs such as `improve.md`, `REFACTOR.md`, or similar plan docs (**doc mode**)
+
+The default output is still TDD-oriented: **Plan** tasks, **Impl** tasks, and optional **Refactor Review** checkpoints. However, **minor documentation-only tweaks do not use Plan / TDD** — emit them as direct tasks.
 
 **Used in:** Code phase (workflow stage 3) - Tasking step
 
 **Announce at start:** "I'm using the tdd-tasking skill."
 
-**Prerequisite:** `ANALYSIS.md` must exist at project root. If not, run `tdd-analyzing` first.
+## Mode Selection
+
+Choose the source and mode before generating tasks.
+
+### Analysis mode
+
+Use when:
+- `ANALYSIS.md` exists at project root and the user asks to task the analysis
+- the request is the normal `tdd-analyzing -> tdd-tasking` workflow
+- the user does not explicitly point to another source doc
+
+### Doc mode
+
+Use when:
+- the user explicitly points to `improve.md`, `REFACTOR.md`, or another implementation-oriented source doc
+- the source doc contains implementation work items but is not an `ANALYSIS.md`
+
+### Source precedence
+
+1. If the user explicitly names a source doc, use it.
+2. Otherwise, prefer `ANALYSIS.md` when present.
+3. If no source is clear, ask which document should drive task generation.
 
 ## Pipeline Position
 
-```
+```text
 Code Phase Workflow:
 
-tdd-analyzing ──▶ tdd-tasking ──▶ Ralphy loop
-     │                 │
-     ▼                 ▼
- ANALYSIS.md       TODO.yaml
-(root directory) (root directory)
+Primary path:
+SPECS/*.md + existing code
+    ↓
+tdd-analyzing → ANALYSIS.md → tdd-tasking → TODO.yaml
+
+Alternate path:
+improve.md / REFACTOR.md / implementation plan doc
+    ↓
+tdd-tasking → TODO.yaml
 ```
 
 ## Task Structure
 
-Every implementation item in ANALYSIS.md produces exactly **two tasks** — a Plan task and an Impl task.
+### Default rule
 
-### 1. Plan Task
+For code-bearing implementation items, generate exactly **two tasks**:
+1. a **Plan** task using `tdd-planning`
+2. an **Impl** task using `tdd-implementing`
+
+### Exception rule
+
+If an item is a **minor documentation-only tweak**, do **not** generate Plan + Impl. Emit a direct task instead.
+
+Examples of documentation-only tweaks:
+- adjust README wording
+- align examples with current behavior
+- clarify a spec paragraph
+- rename headings / reorganize doc sections
+
+Do **not** use the docs exception for:
+- code changes with accompanying docs
+- behavior changes that require tests
+- spec changes that imply implementation work
+
+## 1. Plan Task
 
 Generates a detailed implementation plan via `tdd-planning` skill.
 
-**Template:**
-```
-Plan {feature} implementation, covering {input-reference}, and use tdd-planning skill to generate .plans/{date}-{category-slug}-{review}-{slug}.md
+### Analysis mode template
+
+```text
+Plan ALL {feature} implementation based on ANALYSIS.md, use tdd-planning skill — spec: SPECS/{spec-file} | research: .research/{research-file} — generate .plans/{date}-{category-slug}-{review}-{slug}.md
 ```
 
-**Rules:**
-- `{feature}` = human-readable feature name from ANALYSIS.md (e.g., "token system", "authentication")
-- `{input-reference}` = source spec file (e.g., "SPECS/02-token-system.md")
+### Doc mode template
+
+```text
+Plan ALL {feature} implementation based on {source-doc} section "{section}", use tdd-planning skill — source: {source-doc}{evidence-clause} — generate .plans/{date}-{category-slug}-{review}-{slug}.md
+```
+
+### Rules
+
+- `{feature}` = concise human-readable work item name
 - `{date}` = today's date in YYYY-MM-DD format
-- `{category-slug}` = category letter + number from ANALYSIS.md (e.g., A1, B3, IT2)
+- `{category-slug}` = category/item ID when available (e.g. `A1`, `B3`, `IT2`); if the source doc has no IDs, derive a short stable slug
 - `{slug}` = kebab-case of the feature name
 - The `.plans/{date}-{category-slug}-{review}-{slug}.md` path must match exactly between Plan and Impl tasks
-- Keep title to **one line** — be concise
+- Plan titles must say **"ALL"** contracts — do not narrow the contract prematurely
+- Keep title to one line
 
-### 2. Impl Task
+### Evidence rules
+
+- **Analysis mode:** include both `spec:` and `research:` when they are provided by `ANALYSIS.md`
+- **Doc mode:** `source:` is mandatory; include `spec:` and/or `research:` only if the source doc explicitly provides them or the user named them
+- Use plain paths only — no markdown links
+
+## 2. Impl Task
 
 Implements the generated plan using `tdd-implementing` skill.
 
-**Template:**
-```
-Implement {feature} in {target-modules}, covering {input-reference}, and use tdd-implementing skill to implement following .plans/{date}-{category-slug}-{review}-{slug}.md
+### Analysis mode template
+
+```text
+Implement {feature} in {target-modules} based on ANALYSIS.md, use tdd-implementing skill — spec: SPECS/{spec-file} | research: .research/{research-file} — follow .plans/{date}-{category-slug}-{review}-{slug}.md
 ```
 
-**Rules:**
+### Doc mode template
+
+```text
+Implement {feature} in {target-modules} based on {source-doc} section "{section}", use tdd-implementing skill — source: {source-doc}{evidence-clause} — follow .plans/{date}-{category-slug}-{review}-{slug}.md
+```
+
+### Rules
+
 - The `.plans/` path must be identical to the corresponding Plan task
-- `{target-modules}` = target packages from ANALYSIS.md (e.g., "pkg/token", "pkg/auth")
-- Keep title to **one line** — be concise
+- `{target-modules}` = target packages, files, or modules inferred from the source doc
+- Use `tdd-implementing` only for code-bearing items
+- Keep title to one line
 
-### 3. Refactor Review (every 4 categories)
+## 3. Direct Documentation Task
 
-After every 4 categories of Plan+Impl tasks, insert a **4-task review checkpoint**:
+Use this for **minor documentation-only tweaks**.
+
+### Template
+
+```text
+Update {target-docs} directly based on {source-doc} section "{section}" — documentation-only change; no plan or tdd needed
+```
+
+### Rules
+
+- Use only when the item is clearly documentation-only
+- Prefer specific target docs such as `README.md`, `SPECS/10-core-types.md`, `docs/architecture.md`
+- Keep the scope narrow and executable in one focused pass
+- Do not force `tdd-planning` or `tdd-implementing` for these items
+
+## 4. Refactor Review (every 4 code categories)
+
+After every 4 **code-bearing** categories of Plan+Impl tasks, insert a **4-task review checkpoint**.
 
 **Task 1 — Dedup Audit:**
-```
-Review {package-list} for duplication issues and use code-deduplicating skill to generate .plans/{date}-{category-slug}-{review}-dedup-review.md
+```text
+Review {package-list} for duplication issues based on {source-ref} and use code-deduplicating skill to generate .plans/{date}-{category-slug}-{review}-dedup-review.md
 ```
 
 **Task 2 — Refactor Audit:**
-```
-Review {package-list} for refactoring opportunities and use code-refactoring skill to generate .plans/{date}-{category-slug}-{review}-quality-review.md
+```text
+Review {package-list} for refactoring opportunities based on {source-ref} and use code-refactoring skill to generate .plans/{date}-{category-slug}-{review}-quality-review.md
 ```
 
 **Task 3 — Simplify Audit:**
-```
-Review {package-list} for simplification opportunities and use code-simplifying skill to generate .plans/{date}-{category-slug}-{review}-simplify-review.md
+```text
+Review {package-list} for simplification opportunities based on {source-ref} and use code-simplifying skill to generate .plans/{date}-{category-slug}-{review}-simplify-review.md
 ```
 
 **Task 4 — Fix:**
+```text
+Review .plans/{date}-{category-slug}-{review}-dedup-review.md, .plans/{date}-{category-slug}-{review}-quality-review.md, and .plans/{date}-{category-slug}-{review}-simplify-review.md based on {source-ref}, consolidate suggestions by priority, implement approved improvements
 ```
-Review .plans/{date}-{category-slug}-{review}-dedup-review.md, .plans/{date}-{category-slug}-{review}-quality-review.md, and .plans/{date}-{category-slug}-{review}-simplify-review.md, consolidate suggestions by priority, implement approved improvements
-```
 
-**Package list** = union of all packages touched by the preceding 4 categories.
+### Rules
 
-### 4. Code Restructuring (after all tasks)
+- Count only code-bearing categories toward the review interval
+- Skip doc-only items when computing review checkpoints
+- `package-list` = union of code-touching packages/files from the preceding 4 code categories
+- `source-ref` = `ANALYSIS.md` in analysis mode, or the selected source doc in doc mode
+- If the generated TODO contains no code-bearing items, skip refactor reviews entirely
 
-After all Plan+Impl tasks and Refactor Reviews are complete, insert a **2-task global architecture checkpoint**:
+## 5. Code Restructuring (after all code tasks)
+
+After all code-bearing Plan+Impl tasks and Refactor Reviews are complete, insert a **2-task global architecture checkpoint**.
 
 **Task 1 — Generate:**
-```
-Review entire repository for architectural issues and use code-refactoring skill to generate .plans/{date}-GC1-global-cohesion.md
+```text
+Review entire repository for architectural issues based on {source-ref} and use code-refactoring skill to generate .plans/{date}-GC1-global-cohesion.md
 ```
 
 **Task 2 — Execute:**
-```
-Review and implement approved global refactorings and use code-refactoring skill to implement .plans/{date}-GC1-global-cohesion.md
+```text
+Review and implement approved global refactorings based on {source-ref} and use code-refactoring skill to implement .plans/{date}-GC1-global-cohesion.md
 ```
 
-**Scope** = entire repository (all pkg/ and internal/ packages)
+### Rules
 
-**Purpose:**
-- Catch global architecture issues missed by incremental refactoring
-- Identify mega-packages that need subdirectory organization
-- Find duplicate code across distant packages
-- Verify package placement (internal/ vs pkg/)
-- Ensure consistent naming and structure across the codebase
+- Add these only if the TODO contains code-bearing work
+- Skip them for fully doc-only task sets
 
 ## TODO.yaml Format
 
 ```yaml
 tasks:
   # ═══════════════════════════════════════════════════════════════
-  # Category X: {Name} (SPECS/NN)
+  # Category X: {Name}
   # ═══════════════════════════════════════════════════════════════
 
-  - title: "Plan {feature} implementation, covering SPECS/{spec-file}, and use tdd-planning skill to generate .plans/{date}-{category-slug}-{review}-{slug}.md"
+  - title: "Plan ALL {feature} implementation based on ANALYSIS.md, use tdd-planning skill — spec: SPECS/{spec-file} | research: .research/{research-file} — generate .plans/{date}-{category-slug}-{review}-{slug}.md"
     completed: false
 
-  - title: "Implement {feature} in {target-modules}, covering SPECS/{spec-file}, and use tdd-implementing skill to implement following .plans/{date}-{category-slug}-{review}-{slug}.md"
+  - title: "Implement {feature} in {target-modules} based on ANALYSIS.md, use tdd-implementing skill — spec: SPECS/{spec-file} | research: .research/{research-file} — follow .plans/{date}-{category-slug}-{review}-{slug}.md"
     completed: false
 
-  # ... more plan+impl pairs ...
-
-  # ═══════════════════════════════════════════════════════════════
-  # Refactor Review #N — after Categories W/X/Y/Z
-  # Scope: {package-list}
-  # ═══════════════════════════════════════════════════════════════
-
-  - title: "Review {package-list} for duplication issues and use code-deduplicating skill to generate .plans/{date}-{category-slug}-{review}-dedup-review.md"
-    completed: false
-
-  - title: "Review {package-list} for refactoring opportunities and use code-refactoring skill to generate .plans/{date}-{category-slug}-{review}-quality-review.md"
-    completed: false
-
-  - title: "Review {package-list} for simplification opportunities and use code-simplifying skill to generate .plans/{date}-{category-slug}-{review}-simplify-review.md"
-    completed: false
-
-  - title: "Review .plans/{date}-{category-slug}-{review}-dedup-review.md, .plans/{date}-{category-slug}-{review}-quality-review.md, and .plans/{date}-{category-slug}-{review}-simplify-review.md, consolidate suggestions by priority, implement approved improvements"
-    completed: false
-
-  # ═══════════════════════════════════════════════════════════════
-  # Code Restructuring — after all implementation complete
-  # Scope: entire repository (all pkg/ and internal/ packages)
-  # ═══════════════════════════════════════════════════════════════
-
-  - title: "Review entire repository for architectural issues and use code-refactoring skill to generate .plans/{date}-{category-slug}-GC1-global-cohesion.md"
-    completed: false
-
-  - title: "Review and implement approved global refactorings and use code-refactoring skill to implement .plans/{date}-{category-slug}-GC1-global-cohesion.md"
+  - title: "Update README.md directly based on improve.md section \"README alignment\" — documentation-only change; no plan or tdd needed"
     completed: false
 ```
 
-**YAML rules:**
-- Two fields per task: `title` and `completed` (always `false`)
-- Use YAML block comments (`#`) for category separators with `═` box lines
-- No blank lines between a title and its fields
+### YAML rules
+
+- Every task title must include **source traceability**
+  - **Analysis mode:** use `based on ANALYSIS.md`
+  - **Doc mode:** use `based on {source-doc} section "..."` or equivalent explicit source wording
+- Use only two fields per task: `title` and `completed`
+- Never add `description`
+- Use YAML block comments (`#`) for category separators when helpful
+- No blank lines between a task's fields
 - Blank line between tasks for readability
-- Code Restructuring always comes last, after all other tasks
+- Code Restructuring always comes last, after all code-bearing tasks
 
 ## Workflow
 
-### Step 1: Read ANALYSIS.md
+### Step 1: Identify source and mode
 
-Read `ANALYSIS.md` from the project root and extract:
-- Scope: what needs to be implemented
-- Priority: category ordering and importance
-- Structure: category breakdown with IDs, names, source specs, and target packages
+Determine which document drives task generation:
+- `ANALYSIS.md` -> analysis mode
+- `improve.md` / `REFACTOR.md` / similar -> doc mode
 
-### Step 2: Determine Category Order
+If unclear, ask the user.
 
-Follow the priority and structure from ANALYSIS.md to order categories. Typical ordering:
-1. Core contracts (foundations, config, types)
-2. Domain logic (business logic, data processing)
-3. Interface layer (CLI, API, UI)
-4. Advanced systems (optimization, caching)
-5. Integration tests
+### Step 2: Read the source document
 
-### Step 3: Generate Task Pairs
+Extract:
+- scope
+- ordering / priority
+- target packages or files
+- any referenced `spec:` or `research:` evidence
+- whether each item is code-bearing or documentation-only
 
-For each category item in ANALYSIS.md, generate exactly one Plan task + one Impl task using the templates above.
+In doc mode, common extraction shapes include:
+- headings
+- numbered lists
+- checklists
+- sections like Problems / Proposed Changes / Implementation / Docs
 
-### Step 4: Insert Refactor Reviews
+### Step 3: Generate tasks
 
-Count categories in order. After every 4th category, insert a 4-task refactor review:
-- R1 after categories 1–4
-- R2 after categories 5–8
-- R3 after categories 9–end
+For each extracted item:
+- **code-bearing item** -> generate one Plan task + one Impl task
+- **minor documentation-only tweak** -> generate one direct documentation task
 
-Compute the package scope for each review by collecting all packages from the preceding categories.
+If an item mixes code and docs:
+- keep the code work in Plan + Impl
+- split out the doc tweak into a separate direct doc task only if that makes execution clearer
 
-### Step 5: Insert Code Restructuring
+### Step 4: Insert conditional review checkpoints
 
-After all categories and refactor reviews, append a 2-task global cohesion review:
-- GC1 Generate: Use code-refactoring skill to generate `.plans/{date}-{category-slug}-GC1-global-cohesion.md`
-- GC1 Execute: Review `.plans/{date}-{category-slug}-GC1-global-cohesion.md`, consolidate suggestions by priority, implement high-value improvements
+- After every 4 code-bearing categories, add one refactor review checkpoint
+- If there is no code-bearing work, skip refactor reviews and global restructuring tasks
 
-This catches global architecture issues that incremental refactoring might miss.
-
-### Step 6: Write TODO.yaml
+### Step 5: Write TODO.yaml
 
 Write the final `TODO.yaml` at project root.
 
-### Step 7: Announce Completion
+### Step 6: Announce completion
 
 Inform user:
-```
+
+```text
 TODO.yaml has been generated at project root with N tasks.
 
 Next steps:
 1. Review TODO.yaml (optional)
 2. Execute tasks using Ralphy loop or manually
-3. Each Plan task uses tdd-planning to generate implementation plan
-4. Each Impl task uses tdd-implementing to write code and tests
-
-Ready to proceed with implementation?
+3. Code-bearing Plan tasks use tdd-planning
+4. Code-bearing Impl tasks use tdd-implementing
+5. Minor documentation-only tweaks can be edited directly
 ```
 
 ## Inputs
 
-Required:
-- `ANALYSIS.md` — the implementation analysis report at project root (produced by `tdd-analyzing`)
+### Required
 
-Optional:
-- Existing `TODO.yaml` to update (append new tasks)
-- Custom refactor interval (default: every 4 categories)
-- Date override for plan file naming (default: today)
+One source document:
+- `ANALYSIS.md`, or
+- a user-specified implementation-oriented source doc such as `improve.md`, `REFACTOR.md`, or similar
+
+### Optional
+
+- existing `TODO.yaml` to update
+- custom refactor interval (default: every 4 code categories)
+- date override for plan file naming (default: today)
+
+## Examples
+
+### Example 1: Standard analysis workflow
+
+Source: `ANALYSIS.md`
+
+```yaml
+- title: "Plan ALL token validation implementation based on ANALYSIS.md, use tdd-planning skill — spec: SPECS/10-auth.md | research: .research/R01-auth.md — generate .plans/2026-04-05-A1-plan-token-validation.md"
+  completed: false
+
+- title: "Implement token validation in pkg/auth based on ANALYSIS.md, use tdd-implementing skill — spec: SPECS/10-auth.md | research: .research/R01-auth.md — follow .plans/2026-04-05-A1-plan-token-validation.md"
+  completed: false
+```
+
+### Example 2: improve.md with code work
+
+Source: `improve.md`
+
+```yaml
+- title: "Plan ALL shared validation hardening implementation based on improve.md section \"补强根包共享校验\", use tdd-planning skill — source: improve.md | spec: SPECS/10-core-types.md, SPECS/50-error-handling.md — generate .plans/2026-04-05-A1-plan-root-contract-validation.md"
+  completed: false
+
+- title: "Implement shared validation hardening in search.go and search_test.go based on improve.md section \"补强根包共享校验\", use tdd-implementing skill — source: improve.md | spec: SPECS/10-core-types.md, SPECS/50-error-handling.md — follow .plans/2026-04-05-A1-plan-root-contract-validation.md"
+  completed: false
+```
+
+### Example 3: minor documentation-only tweak
+
+```yaml
+- title: "Update README.md directly based on improve.md section \"让 README 与真实行为重新对齐\" — documentation-only change; no plan or tdd needed"
+  completed: false
+```
 
 ## Remember
 
-- This skill is the **second step** after `tdd-analyzing` — it does not analyze scope
-- Plan titles must say "ALL contracts" — never constrain to specific focus points
+- This skill is still primarily a **Code phase tasking skill**
+- Preserve the normal `tdd-analyzing -> ANALYSIS.md -> tdd-tasking -> TODO.yaml` workflow
+- Support `improve.md` / `REFACTOR.md`-style implementation docs as an explicit secondary mode
+- Plan titles must say **ALL** contracts
+- Do not force minor documentation-only tweaks through Plan / TDD
+- Use `tdd-planning` and `tdd-implementing` only for code-bearing tasks
+- In analysis mode, include `spec:` and `research:` when `ANALYSIS.md` provides them
+- In doc mode, `source:` is required; `spec:` and `research:` are optional unless explicitly available
+- Use plain paths only — no markdown links
 - Refactor reviews analyze code for redundancy and reuse opportunities
 - Simplify tasks focus on recent code changes, not the entire codebase
 - `.plans/` directory is `.gitignore`d — plan files are ephemeral working artifacts
-- Integration test items use same Plan+Impl structure as feature items
+- If the task set is fully documentation-only, skip code review and restructuring checkpoints
 - This skill is used in Code phase, not Alignment phase (use `spec-gap-tasking` for Alignment)

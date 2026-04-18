@@ -4,10 +4,11 @@ Idiomatic Go testing patterns including table-driven tests, proper failure messa
 
 ## Contents
 - Table-Driven Tests
-- No Assertion Libraries
+- Assertion Style and `testify`
 - Got Before Want in Messages
 - Test Helper Conventions
 - Scope Setup to Specific Tests
+- Modern Test APIs
 - Test Error Semantics
 - Don't Call t.Fatal from Goroutines
 
@@ -54,25 +55,36 @@ Use `t.Run` for subtests when individual cases need setup/teardown. Subtest name
 
 ---
 
-## No Assertion Libraries
+## Assertion Style and `testify`
 
-Go's `testing` package is the only allowed test framework. Don't use third-party assertion libraries. Use `cmp.Diff` for complex comparisons.
+`testing` is still the core test framework. Prefer plain `testing` plus `cmp.Diff` for most new tests. `testify/assert` and `testify/require` are acceptable when the repository already standardizes on them or when they make the test materially clearer.
 
-**Incorrect:**
+Rules:
+- Use one assertion style per package or file. Don't mix ad hoc styles.
+- Use `require` for preconditions and setup gates after which the rest of the test is meaningless.
+- Use `assert` for additional checks when the test can continue.
+- Use `cmp.Diff` or `protocmp.Transform()` when a structural diff is more useful than a boolean assertion.
+- Avoid `testify/suite` by default. Subtests, helpers, and explicit setup are usually clearer in Go.
 
-```go
-assert.IsNotNil(t, "obj", obj)
-assert.StringEq(t, "obj.Type", obj.Type, "blogPost")
-assert.IntEq(t, "obj.Comments", obj.Comments, 2)
-```
-
-**Correct:**
+**Plain `testing` is still good default:**
 
 ```go
 want := BlogPost{Comments: 2, Body: "Hello, world!"}
+if diff := cmp.Diff(want, got); diff != "" {
+    t.Errorf("Blog post mismatch (-want +got):\n%s", diff)
+}
+```
 
-if !cmp.Equal(got, want) {
-    t.Errorf("Blog post = %v, want = %v", got, want)
+**`testify` is acceptable when it improves flow:**
+
+```go
+func TestLoadUser(t *testing.T) {
+    user, err := LoadUser("alice")
+    require.NoError(t, err)
+    require.NotNil(t, user)
+
+    assert.Equal(t, "alice", user.Name)
+    assert.True(t, user.Active)
 }
 ```
 
@@ -181,6 +193,58 @@ Use `sync.Once` for expensive setup shared by some (not all) tests. Use `TestMai
 
 ---
 
+## Modern Test APIs
+
+When the module Go version allows it, prefer the newer `testing` APIs that remove boilerplate:
+
+- `for b.Loop()` instead of `for i := 0; i < b.N; i++` in benchmarks (Go 1.24+)
+- `t.Context()` instead of manual `context.WithCancel` plus `t.Cleanup(cancel)` (Go 1.24+)
+- `t.Chdir()` instead of manual `os.Chdir` plus restore logic (Go 1.24+)
+- `testing/synctest` for time-based and concurrent tests that would otherwise need flaky `time.Sleep` coordination (Go 1.25+)
+
+**Benchmark modernization:**
+
+```go
+func BenchmarkProcess(b *testing.B) {
+    for b.Loop() {
+        process()
+    }
+}
+```
+
+**Context modernization:**
+
+```go
+func TestWorker(t *testing.T) {
+    ctx := t.Context()
+    if err := RunWorker(ctx); err != nil {
+        t.Fatalf("RunWorker() error = %v", err)
+    }
+}
+```
+
+**Concurrent test modernization:**
+
+```go
+func TestDebounce(t *testing.T) {
+    synctest.Test(t, func(t *testing.T) {
+        var count atomic.Int32
+        fn := Debounce(func() { count.Add(1) }, 100*time.Millisecond)
+
+        fn()
+        fn()
+        time.Sleep(150 * time.Millisecond)
+        synctest.Wait()
+
+        if got := count.Load(); got != 1 {
+            t.Errorf("count.Load() = %d, want 1", got)
+        }
+    })
+}
+```
+
+---
+
 ## Test Error Semantics
 
 Don't match error strings — they're change detectors. Use `errors.Is` for sentinel errors, or check only that err is non-nil when the specific type doesn't matter.
@@ -210,6 +274,7 @@ if !errors.Is(err, fs.ErrNotExist) {
 ## Don't Call t.Fatal from Goroutines
 
 Never call `t.Fatal`, `t.Fatalf`, or `t.FailNow` from a goroutine other than the one running the Test function. Use `t.Error` instead.
+The same rule applies to `require.*`, because it eventually calls `FailNow`.
 
 **Incorrect:**
 
@@ -225,15 +290,12 @@ go func() {
 
 ```go
 var wg sync.WaitGroup
-wg.Add(num)
 for i := 0; i < num; i++ {
-    go func() {
-        defer wg.Done()
+    wg.Go(func() { // Go 1.25+
         if err := engine.Vroom(); err != nil {
-            t.Errorf("No vroom left on engine: %v", err)
-            return
+            t.Errorf("engine.Vroom() error = %v", err)
         }
-    }()
+    })
 }
 wg.Wait()
 ```

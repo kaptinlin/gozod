@@ -21,9 +21,9 @@ This folder is the source of truth for concern-specific dependency choices.
 
 ## Env Config Rule
 
-- `.env` loading: `github.com/joho/godotenv`
-- env-to-struct binding: `github.com/caarlos0/env/v11`
-- multi-source config (file + env + flags): `github.com/agentable/go-config`
+- `.env` loading: `github.com/agentable/go-dotenv`
+- full application config (file + env + flags + secrets): `github.com/agentable/go-config`
+- CLI app framework: `github.com/agentable/go-command`
 
 These are complementary, not always replacements for each other.
 

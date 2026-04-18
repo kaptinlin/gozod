@@ -66,6 +66,13 @@ Every library should explicitly state its design philosophy using these principl
 - Thin orchestration layers with no business logic
 - Capability packages depend only on foundation types
 
+### Consumer-First Simplicity (Apple philosophy + Go idioms)
+- Design for the 90% path first: most users should import one package and remember one constructor
+- Default usage must not require platform checks or understanding internal layering
+- Hide discoverer / watcher / prober style assembly behind the root package's best default entry point
+- Advanced composition should remain possible, but it must be clearly secondary to the simplest path
+- Natural usage should equal correct usage: the shortest path should also be the recommended path
+
 **See references/design-philosophy.md for real-world examples and anti-patterns.**
 
 ## API Design Patterns

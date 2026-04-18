@@ -16,10 +16,18 @@ Sequential release process for a single Go repository. Follow steps in order.
 
 ## Scripts
 
+The releasing scripts are bundled with this skill. Locate them before use:
+
+```bash
+# Resolve script directory (checks package-local first, then monorepo parent)
+SKILL_SCRIPTS=".agents/skills/releasing/scripts"
+[ ! -f "$SKILL_SCRIPTS/check_changes.sh" ] && SKILL_SCRIPTS="../.agents/skills/releasing/scripts"
+```
+
 | Script | Purpose |
 |--------|---------|
-| `scripts/check_changes.sh` | Detect `.go`/`go.mod`/`go.sum` changes since latest tag (exit 0 = tag needed) |
-| `scripts/tag_release.sh <VERSION>` | Pin sub-module deps, create root + sub-module tags, push |
+| `$SKILL_SCRIPTS/check_changes.sh` | Detect `.go`/`go.mod`/`go.sum` changes since latest tag (exit 0 = tag needed) |
+| `$SKILL_SCRIPTS/tag_release.sh <VERSION>` | Pin sub-module deps, create root + sub-module tags, push |
 
 ## Release Workflow
 
@@ -58,22 +66,21 @@ git tag --list 'v*' --sort=-v:refname | head -5
 
 ### Step 2: Fix All Issues and Pass Checks
 
+Run each check, fix failures, and re-run until the exit code is 0. Do NOT move to Step 3 until every command below passes.
+
 ```bash
-go fmt .
+go fmt ./...
 task lint
 task test
 ```
 
-Then run package-wide formatting if needed:
+If `task lint` or `task test` fails:
+1. Read the error output.
+2. Fix every reported issue.
+3. Re-run the failing command.
+4. Repeat until exit code 0.
 
-```bash
-go fmt ./...
-```
-
-**Hard gate before commit:**
-- Fix all compile, lint, and test issues first.
-- `go fmt .`, `task lint`, and `task test` must all pass.
-- Do not proceed to staging/commit while any check is failing.
+**HARD GATE — all three commands must exit 0 before proceeding. Any skip or workaround is a release blocker.**
 
 ### Step 3: Update Documentation
 
@@ -124,10 +131,17 @@ git log --oneline -10
 
 ### Step 5: Tag and Push
 
-Run `scripts/check_changes.sh` to determine whether a new tag is needed:
+First resolve the script directory:
 
 ```bash
-bash scripts/check_changes.sh
+SKILL_SCRIPTS=".agents/skills/releasing/scripts"
+[ ! -f "$SKILL_SCRIPTS/check_changes.sh" ] && SKILL_SCRIPTS="../.agents/skills/releasing/scripts"
+```
+
+Run `check_changes.sh` to determine whether a new tag is needed:
+
+```bash
+bash "$SKILL_SCRIPTS/check_changes.sh"
 ```
 
 The script compares against the latest `v*` tag and checks:
@@ -140,7 +154,7 @@ The script compares against the latest `v*` tag and checks:
 **Tag and push** (when tag needed):
 
 ```bash
-bash scripts/tag_release.sh <VERSION>
+bash "$SKILL_SCRIPTS/tag_release.sh" <VERSION>
 ```
 
 The script handles:
@@ -183,18 +197,21 @@ Release checklist:
 ```bash
 cd <package>
 task deps:update                                   # upgrade deps (skip replaced)
-go fmt .                                           # format (gate 1)
-go fmt ./...                                       # format package-wide
-task lint                                          # lint
-task test                                          # test
-# ... fix all issues, update README.md / CLAUDE.md if needed ...
+go fmt ./...                                       # format
+task lint                                          # MUST exit 0 — fix and re-run until green
+task test                                          # MUST exit 0 — fix and re-run until green
+# ^^^ DO NOT continue until all three pass ^^^
+# ... update README.md / CLAUDE.md if needed ...
 git submodule update --remote --merge              # update submodules to latest
 git add .
 git reset TODO.md PLAN.md IMPROVE.md REFACTOR.md 2>/dev/null || true
 git commit -m "<type>(<scope>): <description>"
+# Locate skill scripts
+SKILL_SCRIPTS=".agents/skills/releasing/scripts"
+[ ! -f "$SKILL_SCRIPTS/check_changes.sh" ] && SKILL_SCRIPTS="../.agents/skills/releasing/scripts"
 # Check and tag
-if bash scripts/check_changes.sh; then
-  bash scripts/tag_release.sh <VERSION>
+if bash "$SKILL_SCRIPTS/check_changes.sh"; then
+  bash "$SKILL_SCRIPTS/tag_release.sh" <VERSION>
 else
   git push origin main
 fi

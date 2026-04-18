@@ -7,6 +7,7 @@ Go's explicit error handling is a core language feature. Proper error structure,
 - Add Non-Redundant Context
 - Choose %v vs %w for Wrapping
 - Place %w at End of Error String
+- Prefer Modern Error APIs When They Simplify the Code
 - Return error Interface
 - Handle Errors Explicitly
 - Indent Error Flow
@@ -125,6 +126,46 @@ err2 := fmt.Errorf("err2: %w", err1)
 err3 := fmt.Errorf("err3: %w", err2)
 fmt.Println(err3) // err3: err2: err1 (newest-to-oldest, natural)
 ```
+
+---
+
+## Prefer Modern Error APIs When They Simplify the Code
+
+When the module Go version allows it, prefer the newer stdlib error APIs that reduce boilerplate without weakening the contract.
+
+- Use `errors.Join(errs...)` for independent errors collected from loops, goroutines, or cleanup paths.
+- Use multiple `%w` verbs in `fmt.Errorf` when you need a single formatted message that still unwraps multiple errors.
+- Prefer `errors.AsType[*T](err)` over `errors.As(err, &target)` in Go 1.26+ code.
+- Use `context.WithCancelCause` / `context.WithTimeoutCause` when downstream code needs to know why the context ended.
+- Use `errors.ErrUnsupported` for unsupported operations instead of inventing a new sentinel every time.
+
+**Correct:**
+
+```go
+func processFile(path string) (err error) {
+    f, err := os.Open(path)
+    if err != nil {
+        return fmt.Errorf("open %q: %w", path, err)
+    }
+    defer func() { err = errors.Join(err, f.Close()) }()
+
+    // ...
+    return nil
+}
+```
+
+```go
+if pathErr, ok := errors.AsType[*fs.PathError](err); ok { // Go 1.26+
+    return fmt.Errorf("read config at %q: %w", pathErr.Path, err)
+}
+```
+
+```go
+ctx, cancel := context.WithCancelCause(parent)
+cancel(fmt.Errorf("shutting down: %w", reason))
+```
+
+Do not force modern APIs into otherwise simple code. A single wrapped error is still better expressed as `fmt.Errorf("context: %w", err)`.
 
 ---
 

@@ -217,9 +217,63 @@ func TestRenderReport(t *testing.T) {
 
 ---
 
+## Goroutine Leak Detection (Go 1.26+ experimental)
+
+Detects goroutines blocked on concurrency primitives (channels, mutexes, sync.Cond) that can never be unblocked. Uses GC reachability analysis — if a goroutine is blocked on a primitive that no runnable goroutine can reach, it's leaked.
+
+### When to use
+- CI pipelines — catch goroutine leaks in tests before production
+- Production services — monitor for leaked goroutines alongside existing profiles
+- Debugging stuck goroutines that `runtime/pprof` goroutine profile shows as blocked
+
+### When NOT to use
+- Not a substitute for `goleak` in all cases — only detects leaks where the blocking primitive is unreachable (global-variable-held channels won't be detected)
+
+### Enable
+
+```bash
+# Build with experiment flag
+GOEXPERIMENT=goroutineleakprofile go test ./...
+
+# In production — also available as pprof endpoint
+# GET /debug/pprof/goroutineleak
+```
+
+### What it catches
+
+```go
+func processWorkItems(ws []workItem) ([]workResult, error) {
+    ch := make(chan result) // unbuffered
+    for _, w := range ws {
+        go func() {
+            res, err := processWorkItem(w)
+            ch <- result{res, err} // blocks forever if early return below
+        }()
+    }
+
+    var results []workResult
+    for range len(ws) {
+        r := <-ch
+        if r.err != nil {
+            return nil, r.err // early return → remaining goroutines leak
+        }
+        results = append(results, r.res)
+    }
+    return results, nil
+}
+// After early return, ch becomes unreachable → runtime detects leaked goroutines
+```
+
+**Fix**: use buffered channel `make(chan result, len(ws))` or cancellation.
+
+Expected to be enabled by default in Go 1.27.
+
+---
+
 ## Migration strategy
 
 1. Replace `for i := 0; i < b.N; i++` with `for b.Loop()` — or run `go fix ./...` (Go 1.26+)
 2. Replace `ctx, cancel := context.WithCancel(context.Background()); t.Cleanup(cancel)` with `t.Context()`
 3. Replace manual `os.Chdir` + restore with `t.Chdir()`
 4. Replace `time.Sleep`-based test synchronization with `synctest.Test`
+5. Enable `GOEXPERIMENT=goroutineleakprofile` in CI to catch goroutine leaks (Go 1.26+)

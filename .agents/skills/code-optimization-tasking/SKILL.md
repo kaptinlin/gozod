@@ -221,3 +221,43 @@ Optional:
 - Each folder gets **three review tasks** (dedup/refactor/simplify) plus **one fix task** that applies approved changes.
 - Plan filenames must match the folder ID and slug.
 - Global cohesion checkpoint always comes last.
+
+## Appendix: Modernization Tasks
+
+When a `modernizing` skill exists for the project's language/ecosystem, append a **modernization plan + execute pair** after the global cohesion checkpoint. This upgrades codebase idioms, APIs, and tooling to the latest supported version.
+
+### Modernization Plan Task
+
+**Template:**
+```
+Review the entire codebase against the modernizing skill's checklist, identify all applicable modernization opportunities, and generate .plans/{date}-GM1-modernization.md with prioritized changes grouped by: immediate wins (mechanical, safe replacements), judgment-required (patterns needing design review), and runtime/tooling (automated fixers, build config, performance)
+```
+
+### Modernization Execute Task
+
+**Template:**
+```
+Review .plans/{date}-GM1-modernization.md, apply immediate-win modernizations first, then judgment-required changes with user approval, run automated fixers if available, verify all tests pass
+```
+
+### TODO.yaml placement
+
+```yaml
+  # ═══════════════════════════════════════════════════════════════
+  # Modernization — after global cohesion
+  # Scope: entire repository, latest language/ecosystem idioms
+  # ═══════════════════════════════════════════════════════════════
+
+  - title: "Review codebase against modernizing skill checklist and generate .plans/{date}-GM1-modernization.md with prioritized modernization opportunities"
+    completed: false
+
+  - title: "Review .plans/{date}-GM1-modernization.md, apply immediate-win modernizations, run automated fixers, verify tests pass"
+    completed: false
+```
+
+**Rules:**
+- Only include when a `modernizing` skill is available for the project's language
+- Always placed after global cohesion checkpoint
+- `{date}` = today's date in YYYY-MM-DD format
+- Plan task references the `modernizing` skill's full checklist
+- Execute task applies changes in priority order: immediate wins first, then judgment-required with approval

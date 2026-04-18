@@ -80,6 +80,7 @@ Reference these guidelines when:
 - `tools.go` with build tag → `go get -tool <pkg>` in go.mod (1.24+)
 - Temp variable for pointer: `age := x; &age` → `new(x)` (1.26+)
 - Run `go fix ./...` to auto-apply many of the above (1.26+)
+- Manual reflect index loops → `Type.Fields()` / `Type.Methods()` iterators (1.26+)
 
 ### Requires judgment (read the guide first)
 
@@ -114,13 +115,18 @@ Reference these guidelines when:
 **Security** — see [guides/security.md](guides/security.md):
 - `os.Root` prevents path traversal — use for any user-provided file paths
 - `crypto/hpke` for hybrid public key encryption (1.26+)
+- Post-quantum TLS hybrid KEM enabled by default (1.26+)
+- Heap base address randomization for cgo security (1.26+)
 - `crypto/mlkem` for post-quantum key exchange (1.24+)
 
 **Runtime & performance** — see [guides/tooling-build.md](guides/tooling-build.md):
 - PGO with `default.pgo` for 2-14% runtime improvement (1.21+)
 - Green Tea GC enabled by default (1.26+) — 10-40% GC overhead reduction
+- `io.ReadAll` ~2x faster, `fmt.Errorf` allocates less (1.26+)
+- Stack-allocated slice backing stores in more cases (1.26+)
 - Container-aware GOMAXPROCS auto-adjusts on Linux (1.25+)
 - `trace.FlightRecorder` for production debugging (1.25+)
+- Goroutine leak profile (experimental, 1.26+) — detects leaked blocked goroutines
 
 ## How to Use
 

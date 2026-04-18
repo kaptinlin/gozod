@@ -13,14 +13,16 @@ Set up Ralphy configuration in a Go project. Follow these steps in order.
 Before creating config, gather project context:
 
 1. Read `go.mod` → module name, Go version
-2. Read `Taskfile.yml` (if exists) → all available task names
+2. Read `Taskfile.yml` or `Taskfile.yaml` (if exists) → all available task names
 3. Read `CLAUDE.md` or `README.md` → project description, existing conventions
-4. Check for existing `.ralphy/` directory
-5. Detect project structure:
+4. Read `LICENSE` → license type (MIT, agentable Commercial, Apache, etc.)
+5. Check for existing `.ralphy/` directory (update if exists, create if not)
+6. Detect project structure:
    - `.references/` or `.reference/` directory
    - `SPECS/`, `DESIGNS/`, `designs/`, `DESIGN.md` directories/files
    - `.agents/skills/` or `.claude/skills/` directory
-   - `research/` directory
+   - `.research/` or `research/` directory
+   - `DECISIONS.md`, `AGENTS.md` files
    - `bin/` directory
 
 ## Step 2: Create `.ralphy/config.yaml`
@@ -53,6 +55,16 @@ commands:
 
 # Rules - instructions the AI MUST follow
 rules:
+  # ── Craft Philosophy ──
+  - "Simplicity as art — maximize work not done. Every line earns its place."
+  - "Precision over cleverness — the right name, the right type, the right boundary."
+  - "Elegance through reduction — if it doesn't spark clarity, remove it."
+  - "Craft over shipping — the difference between a tool and an instrument is love."
+  - "APIs as language — commands should feel like natural speech, not configuration."
+  - "Errors as teachers — every failure message should illuminate the path forward."
+  - "Beauty is structural — beautiful code is beautiful architecture made visible."
+  - "Never: accidental complexity, feature gravity, abstraction theater, configurability cope."
+
   # ── Go Coding Conventions ──
   - "Go <version> — use modern features: slices/maps packages, for range N, errors.AsType[T]()."
   - "Follow Google Go Best Practices and Style Decisions."
@@ -76,13 +88,11 @@ rules:
   # ── Skill Usage ──
   - "When a task matches a skill in .agents/skills/, invoke that skill instead of handling it manually."
   - "Use dependency-selecting skill when choosing Go libraries."
-  - "Use testing skill when writing tests."
   - "Use committing skill when creating commits."
 
   # ── Testing & Verification ──
   - "Write tests for all new features and bug fixes."
   - "All tests use t.Parallel(). Prefer table-driven tests."
-  - "Use testify for assertions. Mock via function injection, not mock frameworks."
   - "Run 'task test' before committing."
   - "Run 'task lint' and fix all issues before committing."
 
@@ -94,6 +104,11 @@ rules:
   # ── Documentation ──
   - "Code comments and API documentation in English."
   - "Update CLAUDE.md when adding new patterns or conventions."
+
+  # ── Dependency Issue Reporting ──
+  - "When a dependency library has a bug or limitation, do NOT work around it by reimplementing the dependency's functionality."
+  - "Instead, create a report file at reports/<dependency-name>.md describing: dependency name and version, problem description, trigger scenario, expected vs actual behavior, error messages, and workaround suggestion (without implementing it)."
+  - "Continue with other tasks that don't depend on the broken functionality."
 
 # Boundaries - files/folders the AI should not modify
 boundaries:
@@ -110,6 +125,9 @@ boundaries:
 #### `project.name`
 Extract from `go.mod` module path (last segment).
 
+#### `project.description`
+Extract from `CLAUDE.md` or `README.md` first line/heading that describes the project. Do not use placeholders like "A Go library" — extract the actual description.
+
 #### `project.framework`
 Leave empty string if no framework. Fill in if detected (e.g., `chi`, `gin`, `echo`).
 
@@ -121,27 +139,47 @@ Leave empty string if no framework. Fill in if detected (e.g., `chi`, `gin`, `ec
   lint: "go vet ./..."
   build: "go build ./..."
   ```
-- Scan Taskfile for additional tasks (`verify`, `fmt`, `vet`, `generate`, etc.) and include all that exist.
+- Scan Taskfile for **all** defined tasks (`verify`, `fmt`, `vet`, `generate`, `deps`, `clean`, `deps:update`, etc.) and include every one that exists.
 
 #### `rules`
 Rules are organized by category. Include or exclude per category based on detection:
 
 | Category | Condition | Action |
 |----------|-----------|--------|
+| Craft Philosophy | Always | Include as-is. These principles guide the spirit of all design decisions |
 | Go Coding Conventions | Always | Include. Replace `<version>` with Go version from `go.mod` |
 | Change Discipline | Always | Include as-is |
-| Design References | Per-item conditional | Include `.references/` rule only if `.references/` or `.reference/` exists. Include `SPECS/` rule only if `SPECS/` exists. Include `DESIGNS/` rule only if `DESIGNS/` or `designs/` or `DESIGN.md` exists. Include `research/` rule only if `research/` exists |
-| Skill Usage | `.agents/skills/` or `.claude/skills/` exists | Include. Adjust path to match actual directory. Add skill-specific rules for skills that exist (dependency-selecting, testing, committing) |
+| Design References | Per-item conditional | See table below |
+| Skill Usage | `.agents/skills/` or `.claude/skills/` exists | Include. Adjust path to match actual directory |
 | Testing & Verification | Always | Include. Adjust test/lint commands to match actual `commands` section |
 | Error Handling | Always | Include as-is |
 | Documentation | Always | Include as-is |
 
-Add project-specific rules extracted from `CLAUDE.md` if present (e.g., library preferences, naming conventions).
+**Design References — per-item rules:**
+
+| Rule | Include if... |
+|------|---------------|
+| `.references/` rule | `.references/` or `.reference/` directory exists |
+| `SPECS/` rule | `SPECS/` directory exists |
+| `DESIGNS/` rule | `DESIGNS/` or `designs/` or `DESIGN.md` exists |
+| `research/` rule | `.research/` or `research/` directory exists |
+| `DECISIONS.md` rule | `DECISIONS.md` file exists. Add: "Read DECISIONS.md for design decisions before making structural changes." |
+| `AGENTS.md` rule | `AGENTS.md` file exists. Add: "Read AGENTS.md for the full design specification and implementation plan." |
+
+**Project-specific rules:**
+
+After generating the standard rules, scan `CLAUDE.md` for project-specific conventions that should be encoded as rules:
+- Zero-dependency constraints
+- Specific testing patterns (e.g., "Use Clock interface — no time.Sleep")
+- Named error conventions (e.g., "Six sentinel errors only: ...")
+- Library/tool preferences
+
+Add these as a `# ── Project-Specific ──` category at the end.
 
 #### `boundaries.never_touch`
 - Always include `go.sum`
-- Add each only if the directory exists: `.references/**`, `.agents/skills/**`, `bin/**`, `vendor/**`
 - Always include `.ralphy/progress.txt`
+- Add each only if the directory exists: `.references/**`, `.agents/skills/**`, `.claude/skills/**`, `.research/**`, `bin/**`, `vendor/**`, `reports/**`
 
 ## Step 3: Update `.gitignore`
 
@@ -157,12 +195,14 @@ TODO.yaml
 TODO.md
 PLAN.md
 REFACTOR.md
+.plans/*.md
 ```
 
-Check each line before appending to avoid duplicates.
+Check each line individually before appending to avoid duplicates. Some projects may already have partial entries (e.g., `TODO.yaml` but not `TODO.yml`).
 
 ## Workflow Summary
 
-1. Detect project info from `go.mod`, `Taskfile.yml`, `CLAUDE.md`, and project structure
+1. Detect project info from `go.mod`, `Taskfile.yml`, `CLAUDE.md`, `LICENSE`, and project structure
 2. Create `.ralphy/config.yaml` with detected values, adapting rules by category
-3. Update `.gitignore` with ralphy and planning file entries
+3. Extract project-specific rules from `CLAUDE.md`
+4. Update `.gitignore` with ralphy and planning file entries

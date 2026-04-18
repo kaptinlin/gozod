@@ -271,6 +271,42 @@ On Linux, the runtime now considers cgroup CPU bandwidth limits and periodically
 ### Cgo calls ~30% faster (Go 1.26+)
 Reduced baseline overhead for C function calls from Go.
 
+### Stack allocation for slices (Go 1.26+)
+The compiler allocates slice backing stores on the stack in more situations, improving performance. No code changes needed. Disable with `-gcflags=all=-d=variablemakehash=n` if issues arise.
+
+### go mod init defaults to lower go version (Go 1.26+)
+`go mod init` with Go 1.26 toolchain creates `go.mod` with `go 1.25.0` (one version back). Encourages compatibility with currently supported Go versions. Override with `go get go@version` after init.
+
+### io.ReadAll ~2x faster (Go 1.26+)
+`io.ReadAll` allocates less intermediate memory and returns a minimally sized slice. ~2x faster, ~50% less memory. No code changes needed.
+
+### fmt.Errorf allocates less (Go 1.26+)
+`fmt.Errorf("static message")` now allocates similarly to `errors.New("static message")`. No code changes needed.
+
+### reflect iterators (Go 1.26+)
+`reflect.Type` and `reflect.Value` now have `Fields()`, `Methods()`, `Ins()`, `Outs()` methods returning iterators. Replaces manual index loops in reflection code.
+
+```go
+// Old
+for i := range t.NumField() {
+    f := t.Field(i)
+    // ...
+}
+
+// New (Go 1.26+)
+for f := range t.Fields() {
+    // ...
+}
+```
+
+### bytes.Buffer.Peek (Go 1.26+)
+Returns the next n bytes from the buffer without advancing. Useful for lookahead parsing.
+
+```go
+buf := bytes.NewBufferString("hello world")
+peek := buf.Peek(5) // "hello" — buffer position unchanged
+```
+
 ### Flight recorder (Go 1.25+)
 Lightweight continuous trace capture with snapshot-on-demand for production debugging.
 
@@ -296,3 +332,4 @@ if criticalError {
 4. Add `go mod tidy -diff` to CI pipeline
 5. Migrate from `log` to `slog` for new code; migrate existing code gradually
 6. Run `go vet ./...` to catch new analyzer warnings
+7. After Go 1.26 upgrade: io.ReadAll, fmt.Errorf, slice allocation — all faster automatically

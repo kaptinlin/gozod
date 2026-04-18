@@ -140,6 +140,59 @@ func (s *Store) Get(ctx context.Context, scope, name string) ([]byte, error) {
 
 ---
 
+## Consumer-First Simplicity (Apple philosophy + Go idioms)
+
+### Principle
+Design the 90% path first. Most users should import one package, learn one constructor, and complete common tasks without understanding internal layers, platform differences, or manual component assembly.
+
+### Good
+```go
+import mylib "example.com/mylib"
+
+client := mylib.New()
+result, err := client.Do(ctx, input)
+```
+
+**Why good:**
+- One import
+- One obvious constructor
+- No platform branching
+- No knowledge of internal discoverer/watcher/prober-style pieces
+- Natural usage is the recommended usage
+
+### Bad
+```go
+import (
+    "example.com/mylib/auto"
+    "example.com/mylib/platform/linux"
+    "example.com/mylib/probe"
+)
+
+var client *mylib.Client
+switch runtime.GOOS {
+case "linux":
+    d := linux.NewDiscoverer()
+    p := probe.New()
+    client = mylib.NewWith(d, p)
+default:
+    client = auto.New()
+}
+```
+
+**Why bad:**
+- The user has to understand package internals before solving their actual problem
+- Platform differences leak into the consumer mental model
+- The shortest path is not the default path
+- Public API is shaped around implementation assembly instead of user tasks
+
+### Review questions
+- Is the default entry point in the root package/module?
+- Can common tasks be done without platform/runtime branching?
+- Are advanced composition APIs clearly secondary to the default path?
+- Does the public API optimize for user tasks instead of internal subsystem structure?
+
+---
+
 ## DRY - Don't Repeat Yourself
 
 ### Principle

@@ -64,15 +64,26 @@ go get github.com/kaptinlin/gozod
 
 ### Struct Tag Validation (Declarative)
 
+**Recommended approach** - Use `FromStruct` with struct tags for clean, declarative validation:
+
 ```go
 type CreateUserRequest struct {
-    Name  string `json:"name"  gozod:"required,min=2,max=50"`
-    Email string `json:"email" gozod:"required,email"`
-    Age   int    `json:"age"   gozod:"required,min=18,max=120"`
+    Name  string `json:"name"  validate:"required,min=2,max=50"`
+    Email string `json:"email" validate:"required,email"`
+    Age   int    `json:"age"   validate:"required,min=18,max=120"`
 }
 
-schema := gozod.FromStruct[CreateUserRequest]()
+// Use custom tag name "validate" (default is "gozod")
+schema := gozod.FromStruct[CreateUserRequest](gozod.WithTagName("validate"))
 user, err := schema.Parse(req) // or schema.StrictParse(req) for compile-time safety
+```
+
+**Default tag name** (if you prefer "gozod"):
+```go
+type User struct {
+    Name string `gozod:"required,min=2"`
+}
+schema := gozod.FromStruct[User]() // uses "gozod" by default
 ```
 
 ### Programmatic Schema
@@ -151,7 +162,21 @@ required := optional.NonOptional() // undo Optional
 
 ## Struct Tags -- [details](references/struct-tags.md)
 
-Tag syntax: `gozod:"rule1,rule2=value,rule3"`
+### Custom Tag Names
+
+Use `WithTagName()` to customize the tag name (default is `"gozod"`):
+
+```go
+type Config struct {
+    Port int `validate:"required,min=1000,max=9999"`
+}
+
+schema := gozod.FromStruct[Config](gozod.WithTagName("validate"))
+```
+
+### Tag Syntax
+
+Tag syntax: `validate:"rule1,rule2=value,rule3"` (or `gozod:` if using default)
 
 | Tag | Applies To | Description |
 |-----|-----------|-------------|
@@ -169,6 +194,53 @@ Tag syntax: `gozod:"rule1,rule2=value,rule3"`
 | `nonnegative` | Number | >= 0 |
 | `nonpositive` | Number | <= 0 |
 | `nonempty` | Array/Slice | At least one element |
+
+## Wrapper Types (Unwrapper Interface)
+
+GoZod supports custom wrapper types (like `Optional[T]`, `sql.NullString`) via the `Unwrapper` interface:
+
+```go
+type Unwrapper interface {
+    Unwrap() (any, bool)
+}
+```
+
+**Example - Optional wrapper:**
+```go
+type Optional[T any] struct {
+    Value T
+    set   bool
+}
+
+func (o Optional[T]) Unwrap() (any, bool) {
+    return o.Value, o.set
+}
+
+type ServerConfig struct {
+    Host string        `validate:"required"`
+    Port Optional[int] `validate:"min=1000,max=9999"`
+}
+
+schema := gozod.FromStruct[ServerConfig](gozod.WithTagName("validate"))
+
+// Port not set - validation skipped
+config := ServerConfig{Host: "localhost"}
+result, _ := schema.Parse(config)  // ✅ Success
+
+// Port set with valid value
+config = ServerConfig{Host: "localhost", Port: Optional[int]{Value: 3000, set: true}}
+result, _ = schema.Parse(config)  // ✅ Success
+
+// Port set with invalid value
+config = ServerConfig{Host: "localhost", Port: Optional[int]{Value: 100, set: true}}
+_, err := schema.Parse(config)  // ❌ Validation fails: Port < 1000
+```
+
+**Built-in support:**
+- `sql.NullString`, `sql.NullInt64`, `sql.NullBool`, etc.
+- Any type implementing `Unwrapper`
+
+When `Unwrap()` returns `(value, false)`, validation is skipped for that field.
 
 ## Error Handling -- [details](references/error-handling.md)
 

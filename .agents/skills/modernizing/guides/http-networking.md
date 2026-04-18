@@ -213,10 +213,49 @@ d := rand.N(5 * time.Minute) // generic — works with Duration
 
 ---
 
+## net/url.Parse rejects malformed hosts (Go 1.26+)
+
+**Breaking change**: `url.Parse` now rejects URLs with unbracketed colons in the host, such as `http://::1/` or `http://localhost:80:80/`. Bracketed IPv6 like `http://[::1]/` is still fine.
+
+### Action
+- If your code parses URLs that may contain bare colons in host, validate or use `GODEBUG=urlstrictcolons=0` to restore old behavior
+- This catches real bugs (double ports, malformed IPv6)
+
+---
+
+## net.Dialer typed methods (Go 1.26+)
+
+New methods `DialIP`, `DialTCP`, `DialUDP`, `DialUnix` permit dialing specific network types with context.
+
+```go
+d := net.Dialer{Timeout: 5 * time.Second}
+conn, err := d.DialTCP(ctx, nil, &net.TCPAddr{IP: net.IPv4(127,0,0,1), Port: 8080})
+```
+
+---
+
+## net/http additions (Go 1.26+)
+
+- `HTTP2Config.StrictMaxConcurrentRequests` — controls whether a new connection opens when HTTP/2 stream limit is reached
+- `Transport.NewClientConn` — returns a client connection for custom connection management (most users should keep using `Transport.RoundTrip`)
+- `ServeMux` trailing slash redirects now use **307** (Temporary Redirect) instead of 301
+- `httptest.Server.Client()` now redirects `example.com` and subdomains to the test server
+
+---
+
+## ReverseProxy.Director officially deprecated (Go 1.26+)
+
+`Director` is now formally deprecated in the documentation. A malicious client can strip headers added by `Director` using hop-by-hop header manipulation. `Rewrite` (available since Go 1.20) doesn't have this vulnerability.
+
+**Action**: migrate all `Director` usage to `Rewrite`. The deprecation warnings in `go vet` will surface these.
+
+---
+
 ## Migration strategy
 
 1. Replace manual method checks in `HandleFunc` with method prefixes (Go 1.22+)
 2. Replace path parsing with `r.PathValue("param")` wildcards
-3. Migrate `ReverseProxy.Director` to `Rewrite`
+3. Migrate `ReverseProxy.Director` to `Rewrite` — officially deprecated in Go 1.26
 4. Replace `math/rand` with `math/rand/v2`
 5. Evaluate if third-party router can be replaced by stdlib for simpler services
+6. Check for malformed URLs after Go 1.26 upgrade — `url.Parse` is stricter with host colons

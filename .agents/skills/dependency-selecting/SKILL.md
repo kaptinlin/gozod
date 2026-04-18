@@ -42,9 +42,11 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 | CLI flags provider (POSIX) | go-config/provider/flag | `github.com/agentable/go-config/provider/flag` |
 | Static/defaults provider | go-config/provider/static | `github.com/agentable/go-config/provider/static` |
 | Secrets provider | go-config/provider/secrets | `github.com/agentable/go-config/provider/secrets` |
+| `.env` loading with secret resolution | **agentable/go-dotenv** | `github.com/agentable/go-dotenv` |
 | Secrets management (store/cipher/scope) | **agentable/go-secrets** | `github.com/agentable/go-secrets` |
-| Simple env→struct only | **caarlos0/env/v11** | `github.com/caarlos0/env/v11` |
-| Full CLI framework | **spf13/cobra** | `github.com/spf13/cobra` |
+| Full CLI framework | **agentable/go-command** | `github.com/agentable/go-command` |
+| Build/runtime version metadata | **agentable/go-version** | `github.com/agentable/go-version` |
+| Dynamic app schema / schema-as-code | **agentable/go-schema** | `github.com/agentable/go-schema` |
 
 ### Caching — [details](references/cache.md)
 
@@ -60,6 +62,8 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 |------|---------|--------|
 | In-process event emitter | **kaptinlin/emitter** | `github.com/kaptinlin/emitter` |
 | Background job queue (Redis) | **kaptinlin/queue** | `github.com/kaptinlin/queue` |
+| Outbound email via SMTP/relays/providers | **agentable/go-mailsmtp** | `github.com/agentable/go-mailsmtp` |
+| Unified messaging across chat platforms | **agentable/unifmsg** | `github.com/agentable/unifmsg` |
 | Distributed pub/sub | **ThreeDotsLabs/watermill** | `github.com/ThreeDotsLabs/watermill` |
 
 ### Resilience & Fault Tolerance — [details](references/resilience.md)
@@ -84,7 +88,7 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 | ICU MessageFormat v1 & v2 | **kaptinlin/messageformat-go** | `github.com/kaptinlin/messageformat-go` |
 | Template engine (Liquid/Django-like) | **kaptinlin/template** | `github.com/kaptinlin/template` |
 | String/array/date/number filters | **kaptinlin/filter** | `github.com/kaptinlin/filter` |
-| Human-readable numbers/sizes/time | **dustin/go-humanize** | `github.com/dustin/go-humanize` |
+| Human-readable numbers/sizes/time | **agentable/go-humanize** | `github.com/agentable/go-humanize` |
 
 ### Documents & Images — [details](references/document.md)
 
@@ -95,8 +99,10 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 | Markdown → DOCX/Typst | **agentable/markconv** | `github.com/agentable/markconv` |
 | Document parsing (multi-format) | **agentable/polyparse** | `github.com/agentable/polyparse` |
 | Document translation | **agentable/polytrans** | `github.com/agentable/polytrans` |
-| Math formula conversion | **agentable/mathconv** | `github.com/agentable/mathconv` |
-| Image processing (libvips) | **cshum/vipsgen** | `github.com/cshum/vipsgen` |
+| Math formula conversion | **agentable/go-mathconv** | `github.com/agentable/go-mathconv` |
+| Image processing | **agentable/go-image** | `github.com/agentable/go-image` |
+| Audio probing / transcode pipeline | **agentable/go-audio** | `github.com/agentable/go-audio` |
+| Video probing / thumbnails / transcode | **agentable/go-video** | `github.com/agentable/go-video` |
 
 ### HTTP & API — [details](references/web.md)
 
@@ -113,18 +119,24 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 
 | Need | Library | Module |
 |------|---------|--------|
-| URL query string parsing | **agentable/queryparse** | `github.com/agentable/queryparse` |
-| Query schema building | **agentable/queryschema** | `github.com/agentable/queryschema` |
-| Dynamic condition evaluation | **agentable/condeval** | `github.com/agentable/condeval` |
-| Filter schema validation | **agentable/filterschema** | `github.com/agentable/filterschema` |
+| URL query string parsing | **agentable/go-queryparse** | `github.com/agentable/go-queryparse` |
+| Query schema building | **agentable/go-queryschema** | `github.com/agentable/go-queryschema` |
+| Dynamic condition evaluation | **agentable/go-condeval** | `github.com/agentable/go-condeval` |
+| Filter schema validation | **agentable/go-filterschema** | `github.com/agentable/go-filterschema` |
+| Codebase/file content grep | **agentable/go-grep** | `github.com/agentable/go-grep` |
+| Full-text search engine abstraction | **agentable/go-search** | `github.com/agentable/go-search` |
+| App data schema engine | **agentable/go-schema** | `github.com/agentable/go-schema` |
 
 ### Workflow & State — [details](references/workflow.md)
 
 | Need | Library | Module |
 |------|---------|--------|
-| Cron scheduling (periodic jobs) | **netresearch/go-cron** | `github.com/netresearch/go-cron` |
+| In-process scheduler (`Every` / `Cron`) | **agentable/go-schedule** | `github.com/agentable/go-schedule` |
+| Cron expression primitive | **agentable/go-cron** | `github.com/agentable/go-cron` |
 | Workflow/pipeline engine (DAG) | **agentable/aster** | `github.com/agentable/aster` |
+| Declarative/resumable flow engine | **agentable/go-flow** | `github.com/agentable/go-flow` |
 | Finite state machine | **agentable/go-fsm** | `github.com/agentable/go-fsm` |
+| Process lifecycle management | **agentable/go-process** | `github.com/agentable/go-process` |
 | Distributed transactions | **dtm-labs/dtm** | `github.com/dtm-labs/dtm` |
 
 ### AI & RAG — [details](references/ai.md)
@@ -146,15 +158,20 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 | Need | Library | Module |
 |------|---------|--------|
 | UUID generation (RFC 9562) | **google/uuid** | `github.com/google/uuid` |
-| Date/time toolkit (parsing, timezone, humanized ops) | **dromara/carbon** | `github.com/dromara/carbon/v2` |
+| Date/time semantics, parsing, locale-aware formatting | **agentable/go-time** | `github.com/agentable/go-time` |
+| Human-readable bytes/numbers/time | **agentable/go-humanize** | `github.com/agentable/go-humanize` |
+| Color parsing, conversion, accessibility, palettes | **agentable/go-color** | `github.com/agentable/go-color` |
 | Currency handling | **bojanz/currency** | `github.com/bojanz/currency` |
 | Data validation (Zod-style) | **kaptinlin/gozod** | `github.com/kaptinlin/gozod` |
 | Deep cloning | **kaptinlin/deepclone** | `github.com/kaptinlin/deepclone` |
+| Scenario / protocol test orchestration | **agentable/go-test** | `github.com/agentable/go-test` |
 | Testing assertions | **stretchr/testify** | `github.com/stretchr/testify` |
 | Authorization (policy-based) | **cerbos** | `github.com/cerbos/cerbos-sdk-go` |
+| File system notifications (cross-platform) | **fsnotify/fsnotify** | `github.com/fsnotify/fsnotify` |
 | Virtual filesystem | **agentable/vfs** | `github.com/agentable/vfs` |
+| Filesystem abstraction & drivers | **agentable/go-filesystem** | `github.com/agentable/go-filesystem` |
 | Unified messaging (Telegram/Discord/Slack/...) | **agentable/unifmsg** | `github.com/agentable/unifmsg` |
-| Bash command repair | **agentable/bashrepair** | `github.com/agentable/bashrepair` |
+| Bash command repair | **agentable/go-bashrepair** | `github.com/agentable/go-bashrepair` |
 | Code generation tool | **agentable/gendog** | `github.com/agentable/gendog` |
 
 ## Global "Do NOT Use" Table
@@ -169,13 +186,17 @@ Choose the right Go library for each need. Prioritize kaptinlin/agentable librar
 | `goccy/go-json` | We use json/v2 | `go-json-experiment/json` |
 | `nicksnyder/go-i18n` | We maintain our own | `kaptinlin/go-i18n` |
 | `cenkalti/backoff` | Avoid mixed retry abstractions | `failsafe-go` or project-local `internal/backoff` |
-| `robfig/cron/v3` | Standardize scheduler choice to one direct dependency | `github.com/netresearch/go-cron` |
+| `robfig/cron/v3` | Standardize scheduler stack on our own scheduler/cron libs | `github.com/agentable/go-schedule` / `github.com/agentable/go-cron` |
 | `sony/gobreaker` | failsafe-go covers more | `failsafe-go` |
 | `afex/hystrix-go` | Abandoned | `failsafe-go` |
 | `patrickmn/go-cache` | Unmaintained, no generics | `samber/hot` |
 | `jung-kurt/gofpdf` | Archived | `agentable/pdfkit` |
 | `unidoc/unioffice` | Commercial license | `agentable/godocx` |
-| `disintegration/imaging` | Much slower than vips | `cshum/vipsgen` |
+| `disintegration/imaging` | Prefer our image pipeline first | `github.com/agentable/go-image` |
+| `dustin/go-humanize` | Prefer our ecosystem humanization helpers | `github.com/agentable/go-humanize` |
+| `dromara/carbon/v2` | Prefer our time semantics/value-object toolkit | `github.com/agentable/go-time` |
+| `joho/godotenv` | Prefer our `.env` loader with secret resolution | `github.com/agentable/go-dotenv` |
+| `spf13/cobra` | Prefer our CLI framework for new apps | `github.com/agentable/go-command` |
 | `dario.cat/mergo` | Recursive map merge is ~30 lines | stdlib |
 | `mitchellh/copystructure` | `atomic.Pointer` swap pattern | `kaptinlin/deepclone` or stdlib |
 | `hashicorp/hcl` | YAGNI — Terraform-specific | — |

@@ -312,6 +312,7 @@ tasks:
 - 依赖方的 Plan+Execute 任务排在后面
 
 **YAML rules:**
+- **ANALYSIS.md reference:** Every task title MUST include `based on ANALYSIS.md` to maintain traceability. This applies to Plan tasks, Execute tasks, Quality Review tasks, and all checkpoint tasks. The reference connects each task back to its source analysis.
 - Two fields per task: `title`, `completed` (always `false`)
 - DO NOT include `description` field
 - Use YAML block comments (`#`) for category separators with `═` box lines

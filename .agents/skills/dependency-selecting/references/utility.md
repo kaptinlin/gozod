@@ -15,15 +15,50 @@ id := uuid.New()        // v4 random
 id := uuid.Must(uuid.NewV7()) // v7 time-ordered
 ```
 
-## `github.com/dromara/carbon/v2` — Date/Time Toolkit
+## `github.com/agentable/go-time` — Date/Time Semantics
 
-- Rich date/time API (parse, format, add/sub, boundaries like start/end of day)
-- Timezone helpers and locale-aware formatting
-- Human-friendly helpers for common business time logic
+- Human time parsing, immutable value objects, locale-aware formatting, and timezone-aware semantics
+- Explicit resolved/ambiguous/invalid parse status instead of silent guessing
+- Covers natural language time, intervals, relative time, and value-object style APIs
 
-**When to use:** Time-heavy business code (report windows, billing cycles, schedule windows, timezone conversions) where stdlib `time` code becomes repetitive.
+**When to use:** Time-heavy business logic, human time input, locale-aware formatting, timezone-sensitive scheduling, and interval semantics.
 
 **When NOT to use:** Simple timestamp parse/format or basic duration arithmetic that stdlib `time` already handles cleanly.
+
+## `github.com/agentable/go-humanize` — Human-Readable Formatting
+
+- Bytes, numbers, durations, relative time, ordinals, pluralization, and percentages
+- Pure functions, zero dependencies
+
+**When to use:** Presenting machine values to humans in CLIs, logs, UIs, and diagnostics.
+
+## `github.com/agentable/go-color` — Color Processing
+
+- Parse, convert, analyze, and output colors across 11 color spaces
+- Includes WCAG contrast checks, palette generation, and design-token-friendly output
+
+**When to use:** Design systems, theming, color accessibility checks, palette tooling, and color conversion workflows.
+
+## `github.com/agentable/go-version` — Build/Runtime Version Metadata
+
+- Single source of truth for version/build/runtime metadata
+- Stable simple/text/JSON/header output without framework lock-in
+
+**When to use:** CLIs and services that need reliable version/build reporting.
+
+## `github.com/agentable/go-filesystem` — Filesystem Abstraction
+
+- Capability-based filesystem interfaces with local/memory/cloud drivers and middleware
+- Good fit for mountable, testable, multi-backend file operations
+
+**When to use:** Abstracting over local/object/virtual filesystems in application code.
+
+## `github.com/agentable/go-test` — Scenario / Protocol Test Orchestration
+
+- YAML-driven HTTP, gRPC, WebSocket, and CLI test orchestration with native `testing.T` integration
+- Useful when `testify` assertions alone are not enough
+
+**When to use:** Multi-step API/CLI/protocol testing scenarios and reusable scenario suites.
 
 ## `github.com/bojanz/currency` — Currency Handling
 
@@ -82,6 +117,37 @@ require.NoError(t, err)  // stops test on failure
 
 **When to use:** Externalized access control, policy-based authorization, RBAC/ABAC.
 
+## `github.com/fsnotify/fsnotify` — File System Notifications
+
+- Cross-platform file system event notifications (create, write, remove, rename, chmod)
+- Backends: inotify (Linux), kqueue (macOS/BSD), ReadDirectoryChangesW (Windows), FEN (illumos)
+- Non-recursive — subdirectories require separate `Add()` calls
+- 10K+ stars, widely used across Go ecosystem
+
+**When to use:** Config file hot-reload, dev tools (live reload, asset pipeline), log rotation detection, file sync — any time you need to react to file system changes.
+
+**When NOT to use:** Recursive directory trees with thousands of entries (consider polling instead). One-shot file existence checks (use `os.Stat`).
+
+```go
+watcher, _ := fsnotify.NewWatcher()
+defer watcher.Close()
+
+go func() {
+    for {
+        select {
+        case event := <-watcher.Events:
+            if event.Has(fsnotify.Write) {
+                log.Println("modified:", event.Name)
+            }
+        case err := <-watcher.Errors:
+            log.Println("error:", err)
+        }
+    }
+}()
+
+watcher.Add("/path/to/watch")
+```
+
 ## `github.com/agentable/vfs` — Virtual Filesystem
 
 - Unix-like commands, mountable backends
@@ -97,7 +163,7 @@ require.NoError(t, err)  // stops test on failure
 
 **When to use:** Multi-platform chatbot, notification delivery across platforms, unified messaging gateway.
 
-## `github.com/agentable/bashrepair` — Bash Command Repair
+## `github.com/agentable/go-bashrepair` — Bash Command Repair
 
 - Auto-fixes common bash syntax errors
 - Designed for AI-generated shell commands
@@ -116,5 +182,7 @@ require.NoError(t, err)  // stops test on failure
 
 | Library | Reason |
 |---------|--------|
-| `jinzhu/now` | Narrower API, prefer `carbon/v2` for richer time operations |
-| `araddon/dateparse` as primary time toolkit | Useful parser only; not a full date-time operation toolkit |
+| `jinzhu/now` | Narrower API, prefer `agentable/go-time` for richer time semantics |
+| `araddon/dateparse` as primary time toolkit | Useful parser only; not a full time semantics toolkit |
+| `dustin/go-humanize` | Prefer our ecosystem humanization helpers | `github.com/agentable/go-humanize` |
+| `dromara/carbon/v2` | Prefer our time semantics/value-object toolkit | `github.com/agentable/go-time` |

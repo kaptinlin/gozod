@@ -1,74 +1,108 @@
-# Skill Creation Checklist (TDD Adapted)
+# Skill Creation Checklist
 
-**IMPORTANT: Use TodoWrite to create todos for EACH checklist item below.**
+Use this checklist before considering a skill complete.
 
-## RED Phase - Write Failing Test
+## 1. Scope and Intent
 
-- [ ] Create pressure scenarios (3+ combined pressures for discipline skills)
-- [ ] Run scenarios WITHOUT skill - document baseline behavior verbatim
-- [ ] Identify patterns in rationalizations/failures
+- [ ] The skill solves a reusable problem, not a one-off historical case
+- [ ] The skill belongs in a reusable skill, not in project-local `CLAUDE.md`
+- [ ] The skill's purpose is clear in 1-2 short paragraphs
+- [ ] The intended behavior change is explicit
+- [ ] The skill has clear non-goals or out-of-scope cases
 
-## GREEN Phase - Write Minimal Skill
+## 2. Metadata and Discovery
 
-### Metadata Validation
-- [ ] Name uses only letters, numbers, hyphens (no parentheses/special chars)
-- [ ] YAML frontmatter with only name and description (max 1024 chars)
-- [ ] Description starts with "Use when..." and includes specific triggers/symptoms
-- [ ] Description written in third person
-- [ ] Run `python3 scripts/validate-metadata.py --file SKILL.md` to verify
+- [ ] `name` uses only lowercase letters, numbers, and hyphens
+- [ ] `name` is specific and searchable
+- [ ] YAML frontmatter contains only `name` and `description`
+- [ ] `description` is written in third person
+- [ ] `description` describes when to use the skill, not how it works internally
+- [ ] `description` includes concrete triggers, symptoms, contexts, or keywords
+- [ ] `description` is specific enough to distinguish this skill from adjacent skills
+- [ ] Run `python3 scripts/validate-metadata.py --file SKILL.md`
 
-### Content Structure
-- [ ] Clear overview with core principle
-- [ ] Keywords throughout for search (errors, symptoms, tools)
-- [ ] Address specific baseline failures identified in RED
-- [ ] Code inline OR link to separate file
-- [ ] One excellent example (not multi-language)
+## 3. Core Structure
 
-### Testing
-- [ ] Run scenarios WITH skill - verify agents now comply
+- [ ] The main file includes a clear purpose/overview
+- [ ] The main file says when to use the skill
+- [ ] The main file says when not to use the skill
+- [ ] The main file includes core principles or decision rules
+- [ ] The main file includes workflow or implementation guidance
+- [ ] The main file includes verification or quality checks
+- [ ] Optional sections exist only when they add real value
 
-## REFACTOR Phase - Close Loopholes
+## 4. Boundaries and Instruction Quality
 
-- [ ] Identify NEW rationalizations from testing
-- [ ] Add explicit counters (if discipline skill)
-- [ ] Build rationalization table from all test iterations
-- [ ] Create red flags list
-- [ ] Re-test until bulletproof
+- [ ] Important constraints are explicit, not implied
+- [ ] Fragile or safety-critical behavior uses stronger instruction language
+- [ ] The skill does not force rigid process where judgment is required
+- [ ] The skill teaches decision-making, not just ceremony
+- [ ] The guidance avoids filler and repeated explanation
+- [ ] The skill does not duplicate large chunks of canonical reference material
 
-## Quality Checks
+## 5. Progressive Disclosure
 
-### Structure
-- [ ] Small flowchart only if decision non-obvious
-- [ ] Quick reference table
-- [ ] Common mistakes section
-- [ ] No narrative storytelling
-- [ ] Supporting files only for tools or heavy reference
+- [ ] Main `SKILL.md` stays under 500 lines
+- [ ] Principles and high-signal guidance stay inline
+- [ ] Heavy documentation is moved to `references/`
+- [ ] Deterministic helpers are moved to `scripts/`
+- [ ] Templates, schemas, or scaffolds are moved to `assets/`
+- [ ] Supporting folders exist only when justified by reuse, size, or determinism
+- [ ] References are loaded just-in-time instead of force-loading everything up front
 
-### Progressive Disclosure
-- [ ] Main SKILL.md under 500 lines
-- [ ] Heavy reference material (>100 lines) moved to `references/`
-- [ ] Reusable tools/scripts in `scripts/`
-- [ ] Templates and schemas in `assets/`
+## 6. Examples and Supporting Material
 
-### CSO (Claude Search Optimization)
-- [ ] Description focuses on WHEN to use, not HOW it works
-- [ ] No workflow summary in description
-- [ ] Includes negative triggers ("Don't use for...")
-- [ ] Searchable keywords in overview and sections
+- [ ] Examples exist only if they resolve ambiguity better than prose
+- [ ] The skill uses one strong example instead of many weak ones
+- [ ] Flowcharts are used only for genuinely non-obvious decisions
+- [ ] Supporting files have distinct jobs and are not redundant with the main file
 
-## Deployment
+## 7. Testing and Validation
 
-- [ ] Commit skill to git and push to your fork (if configured)
-- [ ] Consider contributing back via PR (if broadly useful)
+- [ ] The skill has been tested before being treated as done
+- [ ] Baseline behavior without the skill was observed when appropriate
+- [ ] Testing matches the skill type (discipline, technique, pattern, or reference)
+- [ ] The skill has been checked for discoverability
+- [ ] The skill has been checked for correct application
+- [ ] The skill has been checked for misuse, overreach, or boundary failure
+
+## 8. RED-GREEN-REFACTOR
+
+### RED
+- [ ] Run a baseline scenario without the skill when behavior change is the point
+- [ ] Document failures, ambiguity, or rationalizations the skill must address
+
+### GREEN
+- [ ] Write the minimum skill that addresses the real problem
+- [ ] Verify the skill improves behavior with the skill present
+
+### REFACTOR
+- [ ] Tighten vague wording
+- [ ] Close loopholes discovered during testing
+- [ ] Remove sections, examples, or files that do not earn their keep
+- [ ] Re-test after meaningful changes
+
+## 9. Final Review
+
+- [ ] The skill is concise
+- [ ] The skill is discoverable
+- [ ] The skill is reusable
+- [ ] The skill is bounded
+- [ ] The skill is testable
+- [ ] The skill is better because of what it omits, not only what it includes
 
 ## Validation Commands
 
 ```bash
-# Validate metadata
 python3 scripts/validate-metadata.py --file SKILL.md
-
-# Check line count (should be under 500)
 wc -l SKILL.md
-
-# Test with subagents (see testing-skills-with-subagents.md)
 ```
+
+## Deep References
+
+Read these when needed:
+- `references/testing-skill-types.md`
+- `testing-skills-with-subagents.md`
+- `references/bulletproofing.md`
+- `references/cso-guidelines.md`
+- `references/error-handling.md`

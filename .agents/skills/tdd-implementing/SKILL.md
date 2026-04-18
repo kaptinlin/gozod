@@ -18,8 +18,13 @@ Implement features using strict TDD discipline: write failing test first (RED), 
 Code Phase Workflow:
 
 tdd-tasking → Ralphy loop:
-                ├─ Plan task → tdd-planning → .plans/YYYY-MM-DD-{feature}.md
-                ├─ Impl task → tdd-implementing → code + tests
+                ├─ Plan task  → tdd-planning → .plans/YYYY-MM-DD-{feature}.md
+                ├─ Impl task  → tdd-implementing:
+                │                 0. Study (.references/ + existing code)
+                │                 1. Plan (interface + behaviors)
+                │                 2. Tracer bullet (first RED→GREEN)
+                │                 3. Incremental loop (remaining criteria)
+                │                 4. Refactor (GREEN only)
                 └─ Checkpoint → code-simplifying / code-refactoring
 ```
 
@@ -29,7 +34,9 @@ tdd-tasking → Ralphy loop:
 
 **Good tests** exercise real code paths through exported APIs. They describe _what_ the system does. `TestOrder_ConfirmsOnValidPayment` tells you exactly what capability exists and survives a complete internal refactor.
 
-**Bad tests** are coupled to implementation: they mock internal collaborators, assert on call order, or verify through side-channel means (querying the DB directly). The warning sign: test breaks when you rename an internal function but behavior hasn't changed.
+**Bad tests** are coupled to implementation: they mock internal collaborators, assert on call order, verify through side-channel means (querying the DB directly), or lock prose/spec/docs wording inside test files. The warning sign: test breaks when you rename an internal function, rewrite a README section, or rephrase a spec while behavior hasn't changed.
+
+**Never add documentation-lock test files** like `research_test.go`, `*_spec_test.go`, or tests that read `README.md`, `CLAUDE.md`, `SPECS/*.md`, `.research/*` just to assert headings, anchor text, fixed wording, or narrative structure. If the invariant matters to runtime or API consumers, test behavior through code. If it is an architecture/process rule, enforce it with lint/CI checks or keep it in docs — not in unit tests.
 
 ## Iron Law
 
@@ -51,7 +58,7 @@ Constraints are rules about how code should be written — not executable behavi
 |-----------------|----------------------|
 | Forbidden values, required patterns, validation rules | **Runtime code + tests** — users observe the enforcement |
 | Module import restrictions, layer boundaries | **Lint rules / CI scripts** — catch violations in build |
-| Architecture rules, naming conventions | **SPEC documentation + CI checks** — code reviews and automation |
+| Architecture rules, naming conventions, documentation structure | **SPEC documentation + CI checks** — code reviews and automation |
 
 **The deletion test:** If deleting the code doesn't change program behavior, it's documentation disguised as code.
 
@@ -86,6 +93,26 @@ Horizontal slices produce imagined-behavior tests — you test the _shape_ of da
 
 ## Workflow
 
+### 0. Study (Before Any Code)
+
+Before touching any code, study three sources:
+
+**a) The implementation plan** — read `.plans/` file for this feature. It defines the interface contract and acceptance criteria. Do not deviate.
+
+**b) Reference implementations** — check `.references/` for the closest analog:
+- Read the reference's source code for API patterns and error handling
+- Read the reference's tests (or test-equivalent code) for edge cases you must cover
+- Note auth chains, pagination, error mapping, and name conventions
+- **Borrow patterns, not code** — translate to the project's conventions
+
+**c) Existing codebase patterns** — read at least 2 similar implementations in the project:
+- Match the constructor pattern (functional options, validation, nil guards)
+- Match the error pattern (sentinel errors, error wrapping style)
+- Match the test pattern (setup helpers, assertion framework, table-driven style)
+- Match the concurrency pattern (atomic flags, mutexes, async patterns, etc.)
+
+**Why this matters:** Implementing without studying produces inconsistent code. Studying first means the first TDD cycle produces code that already fits the project.
+
 ### 1. Plan
 
 Before any code:
@@ -117,14 +144,17 @@ This is your tracer bullet — proves the path works at all.
 **Test errors?** Fix the error, re-run until it fails correctly.
 
 ```language-agnostic
-TestFeature_HappyPath(input) {
-    result, err := DoThing(validInput)
-    assert.NoError(err)
-    assert.Equal(expected, result)
-}
+// Test for first behavior - confirm it fails
+test("Feature_HappyPath", () => {
+    result = DoThing(validInput)
+    assert.NoError(result.error)
+    assert.Equal(expected, result.value)
+})
 ```
 
-Expected first run: `FAIL` — function not defined
+Expected first run: `FAIL` — function/feature not defined
+
+**Note:** See `references/test-framework.md` in your project templates for language-specific testing patterns and assertions.
 
 ### 3. Incremental Loop
 
@@ -140,6 +170,7 @@ Rules:
 - Only enough code to pass the current test
 - Don't anticipate future tests — write them when you get there
 - Keep tests focused on observable behavior
+- Do not create tests that parse docs/spec files to lock wording, anchors, headings, or prose structure
 
 ### 4. Refactor
 
@@ -208,11 +239,13 @@ Run coverage tool per your language ecosystem.
 [ ] Test describes behavior, not implementation
 [ ] Test uses exported API only — no internal state
 [ ] Test would survive renaming an internal function
+[ ] Test would survive README/CLAUDE/SPEC prose rewrites when behavior is unchanged
 [ ] Parallel test enabled (unless mutating shared state)
 [ ] Implementation is minimal for this test only
 [ ] No speculative code added
 [ ] Test passes before moving on
 [ ] No "documentation disguised as code" added
+[ ] No documentation-lock test file added
 ```
 
 ## Testing Constraints vs Implementing Them
@@ -228,9 +261,9 @@ type AssertValidAction<T> = T extends ForbiddenAction ? Error : T
 No runtime code reads these. If a developer doesn't use the type, it's unenforced.
 
 **✅ Right: Implement constraints as runtime validation**
-```typescript
+```language-agnostic
 // Actual code that executes and enforces the rule
-function validateAction(action: string): void {
+function validateAction(action: string) {
     const forbidden = ['DELETE_ALL', 'FORMAT_DISK']
     if (forbidden.includes(action)) {
         throw new Error(`Forbidden action: ${action}`)
@@ -239,7 +272,7 @@ function validateAction(action: string): void {
 ```
 
 **✅ Best: Test enforces the constraint**
-```typescript
+```language-agnostic
 test("rejects forbidden actions", () => {
     expect(() => validateAction('DELETE_ALL'))
         .toThrow("Forbidden action")
@@ -250,6 +283,8 @@ test("rejects forbidden actions", () => {
 1. **SPEC** as source of truth — document the rule clearly
 2. **CI check** — lint rule or validation script that runs in build
 3. **Test** — verify the CI check catches violations
+
+Do **not** replace CI/lint enforcement with unit tests that read markdown docs and assert exact prose. That creates brittle doc-lock tests instead of executable behavior checks.
 
 ## Code Comment Guidelines (KISS + DRY)
 
@@ -265,9 +300,9 @@ test("rejects forbidden actions", () => {
 ### ❌ Delete These Comments
 
 1. **Type-repeating comments** — Types already document themselves
-   ```typescript
-   // ❌ Bad: readonly name: string; /** 组件名称 */
-   // ✅ Good: readonly name: string;
+   ```language-agnostic
+   // ❌ Bad: name: string; /** Component name */
+   // ✅ Good: name: string;
    ```
 
 2. **Obvious field descriptions** — Self-explanatory names
@@ -286,9 +321,40 @@ test("rejects forbidden actions", () => {
 
 **Rule of thumb**: If comment just restates code in natural language, delete it.
 
+## Consistency Checklist
+
+Before the first TDD cycle, verify you can answer these from studying existing code:
+
+```
+[ ] Constructor pattern: Functional options? Builder? Config struct/object?
+[ ] Error pattern: Sentinel errors? Wrapping? Custom error types?
+[ ] Cleanup pattern: Atomic flags? Once/defer patterns? Async cleanup?
+[ ] Test setup: Shared helpers? Setup/teardown hooks?
+[ ] Test assertions: Which framework? Assertion style?
+[ ] Interface compliance: Compile-time checks? Type annotations?
+[ ] Context/cancellation: How is cancellation handled?
+[ ] Naming: Language-specific conventions? Package/module structure?
+```
+
+**Note:** See `references/code-patterns.md` in your project templates for language-specific patterns.
+
+If you don't match these, your code will look foreign in the codebase. Study first, code second.
+
+## Sub-Module Setup
+
+When implementing a new sub-module (separate package/module):
+
+1. **First TDD cycle**: Create module configuration file (e.g., `go.mod`, `package.json`) with proper dependencies
+2. **Compile-time check**: Add interface compliance verification appropriate for your language
+3. **Test imports**: Use the parent module's test helpers if they exist
+4. Run dependency management commands after adding each dependency — don't batch
+
+**Note:** See `references/code-patterns.md` in your project templates for language-specific sub-module setup.
+
 ## Remember
 
 - This skill is used in Code phase for Impl tasks generated by `tdd-tasking`
+- **Study references and existing code BEFORE the first TDD cycle** — not after
 - Always follow the implementation plan from `tdd-planning`
 - One feature = many TDD cycles, one commit at the end
 - Tests verify behavior through exported interfaces only
@@ -296,3 +362,5 @@ test("rejects forbidden actions", () => {
 - **Constraints belong in tests, not type declarations**
 - **If no runtime code reads it, it's not implementation — it's documentation**
 - **Comments should add value, not repeat what code already says (KISS + DRY)**
+- **Borrow patterns from .references/, match conventions from existing code**
+- **See `references/` in your project templates for language-specific testing frameworks, patterns, and examples**

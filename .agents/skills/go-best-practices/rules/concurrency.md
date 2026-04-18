@@ -4,6 +4,7 @@ Correct goroutine lifecycle management, synchronization patterns, and channel us
 
 ## Contents
 - Goroutine Lifetimes
+- Prefer Modern sync Helpers
 - Prefer Synchronous Functions
 - Specify Channel Direction
 - Don't Copy Sync Types
@@ -32,11 +33,10 @@ func (w *Worker) Run() {
 func (w *Worker) Run(ctx context.Context) error {
     var wg sync.WaitGroup
     for item := range w.q {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
+        item := item
+        wg.Go(func() { // Go 1.25+
             process(ctx, item)
-        }()
+        })
     }
     wg.Wait()
     return nil
@@ -44,6 +44,48 @@ func (w *Worker) Run(ctx context.Context) error {
 ```
 
 Goroutines blocked on channel operations will leak if no other goroutine holds the channel reference. The garbage collector will not terminate blocked goroutines.
+
+---
+
+## Prefer Modern sync Helpers
+
+When the module Go version allows it, prefer the newer sync and time APIs that remove common concurrency boilerplate:
+
+- `sync.WaitGroup.Go` instead of manual `Add(1)` / `defer Done()` pairs
+- `sync.OnceValue` / `sync.OnceValues` instead of `sync.Once` plus separate cached variables
+- Go 1.23+ timer semantics instead of manual timer drain patterns after `Stop` / `Reset`
+
+**WaitGroup modernization:**
+
+```go
+var wg sync.WaitGroup
+for _, job := range jobs {
+    job := job
+    wg.Go(func() { process(job) }) // Go 1.25+
+}
+wg.Wait()
+```
+
+**Once modernization:**
+
+```go
+var loadConfig = sync.OnceValues(func() (*Config, error) { // Go 1.21+
+    return parseConfig("config.yaml")
+})
+```
+
+**Timer modernization:**
+
+```go
+t := time.NewTimer(delay)
+t.Stop()      // Go 1.23+: no manual drain needed
+t.Reset(next)
+```
+
+Do not use these helpers mechanically:
+- `OnceValue` caches failures forever, so it is wrong for retriable initialization.
+- `WaitGroup.Go` is not a substitute for `errgroup.Group` when you need structured error propagation.
+- Timer simplifications only apply when the module's Go version is new enough.
 
 ---
 

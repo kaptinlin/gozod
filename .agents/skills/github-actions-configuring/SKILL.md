@@ -62,16 +62,19 @@ Single-module library
 
 ### Workflow Structure
 
-Every Go package workflow should have two jobs:
+Every Go package workflow should have three jobs:
 
 1. **test** — Run `task test` with race detection
 2. **lint** — Run `task lint` with golangci-lint
+3. **security** — Run `govulncheck ./...` for vulnerability scanning
 
-Both jobs should:
+All jobs should:
 - Use `actions/checkout@v6` without `submodules: recursive`
 - Use `actions/setup-go@v6` with `go-version-file: go.mod`
 - Enable Go module caching with `cache: true`
-- Use `go-task/setup-task@v1` to install Task runner
+- Use `go-task/setup-task@v2` to install Task runner
+
+**Critical:** The security job must have PAT_TOKEN configured if the package depends on private modules (`github.com/agentable/*`). Without it, `govulncheck` fails to resolve private dependencies. The `Configure Git for private modules` step must run **before** `actions/setup-go` because the Go action's cache restore can trigger module resolution.
 
 ## Multi-Module Repositories
 
@@ -328,16 +331,17 @@ After creating the workflow, verify:
 - [ ] No `git submodule update --init --recursive` commands
 - [ ] `go-version-file: go.mod` is set
 - [ ] `cache: true` is enabled
-- [ ] Both test and lint jobs are present
+- [ ] Test, lint, and security jobs are all present
+- [ ] Security job runs `govulncheck ./...`
 - [ ] Workflow triggers on push to main and pull requests
 
 **Single-module specific:**
 - [ ] Test submodules (if any) are initialized with specific paths
-- [ ] PAT_TOKEN is configured (for private packages only)
+- [ ] PAT_TOKEN is configured in test, lint, AND security jobs (for private packages only)
 
 **Multi-module specific:**
 - [ ] `GOWORK: "off"` is set in env
-- [ ] PAT_TOKEN is configured (always required — multi-module repos typically have private deps)
+- [ ] PAT_TOKEN is configured in all jobs including security (always required — multi-module repos typically have private deps)
 - [ ] Uses `task test` (root only), NOT `task test:all` (pre-release)
 - [ ] Uses `task lint` (root only), NOT `task lint:all` (pre-release)
 - [ ] No matrix per module (pre-release)
