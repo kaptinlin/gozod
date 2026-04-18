@@ -155,10 +155,10 @@ func (ts TestStruct) GenerateStructCode() string {
 
 		var tags []string
 		if field.JSONTag != "" {
-			tags = append(tags, fmt.Sprintf(`json:"%s"`, field.JSONTag))
+			tags = append(tags, fmt.Sprintf("json:%q", field.JSONTag))
 		}
 		if field.GozodTag != "" {
-			tags = append(tags, fmt.Sprintf(`gozod:"%s"`, field.GozodTag))
+			tags = append(tags, fmt.Sprintf("gozod:%q", field.GozodTag))
 		}
 
 		if len(tags) > 0 {
@@ -216,13 +216,13 @@ func (h *TestHelper) AssertValidGoCode(code string) {
 // AssertImportsCorrect checks if the generated imports are correct
 func (h *TestHelper) AssertImportsCorrect(code string, expectedImports []string, unexpectedImports []string) {
 	for _, imp := range expectedImports {
-		if !strings.Contains(code, fmt.Sprintf(`"%s"`, imp)) {
+		if !strings.Contains(code, fmt.Sprintf("%q", imp)) {
 			h.t.Errorf("Generated code should import %s\nCode:\n%s", imp, code)
 		}
 	}
 
 	for _, imp := range unexpectedImports {
-		if strings.Contains(code, fmt.Sprintf(`"%s"`, imp)) {
+		if strings.Contains(code, fmt.Sprintf("%q", imp)) {
 			h.t.Errorf("Generated code should not import %s\nCode:\n%s", imp, code)
 		}
 	}

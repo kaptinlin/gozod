@@ -213,7 +213,7 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
 			require.NoError(t, err, "Failed to create writer")
 
-			schema, err := writer.generateFieldSchemaCode(tt.field, tt.structName)
+			schema, err := writer.generateFieldSchemaCode(&tt.field, tt.structName)
 			if tt.expectError {
 				assert.Error(t, err, "Expected error but got none")
 			} else {
@@ -356,7 +356,7 @@ func TestFileWriter_GenerateFieldSchemaCodeForStruct(t *testing.T) {
 				field.Type = reflect.TypeFor[int]()
 			}
 
-			result, err := writer.generateFieldSchemaCode(field, "TestStruct")
+			result, err := writer.generateFieldSchemaCode(&field, "TestStruct")
 			require.NoError(t, err, "Failed to generate field schema")
 
 			if !strings.Contains(result, tt.expected) {
@@ -458,6 +458,7 @@ func TestGenerateValidatorChain(t *testing.T) {
 		{name: "ipv4", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ".IPv4()"},
 		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ".IPv6()"},
 		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
+		{name: "regex with quotes", rule: tagparser.TagRule{Name: "regex", Params: []string{"^\"[A-Z]+\"$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^\"[A-Z]+\"$"))`},
 
 		// Numeric validators
 		{name: "gte", rule: tagparser.TagRule{Name: "gte", Params: []string{"0"}}, fieldType: reflect.TypeFor[int](), expected: ".Gte(0)"},
@@ -548,6 +549,18 @@ func TestGeneratePrefaultValue(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestGenerateDefaultValueEscapesQuotes(t *testing.T) {
+	assert.Equal(t, `.Default("hello \"world\"")`, generateDefaultValue(`hello "world"`, reflect.TypeFor[string]()))
+	assert.Equal(t, `.Default([]string{"a\"b"})`, generateDefaultValue(`["a\"b"]`, reflect.TypeFor[[]string]()))
+	assert.Equal(t, `.Default(map[string]string{"k": "v\"w"})`, generateDefaultValue(`{"k":"v\"w"}`, reflect.TypeFor[map[string]string]()))
+}
+
+func TestGeneratePrefaultValueEscapesQuotes(t *testing.T) {
+	assert.Equal(t, `.Prefault("hello \"world\"")`, generatePrefaultValue(`hello "world"`, reflect.TypeFor[string]()))
+	assert.Equal(t, `.Prefault([]string{"x\"y"})`, generatePrefaultValue(`["x\"y"]`, reflect.TypeFor[[]string]()))
+	assert.Equal(t, `.Prefault(map[string]string{"foo": "bar\"baz"})`, generatePrefaultValue(`{"foo":"bar\"baz"}`, reflect.TypeFor[map[string]string]()))
 }
 
 func TestFileWriter_FirstLowerCase(t *testing.T) {

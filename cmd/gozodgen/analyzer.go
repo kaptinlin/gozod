@@ -284,7 +284,7 @@ func (a *StructAnalyzer) typesToReflectType(t types.Type) reflect.Type {
 
 // basicKindToReflectType maps go/types basic kinds to reflect.Type.
 func basicKindToReflectType(kind types.BasicKind) reflect.Type {
-	switch kind { //nolint:exhaustive // only concrete types need mapping
+	switch kind {
 	case types.String:
 		return reflect.TypeFor[string]()
 	case types.Int:

@@ -152,7 +152,8 @@ func (w *FileWriter) generateImports(info *GenerationInfo) []string {
 // generateFieldSchemas generates schema code for all fields.
 func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structName string) ([]FieldSchemaInfo, error) {
 	schemas := make([]FieldSchemaInfo, 0, len(fields))
-	for _, field := range fields {
+	for i := range fields {
+		field := &fields[i]
 		code, err := w.generateFieldSchemaCode(field, structName)
 		if err != nil {
 			return nil, fmt.Errorf("generate schema for field %s: %w", field.Name, err)
@@ -166,7 +167,7 @@ func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structNa
 }
 
 // generateFieldSchemaCode generates GoZod schema code for a single field.
-func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structName string) (string, error) {
+func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structName string) (string, error) {
 	typeName := field.EffectiveTypeName()
 
 	// UUID special case
@@ -188,7 +189,7 @@ func (w *FileWriter) generateFieldSchemaCode(field tagparser.FieldInfo, structNa
 	if rule := field.EnumRule(); rule != nil && field.IsEnumStringField() {
 		values := make([]string, 0, len(rule.Params))
 		for _, param := range rule.Params {
-			values = append(values, fmt.Sprintf(`"%s"`, param))
+			values = append(values, fmt.Sprintf("%q", param))
 		}
 		var b strings.Builder
 		b.WriteString("gozod.Enum(")
@@ -265,10 +266,7 @@ func generateValidatorChain(rule tagparser.TagRule, fieldType reflect.Type) stri
 		return ""
 	case "regex":
 		if len(rule.Params) > 0 {
-			// Escape the regex pattern for double quotes
-			escapedPattern := strings.ReplaceAll(rule.Params[0], "\\", "\\\\")
-			escapedPattern = strings.ReplaceAll(escapedPattern, "\"", "\\\"")
-			return fmt.Sprintf(".Regex(regexp.MustCompile(\"%s\"))", escapedPattern)
+			return fmt.Sprintf(".Regex(regexp.MustCompile(%q))", rule.Params[0])
 		}
 	case "default":
 		if len(rule.Params) > 0 {
@@ -377,9 +375,9 @@ func generatePrefaultValue(value string, fieldType reflect.Type) string {
 // generateTypedValue returns a method call (.Default or .Prefault) with
 // the value formatted according to the field's Go type.
 func generateTypedValue(method, value string, fieldType reflect.Type) string {
-	switch fieldType.Kind() { //nolint:exhaustive // only special-cased types need distinct formatting
+	switch fieldType.Kind() {
 	case reflect.String:
-		return fmt.Sprintf(`.%s("%s")`, method, value)
+		return fmt.Sprintf(".%s(%q)", method, value)
 	case reflect.Slice, reflect.Array:
 		return generateSliceValue(method, value, fieldType)
 	case reflect.Map:
@@ -401,12 +399,12 @@ func generateSliceValue(method, value string, fieldType reflect.Type) string {
 	var jsonResult []any
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
 		elemType := fieldType.Elem()
-		switch elemType.Kind() { //nolint:exhaustive // only common JSON-decodable types need special handling
+		switch elemType.Kind() {
 		case reflect.String:
 			items := make([]string, 0, len(jsonResult))
 			for _, item := range jsonResult {
 				if str, ok := item.(string); ok {
-					items = append(items, fmt.Sprintf(`"%s"`, str))
+					items = append(items, fmt.Sprintf("%q", str))
 				}
 			}
 			return fmt.Sprintf(".%s([]string{%s})", method, strings.Join(items, ", "))
@@ -451,12 +449,12 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 
 	var jsonResult map[string]any
 	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		switch fieldType.Elem().Kind() { //nolint:exhaustive // only string and interface map values are JSON-decodable
+		switch fieldType.Elem().Kind() {
 		case reflect.String:
 			items := make([]string, 0, len(jsonResult))
 			for k, v := range jsonResult {
 				if str, ok := v.(string); ok {
-					items = append(items, fmt.Sprintf(`"%s": "%s"`, k, str))
+					items = append(items, fmt.Sprintf("%q: %q", k, str))
 				}
 			}
 			return fmt.Sprintf(".%s(map[string]string{%s})", method, strings.Join(items, ", "))
@@ -465,13 +463,13 @@ func generateMapValue(method, value string, fieldType reflect.Type) string {
 			for k, v := range jsonResult {
 				switch val := v.(type) {
 				case string:
-					items = append(items, fmt.Sprintf(`"%s": "%s"`, k, val))
+					items = append(items, fmt.Sprintf("%q: %q", k, val))
 				case float64:
-					items = append(items, fmt.Sprintf(`"%s": %g`, k, val))
+					items = append(items, fmt.Sprintf("%q: %g", k, val))
 				case bool:
-					items = append(items, fmt.Sprintf(`"%s": %t`, k, val))
+					items = append(items, fmt.Sprintf("%q: %t", k, val))
 				default:
-					items = append(items, fmt.Sprintf(`"%s": %v`, k, val))
+					items = append(items, fmt.Sprintf("%q: %v", k, val))
 				}
 			}
 			return fmt.Sprintf(".%s(map[string]any{%s})", method, strings.Join(items, ", "))
