@@ -91,7 +91,7 @@ linters:
       - path: '(^|.*/)(core/(context|issues|parsing)\.go|internal/issues/.*\.go|jsonschema/to\.go|pkg/(regex/text|structx/structx|tagparser/(field_info|parser))\.go|types/(intersection|lazy|map|object|record|set|slice|struct|tuple)\.go)$'
         linters:
           - gocritic
-      - path: '(^|.*/)(core/constants\.go|gozod_(constructors_.*|core|errors|jsonschema|metadata|structs|types)\.go|internal/issues/types\.go|pkg/coerce/coerce\.go|types/discriminated_union\.go|types/object\.go)$'
+      - path: '^(core/constants\.go|constructors_.*\.go|core\.go|errors\.go|jsonschema\.go|metadata\.go|structs\.go|types\.go|internal/issues/types\.go|pkg/coerce/coerce\.go|types/discriminated_union\.go|types/object\.go)$'
         linters:
           - revive
       - path: '(^|.*/)(pkg/cloneutil/clone\.go|pkg/reflectx/types\.go|pkg/slicex/slicex\.go)$'
@@ -100,7 +100,7 @@ linters:
       - path: '(^|.*/)(types/(function|lazy|never|nil|struct)\.go|types/network_test\.go)$'
         linters:
           - nolintlint
-      - path: '(^|.*/)(core/issues\.go|gozod_errors\.go|internal/issues/types\.go)$'
+      - path: '^(core/issues\.go|errors\.go|internal/issues/types\.go)$'
         linters:
           - errname
 
