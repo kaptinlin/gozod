@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/google/go-cmp v0.7.0
 	github.com/kaptinlin/deepclone v0.2.10
 	github.com/kaptinlin/jsonschema v0.7.7
 	github.com/stretchr/testify v1.11.1

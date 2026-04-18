@@ -1,14 +1,20 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/kaptinlin/gozod/pkg/tagparser"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 func TestStructAnalyzer_AnalyzePackage(t *testing.T) {
@@ -345,6 +351,14 @@ func TestNeedsGeneration(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "struct with generate directive",
+			info: &GenerationInfo{
+				Name:        "User",
+				HasGenerate: true,
+			},
+			expected: true,
+		},
+		{
 			name: "struct without gozod tags",
 			info: &GenerationInfo{
 				Name: "User",
@@ -363,6 +377,275 @@ func TestNeedsGeneration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := NeedsGeneration(tt.info)
 			assert.Equal(t, tt.expected, result, "Expected %t, got %t", tt.expected, result)
+		})
+	}
+}
+
+func TestStructAnalyzer_AnalyzePackageWithGenerateDirective(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("generated.go", `package main
+
+//go:generate gozodgen
+type User struct {
+	Name string
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
+	require.NoError(t, err)
+	require.Len(t, structs, 1)
+
+	assert.True(t, structs[0].HasGenerate)
+	require.Len(t, structs[0].Fields, 1)
+	assert.Equal(t, "Name", structs[0].Fields[0].Name)
+	assert.Equal(t, "Name", structs[0].Fields[0].JSONName)
+}
+
+func TestStructAnalyzer_ParseStructFieldsWithJSONFallbacks(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", `package main
+
+type User struct {
+	Name   string
+	Alias  string `+"`json:\"\"`"+`
+	Hidden string `+"`json:\"-\" gozod:\"required\"`"+`
+	hidden string
+}
+`, parser.ParseComments)
+	require.NoError(t, err)
+
+	genDecl := file.Decls[0].(*ast.GenDecl)
+	typeSpec := genDecl.Specs[0].(*ast.TypeSpec)
+	structType := typeSpec.Type.(*ast.StructType)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	fields, err := analyzer.parseStructFields(structType)
+	require.NoError(t, err)
+	require.Len(t, fields, 3)
+
+	assert.Equal(t, "Name", fields[0].info.Name)
+	assert.Equal(t, reflect.TypeFor[string](), fields[0].info.Type)
+	assert.Equal(t, "string", fields[0].info.TypeName)
+	assert.Equal(t, "Name", fields[0].info.JSONName)
+	assert.False(t, fields[0].hasGozodTag)
+
+	assert.Equal(t, "Alias", fields[1].info.Name)
+	assert.Equal(t, reflect.TypeFor[string](), fields[1].info.Type)
+	assert.Equal(t, "string", fields[1].info.TypeName)
+	assert.Equal(t, "Alias", fields[1].info.JSONName)
+	assert.False(t, fields[1].hasGozodTag)
+
+	assert.Equal(t, "Hidden", fields[2].info.Name)
+	assert.Equal(t, reflect.TypeFor[string](), fields[2].info.Type)
+	assert.Equal(t, "string", fields[2].info.TypeName)
+	assert.Equal(t, "Hidden", fields[2].info.JSONName)
+	assert.Equal(t, "required", fields[2].info.GoZodTag)
+	assert.True(t, fields[2].info.Required)
+	assert.True(t, fields[2].hasGozodTag)
+	if diff := cmp.Diff([]tagparser.TagRule{{Name: "required"}}, fields[2].info.Rules); diff != "" {
+		t.Errorf("parseStructFields() rules mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		field *ast.Field
+		want  string
+	}{
+		{
+			name: "without tag uses field name",
+			field: &ast.Field{
+				Names: []*ast.Ident{{Name: "Name"}},
+			},
+			want: "Name",
+		},
+		{
+			name: "json alias uses alias",
+			field: &ast.Field{
+				Names: []*ast.Ident{{Name: "Name"}},
+				Tag:   &ast.BasicLit{Value: "`json:\"full_name,omitempty\"`"},
+			},
+			want: "full_name",
+		},
+		{
+			name: "empty json tag falls back to field name",
+			field: &ast.Field{
+				Names: []*ast.Ident{{Name: "Alias"}},
+				Tag:   &ast.BasicLit{Value: "`json:\"\"`"},
+			},
+			want: "Alias",
+		},
+		{
+			name: "ignored json tag falls back to field name",
+			field: &ast.Field{
+				Names: []*ast.Ident{{Name: "Hidden"}},
+				Tag:   &ast.BasicLit{Value: "`json:\"-\"`"},
+			},
+			want: "Hidden",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, analyzer.extractJSONName(tt.field))
+		})
+	}
+}
+
+func TestExtractTagValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		tag     string
+		tagName string
+		want    string
+	}{
+		{
+			name:    "extract existing tag",
+			tag:     `json:"name,omitempty" gozod:"required,min=2"`,
+			tagName: "gozod",
+			want:    "required,min=2",
+		},
+		{
+			name:    "missing tag returns empty string",
+			tag:     `json:"name,omitempty"`,
+			tagName: "gozod",
+			want:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, extractTagValue(tt.tag, tt.tagName))
+		})
+	}
+}
+
+func TestGetTypeNameFromAST(t *testing.T) {
+	tests := []struct {
+		name string
+		expr ast.Expr
+		want string
+	}{
+		{
+			name: "identifier",
+			expr: &ast.Ident{Name: "string"},
+			want: "string",
+		},
+		{
+			name: "pointer",
+			expr: &ast.StarExpr{X: &ast.Ident{Name: "User"}},
+			want: "*User",
+		},
+		{
+			name: "slice",
+			expr: &ast.ArrayType{Elt: &ast.Ident{Name: "int"}},
+			want: "[]int",
+		},
+		{
+			name: "map",
+			expr: &ast.MapType{Key: &ast.Ident{Name: "string"}, Value: &ast.Ident{Name: "int"}},
+			want: "map[string]int",
+		},
+		{
+			name: "selector",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "time"}, Sel: &ast.Ident{Name: "Time"}},
+			want: "time.Time",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, getTypeNameFromAST(tt.expr))
+		})
+	}
+}
+
+func TestSmartSplitTagRules(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+		want []string
+	}{
+		{
+			name: "simple rules",
+			tag:  "required,min=2,max=10",
+			want: []string{"required", "min=2", "max=10"},
+		},
+		{
+			name: "json object preserves commas",
+			tag:  `required,meta={"label":"user,name","nested":{"min":1}},max=10`,
+			want: []string{"required", `meta={"label":"user,name","nested":{"min":1}}`, "max=10"},
+		},
+		{
+			name: "json array preserves commas",
+			tag:  `enum=["a,b","c"],required`,
+			want: []string{`enum=["a,b","c"]`, "required"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := smartSplitTagRules(tt.tag)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("smartSplitTagRules() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStructAnalyzer_GetReflectTypeFromAST(t *testing.T) {
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		expr ast.Expr
+		want reflect.Type
+	}{
+		{
+			name: "string",
+			expr: &ast.Ident{Name: "string"},
+			want: reflect.TypeFor[string](),
+		},
+		{
+			name: "pointer",
+			expr: &ast.StarExpr{X: &ast.Ident{Name: "int"}},
+			want: reflect.PointerTo(reflect.TypeFor[int]()),
+		},
+		{
+			name: "slice",
+			expr: &ast.ArrayType{Elt: &ast.Ident{Name: "bool"}},
+			want: reflect.SliceOf(reflect.TypeFor[bool]()),
+		},
+		{
+			name: "map",
+			expr: &ast.MapType{Key: &ast.Ident{Name: "string"}, Value: &ast.Ident{Name: "float64"}},
+			want: reflect.MapOf(reflect.TypeFor[string](), reflect.TypeFor[float64]()),
+		},
+		{
+			name: "time selector",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "time"}, Sel: &ast.Ident{Name: "Time"}},
+			want: reflect.TypeFor[timeType](),
+		},
+		{
+			name: "unknown falls back to any",
+			expr: &ast.Ident{Name: "Custom"},
+			want: reflect.TypeFor[any](),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, analyzer.getReflectTypeFromAST(tt.expr))
 		})
 	}
 }

@@ -1,11 +1,14 @@
 package mapx_test
 
 import (
+	"slices"
 	"testing"
 
-	"github.com/kaptinlin/gozod/pkg/mapx"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/pkg/mapx"
 )
 
 func TestValueOf(t *testing.T) {
@@ -238,7 +241,7 @@ func TestBool(t *testing.T) {
 	})
 }
 
-func TestInt(t *testing.T) {
+func TestIntCoerce(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
 		val, ok := mapx.IntCoerce(nil, "key")
 		assert.Equal(t, 0, val)
@@ -281,7 +284,7 @@ func TestInt(t *testing.T) {
 	})
 }
 
-func TestFloat64(t *testing.T) {
+func TestFloat64Coerce(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
 		val, ok := mapx.Float64Coerce(nil, "key")
 		assert.Equal(t, 0.0, val)
@@ -295,27 +298,76 @@ func TestFloat64(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("float32 value", func(t *testing.T) {
+		m := map[string]any{"price": float32(19.5)}
+		val, ok := mapx.Float64Coerce(m, "price")
+		assert.Equal(t, 19.5, val)
+		assert.True(t, ok)
+	})
+
 	t.Run("int value", func(t *testing.T) {
 		m := map[string]any{"price": 20}
 		val, ok := mapx.Float64Coerce(m, "price")
 		assert.Equal(t, 20.0, val)
 		assert.True(t, ok)
 	})
+
+	t.Run("int32 value", func(t *testing.T) {
+		m := map[string]any{"price": int32(21)}
+		val, ok := mapx.Float64Coerce(m, "price")
+		assert.Equal(t, 21.0, val)
+		assert.True(t, ok)
+	})
+
+	t.Run("int64 value", func(t *testing.T) {
+		m := map[string]any{"price": int64(22)}
+		val, ok := mapx.Float64Coerce(m, "price")
+		assert.Equal(t, 22.0, val)
+		assert.True(t, ok)
+	})
+
+	t.Run("string value", func(t *testing.T) {
+		m := map[string]any{"price": "19.99"}
+		val, ok := mapx.Float64Coerce(m, "price")
+		assert.Equal(t, 0.0, val)
+		assert.False(t, ok)
+	})
 }
 
-func TestNumericCoerceCompatibilityAliases(t *testing.T) {
-	m := map[string]any{
-		"age":   int32(25),
-		"price": 20,
-	}
+func TestStrings(t *testing.T) {
+	t.Run("string slice value", func(t *testing.T) {
+		m := map[string]any{"tags": []string{"a", "b"}}
+		val, ok := mapx.Strings(m, "tags")
+		require.True(t, ok)
+		if diff := cmp.Diff([]string{"a", "b"}, val); diff != "" {
+			t.Errorf("Strings() mismatch (-want +got):\n%s", diff)
+		}
+	})
 
-	intVal, intOK := mapx.Int(m, "age")
-	assert.Equal(t, 25, intVal)
-	assert.True(t, intOK)
+	t.Run("non string slice value", func(t *testing.T) {
+		m := map[string]any{"tags": []any{"a", "b"}}
+		val, ok := mapx.Strings(m, "tags")
+		assert.Nil(t, val)
+		assert.False(t, ok)
+	})
+}
 
-	floatVal, floatOK := mapx.Float64(m, "price")
-	assert.Equal(t, 20.0, floatVal)
-	assert.True(t, floatOK)
+func TestAnySlice(t *testing.T) {
+	t.Run("any slice value", func(t *testing.T) {
+		m := map[string]any{"items": []any{"a", 1, true}}
+		val, ok := mapx.AnySlice(m, "items")
+		require.True(t, ok)
+		if diff := cmp.Diff([]any{"a", 1, true}, val); diff != "" {
+			t.Errorf("AnySlice() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("non any slice value", func(t *testing.T) {
+		m := map[string]any{"items": []string{"a", "b"}}
+		val, ok := mapx.AnySlice(m, "items")
+		assert.Nil(t, val)
+		assert.False(t, ok)
+	})
 }
 
 func TestMap(t *testing.T) {
@@ -330,7 +382,9 @@ func TestMap(t *testing.T) {
 		m := map[string]any{"config": nested}
 		val, ok := mapx.Map(m, "config")
 		require.True(t, ok)
-		assert.Equal(t, true, val["nested"])
+		if diff := cmp.Diff(nested, val); diff != "" {
+			t.Errorf("Map() mismatch (-want +got):\n%s", diff)
+		}
 	})
 
 	t.Run("non-map value", func(t *testing.T) {
@@ -338,6 +392,228 @@ func TestMap(t *testing.T) {
 		_, ok := mapx.Map(m, "config")
 		assert.False(t, ok)
 	})
+}
+
+func TestAnyOr(t *testing.T) {
+	m := map[string]any{"value": []int{1, 2, 3}}
+
+	t.Run("existing key", func(t *testing.T) {
+		got := mapx.AnyOr(m, "value", []int{9})
+		if diff := cmp.Diff([]int{1, 2, 3}, got); diff != "" {
+			t.Errorf("AnyOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("missing key", func(t *testing.T) {
+		got := mapx.AnyOr(m, "missing", []int{9})
+		if diff := cmp.Diff([]int{9}, got); diff != "" {
+			t.Errorf("AnyOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestStringsOr(t *testing.T) {
+	m := map[string]any{"tags": []string{"go", "zod"}}
+
+	t.Run("existing key", func(t *testing.T) {
+		got := mapx.StringsOr(m, "tags", []string{"fallback"})
+		if diff := cmp.Diff([]string{"go", "zod"}, got); diff != "" {
+			t.Errorf("StringsOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("missing key", func(t *testing.T) {
+		got := mapx.StringsOr(m, "missing", []string{"fallback"})
+		if diff := cmp.Diff([]string{"fallback"}, got); diff != "" {
+			t.Errorf("StringsOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestAnySliceOr(t *testing.T) {
+	m := map[string]any{"items": []any{"go", 1}}
+
+	t.Run("existing key", func(t *testing.T) {
+		got := mapx.AnySliceOr(m, "items", []any{"fallback"})
+		if diff := cmp.Diff([]any{"go", 1}, got); diff != "" {
+			t.Errorf("AnySliceOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("missing key", func(t *testing.T) {
+		got := mapx.AnySliceOr(m, "missing", []any{"fallback"})
+		if diff := cmp.Diff([]any{"fallback"}, got); diff != "" {
+			t.Errorf("AnySliceOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestMapOr(t *testing.T) {
+	m := map[string]any{"config": map[string]any{"enabled": true}}
+
+	t.Run("existing key", func(t *testing.T) {
+		got := mapx.MapOr(m, "config", map[string]any{"enabled": false})
+		want := map[string]any{"enabled": true}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("MapOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("missing key", func(t *testing.T) {
+		got := mapx.MapOr(m, "missing", map[string]any{"enabled": false})
+		want := map[string]any{"enabled": false}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("MapOr() mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestKeysFromStruct(t *testing.T) {
+	type config struct {
+		Enabled bool   `json:"enabled"`
+		Name    string `json:"name,omitempty"`
+		Ignored string `json:"-"`
+		hidden  string
+	}
+
+	got := mapx.Keys(config{Enabled: true, Name: "gozod", Ignored: "skip", hidden: "skip"})
+	slices.Sort(got)
+
+	want := []string{"enabled", "name"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Keys() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericArbitraryMap(t *testing.T) {
+	type key struct{ ID int }
+
+	got, err := mapx.ToGeneric(map[key]string{{ID: 1}: "value"})
+	require.NoError(t, err)
+
+	want := map[any]any{key{ID: 1}: "value"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericStructReturnsError(t *testing.T) {
+	type sample struct{ Name string }
+
+	_, err := mapx.ToGeneric(sample{Name: "gozod"})
+	assert.ErrorIs(t, err, mapx.ErrInputNotMap)
+}
+
+func TestToGenericMapIntAny(t *testing.T) {
+	got, err := mapx.ToGeneric(map[int]any{1: "one"})
+	require.NoError(t, err)
+
+	want := map[any]any{1: "one"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericMapAnyAny(t *testing.T) {
+	input := map[any]any{"name": "gozod"}
+	got, err := mapx.ToGeneric(input)
+	require.NoError(t, err)
+
+	if diff := cmp.Diff(input, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericMapStringString(t *testing.T) {
+	got, err := mapx.ToGeneric(map[string]string{"name": "gozod"})
+	require.NoError(t, err)
+
+	want := map[any]any{"name": "gozod"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericMapStringInt(t *testing.T) {
+	got, err := mapx.ToGeneric(map[string]int{"count": 3})
+	require.NoError(t, err)
+
+	want := map[any]any{"count": 3}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericReflectMapStringBool(t *testing.T) {
+	type boolMap map[string]bool
+
+	got, err := mapx.ToGeneric(boolMap{"enabled": true})
+	require.NoError(t, err)
+
+	want := map[any]any{"enabled": true}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericReflectMapPointerKey(t *testing.T) {
+	type key struct{ ID int }
+
+	k := &key{ID: 1}
+	got, err := mapx.ToGeneric(map[*key]string{k: "value"})
+	require.NoError(t, err)
+
+	want := map[any]any{k: "value"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestToGenericReflectMapStringNil(t *testing.T) {
+	type alias map[string]*int
+
+	got, err := mapx.ToGeneric(alias{"none": nil})
+	require.NoError(t, err)
+
+	want := map[any]any{"none": (*int)(nil)}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ToGeneric() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestKeysNilStructInput(t *testing.T) {
+	type config struct{ Enabled bool }
+	var input *config
+	assert.Nil(t, mapx.Keys(input))
+}
+
+func TestKeysNonStructInput(t *testing.T) {
+	assert.Nil(t, mapx.Keys("gozod"))
+}
+
+func TestKeysMapStringAnyOrderAgnostic(t *testing.T) {
+	got := mapx.Keys(map[string]any{"b": 2, "a": 1})
+	slices.Sort(got)
+
+	want := []string{"a", "b"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Keys() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestKeysMapAnyAnyOrderAgnostic(t *testing.T) {
+	got := mapx.Keys(map[any]any{"b": 2, "a": 1, 3: "skip"})
+	slices.Sort(got)
+
+	want := []string{"a", "b"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Keys() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestKeysMapAnyAnyWithoutStringKeys(t *testing.T) {
+	got := mapx.Keys(map[any]any{1: "one", 2: "two"})
+	assert.Empty(t, got)
 }
 
 func TestStringOr(t *testing.T) {
@@ -364,8 +640,8 @@ func TestBoolOr(t *testing.T) {
 	})
 }
 
-func TestIntOr(t *testing.T) {
-	m := map[string]any{"count": 10}
+func TestIntCoerceOr(t *testing.T) {
+	m := map[string]any{"count": int64(10)}
 
 	t.Run("existing key", func(t *testing.T) {
 		assert.Equal(t, 10, mapx.IntCoerceOr(m, "count", 0))
@@ -376,16 +652,16 @@ func TestIntOr(t *testing.T) {
 	})
 }
 
-func TestNumericCoerceDefaultCompatibilityAliases(t *testing.T) {
-	m := map[string]any{
-		"count": int64(10),
-		"ratio": float32(2.5),
-	}
+func TestFloat64CoerceOr(t *testing.T) {
+	m := map[string]any{"ratio": float32(2.5)}
 
-	assert.Equal(t, 10, mapx.IntOr(m, "count", 0))
-	assert.Equal(t, 10, mapx.IntCoerceOr(m, "count", 0))
-	assert.Equal(t, 2.5, mapx.FloatOr(m, "ratio", 0))
-	assert.Equal(t, 2.5, mapx.Float64CoerceOr(m, "ratio", 0))
+	t.Run("existing key", func(t *testing.T) {
+		assert.Equal(t, 2.5, mapx.Float64CoerceOr(m, "ratio", 0))
+	})
+
+	t.Run("missing key", func(t *testing.T) {
+		assert.Equal(t, 1.5, mapx.Float64CoerceOr(m, "missing", 1.5))
+	})
 }
 
 func TestKeys(t *testing.T) {
