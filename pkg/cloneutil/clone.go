@@ -29,7 +29,7 @@ func cloneValue(v reflect.Value) reflect.Value {
 		return cloned
 	}
 
-	switch v.Kind() { //nolint:exhaustive
+	switch v.Kind() {
 	case reflect.Interface:
 		if v.IsNil() {
 			return reflect.Zero(v.Type())

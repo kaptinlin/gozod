@@ -149,7 +149,7 @@ func NumericOrigin(value any) string {
 		return "number"
 	default:
 		pt := reflectx.ParsedType(value)
-		switch pt { //nolint:exhaustive // only bigint and string need special handling
+		switch pt {
 		case core.ParsedTypeBigint:
 			return "bigint"
 		case core.ParsedTypeString:

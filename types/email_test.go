@@ -4,9 +4,10 @@ import (
 	"regexp"
 	"testing"
 
-	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/kaptinlin/gozod/types"
 )
 
 func TestZodEmail_BasicValidation(t *testing.T) {

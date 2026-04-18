@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
@@ -11,7 +13,6 @@ import (
 	"github.com/kaptinlin/gozod/pkg/coerce"
 	"github.com/kaptinlin/gozod/pkg/transform"
 	"github.com/kaptinlin/gozod/pkg/validate"
-	"golang.org/x/text/unicode/norm"
 )
 
 // StringConstraint restricts values to string or *string.

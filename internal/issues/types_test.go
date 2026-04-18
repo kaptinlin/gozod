@@ -3,8 +3,9 @@ package issues
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kaptinlin/gozod/core"
 )
 
 func TestIssueConstants(t *testing.T) {

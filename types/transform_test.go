@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kaptinlin/gozod/core"
-	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 )
 
 var (

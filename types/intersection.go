@@ -499,7 +499,6 @@ func mergeValues(a, b any) (any, error) {
 		}
 	}
 
-	//nolint:exhaustive
 	switch av.Kind() {
 	case reflect.Map:
 		return mergeMaps(a, b)

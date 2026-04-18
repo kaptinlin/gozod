@@ -3,10 +3,11 @@ package types_test
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod/core"
-	. "github.com/kaptinlin/gozod/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/core"
+	. "github.com/kaptinlin/gozod/types"
 )
 
 // extractNetworkString extracts string values from string/*string test results.
@@ -661,7 +662,7 @@ func TestIPv4_EdgeCases(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				// We need to use type assertion to handle different schema types
-				if s, ok := any(tc.schema).(interface { //nolint:unconvert
+				if s, ok := any(tc.schema).(interface { //nolint:unconvert // Test adapts multiple schema types through a shared parse contract.
 					Parse(any, ...*core.ParseContext) (any, error)
 				}); ok {
 					// First parse should return a pointer with the same address

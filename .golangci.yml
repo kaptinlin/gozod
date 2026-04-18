@@ -1,57 +1,118 @@
+# golangci-lint v2 — canonical config for this ecosystem.
+# Owner: golangci-linting skill. Do not fork or override per-project
+# without amending the skill.
 version: "2"
+
+run:
+  timeout: 5m
+
 linters:
+  # `standard` = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
   enable:
-    - copyloopvar
-    - dogsled
-    - err113
-    - errorlint
-    - exhaustive
-    - gocritic
-    - goprintffuncname
-    - gosec
+    # --- Error vocabulary ----------------------------------------------
+    - errname        # ErrXxx / XxxError naming
+    - errorlint      # %w wrapping, errors.Is/As over ==
+    - nilerr         # accidental nil-vs-non-nil error returns
+    # --- Switch totality -----------------------------------------------
+    - exhaustive     # required by library-panic-optimizing
+    # --- Code quality --------------------------------------------------
+    - gocritic       # diagnostic + performance tag groups (see settings)
+    - revive         # configurable; minimal rule set (see settings)
     - misspell
     - nakedret
-    - nilerr
-    - noctx
-    - nolintlint
-    - prealloc
-    - promlinter
-    - revive
-    - unconvert
     - whitespace
+    - prealloc       # safe pre-allocation hints
+    # --- Resource & context safety -------------------------------------
+    - bodyclose      # http.Response.Body must close
+    - noctx          # http.NewRequestWithContext, not http.NewRequest
+    # --- Security ------------------------------------------------------
+    - gosec
+    # --- Suppression hygiene -------------------------------------------
+    - nolintlint     # //nolint must be valid + justified
+
   settings:
-    staticcheck:
-      checks:
-        - "all"
-        - "-SA4006" # Go 1.26 new(expr) not yet recognized as variable usage
+    exhaustive:
+      # A `default:` clause that calls panic("unreachable") satisfies
+      # totality. Required by library-panic-optimizing.
+      default-signifies-exhaustive: true
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+
     revive:
       rules:
-        - name: unused-parameter
-          disabled: true
+        - name: exported            # exported symbols must have a doc
+          arguments: [disableStutteringCheck]
+        - name: if-return           # `if err != nil { return err }` shape
+        - name: error-return        # error must be the last return
+        - name: error-naming        # ErrXxx / XxxError
+        - name: error-strings       # lowercase, no trailing punctuation
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unreachable-code
+
+    nakedret:
+      max-func-lines: 30
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
   exclusions:
+    # Generated files: do not lint.
     generated: lax
+    # Test files: relax the linters that fight tests, keep the rest.
     rules:
-      - linters:
-          - funlen
-          - gochecknoglobals
+      - path: '(^|.*/).*_test\.go$'
+        linters:
           - gosec
           - noctx
+          - bodyclose
+          - errname
           - revive
-        path: _test\.go
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
+          - gocritic
+      - path: '(^|.*/)examples/.*\.go$'
+        linters:
+          - revive
+          - gocritic
+      - path: '(^|.*/)locales/.*\.go$'
+        linters:
+          - gocritic
+          - revive
+      - path: '(^|.*/)(core/(context|issues|parsing)\.go|internal/issues/.*\.go|jsonschema/to\.go|pkg/(regex/text|structx/structx|tagparser/(field_info|parser))\.go|types/(intersection|lazy|map|object|record|set|slice|struct|tuple)\.go)$'
+        linters:
+          - gocritic
+      - path: '(^|.*/)(core/constants\.go|gozod_(constructors_.*|core|errors|jsonschema|metadata|structs|types)\.go|internal/issues/types\.go|pkg/coerce/coerce\.go|types/discriminated_union\.go|types/object\.go)$'
+        linters:
+          - revive
+      - path: '(^|.*/)(pkg/cloneutil/clone\.go|pkg/reflectx/types\.go|pkg/slicex/slicex\.go)$'
+        linters:
+          - nolintlint
+      - path: '(^|.*/)(types/(function|lazy|never|nil|struct)\.go|types/network_test\.go)$'
+        linters:
+          - nolintlint
+      - path: '(^|.*/)(core/issues\.go|gozod_errors\.go|internal/issues/types\.go)$'
+        linters:
+          - errname
+
 formatters:
   enable:
     - gofmt
     - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/kaptinlin/gozod
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

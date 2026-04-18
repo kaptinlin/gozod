@@ -4,9 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kaptinlin/gozod/pkg/tagparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 func TestTagParser_ParseTagString(t *testing.T) {

@@ -294,7 +294,7 @@ func extractNeverValue[T any, R any](value R) T {
 	switch v := any(value).(type) {
 	case *any:
 		if v != nil {
-			return any(*v).(T) //nolint:unconvert
+			return any(*v).(T) //nolint:unconvert // Generic constraint conversion preserves the extracted type.
 		}
 		var zero T
 		return zero
@@ -308,7 +308,7 @@ func convertToNeverConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
 
 	// Direct type match.
-	if r, ok := any(value).(R); ok { //nolint:unconvert
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Generic constraint conversion preserves the destination type.
 		return r, true
 	}
 

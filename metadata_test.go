@@ -3,8 +3,9 @@ package gozod_test
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kaptinlin/gozod"
 )
 
 // TestDescribeGlobalFunction tests the gozod.Describe() global function

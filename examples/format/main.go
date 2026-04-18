@@ -42,7 +42,7 @@ func main() {
 	}
 
 	// JWT structure (any alg).
-	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NSJ9.signature" //nolint:gosec
+	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NSJ9.signature" //nolint:gosec // Example token shape for format validation.
 	if _, err := gozod.JWT().Parse(token); err != nil {
 		fmt.Println("✗ jwt ->", err)
 	} else {

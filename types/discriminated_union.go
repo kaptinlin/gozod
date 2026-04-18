@@ -461,7 +461,7 @@ func extractDiscVals(in *core.ZodTypeInternals) []any {
 	}
 
 	// Only interested in Literal and Enum types here
-	//nolint:exhaustive
+	//nolint:exhaustive // Only literal and enum schemas contribute discriminant values here.
 	switch in.Type {
 	case core.ZodTypeLiteral:
 		if lv, exists := in.Bag["literal"]; exists {

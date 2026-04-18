@@ -90,7 +90,7 @@ func (z *ZodFunction[T]) convertResult(result any) T {
 		var zero T
 		return zero
 	}
-	return any(result).(T) //nolint:unconvert
+	return any(result).(T) //nolint:unconvert // Generic constraint conversion preserves the function type.
 }
 
 // Parse validates input and returns a function value.
@@ -471,7 +471,7 @@ func convertToFuncType[T FunctionConstraint](v any) (T, bool) {
 		return zero, false
 	}
 
-	if val, ok := any(v).(T); ok { //nolint:unconvert
+	if val, ok := any(v).(T); ok { //nolint:unconvert // Generic constraint conversion preserves the function type.
 		return val, true
 	}
 

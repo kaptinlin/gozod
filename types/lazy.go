@@ -102,10 +102,10 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 			return zero, issues.CreateNonOptionalError(pc)
 		}
 		if in.DefaultValue != nil {
-			return any(in.DefaultValue).(T), nil //nolint:unconvert
+			return any(in.DefaultValue).(T), nil //nolint:unconvert // Default values flow through the schema's generic output type.
 		}
 		if in.DefaultFunc != nil {
-			return any(in.DefaultFunc()).(T), nil //nolint:unconvert
+			return any(in.DefaultFunc()).(T), nil //nolint:unconvert // Default values flow through the schema's generic output type.
 		}
 		switch {
 		case in.PrefaultValue != nil:

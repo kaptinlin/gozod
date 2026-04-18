@@ -19,7 +19,6 @@ func getParsedTypeZh(input any) string {
 	// Use reflectx.ParsedType directly for comprehensive type detection
 	parsedType := reflectx.ParsedType(input)
 
-	//nolint:exhaustive
 	switch parsedType {
 	case core.ParsedTypeNaN:
 		return "非数字(NaN)"

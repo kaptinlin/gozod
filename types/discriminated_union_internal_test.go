@@ -3,8 +3,9 @@ package types
 import (
 	"testing"
 
-	"github.com/kaptinlin/gozod/core"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kaptinlin/gozod/core"
 )
 
 func TestDiscriminatedUnion_CloneFromDoesNotShareInternals(t *testing.T) {

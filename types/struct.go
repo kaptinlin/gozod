@@ -538,7 +538,7 @@ func convertToConstraintValue[T any, R any](value any) (R, bool) {
 	}
 
 	// Direct type match
-	if r, ok := any(value).(R); ok { //nolint:unconvert
+	if r, ok := any(value).(R); ok { //nolint:unconvert // Generic constraint conversion preserves the destination type.
 		return r, true
 	}
 
@@ -567,7 +567,7 @@ func convertToStructType[T any, R any](v any) (R, bool) {
 	}
 
 	// Try direct conversion first
-	if converted, ok := any(v).(R); ok { //nolint:unconvert
+	if converted, ok := any(v).(R); ok { //nolint:unconvert // Generic constraint conversion preserves the destination type.
 		return converted, true
 	}
 

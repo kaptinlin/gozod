@@ -20,7 +20,6 @@ func isNilInput(input any) bool {
 		return true
 	}
 	// Only these kinds can be nil.
-	//nolint:exhaustive
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
 		return v.IsNil()

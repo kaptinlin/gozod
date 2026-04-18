@@ -241,7 +241,7 @@ func isNilInput[R any](input R) bool {
 	if !rv.IsValid() {
 		return true
 	}
-	switch rv.Kind() { //nolint:exhaustive // only nillable kinds need explicit handling
+	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
 		return rv.IsNil()
 	default:

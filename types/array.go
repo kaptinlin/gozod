@@ -477,7 +477,7 @@ func convertToArrayType[T any, R any](value any) (R, bool) {
 
 	rt := reflect.TypeFor[R]()
 	// Convert to target constraint type R.
-	//nolint:exhaustive
+	//nolint:exhaustive // Only slice and pointer constraint kinds can succeed here.
 	switch rt.Kind() {
 	case reflect.Slice:
 		if reflect.TypeOf(value).AssignableTo(rt) {
