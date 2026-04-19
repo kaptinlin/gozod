@@ -52,7 +52,8 @@ cmd/gozodgen/gozodgen
 
 # Scratch/planning docs
 .plans/
-reports/
+reports/*
+!reports/.gitkeep
 PLAN*.md
 IMPROVE.md
 IMPROVE*.md
@@ -71,4 +72,3 @@ plan*.md
 .plan/*.md
 .plans/*
 TODO*.md
-reports/*

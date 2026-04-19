@@ -618,6 +618,7 @@ func TestDocumentationFiles(t *testing.T) {
 			"core/constraints.go",
 			"types/constraints_verify.go",
 			"reports",
+			"reports/.gitkeep",
 		} {
 			_, err := os.Stat(rel)
 			require.NoErrorf(t, err, "missing path referenced by CLAUDE.md: %s", rel)
