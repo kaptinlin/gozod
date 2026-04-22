@@ -10,6 +10,9 @@ import (
 
 // Regex reports whether the string matches the pattern.
 func Regex(value any, pattern *regexp.Regexp) bool {
+	if pattern == nil {
+		return false
+	}
 	return matchString(value, pattern)
 }
 

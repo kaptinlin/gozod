@@ -118,6 +118,9 @@ func JSON(value any) bool {
 
 // Property reports whether the object has a property at key that passes the validator.
 func Property(obj any, key string, validator func(any) bool) bool {
+	if validator == nil {
+		return false
+	}
 	m, ok := obj.(map[string]any)
 	if !ok {
 		return false
