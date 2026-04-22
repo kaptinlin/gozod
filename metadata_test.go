@@ -155,6 +155,20 @@ func TestMetadataCheckOnAttachCallback(t *testing.T) {
 		assert.Equal(t, "TestTitle", meta.Title)
 		assert.Equal(t, "TestDesc", meta.Description)
 	})
+
+	t.Run("metadata OnAttach ignores non-schema values", func(t *testing.T) {
+		describeCheck := gozod.Describe("ignored")
+		metaCheck := gozod.Meta(gozod.GlobalMeta{Title: "ignored"})
+
+		assert.NotPanics(t, func() {
+			for _, fn := range describeCheck.Zod().OnAttach {
+				fn("not a schema")
+			}
+			for _, fn := range metaCheck.Zod().OnAttach {
+				fn(struct{}{})
+			}
+		})
+	})
 }
 
 // =============================================================================

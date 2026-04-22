@@ -22,20 +22,11 @@ func (c *ZodCheckDescribe) Zod() *core.ZodCheckInternals {
 //
 //	schema := gozod.String().Check(gozod.Describe("User email"))
 func Describe(description string) core.ZodCheck {
-	internals := &core.ZodCheckInternals{
-		Def:   &core.ZodCheckDef{Check: "describe"},
-		Check: func(_ *core.ParsePayload) {},
-		OnAttach: []func(any){
-			func(schema any) {
-				if s, ok := schema.(core.ZodSchema); ok {
-					existing, _ := core.GlobalRegistry.Get(s)
-					existing.Description = description
-					core.GlobalRegistry.Add(s, existing)
-				}
-			},
-		},
+	return &ZodCheckDescribe{
+		internals: newMetadataCheck("describe", func(meta *core.GlobalMeta) {
+			meta.Description = description
+		}),
 	}
-	return &ZodCheckDescribe{internals: internals}
 }
 
 // ZodCheckMeta is a no-op check that attaches arbitrary metadata to the
@@ -59,31 +50,39 @@ func (c *ZodCheckMeta) Zod() *core.ZodCheckInternals {
 //	    Description: "User's age",
 //	}))
 func Meta(metadata core.GlobalMeta) core.ZodCheck {
-	internals := &core.ZodCheckInternals{
-		Def:   &core.ZodCheckDef{Check: "meta"},
+	return &ZodCheckMeta{
+		internals: newMetadataCheck("meta", func(existing *core.GlobalMeta) {
+			if metadata.ID != "" {
+				existing.ID = metadata.ID
+			}
+			if metadata.Title != "" {
+				existing.Title = metadata.Title
+			}
+			if metadata.Description != "" {
+				existing.Description = metadata.Description
+			}
+			if len(metadata.Examples) > 0 {
+				existing.Examples = metadata.Examples
+			}
+		}),
+	}
+}
+
+func newMetadataCheck(name string, apply func(*core.GlobalMeta)) *core.ZodCheckInternals {
+	return &core.ZodCheckInternals{
+		Def:   &core.ZodCheckDef{Check: name},
 		Check: func(_ *core.ParsePayload) {},
 		OnAttach: []func(any){
 			func(schema any) {
-				s, ok := schema.(core.ZodSchema)
+				zodSchema, ok := schema.(core.ZodSchema)
 				if !ok {
 					return
 				}
-				existing, _ := core.GlobalRegistry.Get(s)
-				if metadata.ID != "" {
-					existing.ID = metadata.ID
-				}
-				if metadata.Title != "" {
-					existing.Title = metadata.Title
-				}
-				if metadata.Description != "" {
-					existing.Description = metadata.Description
-				}
-				if len(metadata.Examples) > 0 {
-					existing.Examples = metadata.Examples
-				}
-				core.GlobalRegistry.Add(s, existing)
+
+				existing, _ := core.GlobalRegistry.Get(zodSchema)
+				apply(&existing)
+				core.GlobalRegistry.Add(zodSchema, existing)
 			},
 		},
 	}
-	return &ZodCheckMeta{internals: internals}
 }
