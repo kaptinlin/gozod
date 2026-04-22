@@ -64,6 +64,7 @@ ANALYSIS.md
 # Meeting records
 .meetings/
 
+.claude/
 .vscode/
 .ralphy/*.json
 improve*.md
