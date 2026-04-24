@@ -12,6 +12,6 @@ import (
 func (fps FloatPrefaultStruct) Schema() *gozod.ZodStruct[FloatPrefaultStruct, FloatPrefaultStruct] {
 	return gozod.Struct[FloatPrefaultStruct](gozod.StructSchema{
 		"float_slice": gozod.Slice(gozod.Float64()).Prefault([]float64{3.3, 4.4}).Optional(),
-		"bool_slice": gozod.Slice(gozod.Bool()).Prefault([]bool{false, true}).Optional(),
+		"bool_slice":  gozod.Slice(gozod.Bool()).Prefault([]bool{false, true}).Optional(),
 	})
 }

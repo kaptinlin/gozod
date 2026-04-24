@@ -11,8 +11,8 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (n Node) Schema() *gozod.ZodStruct[Node, Node] {
 	return gozod.Struct[Node](gozod.StructSchema{
-		"value": gozod.Int(),
-		"next": gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() }).Optional(),
+		"value":    gozod.Int(),
+		"next":     gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() }).Optional(),
 		"children": gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() })).Optional(),
 	})
 }

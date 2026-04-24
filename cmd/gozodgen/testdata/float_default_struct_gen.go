@@ -12,6 +12,6 @@ import (
 func (fds FloatDefaultStruct) Schema() *gozod.ZodStruct[FloatDefaultStruct, FloatDefaultStruct] {
 	return gozod.Struct[FloatDefaultStruct](gozod.StructSchema{
 		"float_slice": gozod.Slice(gozod.Float64()).Default([]float64{1.1, 2.2}).Optional(),
-		"bool_slice": gozod.Slice(gozod.Bool()).Default([]bool{true, false}).Optional(),
+		"bool_slice":  gozod.Slice(gozod.Bool()).Default([]bool{true, false}).Optional(),
 	})
 }

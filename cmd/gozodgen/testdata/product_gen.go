@@ -12,12 +12,12 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (p Product) Schema() *gozod.ZodStruct[Product, Product] {
 	return gozod.Struct[Product](gozod.StructSchema{
-		"id": gozod.UUID(),
-		"sku": gozod.String().Regex(regexp.MustCompile("^[A-Z0-9\\-]+$")),
-		"name": gozod.String().Min(1).Max(200),
-		"price": gozod.Float64().Gt(0.0),
+		"id":       gozod.UUID(),
+		"sku":      gozod.String().Regex(regexp.MustCompile("^[A-Z0-9\\-]+$")),
+		"name":     gozod.String().Min(1).Max(200),
+		"price":    gozod.Float64().Gt(0.0),
 		"currency": gozod.Enum("USD", "EUR", "GBP"),
-		"tags": gozod.Slice(gozod.String()).Min(0).Max(10).Optional(),
-		"active": gozod.Bool().Default(true).Optional(),
+		"tags":     gozod.Slice(gozod.String()).Min(0).Max(10).Optional(),
+		"active":   gozod.Bool().Default(true).Optional(),
 	})
 }

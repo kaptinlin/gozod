@@ -11,9 +11,9 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (ps PrefaultStruct) Schema() *gozod.ZodStruct[PrefaultStruct, PrefaultStruct] {
 	return gozod.Struct[PrefaultStruct](gozod.StructSchema{
-		"str": gozod.String().Prefault("world").Optional(),
-		"num": gozod.Int().Prefault(100).Optional(),
+		"str":   gozod.String().Prefault("world").Optional(),
+		"num":   gozod.Int().Prefault(100).Optional(),
 		"slice": gozod.Slice(gozod.String()).Prefault([]string{"x", "y"}).Optional(),
-		"map": gozod.Record(gozod.String()).Prefault(map[string]string{"foo": "bar"}).Optional(),
+		"map":   gozod.Record(gozod.String()).Prefault(map[string]string{"foo": "bar"}).Optional(),
 	})
 }

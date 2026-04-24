@@ -11,8 +11,8 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (d Department) Schema() *gozod.ZodStruct[Department, Department] {
 	return gozod.Struct[Department](gozod.StructSchema{
-		"name": gozod.String(),
-		"manager": gozod.FromStruct[Employee]().Optional(),
+		"name":      gozod.String(),
+		"manager":   gozod.FromStruct[Employee]().Optional(),
 		"employees": gozod.Slice(gozod.FromStruct[Employee]()).Optional(),
 	})
 }

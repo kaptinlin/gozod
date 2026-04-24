@@ -10,11 +10,11 @@ import (
 // This generated function provides zero-reflection validation with optimal performance
 func (u User) Schema() *gozod.ZodStruct[User, User] {
 	return gozod.Struct[User](gozod.StructSchema{
-		"id": gozod.UUID(),
-		"name": gozod.String().Min(2).Max(50),
-		"email": gozod.String().Email(),
-		"age": gozod.Int().Min(18).Max(120),
-		"status": gozod.Enum("active", "inactive").Default("active").Optional(),
+		"id":         gozod.UUID(),
+		"name":       gozod.String().Min(2).Max(50),
+		"email":      gozod.String().Email(),
+		"age":        gozod.Int().Min(18).Max(120),
+		"status":     gozod.Enum("active", "inactive").Default("active").Optional(),
 		"created_at": gozod.Time(),
 	})
 }

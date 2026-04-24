@@ -4,30 +4,30 @@
 package testdata
 
 import (
-	"strings"
-	"regexp"
 	"github.com/kaptinlin/gozod"
-	"net/url"
 	"net"
+	"net/url"
+	"regexp"
+	"strings"
 )
 
 // Schema returns a pre-built gozod schema for ValidatorStruct
 // This generated function provides zero-reflection validation with optimal performance
 func (vs ValidatorStruct) Schema() *gozod.ZodStruct[ValidatorStruct, ValidatorStruct] {
 	return gozod.Struct[ValidatorStruct](gozod.StructSchema{
-		"email": gozod.String().Email().Optional(),
-		"url": gozod.String().URL().Optional(),
-		"uuid": gozod.UUID().Optional(),
-		"ipv4": gozod.String().IPv4().Optional(),
-		"ipv6": gozod.String().IPv6().Optional(),
-		"regex": gozod.String().Regex(regexp.MustCompile("^[A-Z]+$")).Optional(),
-		"trim": gozod.String().Trim().Optional(),
-		"lower": gozod.String().ToLowerCase().Optional(),
-		"upper": gozod.String().ToUpperCase().Optional(),
+		"email":   gozod.String().Email().Optional(),
+		"url":     gozod.String().URL().Optional(),
+		"uuid":    gozod.UUID().Optional(),
+		"ipv4":    gozod.String().IPv4().Optional(),
+		"ipv6":    gozod.String().IPv6().Optional(),
+		"regex":   gozod.String().Regex(regexp.MustCompile("^[A-Z]+$")).Optional(),
+		"trim":    gozod.String().Trim().Optional(),
+		"lower":   gozod.String().ToLowerCase().Optional(),
+		"upper":   gozod.String().ToUpperCase().Optional(),
 		"nilable": gozod.String().Nilable().Optional(),
-		"gt": gozod.Int().Gt(0).Optional(),
-		"gte": gozod.Int().Gte(0).Optional(),
-		"lt": gozod.Int().Lt(100).Optional(),
-		"lte": gozod.Int().Lte(100).Optional(),
+		"gt":      gozod.Int().Gt(0).Optional(),
+		"gte":     gozod.Int().Gte(0).Optional(),
+		"lt":      gozod.Int().Lt(100).Optional(),
+		"lte":     gozod.Int().Lte(100).Optional(),
 	})
 }

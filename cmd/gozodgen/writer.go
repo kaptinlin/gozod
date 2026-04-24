@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -124,7 +125,11 @@ func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
 	if err := w.templates.ExecuteTemplate(&buf, "main", data); err != nil {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
-	return buf.String(), nil
+	formatted, err := format.Source([]byte(buf.String()))
+	if err != nil {
+		return "", fmt.Errorf("format generated code: %w", err)
+	}
+	return string(formatted), nil
 }
 
 // generateImports generates the import statements needed for the generated code.
