@@ -25,18 +25,6 @@ func processModifiers[T any](
 	return processModifiersCore[T](input, internals, expectedType, ctx)
 }
 
-// processModifiersStrict delegates to the same core logic as processModifiers.
-// It exists as a separate function for call-site clarity in strict parse paths.
-func processModifiersStrict[T any](
-	input any,
-	internals *core.ZodTypeInternals,
-	expectedType core.ZodTypeCode,
-	_ func(any) (any, error),
-	ctx *core.ParseContext,
-) (any, bool, error) {
-	return processModifiersCore[T](input, internals, expectedType, ctx)
-}
-
 // processModifiersCore contains the shared modifier logic.
 // Priority: Default > Prefault > NonOptional > Optional/Nilable > Pointer > Unknown.
 func processModifiersCore[T any](
@@ -138,18 +126,10 @@ func filterNilChecks(checks []core.ZodCheck) []core.ZodCheck {
 // it is a DefaultValue, or invoking DefaultFunc. Returns nil when neither is set.
 func resolveDefault(internals *core.ZodTypeInternals) any {
 	if internals.DefaultValue != nil {
-		return cloneDefaultValue(internals.DefaultValue)
+		return cloneutil.Clone(internals.DefaultValue)
 	}
 	if internals.DefaultFunc != nil {
 		return internals.DefaultFunc()
 	}
 	return nil
-}
-
-// cloneDefaultValue creates a deep copy of supported composite default values.
-func cloneDefaultValue(v any) any {
-	if v == nil {
-		return nil
-	}
-	return cloneutil.Clone(v)
 }

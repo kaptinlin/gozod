@@ -698,7 +698,7 @@ func parsePrimitiveStrictNil[T any, R any](
 ) (R, error) {
 	var zero R
 
-	r, handled, err := processModifiersStrict[T](
+	r, handled, err := processModifiers[T](
 		input, internals, expectedType,
 		func(v any) (any, error) {
 			return parsePrimitiveValue[T](v, internals, expectedType, validator, pc)
@@ -897,7 +897,7 @@ func parseComplexStrictNil[T any, R any](
 ) (R, error) {
 	var zero R
 
-	r, handled, err := processModifiersStrict[T](
+	r, handled, err := processModifiers[T](
 		zero, internals, expectedType,
 		func(v any) (any, error) {
 			return parseComplexValue(v, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
@@ -1119,35 +1119,6 @@ func dereferencePointer(input any) (any, bool) {
 		return nil, true
 	}
 
-	switch v := input.(type) {
-	case *string:
-		if v == nil {
-			return nil, true
-		}
-		return *v, false
-	case *int64:
-		if v == nil {
-			return nil, true
-		}
-		return *v, false
-	case *float64:
-		if v == nil {
-			return nil, true
-		}
-		return *v, false
-	case *bool:
-		if v == nil {
-			return nil, true
-		}
-		return *v, false
-	case *int:
-		if v == nil {
-			return nil, true
-		}
-		return *v, false
-	}
-
-	// Reflection fallback for other pointer types.
 	rv := reflect.ValueOf(input)
 	if rv.Kind() != reflect.Pointer {
 		return input, false
