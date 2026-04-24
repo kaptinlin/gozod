@@ -17,6 +17,22 @@ import (
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
+func TestStructAnalyzer_AnalyzePackageSkipsTestPackages(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("user_test.go", `package main_test
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
+	require.NoError(t, err)
+	assert.Len(t, structs, 0)
+}
+
 func TestStructAnalyzer_AnalyzePackage(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -102,6 +118,22 @@ type User struct {
 	}
 }
 
+func TestStructAnalyzer_AnalyzePackageReturnsTagParseError(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("user.go", `package main
+type User struct {
+	Name string `+"`gozod:\"min=\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	_, err = analyzer.AnalyzePackage(helper.GetTempDir())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "parse gozod tag for field Name")
+}
+
 func TestStructAnalyzer_ParseTagRules(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -149,6 +181,28 @@ func TestStructAnalyzer_ParseTagRules(t *testing.T) {
 			tagValue:    "",
 			expectError: false,
 			expected:    nil,
+		},
+		{
+			name:        "blank rule is ignored",
+			tagValue:    "required, ,max=50",
+			expectError: false,
+			expected: []tagparser.TagRule{
+				{Name: "required", Params: nil},
+				{Name: "max", Params: []string{"50"}},
+			},
+		},
+		{
+			name:        "empty parameter errors",
+			tagValue:    "min=",
+			expectError: true,
+		},
+		{
+			name:        "space separated non-regex parameters",
+			tagValue:    "between=1 10",
+			expectError: false,
+			expected: []tagparser.TagRule{
+				{Name: "between", Params: []string{"1", "10"}},
+			},
 		},
 	}
 
@@ -462,6 +516,11 @@ func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
 		want  string
 	}{
 		{
+			name:  "unnamed field without tag uses empty name",
+			field: &ast.Field{},
+			want:  "",
+		},
+		{
 			name: "without tag uses field name",
 			field: &ast.Field{
 				Names: []*ast.Ident{{Name: "Name"}},
@@ -491,6 +550,13 @@ func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
 				Tag:   &ast.BasicLit{Value: "`json:\"-\"`"},
 			},
 			want: "Hidden",
+		},
+		{
+			name: "ignored json tag without field name uses empty name",
+			field: &ast.Field{
+				Tag: &ast.BasicLit{Value: "`json:\"-\"`"},
+			},
+			want: "",
 		},
 	}
 
@@ -559,6 +625,16 @@ func TestGetTypeNameFromAST(t *testing.T) {
 			name: "selector",
 			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "time"}, Sel: &ast.Ident{Name: "Time"}},
 			want: "time.Time",
+		},
+		{
+			name: "selector without identifier prefix",
+			expr: &ast.SelectorExpr{X: &ast.CallExpr{}, Sel: &ast.Ident{Name: "Name"}},
+			want: "Name",
+		},
+		{
+			name: "unknown expression",
+			expr: &ast.CallExpr{},
+			want: "unknown",
 		},
 	}
 
@@ -635,6 +711,16 @@ func TestStructAnalyzer_GetReflectTypeFromAST(t *testing.T) {
 			name: "time selector",
 			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "time"}, Sel: &ast.Ident{Name: "Time"}},
 			want: reflect.TypeFor[timeType](),
+		},
+		{
+			name: "unknown selector falls back to any",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "pkg"}, Sel: &ast.Ident{Name: "Type"}},
+			want: reflect.TypeFor[any](),
+		},
+		{
+			name: "unknown expression falls back to any",
+			expr: &ast.CallExpr{},
+			want: reflect.TypeFor[any](),
 		},
 		{
 			name: "unknown falls back to any",

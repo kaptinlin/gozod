@@ -42,7 +42,7 @@ func (h *TestHelper) CreateGoFile(filename, content string) string {
 		formatted = []byte(content)
 	}
 
-	if err := os.WriteFile(filePath, formatted, 0600); err != nil { //nolint:gosec // test helper writes to controlled temp dir
+	if err := os.WriteFile(filePath, formatted, 0600); err != nil {
 		h.t.Fatalf("Failed to write file %s: %v", filePath, err)
 	}
 

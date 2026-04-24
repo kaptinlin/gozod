@@ -361,6 +361,37 @@ func TestCodeGenerator_RealTestdata(t *testing.T) {
 	}
 }
 
+func TestCodeGenerator_ProcessPackageReturnsAnalysisError(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("broken.go", "package main\ntype Broken struct {\n")
+
+	generator, err := NewCodeGenerator(&GeneratorConfig{OutputSuffix: "_gen.go", PackageName: "main"})
+	require.NoError(t, err)
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "analyze package")
+}
+
+func TestCodeGenerator_ProcessPackageReturnsWriteError(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("user.go", `package main
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+
+	blockedOutput := filepath.Join(helper.GetTempDir(), "user_gen.go")
+	require.NoError(t, os.Mkdir(blockedOutput, 0750))
+
+	generator, err := NewCodeGenerator(&GeneratorConfig{OutputSuffix: "_gen.go", PackageName: "main"})
+	require.NoError(t, err)
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "generate code for struct User")
+}
+
 func TestNewCodeGenerator(t *testing.T) {
 	tests := []struct {
 		name        string

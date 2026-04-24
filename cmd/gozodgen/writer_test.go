@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -229,6 +230,67 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 	}
 }
 
+func TestFileWriter_WriteGeneratedCode(t *testing.T) {
+	helper := NewTestHelper(t)
+	sourcePath := helper.CreateGoFile("user.go", `package main
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+
+	writer, err := NewFileWriter(helper.GetTempDir(), "main", "_gen.go", false, true)
+	require.NoError(t, err)
+
+	err = writer.WriteGeneratedCode(&GenerationInfo{
+		Name:     "User",
+		Package:  "main",
+		FilePath: sourcePath,
+		Fields: []tagparser.FieldInfo{{
+			Name:     "Name",
+			JSONName: "name",
+			Type:     reflect.TypeFor[string](),
+			Rules:    []tagparser.TagRule{{Name: "required"}},
+		}},
+	})
+	require.NoError(t, err)
+	helper.AssertFileExists("user_gen.go")
+}
+
+func TestFileWriter_GenerateCodeUsesInfoPackage(t *testing.T) {
+	writer, err := NewFileWriter("", "", "_gen.go", true, false)
+	require.NoError(t, err)
+
+	content, err := writer.generateCode(&GenerationInfo{
+		Name:    "User",
+		Package: "models",
+		Fields: []tagparser.FieldInfo{{
+			Name:     "Name",
+			JSONName: "name",
+			Type:     reflect.TypeFor[string](),
+			Rules:    []tagparser.TagRule{{Name: "required"}},
+		}},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, content, "package models")
+}
+
+func TestFileWriter_GenerateCodeReturnsTemplateError(t *testing.T) {
+	writer := &FileWriter{templates: template.New("broken"), packageName: "main"}
+
+	_, err := writer.generateCode(&GenerationInfo{
+		Name:    "User",
+		Package: "main",
+		Fields: []tagparser.FieldInfo{{
+			Name:     "Name",
+			JSONName: "name",
+			Type:     reflect.TypeFor[string](),
+			Rules:    []tagparser.TagRule{{Name: "required"}},
+		}},
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "execute template")
+}
+
 func TestFileWriter_GenerateCode(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -430,6 +492,24 @@ func TestCircularReferenceHandling(t *testing.T) {
 			structName: "Node",
 			expected:   "gozod.Time()",
 		},
+		{
+			name:       "unknown type uses Any",
+			typeName:   "unknown",
+			structName: "Node",
+			expected:   "gozod.Any()",
+		},
+		{
+			name:       "malformed map uses Any record",
+			typeName:   "map[string]",
+			structName: "Node",
+			expected:   "gozod.Record(gozod.Any())",
+		},
+		{
+			name:       "map self reference",
+			typeName:   "map[string]*Node",
+			structName: "Node",
+			expected:   "gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() }))",
+		},
 	}
 
 	for _, tt := range tests {
@@ -473,6 +553,8 @@ func TestGenerateValidatorChain(t *testing.T) {
 
 		// Time (returns empty)
 		{name: "time", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "enum method returns empty", rule: tagparser.TagRule{Name: "enum", Params: []string{"active"}}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "unknown rule returns empty", rule: tagparser.TagRule{Name: "unknown"}, fieldType: reflect.TypeFor[string](), expected: ""},
 
 		// Refine and check
 		{name: "refine", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeFor[string](), expected: ".Refine(myValidator)"},
@@ -506,9 +588,13 @@ func TestGenerateDefaultValue(t *testing.T) {
 		{name: "int slice", value: `[1,2,3]`, fieldType: reflect.TypeFor[[]int](), expected: `.Default([]int{1, 2, 3})`},
 		{name: "float slice", value: `[1.1,2.2]`, fieldType: reflect.TypeFor[[]float64](), expected: `.Default([]float64{1.1, 2.2})`},
 		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeFor[[]bool](), expected: `.Default([]bool{true, false})`},
+		{name: "raw slice literal fallback", value: `items`, fieldType: reflect.TypeFor[[]string](), expected: `.Default(items)`},
+		{name: "unsupported slice element fallback", value: `[1,2]`, fieldType: reflect.TypeFor[[]uint](), expected: `.Default([1,2])`},
 		// Map types
 		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Default(map[string]string{"k": "v"})`},
 		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeFor[map[string]any](), expected: `.Default(map[string]any{"a": 1})`},
+		{name: "raw map literal fallback", value: `defaults`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Default(defaults)`},
+		{name: "unsupported map value fallback", value: `{"a":1}`, fieldType: reflect.TypeFor[map[string]int](), expected: `.Default({"a":1})`},
 	}
 
 	for _, tt := range tests {

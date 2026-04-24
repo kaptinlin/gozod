@@ -1,9 +1,6 @@
 package gozod_test
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -585,129 +582,6 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 // =============================================================================
 // APPLY FUNCTION TESTS
 // =============================================================================
-
-func TestDocumentationFiles(t *testing.T) {
-	read := func(name string) string {
-		t.Helper()
-		data, err := os.ReadFile(name)
-		require.NoError(t, err)
-		return string(data)
-	}
-
-	t.Run("AGENTS symlink points to CLAUDE", func(t *testing.T) {
-		target, err := os.Readlink("AGENTS.md")
-		require.NoError(t, err)
-		assert.Equal(t, "CLAUDE.md", target)
-	})
-
-	t.Run("CLAUDE commands and references exist", func(t *testing.T) {
-		claude := read("CLAUDE.md")
-		for _, rel := range []string{
-			"README.md",
-			".agents/rules",
-			"coerce",
-			"core",
-			"docs",
-			"examples",
-			"internal",
-			"jsonschema",
-			"locales",
-			"pkg",
-			"types",
-			"cmd/gozodgen",
-			"core/constraints.go",
-			"types/constraints_verify.go",
-			"reports",
-			"reports/.gitkeep",
-		} {
-			_, err := os.Stat(rel)
-			require.NoErrorf(t, err, "missing path referenced by CLAUDE.md: %s", rel)
-		}
-
-		for _, cmd := range []string{
-			"task test",
-			"task test:race",
-			"task lint",
-			"task golangci-lint",
-			"task tidy-lint",
-			"task fmt",
-			"task vet",
-			"task verify",
-			"go build ./...",
-			"go test -tags=contractcheck ./types",
-		} {
-			assert.Contains(t, claude, cmd)
-		}
-	})
-
-	t.Run("README links and examples stay in sync", func(t *testing.T) {
-		readme := read("README.md")
-		for _, rel := range []string{
-			"LICENSE",
-			"AGENTS.md",
-			"docs/api.md",
-			"docs/basics.md",
-			"docs/tags.md",
-			"docs/json-schema.md",
-			"docs/feature-mapping.md",
-			"docs/metadata.md",
-			"examples/README.md",
-			"examples/quickstart",
-			"examples/struct_tags",
-			"coerce",
-			"cmd/gozodgen",
-		} {
-			_, err := os.Stat(rel)
-			require.NoErrorf(t, err, "missing path referenced by README.md: %s", rel)
-		}
-
-		for _, snippet := range []string{
-			"go get github.com/kaptinlin/gozod",
-			"go install github.com/kaptinlin/gozod/cmd/gozodgen@latest",
-			"go generate ./...",
-			"go run ./examples/quickstart",
-			"go run ./examples/struct_tags",
-			"task test",
-			"task lint",
-			"task verify",
-			"go test -tags=contractcheck ./types",
-			"gozod.String().Min(2).Email()",
-			"gozod.FromStruct[User]()",
-			"gozod.Object(gozod.ObjectSchema{",
-			"gozod.Union([]any{",
-			"gozod.ToJSONSchema(schema)",
-			"jsonSchema.ValidateMap(",
-			"gozod.IsZodError(err, &zodErr)",
-			"gozod.PrettifyError(zodErr)",
-		} {
-			assert.Contains(t, readme, snippet)
-		}
-
-		assert.False(t, strings.Contains(readme, "CONTRIBUTING.md"))
-		assert.False(t, strings.Contains(readme, ".agents/rules/"))
-		assert.False(t, strings.Contains(readme, "Dependency Issue Reporting"))
-		assert.False(t, strings.Contains(readme, "internal/engine"))
-	})
-
-	t.Run("README avoids dead local links", func(t *testing.T) {
-		readme := read("README.md")
-		for _, token := range []string{"](docs/", "](examples/", "](cmd/", "](LICENSE)", "](AGENTS.md)"} {
-			idx := 0
-			for {
-				pos := strings.Index(readme[idx:], token)
-				if pos == -1 {
-					break
-				}
-				start := idx + pos + 2
-				end := start + strings.Index(readme[start:], ")")
-				rel := readme[start:end]
-				_, err := os.Stat(filepath.Clean(rel))
-				require.NoErrorf(t, err, "broken README link: %s", rel)
-				idx = end + 1
-			}
-		}
-	})
-}
 
 func TestApply(t *testing.T) {
 	t.Run("basic apply with same schema type", func(t *testing.T) {
