@@ -1518,7 +1518,7 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	}
 
 	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 
@@ -1541,7 +1541,7 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	result := reflect.New(structType).Elem()
 
 	// First, copy all fields from input to result
-	for i := 0; i < structType.NumField(); i++ {
+	for i := range structType.NumField() {
 		result.Field(i).Set(rv.Field(i))
 	}
 

@@ -66,14 +66,7 @@ func (f FieldInfo) RulesExcept(names ...string) []TagRule {
 	}
 	filtered := make([]TagRule, 0, len(f.Rules))
 	for _, rule := range f.Rules {
-		excluded := false
-		for _, name := range names {
-			if rule.Name == name {
-				excluded = true
-				break
-			}
-		}
-		if !excluded {
+		if !slices.Contains(names, rule.Name) {
 			filtered = append(filtered, rule)
 		}
 	}
