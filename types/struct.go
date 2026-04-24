@@ -1540,12 +1540,10 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	var allIssues []core.ZodIssue
 	result := reflect.New(structType).Elem()
 
-	// First, copy all fields from input to result
 	for i := range structType.NumField() {
 		result.Field(i).Set(rv.Field(i))
 	}
 
-	// Then process fields with validation tags
 	for _, pf := range parsedFields {
 		schema := fieldSchemas[pf.JSONName]
 		if schema == nil {
