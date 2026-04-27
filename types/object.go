@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"strings"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 var (
@@ -671,22 +671,17 @@ func (z *ZodObject[T, R]) extractObject(v any) (map[string]any, error) {
 	}
 
 	if rv.Kind() == reflect.Struct {
-		rt := rv.Type()
 		result := make(map[string]any, rv.NumField())
-		for i := range rv.NumField() {
-			f := rt.Field(i)
-			if !f.IsExported() {
+		for field, value := range rv.Fields() {
+			if !field.IsExported() || !value.CanInterface() {
 				continue
 			}
-			name := f.Name
-			if tag := f.Tag.Get("json"); tag != "" && tag != "-" {
-				if tagName, _, found := strings.Cut(tag, ","); found {
-					name = tagName
-				} else {
-					name = tag
-				}
+
+			jsonField := tagparser.JSONFieldName(field)
+			if jsonField.Skip {
+				continue
 			}
-			result[name] = rv.Field(i).Interface()
+			result[jsonField.Name] = value.Interface()
 		}
 		return result, nil
 	}

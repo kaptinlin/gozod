@@ -1517,6 +1517,56 @@ func TestStruct_PartialAndRequired_Integration(t *testing.T) {
 	})
 }
 
+func TestStruct_JSONFieldMapping(t *testing.T) {
+	t.Run("parse maps json omitempty-only tag to Go field name", func(t *testing.T) {
+		type TagCase struct {
+			Name     string `json:"name"`
+			Nickname string `json:",omitempty"`
+		}
+
+		schema := Struct[TagCase](core.StructSchema{
+			"name":     String().Trim(),
+			"Nickname": String().Trim(),
+		})
+
+		result, err := schema.Parse(TagCase{Name: " Alice ", Nickname: " Al "})
+		require.NoError(t, err)
+		assert.Equal(t, TagCase{Name: "Alice", Nickname: "Al"}, result)
+	})
+
+	t.Run("parse still allows explicit Go field name for json dash fields", func(t *testing.T) {
+		type TagCase struct {
+			Name   string `json:"name"`
+			Secret string `json:"-"`
+		}
+
+		schema := Struct[TagCase](core.StructSchema{
+			"name":   String().Trim(),
+			"Secret": String().Trim(),
+		})
+
+		result, err := schema.Parse(TagCase{Name: " Alice ", Secret: " hidden "})
+		require.NoError(t, err)
+		assert.Equal(t, TagCase{Name: "Alice", Secret: "hidden"}, result)
+	})
+
+	t.Run("strict map conversion uses shared json field names", func(t *testing.T) {
+		type TagCase struct {
+			Name     string `json:"name"`
+			Nickname string `json:",omitempty"`
+			Secret   string `json:"-"`
+		}
+
+		schema := Struct[TagCase]()
+		result, err := schema.Parse(map[string]any{
+			"name":     "Alice",
+			"Nickname": "Al",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, TagCase{Name: "Alice", Nickname: "Al"}, result)
+	})
+}
+
 // =============================================================================
 // Multi-error collection tests (TypeScript Zod v4 behavior)
 // =============================================================================

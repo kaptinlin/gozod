@@ -33,10 +33,45 @@ var (
 // anyType is the reflect.Type for interface{}/any, cached to avoid repeated allocation.
 var anyType = reflect.TypeFor[any]()
 
-// jsonTagName extracts the field name from a JSON struct tag, ignoring options like omitempty.
-func jsonTagName(tag string) string {
-	name, _, _ := strings.Cut(tag, ",")
-	return name
+type structFieldBinding struct {
+	field    reflect.StructField
+	index    int
+	jsonName string
+	skipJSON bool
+}
+
+func structFieldBindings(t reflect.Type) []structFieldBinding {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
+	bindings := make([]structFieldBinding, 0, t.NumField())
+	for field := range t.Fields() {
+		if !field.IsExported() {
+			continue
+		}
+
+		jsonField := tagparser.JSONFieldName(field)
+		bindings = append(bindings, structFieldBinding{
+			field:    field,
+			index:    field.Index[0],
+			jsonName: jsonField.Name,
+			skipJSON: jsonField.Skip,
+		})
+	}
+	return bindings
+}
+
+func findStructFieldBinding(t reflect.Type, name string) (structFieldBinding, bool) {
+	for _, binding := range structFieldBindings(t) {
+		if binding.field.Name == name || (!binding.skipJSON && binding.jsonName == name) {
+			return binding, true
+		}
+	}
+	return structFieldBinding{}, false
 }
 
 // ZodStructDef defines the configuration for struct validation.
@@ -866,33 +901,21 @@ func (z *ZodStruct[T, R]) parseFieldWithSchema(fieldValue any, fieldSchema any, 
 
 // setStructFieldValue sets a field value.
 func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structType reflect.Type, fieldName string, value any) error {
-	// First try to find by field name
 	fieldVal := structVal.FieldByName(fieldName)
 	if fieldVal.IsValid() && fieldVal.CanSet() {
 		return z.setReflectFieldValue(fieldVal, value)
 	}
 
-	// Then try to find by json tag
-	for i := range structType.NumField() {
-		field := structType.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		jsonTag := field.Tag.Get("json")
-		if jsonTag != "" {
-			// Parse json tag (handle omitempty, etc.)
-			jsonName := jsonTagName(jsonTag)
-			if jsonName == fieldName {
-				fieldVal := structVal.Field(i)
-				if fieldVal.CanSet() {
-					return z.setReflectFieldValue(fieldVal, value)
-				}
-			}
-		}
+	binding, found := findStructFieldBinding(structType, fieldName)
+	if !found {
+		return ErrFieldNotFoundOrNotSettable
 	}
 
-	return ErrFieldNotFoundOrNotSettable
+	fieldVal = structVal.Field(binding.index)
+	if !fieldVal.CanSet() {
+		return ErrFieldNotFoundOrNotSettable
+	}
+	return z.setReflectFieldValue(fieldVal, value)
 }
 
 // setReflectFieldValue sets a reflect.Value field.
@@ -1136,27 +1159,14 @@ func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect
 	newStruct := reflect.New(targetType).Elem()
 
 	// Convert map to struct by matching field names
-	for i := range targetType.NumField() {
-		field := targetType.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		// Get field name, check json tag first, then field name
-		fieldName := field.Name
-		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
-			if tagName := jsonTagName(jsonTag); tagName != "" && tagName != "-" {
-				fieldName = tagName
-			}
-		}
-
+	for _, binding := range structFieldBindings(targetType) {
 		// Look for value in map by exact field name match
 		var mapValue any
 		var found bool
 
 		for _, key := range sourceVal.MapKeys() {
 			keyStr := fmt.Sprintf("%v", key.Interface())
-			if keyStr == fieldName || keyStr == field.Name {
+			if keyStr == binding.field.Name || (!binding.skipJSON && keyStr == binding.jsonName) {
 				mapValue = sourceVal.MapIndex(key).Interface()
 				found = true
 				break
@@ -1166,13 +1176,14 @@ func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect
 		if found && mapValue != nil {
 			// Try direct assignment first
 			mapValueVal := reflect.ValueOf(mapValue)
-			if mapValueVal.Type().AssignableTo(field.Type) {
-				newStruct.Field(i).Set(mapValueVal)
+			fieldVal := newStruct.Field(binding.index)
+			if mapValueVal.Type().AssignableTo(binding.field.Type) {
+				fieldVal.Set(mapValueVal)
 			} else {
 				// Try type conversion
-				convertedValue := z.convertValue(mapValue, field.Type)
+				convertedValue := z.convertValue(mapValue, binding.field.Type)
 				if convertedValue != nil {
-					newStruct.Field(i).Set(reflect.ValueOf(convertedValue))
+					fieldVal.Set(reflect.ValueOf(convertedValue))
 				}
 			}
 		}
@@ -1183,27 +1194,15 @@ func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect
 
 // getStructFieldValue gets the value of a struct field by name or json tag
 func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType reflect.Type, fieldName string) (reflect.Value, bool) {
-	// First, try to find by exact field name
 	if field := val.FieldByName(fieldName); field.IsValid() {
 		return field, true
 	}
 
-	// Then, try to find by json tag
-	for i := range val.NumField() {
-		field := structType.Field(i)
-		if !field.IsExported() {
-			continue
-		}
-
-		// Check json tag
-		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			if jsonTagName(tag) == fieldName {
-				return val.Field(i), true
-			}
-		}
+	binding, found := findStructFieldBinding(structType, fieldName)
+	if !found {
+		return reflect.Value{}, false
 	}
-
-	return reflect.Value{}, false
+	return val.Field(binding.index), true
 }
 
 // shouldSkipFieldInPartialMode checks if a field should be skipped in partial mode
@@ -1447,21 +1446,15 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 
 	v := reflect.New(t).Elem()
 
-	for i := range t.NumField() {
-		field := t.Field(i)
-		if !field.IsExported() {
+	for _, binding := range structFieldBindings(t) {
+		if binding.skipJSON {
 			continue
 		}
 
-		key := field.Name
-		if tag := field.Tag.Get("json"); tag != "" {
-			tagName, _, _ := strings.Cut(tag, ",")
-			if tagName != "" && tagName != "-" {
-				key = tagName
-			}
+		val, ok := data[binding.jsonName]
+		if !ok && binding.jsonName != binding.field.Name {
+			val, ok = data[binding.field.Name]
 		}
-
-		val, ok := data[key]
 		if !ok {
 			return zero, false
 		}
@@ -1471,11 +1464,12 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 			return zero, false
 		}
 
+		fieldVal := v.Field(binding.index)
 		switch {
-		case rv.Type().AssignableTo(field.Type):
-			v.Field(i).Set(rv)
-		case rv.Type().ConvertibleTo(field.Type):
-			v.Field(i).Set(rv.Convert(field.Type))
+		case rv.Type().AssignableTo(binding.field.Type):
+			fieldVal.Set(rv)
+		case rv.Type().ConvertibleTo(binding.field.Type):
+			fieldVal.Set(rv.Convert(binding.field.Type))
 		default:
 			return zero, false
 		}

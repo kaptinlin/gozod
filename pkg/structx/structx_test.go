@@ -30,6 +30,11 @@ type testSkipField struct {
 	Secret string `json:"-"`
 }
 
+type testEmptyJSONName struct {
+	WithEmpty string `json:",omitempty"`
+	Secret    string `json:"-"`
+}
+
 func TestToMap(t *testing.T) {
 	t.Run("nil input returns error", func(t *testing.T) {
 		_, err := ToMap(nil)
@@ -62,6 +67,16 @@ func TestToMap(t *testing.T) {
 		var user *testUser
 		_, err := ToMap(user)
 		assert.ErrorIs(t, err, ErrInvalidStructInput)
+	})
+
+	t.Run("empty json name uses field name", func(t *testing.T) {
+		got, err := ToMap(testEmptyJSONName{WithEmpty: "value", Secret: "hidden"})
+		require.NoError(t, err)
+
+		assert.Equal(t, "value", got["WithEmpty"])
+		assert.NotContains(t, got, "")
+		assert.NotContains(t, got, "Secret")
+		assert.NotContains(t, got, "-")
 	})
 }
 
@@ -185,6 +200,16 @@ func TestUnmarshal(t *testing.T) {
 
 		user := result.(testUser)
 		assert.Equal(t, 30, user.Age)
+	})
+
+	t.Run("empty json name uses field name", func(t *testing.T) {
+		data := map[string]any{"WithEmpty": "value", "Secret": "hidden", "-": "dash"}
+		result, err := Unmarshal(data, reflect.TypeFor[testEmptyJSONName]())
+		require.NoError(t, err)
+
+		got := result.(testEmptyJSONName)
+		assert.Equal(t, "value", got.WithEmpty)
+		assert.Empty(t, got.Secret)
 	})
 }
 

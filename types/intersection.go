@@ -10,6 +10,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 // ZodIntersectionDef is the configuration for intersection validation.
@@ -560,20 +561,17 @@ func structToMap(v reflect.Value) map[string]any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
-	t := v.Type()
-	m := make(map[string]any, t.NumField())
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if !f.IsExported() {
+	m := make(map[string]any, v.NumField())
+	for field, value := range v.Fields() {
+		if !field.IsExported() || !value.CanInterface() {
 			continue
 		}
-		key := f.Name
-		if tag := f.Tag.Get("json"); tag != "" {
-			if name := strings.Split(tag, ",")[0]; name != "" && name != "-" {
-				key = name
-			}
+
+		jsonField := tagparser.JSONFieldName(field)
+		if jsonField.Skip {
+			continue
 		}
-		m[key] = v.Field(i).Interface()
+		m[jsonField.Name] = value.Interface()
 	}
 	return m
 }

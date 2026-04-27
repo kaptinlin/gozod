@@ -110,6 +110,7 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 		Age           int     `gozod:"required,min=18,max=120" json:"age"`
 		OptionalField *string `gozod:"max=100" json:"optional_field"`
 		IgnoredField  string  `gozod:"-" json:"ignored"`
+		HiddenJSON    string  `json:"-"`
 		NoTagField    string  `json:"no_tag"`
 	}
 
@@ -119,7 +120,7 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should have 5 fields (Name, Email, Age, OptionalField, NoTagField)
-	// unexportedField and IgnoredField should be excluded
+	// IgnoredField and HiddenJSON should be excluded.
 	assert.Len(t, fields, 5)
 
 	// Verify Name field

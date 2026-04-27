@@ -3,7 +3,8 @@ package structx
 import (
 	"errors"
 	"reflect"
-	"strings"
+
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 // Sentinel errors for structx operations.
@@ -23,21 +24,19 @@ func ToMap(input any) (map[string]any, error) {
 		return nil, ErrInvalidStructInput
 	}
 
-	t := v.Type()
-	m := make(map[string]any, t.NumField())
+	m := make(map[string]any, v.NumField())
 
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if !f.IsExported() {
+	for f, value := range v.Fields() {
+		if !f.IsExported() || !value.CanInterface() {
 			continue
 		}
 
-		name := fieldName(f)
-		if name == "" {
+		jsonField := tagparser.JSONFieldName(f)
+		if jsonField.Skip {
 			continue
 		}
 
-		m[name] = v.Field(i).Interface()
+		m[jsonField.Name] = value.Interface()
 	}
 
 	return m, nil
@@ -133,19 +132,9 @@ func setField(dst reflect.Value, src reflect.Value, targetType reflect.Type) {
 // fieldName returns the map key for a struct field based on its json tag.
 // It returns an empty string for fields that should be skipped (json:"-").
 func fieldName(field reflect.StructField) string {
-	tag := field.Tag.Get("json")
-	if tag == "" {
-		return field.Name
-	}
-
-	name, _, _ := strings.Cut(tag, ",")
-
-	switch name {
-	case "-":
+	jsonField := tagparser.JSONFieldName(field)
+	if jsonField.Skip {
 		return ""
-	case "":
-		return field.Name
-	default:
-		return name
 	}
+	return jsonField.Name
 }

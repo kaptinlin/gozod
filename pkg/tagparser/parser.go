@@ -28,6 +28,12 @@ type TagRule struct {
 	Params []string // e.g., ["2"] for "min=2"
 }
 
+// JSONField represents the resolved JSON contract for a struct field.
+type JSONField struct {
+	Name string
+	Skip bool
+}
+
 // ErrTypeMustBeStruct indicates that the input type is neither a
 // struct nor a pointer to struct.
 var ErrTypeMustBeStruct = errors.New("tagparser: type must be a struct or pointer to struct")
@@ -101,10 +107,15 @@ func (p *TagParser) parseStructFields(typ reflect.Type) ([]FieldInfo, error) {
 			continue
 		}
 
+		jsonField := JSONFieldName(f)
+		if jsonField.Skip {
+			continue
+		}
+
 		info := FieldInfo{
 			Name:     f.Name,
 			Type:     f.Type,
-			JSONName: jsonFieldName(f),
+			JSONName: jsonField.Name,
 			GoZodTag: tag,
 		}
 
@@ -251,22 +262,22 @@ func parseRule(part string) TagRule {
 	return TagRule{Name: name, Params: params}
 }
 
-// jsonFieldName extracts the JSON field name from a struct field's
-// json tag. Falls back to the Go field name when no usable json
-// name is present.
-func jsonFieldName(f reflect.StructField) string {
+// JSONFieldName resolves the JSON field name and skip marker for a struct field.
+func JSONFieldName(f reflect.StructField) JSONField {
 	tag := f.Tag.Get("json")
-	if tag == "" || tag == "-" {
-		return f.Name
+	if tag == "" {
+		return JSONField{Name: f.Name}
+	}
+	if tag == "-" {
+		return JSONField{Skip: true}
 	}
 
 	name, _, _ := strings.Cut(tag, ",")
 	name = strings.TrimSpace(name)
-	if name != "" {
-		return name
+	if name == "" {
+		name = f.Name
 	}
-
-	return f.Name
+	return JSONField{Name: name}
 }
 
 // hasRule reports whether a rule with the given name exists.

@@ -34,3 +34,26 @@ func TestObject_CloneFromDoesNotShareState(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "source object", meta.Description)
 }
+
+func TestStructToMapJSONTags(t *testing.T) {
+	type tagCase struct {
+		Name     string `json:"name,omitempty"`
+		Nickname string `json:",omitempty"`
+		Secret   string `json:"-"`
+		hidden   string
+	}
+
+	got := structToMap(reflect.ValueOf(tagCase{
+		Name:     "Alice",
+		Nickname: "Al",
+		Secret:   "hidden",
+		hidden:   "private",
+	}))
+
+	assert.Equal(t, "Alice", got["name"])
+	assert.Equal(t, "Al", got["Nickname"])
+	assert.NotContains(t, got, "")
+	assert.NotContains(t, got, "Secret")
+	assert.NotContains(t, got, "-")
+	assert.NotContains(t, got, "hidden")
+}

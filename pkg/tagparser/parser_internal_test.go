@@ -12,7 +12,7 @@ func TestJSONFieldName(t *testing.T) {
 	tests := []struct {
 		name     string
 		field    reflect.StructField
-		expected string
+		expected JSONField
 	}{
 		{
 			name: "no json tag",
@@ -20,7 +20,7 @@ func TestJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  "",
 			},
-			expected: "TestField",
+			expected: JSONField{Name: "TestField"},
 		},
 		{
 			name: "json tag with name",
@@ -28,7 +28,7 @@ func TestJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"test_field"`,
 			},
-			expected: "test_field",
+			expected: JSONField{Name: "test_field"},
 		},
 		{
 			name: "json tag with omitempty",
@@ -36,7 +36,7 @@ func TestJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"test_field,omitempty"`,
 			},
-			expected: "test_field",
+			expected: JSONField{Name: "test_field"},
 		},
 		{
 			name: "json tag with dash (skip)",
@@ -44,7 +44,7 @@ func TestJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"-"`,
 			},
-			expected: "TestField",
+			expected: JSONField{Skip: true},
 		},
 		{
 			name: "json tag omitempty only",
@@ -52,13 +52,13 @@ func TestJSONFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:",omitempty"`,
 			},
-			expected: "TestField",
+			expected: JSONField{Name: "TestField"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := jsonFieldName(tt.field)
+			result := JSONFieldName(tt.field)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

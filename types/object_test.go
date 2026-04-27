@@ -124,6 +124,35 @@ func TestObject_BasicFunctionality(t *testing.T) {
 	})
 }
 
+func TestObject_ParseStructJSONTags(t *testing.T) {
+	type objectTagCase struct {
+		Name     string `json:"name,omitempty"`
+		Nickname string `json:",omitempty"`
+		Secret   string `json:"-"`
+		hidden   string
+	}
+
+	schema := StrictObject(core.ObjectSchema{
+		"name":     String(),
+		"Nickname": String(),
+	})
+
+	result, err := schema.Parse(objectTagCase{
+		Name:     "Alice",
+		Nickname: "Al",
+		Secret:   "hidden",
+		hidden:   "private",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "Alice", result["name"])
+	assert.Equal(t, "Al", result["Nickname"])
+	assert.NotContains(t, result, "")
+	assert.NotContains(t, result, "Secret")
+	assert.NotContains(t, result, "-")
+	assert.NotContains(t, result, "hidden")
+}
+
 func TestObject_TypeSafety(t *testing.T) {
 	t.Run("Object returns map[string]any type", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
