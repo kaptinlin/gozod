@@ -94,6 +94,10 @@ linters:
       - path: '^(core/constants\.go|constructors_.*\.go|core\.go|errors\.go|jsonschema\.go|metadata\.go|structs\.go|types\.go|internal/issues/types\.go|pkg/coerce/coerce\.go|types/discriminated_union\.go|types/object\.go)$'
         linters:
           - revive
+      - path: '(^|.*/)(internal/utils/utils\.go|types/(function|stringbool)\.go)$'
+        text: 'var-naming: avoid meaningless package names'
+        linters:
+          - revive
       - path: '(^|.*/)(pkg/cloneutil/clone\.go|pkg/reflectx/types\.go|pkg/slicex/slicex\.go)$'
         linters:
           - nolintlint

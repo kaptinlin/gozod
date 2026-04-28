@@ -325,6 +325,10 @@ func TestZodXor_OptionsDefensiveCopy(t *testing.T) {
 	original := schema.Options()
 	assert.Len(t, original, 3)
 	assert.NotNil(t, original[0])
+
+	emptyOptions := Xor([]any{}).Options()
+	assert.Empty(t, emptyOptions)
+	assert.NotNil(t, emptyOptions)
 }
 
 // =============================================================================

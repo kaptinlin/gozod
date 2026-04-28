@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -266,9 +267,10 @@ func (z *ZodUnion[T, R]) Describe(desc string) *ZodUnion[T, R] {
 
 // Options returns a copy of all union member schemas.
 func (z *ZodUnion[T, R]) Options() []core.ZodSchema {
-	out := make([]core.ZodSchema, len(z.internals.Options))
-	copy(out, z.internals.Options)
-	return out
+	if len(z.internals.Options) == 0 {
+		return []core.ZodSchema{}
+	}
+	return slices.Clone(z.internals.Options)
 }
 
 // Transform creates a type-safe transformation pipeline.

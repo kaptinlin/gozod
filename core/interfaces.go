@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"slices"
 	"sync/atomic"
 
 	"github.com/kaptinlin/gozod/pkg/cloneutil"
@@ -145,8 +146,7 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 		cp.PrefaultValue = cloneutil.Clone(z.PrefaultValue)
 	}
 	if len(z.Checks) > 0 {
-		cp.Checks = make([]ZodCheck, len(z.Checks))
-		copy(cp.Checks, z.Checks)
+		cp.Checks = slices.Clone(z.Checks)
 	}
 	if len(z.Values) > 0 {
 		cp.Values = maps.Clone(z.Values)

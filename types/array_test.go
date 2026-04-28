@@ -218,6 +218,16 @@ func TestArray_TypeSpecificMethods(t *testing.T) {
 		assert.Len(t, items, 2)
 		assert.Equal(t, stringSchema, items[0])
 		assert.Equal(t, intSchema, items[1])
+
+		items[0] = nil
+		assert.Equal(t, stringSchema, schema.Items()[0])
+	})
+
+	t.Run("Items returns non-nil empty slice", func(t *testing.T) {
+		items := Array([]any{}).Items()
+
+		assert.Empty(t, items)
+		assert.NotNil(t, items)
 	})
 }
 

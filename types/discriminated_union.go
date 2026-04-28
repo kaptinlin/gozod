@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -241,9 +242,10 @@ func (z *ZodDiscriminatedUnion[T, R]) Discriminator() string {
 
 // Options returns a copy of all union member schemas.
 func (z *ZodDiscriminatedUnion[T, R]) Options() []core.ZodSchema {
-	r := make([]core.ZodSchema, len(z.internals.Options))
-	copy(r, z.internals.Options)
-	return r
+	if len(z.internals.Options) == 0 {
+		return []core.ZodSchema{}
+	}
+	return slices.Clone(z.internals.Options)
 }
 
 // DiscriminatorMap returns a copy of the discriminator-to-schema mapping.
@@ -441,21 +443,13 @@ func extractDiscVals(in *core.ZodTypeInternals) []any {
 	}
 
 	if len(in.Values) > 0 {
-		vals := make([]any, 0, len(in.Values))
-		for v := range in.Values {
-			vals = append(vals, v)
-		}
-		return vals
+		return slices.Collect(maps.Keys(in.Values))
 	}
 
 	if in.Bag != nil {
 		if bv, exists := in.Bag["values"]; exists {
 			if vm, ok := bv.(map[any]struct{}); ok {
-				vals := make([]any, 0, len(vm))
-				for v := range vm {
-					vals = append(vals, v)
-				}
-				return vals
+				return slices.Collect(maps.Keys(vm))
 			}
 		}
 	}
@@ -470,11 +464,7 @@ func extractDiscVals(in *core.ZodTypeInternals) []any {
 	case core.ZodTypeEnum:
 		if ev, exists := in.Bag["enum"]; exists {
 			if em, ok := ev.(map[any]struct{}); ok {
-				enumVals := make([]any, 0, len(em))
-				for v := range em {
-					enumVals = append(enumVals, v)
-				}
-				return enumVals
+				return slices.Collect(maps.Keys(em))
 			}
 		}
 	}

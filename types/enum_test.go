@@ -533,6 +533,9 @@ func TestEnum_EnumSpecificMethods(t *testing.T) {
 			"green": "GREEN",
 			"blue":  "BLUE",
 		}, mapping)
+
+		mapping["red"] = "changed"
+		assert.Equal(t, "RED", enum.Enum()["red"])
 	})
 
 	t.Run("Options method returns all values", func(t *testing.T) {
@@ -543,6 +546,15 @@ func TestEnum_EnumSpecificMethods(t *testing.T) {
 		assert.Contains(t, options, "red")
 		assert.Contains(t, options, "green")
 		assert.Contains(t, options, "blue")
+	})
+
+	t.Run("Empty enum accessors return non-nil collections", func(t *testing.T) {
+		enum := Enum[string]()
+
+		assert.Empty(t, enum.Enum())
+		assert.NotNil(t, enum.Enum())
+		assert.Empty(t, enum.Options())
+		assert.NotNil(t, enum.Options())
 	})
 
 	t.Run("Extract creates sub-enum", func(t *testing.T) {

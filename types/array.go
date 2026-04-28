@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -297,9 +298,10 @@ func (z *ZodArray[T, R]) Element(index int) core.ZodSchema {
 
 // Items returns a copy of all element schemas.
 func (z *ZodArray[T, R]) Items() []core.ZodSchema {
-	result := make([]core.ZodSchema, len(z.internals.Items))
-	copy(result, z.internals.Items)
-	return result
+	if len(z.internals.Items) == 0 {
+		return []core.ZodSchema{}
+	}
+	return slices.Clone(z.internals.Items)
 }
 
 // Rest returns the rest parameter schema, or nil if none.

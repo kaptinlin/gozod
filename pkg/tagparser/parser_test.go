@@ -68,6 +68,13 @@ func TestTagParser_ParseTagString(t *testing.T) {
 			},
 		},
 		{
+			name: "unclosed quoted param falls back to raw value",
+			tag:  "custom='hello world",
+			expected: []tagparser.TagRule{
+				{Name: "custom", Params: []string{"'hello", "world"}},
+			},
+		},
+		{
 			name: "complex mix of rules",
 			tag:  "required,min=2,max=50,regex='^[A-Z]+$',enum=ACTIVE INACTIVE",
 			expected: []tagparser.TagRule{

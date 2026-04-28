@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -202,18 +203,18 @@ func (z *ZodEnum[T, R]) Describe(desc string) *ZodEnum[T, R] {
 
 // Enum returns a copy of the enum key-value mapping.
 func (z *ZodEnum[T, R]) Enum() map[string]T {
-	result := make(map[string]T, len(z.internals.Entries))
-	maps.Copy(result, z.internals.Entries)
-	return result
+	if len(z.internals.Entries) == 0 {
+		return map[string]T{}
+	}
+	return maps.Clone(z.internals.Entries)
 }
 
 // Options returns all possible enum values.
 func (z *ZodEnum[T, R]) Options() []T {
-	values := make([]T, 0, len(z.internals.Values))
-	for value := range z.internals.Values {
-		values = append(values, value)
+	if len(z.internals.Values) == 0 {
+		return []T{}
 	}
-	return values
+	return slices.Collect(maps.Keys(z.internals.Values))
 }
 
 // Extract creates a sub-enum containing only the specified keys. Non-existent

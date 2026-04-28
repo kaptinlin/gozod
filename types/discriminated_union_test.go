@@ -841,6 +841,9 @@ func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
 		assert.Len(t, options, 2)
 		assert.Equal(t, schema1, options[0])
 		assert.Equal(t, schema2, options[1])
+
+		options[0] = nil
+		assert.Equal(t, schema1, discriminatedUnion.Options()[0])
 	})
 
 	t.Run("DiscriminatorMap returns value mapping", func(t *testing.T) {

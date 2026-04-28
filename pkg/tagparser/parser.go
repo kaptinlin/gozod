@@ -249,12 +249,17 @@ func parseRule(part string) TagRule {
 
 	var params []string
 	if raw != "" {
-		switch {
-		case strings.HasPrefix(raw, "'") && strings.HasSuffix(raw, "'"):
-			params = []string{unescaper.Replace(raw[1 : len(raw)-1])}
-		case strings.Contains(raw, " "):
+		if quoted, ok := strings.CutPrefix(raw, "'"); ok {
+			if quoted, ok := strings.CutSuffix(quoted, "'"); ok {
+				params = []string{unescaper.Replace(quoted)}
+			} else if strings.Contains(raw, " ") {
+				params = strings.Fields(raw)
+			} else {
+				params = []string{raw}
+			}
+		} else if strings.Contains(raw, " ") {
 			params = strings.Fields(raw)
-		default:
+		} else {
 			params = []string{raw}
 		}
 	}

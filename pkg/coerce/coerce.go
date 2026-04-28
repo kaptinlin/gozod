@@ -553,8 +553,11 @@ func ToComplexFromString(s string) (complex128, error) {
 	}
 
 	// Try pure imaginary number.
-	if strings.HasSuffix(s, "i") || strings.HasSuffix(s, "j") {
-		raw := s[:len(s)-1]
+	raw, hasImaginarySuffix := strings.CutSuffix(s, "i")
+	if !hasImaginarySuffix {
+		raw, hasImaginarySuffix = strings.CutSuffix(s, "j")
+	}
+	if hasImaginarySuffix {
 		switch raw {
 		case "", "+":
 			return complex(0, 1), nil
@@ -596,11 +599,13 @@ func parseComplexParts(s string, pos int) (complex128, error) {
 		return 0, NewFormatError(reStr, "real part")
 	}
 
-	if !strings.HasSuffix(imStr, "i") && !strings.HasSuffix(imStr, "j") {
-		return 0, NewFormatError(imStr, "imaginary part (must end with 'i' or 'j')")
+	var ok bool
+	if imStr, ok = strings.CutSuffix(imStr, "i"); !ok {
+		if imStr, ok = strings.CutSuffix(imStr, "j"); !ok {
+			return 0, NewFormatError(imStr, "imaginary part (must end with 'i' or 'j')")
+		}
 	}
 
-	imStr = imStr[:len(imStr)-1]
 	var im float64
 	switch imStr {
 	case "+":

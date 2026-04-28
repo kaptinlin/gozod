@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"hash/maphash"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -454,11 +454,7 @@ func writeHash(h *maphash.Hash, v any) {
 	case map[string]any:
 		_ = h.WriteByte(6)
 		// Sort keys for deterministic ordering.
-		keys := make([]string, 0, len(val))
-		for k := range val {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(val))
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(len(keys)))
 		_, _ = h.Write(buf[:])

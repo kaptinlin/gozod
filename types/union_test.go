@@ -366,6 +366,9 @@ func TestUnion_TypeSpecificMethods(t *testing.T) {
 
 		_, err = opts[2].ParseAny(true)
 		assert.NoError(t, err, "third option should accept bools")
+
+		opts[0] = nil
+		assert.NotNil(t, schema.Options()[0])
 	})
 
 	t.Run("UnionOf constructor", func(t *testing.T) {

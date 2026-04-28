@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -269,9 +270,10 @@ func (z *ZodXor[T, R]) Describe(description string) *ZodXor[T, R] {
 
 // Options returns a copy of all exclusive union member schemas.
 func (z *ZodXor[T, R]) Options() []core.ZodSchema {
-	result := make([]core.ZodSchema, len(z.internals.Options))
-	copy(result, z.internals.Options)
-	return result
+	if len(z.internals.Options) == 0 {
+		return []core.ZodSchema{}
+	}
+	return slices.Clone(z.internals.Options)
 }
 
 // =============================================================================
