@@ -51,6 +51,12 @@ REFACTOR.md
 cmd/gozodgen/gozodgen
 
 # Scratch/planning docs
+.workspace
+task.md
+.cov.before
+.cov.after
+.fix.before*
+.fix.after*
 .plans/
 reports/*
 !reports/.gitkeep
