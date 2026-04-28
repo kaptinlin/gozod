@@ -66,22 +66,22 @@ func (z *ZodIso[T]) Nullish() *ZodIso[*string] {
 
 // Default uses v when input is nil, bypassing validation.
 func (z *ZodIso[T]) Default(v string) *ZodIso[T] {
-	return newIso(z.ZodString.Default(v))
+	return wrapStringFluent(z, z.ZodString.Default(v), newIso[T])
 }
 
 // DefaultFunc calls fn when input is nil, bypassing validation.
 func (z *ZodIso[T]) DefaultFunc(fn func() string) *ZodIso[T] {
-	return newIso(z.ZodString.DefaultFunc(fn))
+	return wrapStringFluent(z, z.ZodString.DefaultFunc(fn), newIso[T])
 }
 
 // Prefault uses v when input is nil, running through full validation.
 func (z *ZodIso[T]) Prefault(v string) *ZodIso[T] {
-	return newIso(z.ZodString.Prefault(v))
+	return wrapStringFluent(z, z.ZodString.Prefault(v), newIso[T])
 }
 
 // PrefaultFunc calls fn when input is nil, running through full validation.
 func (z *ZodIso[T]) PrefaultFunc(fn func() string) *ZodIso[T] {
-	return newIso(z.ZodString.PrefaultFunc(fn))
+	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newIso[T])
 }
 
 // Min validates the ISO string is >= v using lexicographic comparison.
