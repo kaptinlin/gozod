@@ -58,13 +58,14 @@ func FileSize(expected int64, params ...any) core.ZodCheck {
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
 			size := getFileSize(payload.Value())
-			if size != expected {
-				if size > expected {
-					payload.AddIssue(issues.CreateTooBigIssue(expected, true, "file", payload.Value()))
-				} else {
-					payload.AddIssue(issues.CreateTooSmallIssue(expected, true, "file", payload.Value()))
-				}
+			if size == expected {
+				return
 			}
+			if size > expected {
+				payload.AddIssue(issues.CreateTooBigIssue(expected, true, "file", payload.Value()))
+				return
+			}
+			payload.AddIssue(issues.CreateTooSmallIssue(expected, true, "file", payload.Value()))
 		},
 		OnAttach: []func(any){
 			func(schema any) {

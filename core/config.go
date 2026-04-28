@@ -11,7 +11,6 @@ type ZodConfig struct {
 }
 
 // clone creates a copy of the ZodConfig.
-// This is an unexported helper method for internal use.
 func (c *ZodConfig) clone() *ZodConfig {
 	if c == nil {
 		return &ZodConfig{}
@@ -25,7 +24,6 @@ func (c *ZodConfig) clone() *ZodConfig {
 var globalConfig atomic.Pointer[ZodConfig]
 
 func init() {
-	// Initialize with empty config
 	globalConfig.Store(&ZodConfig{})
 }
 

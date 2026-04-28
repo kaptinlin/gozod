@@ -425,11 +425,11 @@ func writeHash(h *maphash.Hash, v any) {
 	switch val := v.(type) {
 	case bool:
 		_ = h.WriteByte(1)
+		b := byte(0)
 		if val {
-			_ = h.WriteByte(1)
-		} else {
-			_ = h.WriteByte(0)
+			b = 1
 		}
+		_ = h.WriteByte(b)
 	case float64:
 		_ = h.WriteByte(2)
 		var buf [8]byte

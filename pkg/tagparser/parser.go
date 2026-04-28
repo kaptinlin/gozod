@@ -217,9 +217,9 @@ func splitParts(tag string) []string {
 			if !quoted && brackets == 0 && braces == 0 {
 				parts = append(parts, buf.String())
 				buf.Reset()
-			} else {
-				buf.WriteRune(ch)
+				continue
 			}
+			buf.WriteRune(ch)
 		default:
 			buf.WriteRune(ch)
 		}
@@ -252,12 +252,10 @@ func parseRule(part string) TagRule {
 		if quoted, ok := strings.CutPrefix(raw, "'"); ok {
 			if quoted, ok := strings.CutSuffix(quoted, "'"); ok {
 				params = []string{unescaper.Replace(quoted)}
-			} else if strings.Contains(raw, " ") {
-				params = strings.Fields(raw)
-			} else {
-				params = []string{raw}
+				return TagRule{Name: name, Params: params}
 			}
-		} else if strings.Contains(raw, " ") {
+		}
+		if strings.Contains(raw, " ") {
 			params = strings.Fields(raw)
 		} else {
 			params = []string{raw}

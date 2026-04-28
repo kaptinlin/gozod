@@ -625,18 +625,15 @@ func toSnakeCase(s string) string {
 	}
 
 	var result strings.Builder
-	result.Grow(len(s) * 2) // Pre-allocate with enough space
+	result.Grow(len(s) * 2)
 
 	for i, r := range s {
 		if r >= 'A' && r <= 'Z' {
-			// Add underscore before uppercase letters (except the first character)
 			if i > 0 {
 				result.WriteRune('_')
 			}
-			// Convert to lowercase
 			result.WriteRune(r - 'A' + 'a')
 		} else {
-			// Keep lowercase letters and other characters as-is
 			result.WriteRune(r)
 		}
 	}

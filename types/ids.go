@@ -385,13 +385,13 @@ var uuidVersionRE = map[string]*regexp.Regexp{
 
 // newUUIDSchema creates a UUID schema with an optional version-specific regex.
 func newUUIDSchema[T StringConstraint](base *ZodString[T], version string, params []any) *ZodUUID[T] {
-	s := newIDSchema(base, checks.UUID(params...))
-	if re, ok := uuidVersionRE[version]; ok {
-		s = s.Regex(re)
-	} else {
-		s = s.Regex(regex.UUID)
+	re := regex.UUID
+	if versionRE, ok := uuidVersionRE[version]; ok {
+		re = versionRE
 	}
-	return newUUID(s)
+
+	s := newIDSchema(base, checks.UUID(params...))
+	return newUUID(s.Regex(re))
 }
 
 // parseUUIDVersion extracts UUID version from params if present.

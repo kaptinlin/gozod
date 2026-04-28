@@ -57,15 +57,16 @@ func Length(exact int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Length(payload.Value(), exact) {
-				actualLength := getActualLength(payload.Value())
-				origin := utils.LengthableOrigin(payload.Value())
-				if actualLength > exact {
-					payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.Value()))
-				} else {
-					payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.Value()))
-				}
+			if validate.Length(payload.Value(), exact) {
+				return
 			}
+			actualLength := getActualLength(payload.Value())
+			origin := utils.LengthableOrigin(payload.Value())
+			if actualLength > exact {
+				payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.Value()))
+				return
+			}
+			payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.Value()))
 		},
 		OnAttach: []func(any){
 			func(schema any) {
@@ -131,16 +132,19 @@ func Size(exact int, params ...any) core.ZodCheck {
 	return &core.ZodCheckInternals{
 		Def: def,
 		Check: func(payload *core.ParsePayload) {
-			if !validate.Size(payload.Value(), exact) {
-				if actualSize, ok := reflectx.Size(payload.Value()); ok {
-					origin := utils.SizableOrigin(payload.Value())
-					if actualSize > exact {
-						payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.Value()))
-					} else {
-						payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.Value()))
-					}
-				}
+			if validate.Size(payload.Value(), exact) {
+				return
 			}
+			actualSize, ok := reflectx.Size(payload.Value())
+			if !ok {
+				return
+			}
+			origin := utils.SizableOrigin(payload.Value())
+			if actualSize > exact {
+				payload.AddIssue(issues.CreateTooBigIssue(exact, true, origin, payload.Value()))
+				return
+			}
+			payload.AddIssue(issues.CreateTooSmallIssue(exact, true, origin, payload.Value()))
 		},
 		When: func(payload *core.ParsePayload) bool {
 			return reflectx.HasSize(payload.Value()) || reflectx.HasLength(payload.Value())

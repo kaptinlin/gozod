@@ -78,11 +78,9 @@ func Time(opts TimeOptions) *regexp.Regexp {
 func Datetime(options DatetimeOptions) *regexp.Regexp {
 	pat := datePattern + `T` + timePattern(options.Precision)
 
-	var tz string
+	tz := `Z`
 	if options.Local {
 		tz = `Z?`
-	} else {
-		tz = `Z`
 	}
 
 	if options.Offset {
