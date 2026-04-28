@@ -192,15 +192,9 @@ func ToInt64(v any) (int64, error) {
 	case uint8, uint16, uint32:
 		return int64(reflect.ValueOf(x).Uint()), nil //nolint:gosec // uint8/16/32 always fit in int64
 	case uint:
-		if uint64(x) > math.MaxInt64 {
-			return 0, NewOverflowError(x, "int64")
-		}
-		return int64(x), nil
+		return unsignedToInt64(uint64(x), "int64")
 	case uint64:
-		if x > math.MaxInt64 {
-			return 0, NewOverflowError(x, "int64")
-		}
-		return int64(x), nil
+		return unsignedToInt64(x, "int64")
 	case float32:
 		if math.Trunc(float64(x)) != float64(x) {
 			return 0, NewNotWholeError(x)
@@ -224,6 +218,13 @@ func ToInt64(v any) (int64, error) {
 	default:
 		return 0, NewUnsupportedError(fmt.Sprintf("%T", d), "int64")
 	}
+}
+
+func unsignedToInt64(v uint64, target string) (int64, error) {
+	if v > math.MaxInt64 {
+		return 0, NewOverflowError(v, target)
+	}
+	return int64(v), nil
 }
 
 func stringToInt64(s string) (int64, error) {
@@ -370,15 +371,15 @@ func ToInteger[T ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uin
 	case uint8, uint16, uint32:
 		val = int64(reflect.ValueOf(x).Uint()) //nolint:gosec // uint8/16/32 always fit in int64
 	case uint:
-		if uint64(x) > math.MaxInt64 {
-			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
+		val, err = unsignedToInt64(uint64(x), fmt.Sprintf("%T", zero))
+		if err != nil {
+			return zero, err
 		}
-		val = int64(x)
 	case uint64:
-		if x > math.MaxInt64 {
-			return zero, NewOverflowError(x, fmt.Sprintf("%T", zero))
+		val, err = unsignedToInt64(x, fmt.Sprintf("%T", zero))
+		if err != nil {
+			return zero, err
 		}
-		val = int64(x)
 	case float32:
 		if float64(x) > math.MaxInt64 || float64(x) < math.MinInt64 {
 			return zero, NewOverflowError(x, "int64")

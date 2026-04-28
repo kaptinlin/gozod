@@ -1003,7 +1003,7 @@ func convertExtractedComplexResult[T any, R any](
 	rType := reflect.TypeFor[R]()
 	if rType.Kind() == reflect.Pointer {
 		if value, ok := result.(T); ok {
-			return any(new(value)).(R), nil
+			return any(&value).(R), nil
 		}
 	}
 

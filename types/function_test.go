@@ -568,9 +568,10 @@ func TestFunction_Overwrite(t *testing.T) {
 					return new(any(func() string { return "default" }))
 				}
 				if f, ok := (*fn).(func(string) string); ok {
-					return new(any(func(s string) string {
+					transformed := any(func(s string) string {
 						return "transformed_" + f(s)
-					}))
+					})
+					return &transformed
 				}
 				return fn
 			})

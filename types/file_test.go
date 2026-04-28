@@ -501,13 +501,13 @@ func TestFile_Overwrite(t *testing.T) {
 					return nil
 				}
 				if fh, ok := (*f).(*multipart.FileHeader); ok {
-					newFH := &multipart.FileHeader{
+					inner := any(&multipart.FileHeader{
 						Filename: "2024_" + fh.Filename,
 						Header:   fh.Header,
 						Size:     fh.Size,
-					}
-					inner := any(newFH)
-					return new(any(&inner))
+					})
+					outer := any(&inner)
+					return &outer
 				}
 				return f
 			})

@@ -563,12 +563,12 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 	}
 	if v, ok := internals.Bag["minLength"]; ok {
 		if n, ok := toFloat(v); ok {
-			jsonSchema.MinLength = new(n)
+			jsonSchema.MinLength = &n
 		}
 	}
 	if v, ok := internals.Bag["maxLength"]; ok {
 		if n, ok := toFloat(v); ok {
-			jsonSchema.MaxLength = new(n)
+			jsonSchema.MaxLength = &n
 		}
 	}
 	if v, ok := internals.Bag["contentEncoding"]; ok {
@@ -794,15 +794,15 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 		c.path = c.path[:len(c.path)-1]
 	} else {
 		// No rest element - fixed length tuple.
-		// Find the last required (non-optional) item to set minItems.
-		lastRequired := -1
+		minItems := 0
 		for i := len(items) - 1; i >= 0; i-- {
 			if !items[i].Internals().IsOptional() {
-				lastRequired = i
+				minItems = i + 1
 				break
 			}
 		}
-		jsonSchema.MinItems = new(float64(lastRequired + 1))
+		minItemsFloat := float64(minItems)
+		jsonSchema.MinItems = &minItemsFloat
 		jsonSchema.MaxItems = new(float64(len(items)))
 	}
 
@@ -917,11 +917,11 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 		switch k {
 		case "minLength":
 			if f, ok := toFloat(v); ok {
-				js.MinLength = new(f)
+				js.MinLength = &f
 			}
 		case "maxLength":
 			if f, ok := toFloat(v); ok {
-				js.MaxLength = new(f)
+				js.MaxLength = &f
 			}
 		case "format":
 			if s, ok := v.(string); ok {
@@ -937,31 +937,31 @@ func (c *converter) applyBag(js *lib.Schema, bag map[string]any) {
 			}
 		case "minimum":
 			if r, ok := toRat(v); ok {
-				js.Minimum = new(r)
+				js.Minimum = &r
 			}
 		case "maximum":
 			if r, ok := toRat(v); ok {
-				js.Maximum = new(r)
+				js.Maximum = &r
 			}
 		case "multipleOf":
 			if r, ok := toRat(v); ok {
-				js.MultipleOf = new(r)
+				js.MultipleOf = &r
 			}
 		case "exclusiveMinimum":
 			if r, ok := toRat(v); ok {
-				js.ExclusiveMinimum = new(r)
+				js.ExclusiveMinimum = &r
 			}
 		case "exclusiveMaximum":
 			if r, ok := toRat(v); ok {
-				js.ExclusiveMaximum = new(r)
+				js.ExclusiveMaximum = &r
 			}
 		case "minItems":
 			if f, ok := toFloat(v); ok {
-				js.MinItems = new(f)
+				js.MinItems = &f
 			}
 		case "maxItems":
 			if f, ok := toFloat(v); ok {
-				js.MaxItems = new(f)
+				js.MaxItems = &f
 			}
 		case "minSize":
 			if f, ok := toFloat(v); ok {
@@ -1316,18 +1316,19 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 			// Apply min/max/size constraints using helper conversion
 			if v, ok := internals.Bag["size"]; ok {
 				if f, ok := toFloat(v); ok {
-					itemSchema.MinLength = new(f)
-					itemSchema.MaxLength = new(f)
+					maxLength := f
+					itemSchema.MinLength = &f
+					itemSchema.MaxLength = &maxLength
 				}
 			} else {
 				if v, ok := internals.Bag["minSize"]; ok {
 					if f, ok := toFloat(v); ok {
-						itemSchema.MinLength = new(f)
+						itemSchema.MinLength = &f
 					}
 				}
 				if v, ok := internals.Bag["maxSize"]; ok {
 					if f, ok := toFloat(v); ok {
-						itemSchema.MaxLength = new(f)
+						itemSchema.MaxLength = &f
 					}
 				}
 			}

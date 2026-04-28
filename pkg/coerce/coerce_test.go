@@ -200,9 +200,12 @@ func TestToInt64(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(42), result)
 
-		// uint64 overflow
+		result, err = ToInt64(uint64(math.MaxInt64))
+		require.NoError(t, err)
+		assert.Equal(t, int64(math.MaxInt64), result)
+
 		_, err = ToInt64(uint64(math.MaxInt64 + 1))
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrOverflow)
 	})
 
 	t.Run("whole number floats", func(t *testing.T) {
@@ -323,6 +326,11 @@ func TestToInteger(t *testing.T) {
 	t.Run("uint8 negative", func(t *testing.T) {
 		_, err := ToInteger[uint8](-1)
 		assert.Error(t, err)
+	})
+
+	t.Run("uint64 overflows signed conversion", func(t *testing.T) {
+		_, err := ToInteger[int64](uint64(math.MaxInt64 + 1))
+		assert.ErrorIs(t, err, ErrOverflow)
 	})
 }
 
