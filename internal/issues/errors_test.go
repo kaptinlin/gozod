@@ -491,3 +491,87 @@ func TestErrorIntegration(t *testing.T) {
 		assert.Equal(t, zodErr, wrappedExtracted)
 	})
 }
+
+func BenchmarkErrorFormatting(b *testing.B) {
+	err := benchmarkZodError()
+
+	benchmarks := []struct {
+		name string
+		fn   func(*ZodError)
+	}{
+		{name: "FormatError", fn: func(err *ZodError) { _ = FormatError(err) }},
+		{name: "TreeifyError", fn: func(err *ZodError) { _ = TreeifyError(err) }},
+		{name: "FlattenError", fn: func(err *ZodError) { _ = FlattenError(err) }},
+		{name: "PrettifyError", fn: func(err *ZodError) { _ = PrettifyError(err) }},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			for b.Loop() {
+				bm.fn(err)
+			}
+		})
+	}
+}
+
+func benchmarkZodError() *ZodError {
+	return NewZodError([]ZodIssue{
+		{
+			ZodIssueBase: ZodIssueBase{
+				Code:    core.UnrecognizedKeys,
+				Message: "Unknown field 'extraField'",
+				Path:    nil,
+			},
+			Keys: []string{"extraField"},
+		},
+		{
+			ZodIssueBase: ZodIssueBase{
+				Code:    core.InvalidType,
+				Message: "Expected string, received number",
+				Path:    []any{"user", "name"},
+			},
+			Expected: core.ZodTypeString,
+			Received: core.ZodTypeNumber,
+		},
+		{
+			ZodIssueBase: ZodIssueBase{
+				Code:    core.TooSmall,
+				Message: "Must be at least 18",
+				Path:    []any{"user", "age"},
+			},
+			Minimum: 18,
+			Origin:  "number",
+		},
+		{
+			ZodIssueBase: ZodIssueBase{
+				Code:    core.InvalidUnion,
+				Message: "Invalid contact",
+				Path:    []any{"user", "contact"},
+			},
+			Errors: [][]ZodIssue{
+				{
+					{
+						ZodIssueBase: ZodIssueBase{
+							Code:    core.InvalidFormat,
+							Message: "Invalid email format",
+							Path:    []any{"user", "contact", "email"},
+						},
+						Format: "email",
+					},
+				},
+				{
+					{
+						ZodIssueBase: ZodIssueBase{
+							Code:    core.InvalidFormat,
+							Message: "Invalid phone format",
+							Path:    []any{"user", "contact", "phone"},
+						},
+						Format: "phone",
+					},
+				},
+			},
+		},
+	})
+}

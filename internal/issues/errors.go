@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kaptinlin/gozod/core"
@@ -101,24 +102,23 @@ func FormatError(zodErr *ZodError) ZodFormattedError {
 
 // FormatErrorWithMapper formats a ZodError with custom message mapping.
 func FormatErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) ZodFormattedError {
-	fieldErrors := make(ZodFormattedError)
-	fieldErrors["_errors"] = []string{}
+	fieldErrors := newFormattedError()
 
-	var processError func(*ZodError)
-	processError = func(ze *ZodError) {
-		for _, issue := range ze.Issues {
+	var processIssues func([]ZodIssue)
+	processIssues = func(issueList []ZodIssue) {
+		for _, issue := range issueList {
 			switch issue.Code {
 			case core.InvalidUnion:
 				if !slicex.IsEmpty(issue.Errors) {
 					for _, unionErrors := range issue.Errors {
 						if !slicex.IsEmpty(unionErrors) {
-							processError(&ZodError{Issues: unionErrors, formatter: ze.formatter})
+							processIssues(unionErrors)
 						}
 					}
 				}
 			case core.InvalidKey, core.InvalidElement:
 				if !slicex.IsEmpty(issue.Issues) {
-					processError(&ZodError{Issues: issue.Issues, formatter: ze.formatter})
+					processIssues(issue.Issues)
 				}
 			case core.InvalidType, core.InvalidValue, core.InvalidFormat,
 				core.TooBig, core.TooSmall, core.NotMultipleOf,
@@ -132,10 +132,10 @@ func FormatErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) ZodFo
 				} else {
 					curr := fieldErrors
 					for i, pathEl := range issue.Path {
-						key := fmt.Sprintf("%v", pathEl)
+						key := pathKey(pathEl)
 
-						if !mapx.Has(curr, key) {
-							curr[key] = ZodFormattedError{"_errors": []string{}}
+						if _, ok := curr[key]; !ok {
+							curr[key] = newFormattedError()
 						}
 
 						currMap, ok := curr[key].(ZodFormattedError)
@@ -156,8 +156,12 @@ func FormatErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) ZodFo
 		}
 	}
 
-	processError(zodErr)
+	processIssues(zodErr.Issues)
 	return fieldErrors
+}
+
+func newFormattedError() ZodFormattedError {
+	return ZodFormattedError{"_errors": []string{}}
 }
 
 // ZodErrorTree represents a tree-structured validation error.
@@ -184,7 +188,6 @@ func TreeifyErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) *Zod
 	tree := &ZodErrorTree{
 		Errors:     make([]string, 0, max(issueCount/4, 2)),
 		Properties: make(map[string]*ZodErrorTree, max(issueCount/2, 4)),
-		Items:      make([]*ZodErrorTree, 0, max(issueCount/4, 2)),
 	}
 
 	for _, issue := range zodErr.Issues {
@@ -211,21 +214,13 @@ func processIssueInTree(issue ZodIssue, tree *ZodErrorTree, mapper func(ZodIssue
 				current.Properties = make(map[string]*ZodErrorTree)
 			}
 			if current.Properties[element] == nil {
-				current.Properties[element] = &ZodErrorTree{
-					Errors:     []string{},
-					Properties: make(map[string]*ZodErrorTree),
-					Items:      []*ZodErrorTree{},
-				}
+				current.Properties[element] = newZodErrorTreeNode()
 			}
 			current = current.Properties[element]
 
 		case int:
 			for len(current.Items) <= element {
-				current.Items = append(current.Items, &ZodErrorTree{
-					Errors:     []string{},
-					Properties: make(map[string]*ZodErrorTree),
-					Items:      []*ZodErrorTree{},
-				})
+				current.Items = append(current.Items, newZodErrorTreeNode())
 			}
 			current = current.Items[element]
 		}
@@ -233,6 +228,12 @@ func processIssueInTree(issue ZodIssue, tree *ZodErrorTree, mapper func(ZodIssue
 		if isLast {
 			current.Errors = append(current.Errors, mapper(issue))
 		}
+	}
+}
+
+func newZodErrorTreeNode() *ZodErrorTree {
+	return &ZodErrorTree{
+		Errors: []string{},
 	}
 }
 
@@ -255,7 +256,7 @@ func FlattenErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) *Fla
 		if slicex.IsEmpty(issue.Path) {
 			flattened.FormErrors = append(flattened.FormErrors, message)
 		} else {
-			fieldPath := fmt.Sprintf("%v", issue.Path[0])
+			fieldPath := pathKey(issue.Path[0])
 
 			if flattened.FieldErrors[fieldPath] == nil {
 				flattened.FieldErrors[fieldPath] = make([]string, 0, 2)
@@ -270,6 +271,17 @@ func FlattenErrorWithMapper(zodErr *ZodError, mapper func(ZodIssue) string) *Fla
 // FlattenErrorWithFormatter flattens a ZodError with a custom formatter.
 func FlattenErrorWithFormatter(zodErr *ZodError, formatter MessageFormatter) *FlattenedError {
 	return FlattenErrorWithMapper(zodErr, defaultIssueMapper(formatter))
+}
+
+func pathKey(segment any) string {
+	switch v := segment.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // ToDotPath converts a path array to dot notation string.
@@ -307,8 +319,7 @@ func PrettifyErrorWithFormatter(zodErr *ZodError, formatter MessageFormatter) st
 		}
 
 		if len(issue.Path) > 0 {
-			pathStr := ToDotPath(issue.Path)
-			builder.WriteString(pathStr)
+			utils.WriteDotPath(&builder, issue.Path)
 			builder.WriteString(": ")
 		}
 		builder.WriteString(message)

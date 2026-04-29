@@ -264,7 +264,13 @@ func ToDotPath(path []any) string {
 
 	var b strings.Builder
 	b.Grow(len(path) * 8)
+	WriteDotPath(&b, path)
 
+	return b.String()
+}
+
+// WriteDotPath appends an error path to b using dot notation.
+func WriteDotPath(b *strings.Builder, path []any) {
 	for i, seg := range path {
 		switch v := seg.(type) {
 		case int:
@@ -284,11 +290,9 @@ func ToDotPath(path []any) string {
 				b.WriteString(v)
 			}
 		default:
-			fmt.Fprintf(&b, "[%v]", v)
+			fmt.Fprintf(b, "[%v]", v)
 		}
 	}
-
-	return b.String()
 }
 
 // FormatErrorPath formats an error path for display using the given style.
