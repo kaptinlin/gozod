@@ -421,7 +421,7 @@ func (z *ZodArray[T, R]) newArrayInternals(in *core.ZodTypeInternals) *ZodArrayI
 	return &ZodArrayInternals{
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
-		Items:            append([]core.ZodSchema(nil), z.internals.Items...),
+		Items:            slices.Clone(z.internals.Items),
 		Rest:             z.internals.Rest,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/reflectx"
@@ -270,9 +271,7 @@ func ConvertZodIssueToRawWithProperties(issue core.ZodIssue, pathPrefix []any) c
 // ConvertZodIssueToRawWithPrependedPath converts a ZodIssue to ZodRawIssue,
 // prepending pathPrefix to the issue's existing path.
 func ConvertZodIssueToRawWithPrependedPath(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
-	fullPath := make([]any, 0, len(pathPrefix)+len(issue.Path))
-	fullPath = append(fullPath, pathPrefix...)
-	fullPath = append(fullPath, issue.Path...)
+	fullPath := slices.Concat(pathPrefix, issue.Path)
 	return convertZodIssueToRawWithPath(issue, fullPath)
 }
 

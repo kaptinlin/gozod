@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/pkg/cloneutil"
@@ -71,7 +72,7 @@ func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](
 ) core.ZodType[any] {
 	src := schema.Internals()
 
-	checks := append(append([]core.ZodCheck(nil), src.Checks...), check)
+	checks := append(slices.Clone(src.Checks), check)
 	def := &core.ZodTypeDef{
 		Type:   src.Type,
 		Error:  src.Error,
@@ -116,7 +117,7 @@ func Clone[T interface{ Internals() *core.ZodTypeInternals }](
 	def := &core.ZodTypeDef{
 		Type:   src.Type,
 		Error:  src.Error,
-		Checks: append([]core.ZodCheck(nil), src.Checks...),
+		Checks: slices.Clone(src.Checks),
 	}
 
 	if modify != nil {

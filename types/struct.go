@@ -1551,8 +1551,7 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 
 		parsed, err := schema.ParseAny(fieldValue.Interface())
 		if err != nil {
-			var zodErr *issues.ZodError
-			if errors.As(err, &zodErr) {
+			if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
 				for _, issue := range zodErr.Issues {
 					issue.Path = append([]any{pf.Name}, issue.Path...)
 					allIssues = append(allIssues, issue)

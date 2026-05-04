@@ -191,9 +191,7 @@ func Merge(a, b any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvertSecond, err)
 	}
-	result := make([]any, 0, len(first)+len(second))
-	result = append(result, first...)
-	result = append(result, second...)
+	result := slices.Concat(first, second)
 	return restoreType(result, a, b)
 }
 

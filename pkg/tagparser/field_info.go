@@ -62,7 +62,7 @@ func (f FieldInfo) EnumRule() *TagRule {
 // RulesExcept returns all parsed rules except those whose names are excluded.
 func (f FieldInfo) RulesExcept(names ...string) []TagRule {
 	if len(names) == 0 {
-		return append([]TagRule(nil), f.Rules...)
+		return slices.Clone(f.Rules)
 	}
 	filtered := make([]TagRule, 0, len(f.Rules))
 	for _, rule := range f.Rules {
