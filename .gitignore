@@ -79,3 +79,4 @@ plan*.md
 .plan/*.md
 .plans/*
 TODO*.md
+.plans
