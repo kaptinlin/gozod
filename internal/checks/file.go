@@ -83,7 +83,6 @@ func Mime(mimeTypes []string, params ...any) core.ZodCheck {
 	def := &core.ZodCheckDef{Check: "mime_type"}
 	ApplyCheckParams(def, cp)
 
-	// Convert list to a set for efficient lookup
 	allowed := make(map[string]struct{}, len(mimeTypes))
 	for _, m := range mimeTypes {
 		allowed[m] = struct{}{}
