@@ -43,8 +43,8 @@ var _ ZodSchema = (*ZodTransform[any, any])(nil)
 // When input is nil and the source has a default or default function, the default
 // value is returned directly without running the transformation (Zod v4 semantics).
 func (t *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (out Out, _ error) {
-	si := t.source.Internals()
-	hasDefault := isNilInput(input) && (si.DefaultValue != nil || si.DefaultFunc != nil)
+	sourceInternals := t.source.Internals()
+	hasDefault := isNilInput(input) && (sourceInternals.DefaultValue != nil || sourceInternals.DefaultFunc != nil)
 
 	if hasDefault {
 		validated, err := t.source.Parse(input, ctx...)
