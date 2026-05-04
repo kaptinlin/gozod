@@ -35,7 +35,6 @@ func RunChecksOnValue(
 	return executeChecks(value, checks, payload, firstContext(ctx))
 }
 
-// firstContext returns the first context from the variadic slice, or nil.
 func firstContext(ctx []*core.ParseContext) *core.ParseContext {
 	if len(ctx) > 0 {
 		return ctx[0]

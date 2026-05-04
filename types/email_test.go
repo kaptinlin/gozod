@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kaptinlin/gozod/internal/checks"
+
 	. "github.com/kaptinlin/gozod/types"
 )
 
@@ -255,17 +257,23 @@ func TestZodEmail_Patterns(t *testing.T) {
 
 func TestZodEmail_PatternReplacementPreservesOriginal(t *testing.T) {
 	base := Email()
+	base.Internals().AddCheck(checks.MinLength(20))
 	schema := base.HTML5()
 
-	assert.Len(t, base.Internals().Checks, 1)
-	assert.Len(t, schema.Internals().Checks, 1)
-	assert.NotSame(t, base.Internals().Checks[0], schema.Internals().Checks[0])
+	require.Len(t, base.Internals().Checks, 2)
+	require.Len(t, schema.Internals().Checks, 2)
 	assert.Equal(t, "email", base.Internals().Checks[0].Zod().Def.Check)
-	assert.Equal(t, "email", schema.Internals().Checks[0].Zod().Def.Check)
+	assert.Equal(t, "min_length", base.Internals().Checks[1].Zod().Def.Check)
+	assert.Equal(t, "min_length", schema.Internals().Checks[0].Zod().Def.Check)
+	assert.Equal(t, "email", schema.Internals().Checks[1].Zod().Def.Check)
+	assert.NotSame(t, base.Internals().Checks[0], schema.Internals().Checks[1])
 
-	result, err := base.Parse("test@example.com")
+	result, err := schema.Parse("long.enough@example.com")
 	require.NoError(t, err)
-	assert.Equal(t, "test@example.com", result)
+	assert.Equal(t, "long.enough@example.com", result)
+
+	_, err = schema.Parse("a@b.cd")
+	require.Error(t, err)
 }
 
 func TestZodEmail_CustomPattern(t *testing.T) {

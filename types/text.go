@@ -22,8 +22,6 @@ type ZodEmoji[T StringConstraint] struct {
 	*ZodString[T]
 }
 
-// newEmoji creates a new ZodEmoji wrapper around a ZodString.
-// This is an unexported helper function for internal use.
 func newEmoji[T StringConstraint](s *ZodString[T]) *ZodEmoji[T] {
 	return &ZodEmoji[T]{s}
 }
