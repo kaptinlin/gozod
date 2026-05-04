@@ -3141,195 +3141,195 @@ func applyOptionalToSchema(schema core.ZodSchema) core.ZodSchema {
 	switch s := schema.(type) {
 	// String types
 	case *ZodString[string]:
-		return s.Optional() // Converts to *ZodString[*string] that accepts nil
+		return s.Optional()
 	case *ZodString[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodString[*string]
+		return s.Optional()
 	case *ZodEmail[string]:
-		return s.Optional() // Converts to *ZodEmail[*string] that accepts nil
+		return s.Optional()
 	case *ZodEmail[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodEmail[*string]
+		return s.Optional()
 	case *ZodURL[string]:
-		return s.Optional() // Converts to *ZodURL[*string] that accepts nil
+		return s.Optional()
 	case *ZodURL[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodURL[*string]
+		return s.Optional()
 	case *ZodIPv4[string]:
-		return s.Optional() // Converts to *ZodIPv4[*string] that accepts nil
+		return s.Optional()
 	case *ZodIPv4[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodIPv4[*string]
+		return s.Optional()
 	case *ZodIPv6[string]:
-		return s.Optional() // Converts to *ZodIPv6[*string] that accepts nil
+		return s.Optional()
 	case *ZodIPv6[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodIPv6[*string]
+		return s.Optional()
 	case *ZodCIDRv4[string]:
-		return s.Optional() // Converts to *ZodCIDRv4[*string] that accepts nil
+		return s.Optional()
 	case *ZodCIDRv4[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodCIDRv4[*string]
+		return s.Optional()
 	case *ZodCIDRv6[string]:
-		return s.Optional() // Converts to *ZodCIDRv6[*string] that accepts nil
+		return s.Optional()
 	case *ZodCIDRv6[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodCIDRv6[*string]
+		return s.Optional()
 	case *ZodIso[string]:
-		return s.Optional() // Converts to *ZodIso[*string] that accepts nil
+		return s.Optional()
 	case *ZodIso[*string]:
-		return s.Optional() // Makes it accept nil, still returns *ZodIso[*string]
+		return s.Optional()
 
 	// Numeric types
 	case *ZodIntegerTyped[int, int]:
 		return s.Optional()
 	case *ZodIntegerTyped[int, *int]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[int8, int8]:
 		return s.Optional()
 	case *ZodIntegerTyped[int8, *int8]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[int16, int16]:
 		return s.Optional()
 	case *ZodIntegerTyped[int16, *int16]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[int32, int32]:
 		return s.Optional()
 	case *ZodIntegerTyped[int32, *int32]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[int64, int64]:
 		return s.Optional()
 	case *ZodIntegerTyped[int64, *int64]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[uint, uint]:
 		return s.Optional()
 	case *ZodIntegerTyped[uint, *uint]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[uint8, uint8]:
 		return s.Optional()
 	case *ZodIntegerTyped[uint8, *uint8]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[uint16, uint16]:
 		return s.Optional()
 	case *ZodIntegerTyped[uint16, *uint16]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[uint32, uint32]:
 		return s.Optional()
 	case *ZodIntegerTyped[uint32, *uint32]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntegerTyped[uint64, uint64]:
 		return s.Optional()
 	case *ZodIntegerTyped[uint64, *uint64]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Float types
 	case *ZodFloatTyped[float32, float32]:
 		return s.Optional()
 	case *ZodFloatTyped[float32, *float32]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodFloatTyped[float64, float64]:
 		return s.Optional()
 	case *ZodFloatTyped[float64, *float64]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Other primitive types
 	case *ZodBool[bool]:
 		return s.Optional()
 	case *ZodBool[*bool]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodTime[time.Time]:
 		return s.Optional()
 	case *ZodTime[*time.Time]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodBigInt[*big.Int]:
 		return s.Optional()
 	case *ZodBigInt[**big.Int]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodComplex[complex64]:
 		return s.Optional()
 	case *ZodComplex[complex128]:
 		return s.Optional()
 	case *ZodComplex[*complex64]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodComplex[*complex128]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodStringBool[bool]:
 		return s.Optional()
 	case *ZodStringBool[*bool]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Collection types
 	case *ZodSlice[any, []any]:
 		return s.Optional()
 	case *ZodSlice[any, *[]any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodArray[any, any]:
 		return s.Optional()
 	case *ZodArray[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodMap[any, any]:
 		return s.Optional()
 	case *ZodMap[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodRecord[any, any]:
 		return s.Optional()
 	case *ZodRecord[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Object/Struct types
 	case *ZodObject[any, any]:
 		return s.Optional()
 	case *ZodObject[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodStruct[any, any]:
 		return s.Optional()
 	case *ZodStruct[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Composite types
 	case *ZodUnion[any, any]:
 		return s.Optional()
 	case *ZodUnion[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodIntersection[any, any]:
 		return s.Optional()
 	case *ZodIntersection[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodDiscriminatedUnion[any, any]:
 		return s.Optional()
 	case *ZodDiscriminatedUnion[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	// Other types
 	case *ZodEnum[any, any]:
 		return s.Optional()
 	case *ZodEnum[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodLiteral[any, any]:
 		return s.Optional()
 	case *ZodLiteral[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodAny[any, any]:
 		return s.Optional()
 	case *ZodAny[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodUnknown[any, any]:
 		return s.Optional()
 	case *ZodUnknown[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodNever[any, any]:
 		return s.Optional()
 	case *ZodNever[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodNil[any, any]:
 		return s.Optional()
 	case *ZodNil[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodLazy[any]:
 		return s.Optional()
 	case *ZodLazy[*any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodFunction[any]:
 		return s.Optional()
 	case *ZodFunction[*any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 	case *ZodFile[any, any]:
 		return s.Optional()
 	case *ZodFile[any, *any]:
-		return s.Optional() // Makes it accept nil
+		return s.Optional()
 
 	default:
 		// For any unknown types, return as-is

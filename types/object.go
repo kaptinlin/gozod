@@ -746,9 +746,9 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 
 		if err := z.validateField(val, schema, ctx); err != nil {
 			collectFieldErrors(err, name, &errs, val)
-		} else {
-			result[name] = val
+			continue
 		}
+		result[name] = val
 	}
 
 	var unknown []string
@@ -762,15 +762,15 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 		case ObjectModeStrip:
 			// Omit unknown fields from result.
 		case ObjectModePassthrough:
-			if z.internals.Catchall != nil {
-				if err := z.validateField(val, z.internals.Catchall, ctx); err != nil {
-					collectFieldErrors(err, key, &errs, val)
-				} else {
-					result[key] = val
-				}
-			} else {
+			if z.internals.Catchall == nil {
 				result[key] = val
+				continue
 			}
+			if err := z.validateField(val, z.internals.Catchall, ctx); err != nil {
+				collectFieldErrors(err, key, &errs, val)
+				continue
+			}
+			result[key] = val
 		}
 	}
 
