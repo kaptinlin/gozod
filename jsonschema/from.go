@@ -208,7 +208,6 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchema, error) {
 	schemas := make([]core.ZodSchema, 0, len(s.Type))
 
-	// Check each possible type
 	typeChecks := []struct {
 		typeName string
 		convert  func(*lib.Schema) (core.ZodSchema, error)

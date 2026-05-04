@@ -513,7 +513,6 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		return nil, err
 	}
 
-	// Map generic bag properties produced by checks → JSON Schema keywords
 	if internals != nil && internals.Bag != nil {
 		bag := internals.Bag
 		c.applyBag(jsonSchema, bag)
