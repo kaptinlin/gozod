@@ -218,22 +218,9 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				JSONName: a.extractJSONName(field),
 			}
 
-			hasGozodTag := false
-			if field.Tag != nil {
-				tagValue := strings.Trim(field.Tag.Value, "`")
-				if strings.Contains(tagValue, "gozod:") {
-					hasGozodTag = true
-					gozodTag := extractTagValue(tagValue, "gozod")
-					info.GoZodTag = gozodTag
-					if gozodTag != "" {
-						rules, err := a.parseTagRules(gozodTag)
-						if err != nil {
-							return nil, fmt.Errorf("parse gozod tag for field %s: %w", name.Name, err)
-						}
-						info.Rules = rules
-						info.Required = info.HasRule("required")
-					}
-				}
+			hasGozodTag, err := a.applyGoZodTag(&info, field)
+			if err != nil {
+				return nil, fmt.Errorf("parse gozod tag for field %s: %w", name.Name, err)
 			}
 
 			fields = append(fields, parsedField{info: info, hasGozodTag: hasGozodTag})
@@ -375,33 +362,56 @@ func NeedsGeneration(info *GenerationInfo) bool {
 	return false
 }
 
+func (a *StructAnalyzer) applyGoZodTag(info *tagparser.FieldInfo, field *ast.Field) (bool, error) {
+	if field.Tag == nil {
+		return false, nil
+	}
+
+	tagValue := strings.Trim(field.Tag.Value, "`")
+	if !strings.Contains(tagValue, "gozod:") {
+		return false, nil
+	}
+
+	info.GoZodTag = extractTagValue(tagValue, "gozod")
+	if info.GoZodTag == "" {
+		return true, nil
+	}
+
+	rules, err := a.parseTagRules(info.GoZodTag)
+	if err != nil {
+		return true, err
+	}
+	info.Rules = rules
+	info.Required = info.HasRule("required")
+	return true, nil
+}
+
 // extractJSONName extracts the JSON field name from a struct tag.
 func (a *StructAnalyzer) extractJSONName(field *ast.Field) string {
+	fallbackName := firstFieldName(field)
 	if field.Tag == nil {
-		if len(field.Names) > 0 {
-			return field.Names[0].Name
-		}
-		return ""
+		return fallbackName
 	}
 
 	tagValue := strings.Trim(field.Tag.Value, "`")
 	jsonTag := extractTagValue(tagValue, "json")
 	if jsonTag == "" {
-		if len(field.Names) > 0 {
-			return field.Names[0].Name
-		}
-		return ""
+		return fallbackName
 	}
 
 	name, _, _ := strings.Cut(jsonTag, ",")
 	name = strings.TrimSpace(name)
 	if name == "" || name == "-" {
-		if len(field.Names) > 0 {
-			return field.Names[0].Name
-		}
-		return ""
+		return fallbackName
 	}
 	return name
+}
+
+func firstFieldName(field *ast.Field) string {
+	if len(field.Names) == 0 {
+		return ""
+	}
+	return field.Names[0].Name
 }
 
 // extractTagValue returns the value for a specific tag key.

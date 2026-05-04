@@ -542,16 +542,18 @@ func ({{.StructName | receiverName}} {{.StructName}}) Schema() *gozod.ZodStruct[
 	return tmpl, nil
 }
 
+func baseTypeName(s string) string {
+	name, _, _ := strings.Cut(s, "[")
+	return name
+}
+
 // firstLowerCase converts the first character of a string to lowercase and handles special cases.
 func firstLowerCase(s string) string {
 	if s == "" {
 		return s
 	}
 
-	// Handle generic types like APIResponse[T any]
-	if strings.Contains(s, "[") {
-		s = strings.Split(s, "[")[0]
-	}
+	s = baseTypeName(s)
 
 	// Convert to lowercase and handle acronyms
 	if len(s) == 1 {
@@ -581,10 +583,7 @@ func receiverName(s string) string {
 		return "x"
 	}
 
-	// Handle generic types like APIResponse[T any]
-	if strings.Contains(s, "[") {
-		s = strings.Split(s, "[")[0]
-	}
+	s = baseTypeName(s)
 
 	// Convert to a valid receiver name by taking first letter of each word
 	var result strings.Builder
