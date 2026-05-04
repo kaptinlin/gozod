@@ -15,7 +15,7 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/kaptinlin/go-i18n v0.4.6 // indirect
+	github.com/kaptinlin/go-i18n v0.4.7 // indirect
 	github.com/kaptinlin/jsonpointer v0.4.21 // indirect
 	github.com/kaptinlin/messageformat-go v0.6.3 // indirect
 	github.com/kr/text v0.2.0 // indirect
