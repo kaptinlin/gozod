@@ -169,9 +169,9 @@ func (p *TagParser) ParseTagString(tag string) ([]TagRule, error) {
 func splitParts(tag string) []string {
 	parts := make([]string, 0, strings.Count(tag, ",")+1)
 	var buf strings.Builder
-	var brackets, braces int
-	var quoted bool
-	var quote rune
+	var bracketDepth, braceDepth int
+	var inQuote bool
+	var quoteChar rune
 	escaped := false
 
 	for i, ch := range tag {
@@ -186,35 +186,35 @@ func splitParts(tag string) []string {
 			buf.WriteRune(ch)
 			escaped = i+1 < len(tag)
 		case '"', '\'':
-			if !quoted {
-				quoted = true
-				quote = ch
-			} else if ch == quote {
-				quoted = false
+			if !inQuote {
+				inQuote = true
+				quoteChar = ch
+			} else if ch == quoteChar {
+				inQuote = false
 			}
 			buf.WriteRune(ch)
 		case '[':
-			if !quoted {
-				brackets++
+			if !inQuote {
+				bracketDepth++
 			}
 			buf.WriteRune(ch)
 		case ']':
-			if !quoted {
-				brackets--
+			if !inQuote {
+				bracketDepth--
 			}
 			buf.WriteRune(ch)
 		case '{':
-			if !quoted {
-				braces++
+			if !inQuote {
+				braceDepth++
 			}
 			buf.WriteRune(ch)
 		case '}':
-			if !quoted {
-				braces--
+			if !inQuote {
+				braceDepth--
 			}
 			buf.WriteRune(ch)
 		case ',':
-			if !quoted && brackets == 0 && braces == 0 {
+			if !inQuote && bracketDepth == 0 && braceDepth == 0 {
 				parts = append(parts, buf.String())
 				buf.Reset()
 				continue
