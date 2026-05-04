@@ -27,16 +27,16 @@ func Slugify(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 
-	prev := false // whether the last written byte was a hyphen
+	wroteHyphen := false
 	for _, r := range s {
 		switch {
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			prev = false
+			wroteHyphen = false
 			b.WriteRune(r)
 		case isSeparator(r):
-			if !prev && b.Len() > 0 {
+			if !wroteHyphen && b.Len() > 0 {
 				b.WriteByte('-')
-				prev = true
+				wroteHyphen = true
 			}
 		}
 	}
