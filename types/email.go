@@ -101,22 +101,17 @@ func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 	return newEmail(base.withInternals(internals))
 }
 
-// removeEmailChecks returns cs with all "email" checks filtered out.
-func removeEmailChecks(cs []core.ZodCheck) []core.ZodCheck {
-	out := make([]core.ZodCheck, 0, len(cs))
-	for _, c := range cs {
-		if inst := c.Zod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
 // withEmailPattern replaces existing email checks with check.
 func (z *ZodEmail[T]) withEmailPattern(check core.ZodCheck) *ZodEmail[T] {
 	internals := z.Internals().Clone()
-	internals.Checks = removeEmailChecks(internals.Checks)
+	checks := internals.Checks[:0]
+	for _, c := range internals.Checks {
+		if inst := c.Zod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
+			continue
+		}
+		checks = append(checks, c)
+	}
+	internals.Checks = checks
 	internals.AddCheck(check)
 	return newEmail(z.withInternals(internals))
 }

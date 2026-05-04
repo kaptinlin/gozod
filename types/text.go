@@ -6,9 +6,6 @@ import (
 	"github.com/kaptinlin/gozod/pkg/regex"
 )
 
-// newTextSchema adds a check to a base string schema using the clone-addCheck-wrap pattern.
-// It clones the base schema's internals, adds the check, and returns a new schema instance.
-// This is an unexported helper function for internal use.
 func newTextSchema[T StringConstraint](base *ZodString[T], check core.ZodCheck) *ZodString[T] {
 	in := base.Internals().Clone()
 	in.AddCheck(check)

@@ -253,6 +253,21 @@ func TestZodEmail_Patterns(t *testing.T) {
 	}
 }
 
+func TestZodEmail_PatternReplacementPreservesOriginal(t *testing.T) {
+	base := Email()
+	schema := base.HTML5()
+
+	assert.Len(t, base.Internals().Checks, 1)
+	assert.Len(t, schema.Internals().Checks, 1)
+	assert.NotSame(t, base.Internals().Checks[0], schema.Internals().Checks[0])
+	assert.Equal(t, "email", base.Internals().Checks[0].Zod().Def.Check)
+	assert.Equal(t, "email", schema.Internals().Checks[0].Zod().Def.Check)
+
+	result, err := base.Parse("test@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", result)
+}
+
 func TestZodEmail_CustomPattern(t *testing.T) {
 	strictPattern := regexp.MustCompile(`^[a-z]+@[a-z]+\.com$`)
 	schema := Email(strictPattern)
