@@ -8,7 +8,6 @@ type ZodType[T any] = core.ZodType[T]
 // Unwrapper allows wrapper types to expose their underlying value for validation.
 type Unwrapper = core.Unwrapper
 
-// Schema and configuration aliases.
 type (
 	SchemaParams = core.SchemaParams
 	ObjectSchema = core.ObjectSchema
@@ -16,13 +15,11 @@ type (
 	ZodConfig    = core.ZodConfig
 )
 
-// Global configuration functions.
 var (
 	SetConfig = core.SetConfig
 	Config    = core.Config
 )
 
-// Validation check aliases.
 type (
 	ZodCheck           = core.ZodCheck
 	ZodCheckInternals  = core.ZodCheckInternals
@@ -34,13 +31,11 @@ type (
 	ZodRefineFn[T any] = core.ZodRefineFn[T]
 )
 
-// Validation payload and issue code aliases.
 type (
 	ParsePayload = core.ParsePayload
 	IssueCode    = core.IssueCode
 )
 
-// Issue code constants.
 const (
 	IssueInvalidType      = core.InvalidType
 	IssueInvalidValue     = core.InvalidValue
