@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1138,4 +1139,190 @@ func TestHTTPURL_StrictFormat(t *testing.T) {
 		_, err := schema.Parse(u)
 		assert.Error(t, err, "Expected %q to be invalid", u)
 	}
+}
+
+func TestURL_OptionsAndPointerTypes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("value options restrict protocol and hostname", func(t *testing.T) {
+		t.Parallel()
+
+		schema := URL(URLOptions{
+			Protocol: regexp.MustCompile(`^https$`),
+			Hostname: regexp.MustCompile(`^api\.example\.com$`),
+		})
+
+		result, err := schema.Parse("https://api.example.com/v1")
+		require.NoError(t, err)
+		assert.Equal(t, "https://api.example.com/v1", result)
+
+		_, err = schema.Parse("http://api.example.com/v1")
+		assert.Error(t, err)
+
+		_, err = schema.Parse("https://example.com/v1")
+		assert.Error(t, err)
+	})
+
+	t.Run("pointer options are honored by pointer schema", func(t *testing.T) {
+		t.Parallel()
+
+		schema := URLPtr(&URLOptions{Protocol: regexp.MustCompile(`^http$`)})
+
+		result, err := schema.Parse("http://files.example.com/archive")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "http://files.example.com/archive", *result)
+
+		_, err = schema.Parse("https://files.example.com/archive")
+		assert.Error(t, err)
+	})
+
+	t.Run("non option params use normal url validation", func(t *testing.T) {
+		t.Parallel()
+
+		schema := URL(core.SchemaParams{Error: "expected URL"})
+
+		result, err := schema.Parse("https://example.com")
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com", result)
+
+		_, err = schema.Parse("example.com")
+		assert.Error(t, err)
+	})
+}
+
+func TestCIDR_NetworkFamilies(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CIDRv4 accepts IPv4 CIDR only", func(t *testing.T) {
+		t.Parallel()
+
+		schema := CIDRv4()
+
+		result, err := schema.Parse("192.168.1.0/24")
+		require.NoError(t, err)
+		assert.Equal(t, "192.168.1.0/24", result)
+
+		_, err = schema.Parse("192.168.1.1")
+		assert.Error(t, err)
+
+		_, err = schema.Parse("2001:db8::/32")
+		assert.Error(t, err)
+	})
+
+	t.Run("CIDRv6 accepts IPv6 CIDR only", func(t *testing.T) {
+		t.Parallel()
+
+		schema := CIDRv6()
+
+		result, err := schema.Parse("2001:db8::/32")
+		require.NoError(t, err)
+		assert.Equal(t, "2001:db8::/32", result)
+
+		_, err = schema.Parse("2001:db8::1")
+		assert.Error(t, err)
+
+		_, err = schema.Parse("192.168.1.0/24")
+		assert.Error(t, err)
+	})
+}
+
+func TestMAC_DelimiterConstructors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("MAC parameter restricts delimiter", func(t *testing.T) {
+		t.Parallel()
+
+		schema := MAC("-")
+
+		result, err := schema.Parse("00-11-22-33-44-55")
+		require.NoError(t, err)
+		assert.Equal(t, "00-11-22-33-44-55", result)
+
+		_, err = schema.Parse("00:11:22:33:44:55")
+		assert.Error(t, err)
+	})
+
+	t.Run("MACWithDelimiter validates configured delimiter", func(t *testing.T) {
+		t.Parallel()
+
+		schema := MACWithDelimiter(":")
+
+		result, err := schema.Parse("AA:BB:CC:DD:EE:FF")
+		require.NoError(t, err)
+		assert.Equal(t, "AA:BB:CC:DD:EE:FF", result)
+
+		_, err = schema.Parse("AA-BB-CC-DD-EE-FF")
+		assert.Error(t, err)
+	})
+
+	t.Run("non string delimiter parameter uses standard MAC validation", func(t *testing.T) {
+		t.Parallel()
+
+		schema := MAC(core.SchemaParams{Error: "expected MAC"})
+
+		_, err := schema.Parse("AA-BB-CC-DD-EE-FF")
+		assert.Error(t, err)
+
+		_, err = schema.Parse("AA:BB:CC:DD:EE:FF")
+		assert.NoError(t, err)
+	})
+}
+
+func TestNetwork_CoercedConstructors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("coerced IPv6 parses string input", func(t *testing.T) {
+		t.Parallel()
+
+		result, err := CoercedIPv6().Parse("2001:db8::1")
+		require.NoError(t, err)
+		assert.Equal(t, "2001:db8::1", result)
+	})
+
+	t.Run("coerced CIDR schemas validate after string conversion", func(t *testing.T) {
+		t.Parallel()
+
+		v4, err := CoercedCIDRv4().Parse("10.0.0.0/8")
+		require.NoError(t, err)
+		assert.Equal(t, "10.0.0.0/8", v4)
+
+		v6, err := CoercedCIDRv6().Parse("2001:db8::/32")
+		require.NoError(t, err)
+		assert.Equal(t, "2001:db8::/32", v6)
+
+		_, err = CoercedCIDRv4().Parse("2001:db8::/32")
+		assert.Error(t, err)
+	})
+
+	t.Run("coerced URL and hostname parse string inputs", func(t *testing.T) {
+		t.Parallel()
+
+		url, err := CoercedURL().Parse("https://example.com")
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com", url)
+
+		hostname, err := CoercedHostname().Parse("example.com")
+		require.NoError(t, err)
+		assert.Equal(t, "example.com", hostname)
+	})
+
+	t.Run("coerced MAC honors delimiter params", func(t *testing.T) {
+		t.Parallel()
+
+		result, err := CoercedMAC("-").Parse("AA-BB-CC-DD-EE-FF")
+		require.NoError(t, err)
+		assert.Equal(t, "AA-BB-CC-DD-EE-FF", result)
+
+		_, err = CoercedMAC("-").Parse("AA:BB:CC:DD:EE:FF")
+		assert.Error(t, err)
+	})
+
+	t.Run("coerced E164 parses string input", func(t *testing.T) {
+		t.Parallel()
+
+		result, err := CoercedE164().Parse("+14155551234")
+		require.NoError(t, err)
+		assert.Equal(t, "+14155551234", result)
+	})
 }

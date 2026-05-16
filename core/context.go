@@ -1,6 +1,7 @@
 package core
 
 import (
+	"maps"
 	"slices"
 )
 
@@ -29,6 +30,7 @@ func NewParsePayloadWithPath(value any, path []any) *ParsePayload {
 
 // AddIssue appends a validation issue, prepending the current path.
 func (p *ParsePayload) AddIssue(issue ZodRawIssue) {
+	issue = cloneRawIssue(issue)
 	if len(p.path) > 0 {
 		issue.Path = slices.Concat(p.path, issue.Path)
 	}
@@ -37,6 +39,7 @@ func (p *ParsePayload) AddIssue(issue ZodRawIssue) {
 
 // AddIssueWithPath adds a validation issue with a specific path override.
 func (p *ParsePayload) AddIssueWithPath(issue ZodRawIssue, path []any) {
+	issue = cloneRawIssue(issue)
 	issue.Path = slices.Clone(path)
 	p.issues = append(p.issues, issue)
 }
@@ -62,7 +65,7 @@ func (p *ParsePayload) AddIssues(issues ...ZodRawIssue) {
 	if len(issues) == 0 {
 		return
 	}
-	p.issues = append(p.issues, issues...)
+	p.issues = append(p.issues, cloneRawIssues(issues)...)
 }
 
 // HasIssues reports whether the payload has any validation issues.
@@ -79,7 +82,7 @@ func (p *ParsePayload) IssueCount() int {
 func (p *ParsePayload) Clone() *ParsePayload {
 	return &ParsePayload{
 		value:  p.value,
-		issues: slices.Clone(p.issues),
+		issues: cloneRawIssues(p.issues),
 		path:   slices.Clone(p.path),
 		ctx:    p.ctx,
 	}
@@ -136,7 +139,7 @@ func (p *ParsePayload) SetValue(v any) {
 
 // SetIssues replaces the issues slice.
 func (p *ParsePayload) SetIssues(issues []ZodRawIssue) {
-	p.issues = issues
+	p.issues = cloneRawIssuesWithCap(issues)
 }
 
 // Value returns the current value being validated.
@@ -146,7 +149,7 @@ func (p *ParsePayload) Value() any {
 
 // Issues returns a copy of the current validation issues.
 func (p *ParsePayload) Issues() []ZodRawIssue {
-	return slices.Clone(p.issues)
+	return cloneRawIssues(p.issues)
 }
 
 // SetContext attaches the parse context driving this payload.
@@ -157,4 +160,32 @@ func (p *ParsePayload) SetContext(ctx *ParseContext) {
 // Context returns the parse context driving this payload, if any.
 func (p *ParsePayload) Context() *ParseContext {
 	return p.ctx
+}
+
+func cloneRawIssues(issues []ZodRawIssue) []ZodRawIssue {
+	if issues == nil {
+		return nil
+	}
+	cloned := make([]ZodRawIssue, len(issues))
+	for i, issue := range issues {
+		cloned[i] = cloneRawIssue(issue)
+	}
+	return cloned
+}
+
+func cloneRawIssuesWithCap(issues []ZodRawIssue) []ZodRawIssue {
+	if issues == nil {
+		return nil
+	}
+	cloned := make([]ZodRawIssue, len(issues), cap(issues))
+	for i, issue := range issues {
+		cloned[i] = cloneRawIssue(issue)
+	}
+	return cloned
+}
+
+func cloneRawIssue(issue ZodRawIssue) ZodRawIssue {
+	issue.Path = slices.Clone(issue.Path)
+	issue.Properties = maps.Clone(issue.Properties)
+	return issue
 }

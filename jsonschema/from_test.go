@@ -428,3 +428,251 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 		assert.False(t, ok, "Expected no metadata when all fields are empty")
 	})
 }
+
+func TestFromJSONSchema_StrictModeUnsupportedKeywords(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		schema func() *lib.Schema
+		want   error
+	}{
+		{
+			name: "patternProperties",
+			schema: func() *lib.Schema {
+				patternSchema := &lib.Schema{}
+				patternSchema.Type = []string{"string"}
+				return &lib.Schema{PatternProperties: &lib.SchemaMap{"^x-": patternSchema}}
+			},
+			want: ErrJSONSchemaPatternProperties,
+		},
+		{
+			name: "dynamicRef",
+			schema: func() *lib.Schema {
+				return &lib.Schema{DynamicRef: "#node"}
+			},
+			want: ErrJSONSchemaDynamicRef,
+		},
+		{
+			name: "unevaluatedProperties",
+			schema: func() *lib.Schema {
+				return &lib.Schema{UnevaluatedProperties: &lib.Schema{Boolean: new(false)}}
+			},
+			want: ErrJSONSchemaUnevaluatedProps,
+		},
+		{
+			name: "unevaluatedItems",
+			schema: func() *lib.Schema {
+				return &lib.Schema{UnevaluatedItems: &lib.Schema{Boolean: new(false)}}
+			},
+			want: ErrJSONSchemaUnevaluatedItems,
+		},
+		{
+			name: "dependentSchemas",
+			schema: func() *lib.Schema {
+				return &lib.Schema{DependentSchemas: map[string]*lib.Schema{"card": {Boolean: new(true)}}}
+			},
+			want: ErrJSONSchemaDependentSchemas,
+		},
+		{
+			name: "propertyNames",
+			schema: func() *lib.Schema {
+				return &lib.Schema{PropertyNames: &lib.Schema{Boolean: new(true)}}
+			},
+			want: ErrJSONSchemaPropertyNames,
+		},
+		{
+			name: "contains",
+			schema: func() *lib.Schema {
+				return &lib.Schema{Contains: &lib.Schema{Boolean: new(true)}}
+			},
+			want: ErrJSONSchemaContains,
+		},
+		{
+			name: "minContains",
+			schema: func() *lib.Schema {
+				minContains := float64(1)
+				return &lib.Schema{MinContains: &minContains}
+			},
+			want: ErrJSONSchemaContains,
+		},
+		{
+			name: "maxContains",
+			schema: func() *lib.Schema {
+				maxContains := float64(2)
+				return &lib.Schema{MaxContains: &maxContains}
+			},
+			want: ErrJSONSchemaContains,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := FromJSONSchema(tt.schema(), FromJSONSchemaOptions{StrictMode: true})
+			require.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+func TestFromJSONSchema_ObjectAdditionalProperties(t *testing.T) {
+	t.Parallel()
+
+	t.Run("false rejects unknown keys", func(t *testing.T) {
+		t.Parallel()
+
+		nameSchema := &lib.Schema{}
+		nameSchema.Type = []string{"string"}
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.Properties = &lib.SchemaMap{"name": nameSchema}
+		schema.Required = []string{"name"}
+		schema.AdditionalProperties = &lib.Schema{Boolean: new(false)}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, err = zodSchema.ParseAny(map[string]any{"name": "Ada", "extra": true})
+		require.Error(t, err)
+	})
+
+	t.Run("schema validates unknown keys", func(t *testing.T) {
+		t.Parallel()
+
+		nameSchema := &lib.Schema{}
+		nameSchema.Type = []string{"string"}
+		additionalSchema := &lib.Schema{}
+		additionalSchema.Type = []string{"integer"}
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.Properties = &lib.SchemaMap{"name": nameSchema}
+		schema.Required = []string{"name"}
+		schema.AdditionalProperties = additionalSchema
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		result, err := zodSchema.ParseAny(map[string]any{"name": "Ada", "extra": 1})
+		require.NoError(t, err)
+		assert.Equal(t, "Ada", result.(map[string]any)["name"])
+		assert.Equal(t, 1, result.(map[string]any)["extra"])
+
+		_, err = zodSchema.ParseAny(map[string]any{"name": "Ada", "extra": "wrong"})
+		require.Error(t, err)
+	})
+
+	t.Run("record validates values", func(t *testing.T) {
+		t.Parallel()
+
+		valueSchema := &lib.Schema{}
+		valueSchema.Type = []string{"boolean"}
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.AdditionalProperties = valueSchema
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		result, err := zodSchema.ParseAny(map[string]any{"enabled": true})
+		require.NoError(t, err)
+		assert.Equal(t, true, result.(map[string]any)["enabled"])
+
+		_, err = zodSchema.ParseAny(map[string]any{"enabled": "yes"})
+		require.Error(t, err)
+	})
+}
+
+func TestFromJSONSchema_NumberAndIntegerConstraints(t *testing.T) {
+	t.Parallel()
+
+	t.Run("number constraints", func(t *testing.T) {
+		t.Parallel()
+
+		minimum := lib.NewRat(1)
+		maximum := lib.NewRat(10)
+		exclusiveMinimum := lib.NewRat(0)
+		exclusiveMaximum := lib.NewRat(11)
+		multipleOf := lib.NewRat(0.5)
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"number"}
+		schema.Minimum = minimum
+		schema.Maximum = maximum
+		schema.ExclusiveMinimum = exclusiveMinimum
+		schema.ExclusiveMaximum = exclusiveMaximum
+		schema.MultipleOf = multipleOf
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, err = zodSchema.ParseAny(5.5)
+		require.NoError(t, err)
+		_, err = zodSchema.ParseAny(0)
+		require.Error(t, err)
+		_, err = zodSchema.ParseAny(11)
+		require.Error(t, err)
+		_, err = zodSchema.ParseAny(5.25)
+		require.Error(t, err)
+	})
+
+	t.Run("integer constraints", func(t *testing.T) {
+		t.Parallel()
+
+		minimum := lib.NewRat(1)
+		maximum := lib.NewRat(10)
+		exclusiveMinimum := lib.NewRat(0)
+		exclusiveMaximum := lib.NewRat(11)
+		multipleOf := lib.NewRat(2)
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"integer"}
+		schema.Minimum = minimum
+		schema.Maximum = maximum
+		schema.ExclusiveMinimum = exclusiveMinimum
+		schema.ExclusiveMaximum = exclusiveMaximum
+		schema.MultipleOf = multipleOf
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, err = zodSchema.ParseAny(4)
+		require.NoError(t, err)
+		_, err = zodSchema.ParseAny(0)
+		require.Error(t, err)
+		_, err = zodSchema.ParseAny(11)
+		require.Error(t, err)
+		_, err = zodSchema.ParseAny(5)
+		require.Error(t, err)
+	})
+}
+
+func TestFromJSONSchema_OneOfUsesExclusiveUnion(t *testing.T) {
+	t.Parallel()
+
+	first := &lib.Schema{}
+	first.Type = []string{"string"}
+	second := &lib.Schema{}
+	second.Type = []string{"integer"}
+
+	schema := &lib.Schema{}
+	schema.OneOf = []*lib.Schema{first, second}
+
+	zodSchema, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	_, err = zodSchema.ParseAny("value")
+	require.NoError(t, err)
+	_, err = zodSchema.ParseAny(1)
+	require.NoError(t, err)
+
+	second.Type = []string{"string"}
+	zodSchema, err = FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	_, err = zodSchema.ParseAny("value")
+	require.Error(t, err)
+}

@@ -309,6 +309,8 @@ func ToBigInt(v any) (*big.Int, error) {
 			return nil, fmt.Errorf("cannot convert nil *big.Int: %w", ErrNilPointer)
 		}
 		return new(big.Int).Set(x), nil
+	case big.Int:
+		return new(big.Int).Set(&x), nil
 	case int, int8, int16, int32, int64:
 		return big.NewInt(reflect.ValueOf(x).Int()), nil
 	case uint, uint8, uint16, uint32, uint64:

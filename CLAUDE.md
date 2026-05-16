@@ -1,6 +1,6 @@
 # GoZod
 
-GoZod is a TypeScript Zod v4-inspired validation library for Go 1.26+. The root package is a user-facing facade over concrete schemas in `types/`, shared contracts in `core/`, runtime machinery in `internal/`, and JSON Schema translation in `jsonschema/`.
+GoZod is a TypeScript Zod v4-inspired validation library for the Go version declared in `go.mod`. The root package is a user-facing facade over concrete schemas in `types/`, shared contracts in `core/`, runtime machinery in `internal/`, and JSON Schema translation in `jsonschema/`.
 
 - **Reference implementation:** TypeScript Zod v4 in [`.reference/zod/`](.reference/zod/) when that submodule is initialized.
 - **For user-facing examples and installation:** see [README.md](README.md).
@@ -64,7 +64,7 @@ gozod/
 
 ### Must Follow
 
-- Go 1.26.2 — use modern language features where they simplify code.
+- Use the Go version declared in `go.mod`; use modern language features where they simplify code.
 - Follow Google Go Best Practices: <https://google.github.io/go-style/best-practices>
 - Follow Google Go Style Decisions: <https://google.github.io/go-style/decisions>
 - KISS/DRY/YAGNI — no speculative helpers, no duplicated validation logic, no unused API surface.

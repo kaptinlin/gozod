@@ -101,3 +101,67 @@ func TestParseContext_CopyModifiersPreserveExistingFields(t *testing.T) {
 	assert.Equal(t, "custom", cloned.Error(ZodRawIssue{}))
 	assert.False(t, cloned.ReportInput)
 }
+
+func TestParsePayload_AddIssuesAppendsIssues(t *testing.T) {
+	t.Parallel()
+
+	payload := NewParsePayload("value")
+	payload.AddIssues()
+	assert.False(t, payload.HasIssues())
+
+	payload.AddIssues(
+		ZodRawIssue{Code: InvalidType, Message: "first"},
+		ZodRawIssue{Code: Custom, Message: "second"},
+	)
+
+	issues := payload.Issues()
+	require.Len(t, issues, 2)
+	assert.Equal(t, InvalidType, issues[0].Code)
+	assert.Equal(t, Custom, issues[1].Code)
+}
+
+func TestParsePayload_AccessorsDefensivelyCopySlices(t *testing.T) {
+	t.Parallel()
+
+	payload := NewParsePayloadWithPath("value", []any{"user"})
+	payload.AddIssue(ZodRawIssue{Code: Custom, Path: []any{"name"}})
+
+	path := payload.Path()
+	path[0] = "mutated"
+	issues := payload.Issues()
+	issues[0].Code = InvalidType
+	issues[0].Path[0] = "mutated"
+
+	wantPath := []any{"user"}
+	if diff := cmp.Diff(wantPath, payload.Path()); diff != "" {
+		t.Errorf("Path() mismatch (-want +got):\n%s", diff)
+	}
+
+	current := payload.Issues()
+	require.Len(t, current, 1)
+	assert.Equal(t, Custom, current[0].Code)
+	wantIssuePath := []any{"user", "name"}
+	if diff := cmp.Diff(wantIssuePath, current[0].Path); diff != "" {
+		t.Errorf("Issues() path mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestParsePayload_SettersAndContext(t *testing.T) {
+	t.Parallel()
+
+	payload := NewParsePayload("before")
+	payload.SetValue("after")
+	assert.Equal(t, "after", payload.Value())
+
+	issues := []ZodRawIssue{{Code: Custom, Message: "custom"}}
+	payload.SetIssues(issues)
+	issues[0].Code = InvalidType
+
+	current := payload.Issues()
+	require.Len(t, current, 1)
+	assert.Equal(t, Custom, current[0].Code)
+
+	ctx := NewParseContext().WithReportInput(true)
+	payload.SetContext(ctx)
+	assert.Same(t, ctx, payload.Context())
+}

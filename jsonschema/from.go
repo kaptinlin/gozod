@@ -468,7 +468,7 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 			// It's a schema - use catchall
 			catchallSchema, err := ctx.convert(s.AdditionalProperties)
 			if err == nil {
-				result = result.WithCatchall(catchallSchema)
+				result = result.Passthrough().WithCatchall(catchallSchema)
 			}
 		}
 		// If true, default passthrough behavior
