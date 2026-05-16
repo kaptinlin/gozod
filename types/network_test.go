@@ -11,8 +11,6 @@ import (
 	. "github.com/kaptinlin/gozod/types"
 )
 
-// extractNetworkString extracts string values from string/*string test results.
-// Test-only helper moved from network.go to avoid dead code in production.
 func extractNetworkString(value any) string {
 	if ptr, ok := value.(*string); ok {
 		if ptr != nil {
@@ -687,10 +685,6 @@ func TestIPv4_EdgeCases(t *testing.T) {
 				}
 			})
 		}
-	})
-
-	t.Run("Overwrite with pointer types preserves identity", func(t *testing.T) {
-		// ... existing code ...
 	})
 }
 

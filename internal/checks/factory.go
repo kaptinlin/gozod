@@ -332,7 +332,10 @@ func PrefixIssues(path any, iss []core.ZodRawIssue) []core.ZodRawIssue {
 		return iss
 	}
 	for i := range iss {
-		iss[i].Path = slices.Concat([]any{path}, iss[i].Path)
+		prefixed := make([]any, len(iss[i].Path)+1)
+		prefixed[0] = path
+		copy(prefixed[1:], iss[i].Path)
+		iss[i].Path = prefixed
 	}
 	return iss
 }

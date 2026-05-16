@@ -30,17 +30,19 @@ func NewParsePayloadWithPath(value any, path []any) *ParsePayload {
 
 // AddIssue appends a validation issue, prepending the current path.
 func (p *ParsePayload) AddIssue(issue ZodRawIssue) {
-	issue = cloneRawIssue(issue)
 	if len(p.path) > 0 {
 		issue.Path = slices.Concat(p.path, issue.Path)
+	} else {
+		issue.Path = slices.Clone(issue.Path)
 	}
+	issue.Properties = maps.Clone(issue.Properties)
 	p.issues = append(p.issues, issue)
 }
 
 // AddIssueWithPath adds a validation issue with a specific path override.
 func (p *ParsePayload) AddIssueWithPath(issue ZodRawIssue, path []any) {
-	issue = cloneRawIssue(issue)
 	issue.Path = slices.Clone(path)
+	issue.Properties = maps.Clone(issue.Properties)
 	p.issues = append(p.issues, issue)
 }
 
@@ -65,7 +67,11 @@ func (p *ParsePayload) AddIssues(issues ...ZodRawIssue) {
 	if len(issues) == 0 {
 		return
 	}
-	p.issues = append(p.issues, cloneRawIssues(issues)...)
+	start := len(p.issues)
+	p.issues = slices.Grow(p.issues, len(issues))[:start+len(issues)]
+	for i, issue := range issues {
+		p.issues[start+i] = cloneRawIssue(issue)
+	}
 }
 
 // HasIssues reports whether the payload has any validation issues.
@@ -139,7 +145,7 @@ func (p *ParsePayload) SetValue(v any) {
 
 // SetIssues replaces the issues slice.
 func (p *ParsePayload) SetIssues(issues []ZodRawIssue) {
-	p.issues = cloneRawIssuesWithCap(issues)
+	p.issues = cloneRawIssues(issues)
 }
 
 // Value returns the current value being validated.
@@ -167,17 +173,6 @@ func cloneRawIssues(issues []ZodRawIssue) []ZodRawIssue {
 		return nil
 	}
 	cloned := make([]ZodRawIssue, len(issues))
-	for i, issue := range issues {
-		cloned[i] = cloneRawIssue(issue)
-	}
-	return cloned
-}
-
-func cloneRawIssuesWithCap(issues []ZodRawIssue) []ZodRawIssue {
-	if issues == nil {
-		return nil
-	}
-	cloned := make([]ZodRawIssue, len(issues), cap(issues))
 	for i, issue := range issues {
 		cloned[i] = cloneRawIssue(issue)
 	}

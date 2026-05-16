@@ -1,10 +1,6 @@
 package engine
 
-import (
-	"slices"
-
-	"github.com/kaptinlin/gozod/core"
-)
+import "github.com/kaptinlin/gozod/core"
 
 // ----------------------------------------------------------------------------
 // Public check execution API
@@ -56,11 +52,6 @@ func executeChecks(
 	n := len(checks)
 	if n == 0 {
 		return payload
-	}
-
-	cur := payload.Issues()
-	if cap(cur) < len(cur)+n {
-		payload.SetIssues(slices.Grow(cur, n))
 	}
 
 	path := payload.Path()

@@ -165,3 +165,24 @@ func TestParsePayload_SettersAndContext(t *testing.T) {
 	payload.SetContext(ctx)
 	assert.Same(t, ctx, payload.Context())
 }
+
+func TestParsePayload_SetIssuesCopiesWithoutRetainingCapacity(t *testing.T) {
+	t.Parallel()
+
+	issues := make([]ZodRawIssue, 1, 8)
+	issues[0] = ZodRawIssue{
+		Code:       Custom,
+		Path:       []any{"field"},
+		Properties: map[string]any{"key": "value"},
+	}
+
+	payload := NewParsePayload("value")
+	payload.SetIssues(issues)
+	issues[0].Path[0] = "mutated"
+	issues[0].Properties["key"] = "mutated"
+
+	require.Len(t, payload.issues, 1)
+	assert.Equal(t, 1, cap(payload.issues))
+	assert.Equal(t, []any{"field"}, payload.issues[0].Path)
+	assert.Equal(t, "value", payload.issues[0].Properties["key"])
+}

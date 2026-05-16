@@ -429,21 +429,16 @@ func TestCustomValidation_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("handles type mismatch gracefully", func(t *testing.T) {
-		// This test checks what happens when wrong type is passed to typed refine function
 		refineFn := func(s string) bool {
 			return len(s) > 0
 		}
 		check := NewCustom[string](refineFn)
 
-		payload := core.NewParsePayload(123) // Number instead of string
+		payload := core.NewParsePayload(123)
 		internals := check.Zod()
-
-		// With our fix, type mismatch should be handled gracefully by creating a validation error
 		assert.NotPanics(t, func() {
 			internals.Check(payload)
 		}, "Should not panic on type mismatch")
-
-		// Should create a validation error for type mismatch
 		require.Len(t, payload.Issues(), 1)
 		issue := payload.Issues()[0]
 		assert.Equal(t, core.Custom, issue.Code)
@@ -483,16 +478,11 @@ func TestCustomUtilities(t *testing.T) {
 
 		payload := core.NewParsePayload("test")
 		payload.PushPath("base")
-
-		// Test successful case
 		handleRefineResult(true, payload, "test", internals)
 		assert.Empty(t, payload.Issues(), "Should not create issues for successful validation")
-
-		// Test failure case
 		handleRefineResult(false, payload, "test", internals)
 		require.Len(t, payload.Issues(), 1)
 		assert.Equal(t, core.Custom, payload.Issues()[0].Code)
-		// Path will only contain the payload path since custom path is no longer appended
 		assert.Equal(t, []any{"base"}, payload.Issues()[0].Path)
 	})
 
