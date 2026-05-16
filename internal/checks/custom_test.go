@@ -495,6 +495,21 @@ func TestCustomUtilities(t *testing.T) {
 		// Path will only contain the payload path since custom path is no longer appended
 		assert.Equal(t, []any{"base"}, payload.Issues()[0].Path)
 	})
+
+	t.Run("handleRefineResult preserves empty issue path", func(t *testing.T) {
+		internals := &ZodCheckCustomInternals{
+			Def: &ZodCheckCustomDef{
+				ZodCheckDef: core.ZodCheckDef{Abort: false},
+				Params:      map[string]any{"test": "value"},
+			},
+		}
+
+		payload := core.NewParsePayloadWithPath("test", nil)
+		handleRefineResult(false, payload, "test", internals)
+
+		require.Len(t, payload.Issues(), 1)
+		assert.Equal(t, []any{}, payload.Issues()[0].Path)
+	})
 }
 
 // Benchmark tests

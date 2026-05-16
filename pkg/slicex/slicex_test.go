@@ -200,6 +200,13 @@ func TestAppend(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, got.([]int), 4)
 	})
+
+	t.Run("empty append preserves typed empty slice", func(t *testing.T) {
+		got, err := Append([]int{})
+		require.NoError(t, err)
+		assert.NotNil(t, got)
+		assert.Equal(t, []int{}, got)
+	})
 }
 
 func TestPrepend(t *testing.T) {
@@ -216,6 +223,13 @@ func TestPrepend(t *testing.T) {
 		assert.Len(t, gotSlice, 4)
 		assert.Equal(t, 1, gotSlice[0])
 		assert.Equal(t, 2, gotSlice[1])
+	})
+
+	t.Run("empty prepend preserves typed empty slice", func(t *testing.T) {
+		got, err := Prepend([]int{})
+		require.NoError(t, err)
+		assert.NotNil(t, got)
+		assert.Equal(t, []int{}, got)
 	})
 }
 

@@ -5,6 +5,7 @@ package checks
 
 import (
 	"maps"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
@@ -331,10 +332,7 @@ func PrefixIssues(path any, iss []core.ZodRawIssue) []core.ZodRawIssue {
 		return iss
 	}
 	for i := range iss {
-		newPath := make([]any, 1+len(iss[i].Path))
-		newPath[0] = path
-		copy(newPath[1:], iss[i].Path)
-		iss[i].Path = newPath
+		iss[i].Path = slices.Concat([]any{path}, iss[i].Path)
 	}
 	return iss
 }
@@ -450,8 +448,10 @@ func handleRefineResult(ok bool, payload *core.ParsePayload, input any, ci *ZodC
 // ResolvePath returns the issue path, using a custom path override if configured.
 func resolvePath(payload *core.ParsePayload, ci *ZodCheckCustomInternals) []any {
 	pp := payload.Path()
-	path := make([]any, len(pp))
-	copy(path, pp)
+	path := slices.Clone(pp)
+	if path == nil {
+		path = []any{}
+	}
 
 	cp, ok := ci.Def.Params["path"]
 	if !ok {

@@ -205,9 +205,10 @@ func Append(s any, elements ...any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvert, err)
 	}
-	result := make([]any, len(items)+len(elements))
-	copy(result, items)
-	copy(result[len(items):], elements)
+	result := slices.Concat(items, elements)
+	if result == nil {
+		result = []any{}
+	}
 	return restoreType(result, s, nil)
 }
 
@@ -221,9 +222,10 @@ func Prepend(s any, elements ...any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCannotConvert, err)
 	}
-	result := make([]any, len(elements)+len(items))
-	copy(result, elements)
-	copy(result[len(elements):], items)
+	result := slices.Concat(elements, items)
+	if result == nil {
+		result = []any{}
+	}
 	return restoreType(result, s, nil)
 }
 
