@@ -2,6 +2,7 @@ package types
 
 import (
 	"regexp"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -101,17 +102,12 @@ func EmailTyped[T EmailConstraint](params ...any) *ZodEmail[T] {
 	return newEmail(base.withInternals(internals))
 }
 
-// withEmailPattern replaces existing email checks with check.
 func (z *ZodEmail[T]) withEmailPattern(check core.ZodCheck) *ZodEmail[T] {
 	internals := z.Internals().Clone()
-	checks := internals.Checks[:0]
-	for _, c := range internals.Checks {
-		if inst := c.Zod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
-			continue
-		}
-		checks = append(checks, c)
-	}
-	internals.Checks = checks
+	internals.Checks = slices.DeleteFunc(internals.Checks, func(c core.ZodCheck) bool {
+		inst := c.Zod()
+		return inst != nil && inst.Def != nil && inst.Def.Check == "email"
+	})
 	internals.AddCheck(check)
 	return newEmail(z.withInternals(internals))
 }

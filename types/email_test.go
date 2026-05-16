@@ -258,7 +258,7 @@ func TestZodEmail_Patterns(t *testing.T) {
 func TestZodEmail_PatternReplacementPreservesOriginal(t *testing.T) {
 	base := Email()
 	base.Internals().AddCheck(checks.MinLength(20))
-	schema := base.HTML5()
+	schema := base.HTML5().RFC5322()
 
 	require.Len(t, base.Internals().Checks, 2)
 	require.Len(t, schema.Internals().Checks, 2)
@@ -267,6 +267,14 @@ func TestZodEmail_PatternReplacementPreservesOriginal(t *testing.T) {
 	assert.Equal(t, "min_length", schema.Internals().Checks[0].Zod().Def.Check)
 	assert.Equal(t, "email", schema.Internals().Checks[1].Zod().Def.Check)
 	assert.NotSame(t, base.Internals().Checks[0], schema.Internals().Checks[1])
+
+	emailChecks := 0
+	for _, check := range schema.Internals().Checks {
+		if inst := check.Zod(); inst != nil && inst.Def != nil && inst.Def.Check == "email" {
+			emailChecks++
+		}
+	}
+	assert.Equal(t, 1, emailChecks)
 
 	result, err := schema.Parse("long.enough@example.com")
 	require.NoError(t, err)
