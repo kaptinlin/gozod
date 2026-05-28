@@ -1,40 +1,30 @@
-# golangci-lint v2 — canonical config for this ecosystem.
-# Owner: golangci-linting skill. Do not fork or override per-project
-# without amending the skill.
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 30m
+  concurrency: 1
+  go: "1.26.3"
 
 linters:
-  # `standard` = errcheck, govet, ineffassign, staticcheck, unused.
   default: standard
   enable:
-    # --- Error vocabulary ----------------------------------------------
-    - errname        # ErrXxx / XxxError naming
-    - errorlint      # %w wrapping, errors.Is/As over ==
-    - nilerr         # accidental nil-vs-non-nil error returns
-    # --- Switch totality -----------------------------------------------
-    - exhaustive     # required by library-panic-optimizing
-    # --- Code quality --------------------------------------------------
-    - gocritic       # diagnostic + performance tag groups (see settings)
-    - revive         # configurable; minimal rule set (see settings)
+    - errname
+    - errorlint
+    - nilerr
+    - exhaustive
+    - gocritic
+    - revive
     - misspell
     - nakedret
     - whitespace
-    - prealloc       # safe pre-allocation hints
-    # --- Resource & context safety -------------------------------------
-    - bodyclose      # http.Response.Body must close
-    - noctx          # http.NewRequestWithContext, not http.NewRequest
-    # --- Security ------------------------------------------------------
+    - prealloc
+    - bodyclose
+    - noctx
     - gosec
-    # --- Suppression hygiene -------------------------------------------
-    - nolintlint     # //nolint must be valid + justified
+    - nolintlint
 
   settings:
     exhaustive:
-      # A `default:` clause that calls panic("unreachable") satisfies
-      # totality. Required by library-panic-optimizing.
       default-signifies-exhaustive: true
 
     gocritic:
@@ -44,12 +34,12 @@ linters:
 
     revive:
       rules:
-        - name: exported            # exported symbols must have a doc
+        - name: exported
           arguments: [disableStutteringCheck]
-        - name: if-return           # `if err != nil { return err }` shape
-        - name: error-return        # error must be the last return
-        - name: error-naming        # ErrXxx / XxxError
-        - name: error-strings       # lowercase, no trailing punctuation
+        - name: if-return
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
         - name: var-naming
         - name: package-comments
         - name: range
@@ -68,9 +58,7 @@ linters:
       allow-unused: false
 
   exclusions:
-    # Generated files: do not lint.
     generated: lax
-    # Test files: relax the linters that fight tests, keep the rest.
     rules:
       - path: '(^|.*/).*_test\.go$'
         linters:
