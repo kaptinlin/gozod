@@ -71,28 +71,70 @@ func TestFile_Modifiers(t *testing.T) {
 }
 
 func TestFile_ValidationMethods(t *testing.T) {
+	fileHeader := func(size int64, contentType string) *multipart.FileHeader {
+		header := &multipart.FileHeader{
+			Filename: "upload.bin",
+			Header:   make(map[string][]string),
+			Size:     size,
+		}
+		if contentType != "" {
+			header.Header.Set("Content-Type", contentType)
+		}
+		return header
+	}
+
 	t.Run("Min size validation", func(t *testing.T) {
 		schema := File().Min(1024)
 
-		require.NotNil(t, schema)
+		valid := fileHeader(2048, "")
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.Same(t, valid, result)
+
+		_, err = schema.Parse(fileHeader(512, ""))
+		require.Error(t, err)
 	})
 
 	t.Run("Max size validation", func(t *testing.T) {
 		schema := File().Max(2048)
 
-		require.NotNil(t, schema)
+		valid := fileHeader(1024, "")
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.Same(t, valid, result)
+
+		_, err = schema.Parse(fileHeader(4096, ""))
+		require.Error(t, err)
 	})
 
 	t.Run("Exact size validation", func(t *testing.T) {
 		schema := File().Size(1024)
 
-		require.NotNil(t, schema)
+		valid := fileHeader(1024, "")
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.Same(t, valid, result)
+
+		_, err = schema.Parse(fileHeader(512, ""))
+		require.Error(t, err)
+
+		_, err = schema.Parse(fileHeader(2048, ""))
+		require.Error(t, err)
 	})
 
 	t.Run("MIME type validation", func(t *testing.T) {
 		schema := File().Mime([]string{"image/jpeg", "image/png"})
 
-		require.NotNil(t, schema)
+		valid := fileHeader(1024, "image/png")
+		result, err := schema.Parse(valid)
+		require.NoError(t, err)
+		assert.Same(t, valid, result)
+
+		_, err = schema.Parse(fileHeader(1024, "text/plain"))
+		require.Error(t, err)
+
+		_, err = schema.Parse(fileHeader(1024, ""))
+		require.Error(t, err)
 	})
 }
 
@@ -136,6 +178,35 @@ func TestFile_TypeSafety(t *testing.T) {
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Nil(t, result)
+	})
+}
+
+func TestFile_TransformAndPipe(t *testing.T) {
+	t.Run("Transform receives parsed file", func(t *testing.T) {
+		schema := File().Transform(func(f any, ctx *core.RefinementContext) (any, error) {
+			return f.(*multipart.FileHeader).Filename, nil
+		})
+
+		result, err := schema.Parse(&multipart.FileHeader{
+			Filename: "avatar.png",
+			Header:   make(map[string][]string),
+			Size:     1024,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "avatar.png", result)
+	})
+
+	t.Run("Pipe validates parsed file with target schema", func(t *testing.T) {
+		header := &multipart.FileHeader{
+			Filename: "report.pdf",
+			Header:   make(map[string][]string),
+			Size:     2048,
+		}
+		schema := File().Pipe(Any())
+
+		result, err := schema.Parse(header)
+		require.NoError(t, err)
+		assert.Same(t, header, result)
 	})
 }
 

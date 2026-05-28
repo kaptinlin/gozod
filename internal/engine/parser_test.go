@@ -776,3 +776,63 @@ func BenchmarkProcessModifiers(b *testing.B) {
 		}
 	})
 }
+
+func TestConvertToConstraintType(t *testing.T) {
+	ctx := core.NewParseContext()
+
+	value, err := ConvertToConstraintType[string, string]("gozod", ctx, core.ZodTypeString)
+	require.NoError(t, err)
+	assert.Equal(t, "gozod", value)
+
+	ptr, err := ConvertToConstraintType[string, *string]("gozod", ctx, core.ZodTypeString)
+	require.NoError(t, err)
+	require.NotNil(t, ptr)
+	assert.Equal(t, "gozod", *ptr)
+
+	doublePtr, err := ConvertToConstraintType[string, **string]("gozod", ctx, core.ZodTypeString)
+	require.NoError(t, err)
+	require.NotNil(t, doublePtr)
+	require.NotNil(t, *doublePtr)
+	assert.Equal(t, "gozod", **doublePtr)
+
+	input := "from pointer"
+	fromPtr, err := ConvertToConstraintType[string, string](&input, ctx, core.ZodTypeString)
+	require.NoError(t, err)
+	assert.Equal(t, "from pointer", fromPtr)
+
+	nilPtr, err := ConvertToConstraintType[string, *string](nil, ctx, core.ZodTypeString)
+	require.NoError(t, err)
+	assert.Nil(t, nilPtr)
+
+	_, err = ConvertToConstraintType[string, int](struct{}{}, ctx, core.ZodTypeString)
+	require.Error(t, err)
+}
+
+func TestApplyChecks_AppliesValueChangesAndReportsIssues(t *testing.T) {
+	ctx := core.NewParseContext()
+	overwrite := &core.ZodCheckInternals{
+		Def: &core.ZodCheckDef{Check: "overwrite"},
+		Check: func(payload *core.ParsePayload) {
+			payload.SetValue(payload.Value().(string) + "!")
+		},
+	}
+
+	got, err := ApplyChecks("gozod", []core.ZodCheck{overwrite}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "gozod!", got)
+
+	failing := &core.ZodCheckInternals{
+		Def: &core.ZodCheckDef{Check: "custom"},
+		Check: func(payload *core.ParsePayload) {
+			payload.AddIssueWithMessage("not allowed")
+		},
+	}
+
+	_, err = ApplyChecks("gozod", []core.ZodCheck{failing}, ctx)
+	require.Error(t, err)
+	var zodErr *issues.ZodError
+	require.ErrorAs(t, err, &zodErr)
+	require.Len(t, zodErr.Issues, 1)
+	assert.Equal(t, core.Custom, zodErr.Issues[0].Code)
+	assert.Equal(t, "not allowed", zodErr.Issues[0].Message)
+}

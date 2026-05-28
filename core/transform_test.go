@@ -176,3 +176,78 @@ func TestMustParsePanicsWithErrorValue(t *testing.T) {
 
 	_ = transform.MustParse("gozod")
 }
+
+func TestZodTransform_ChainsTransformAndPipe(t *testing.T) {
+	t.Parallel()
+
+	source := newTestZodType(ZodTypeString, func(input any, ctx *ParseContext) (string, error) {
+		value, ok := input.(string)
+		if !ok {
+			return "", ErrInvalidTransformType
+		}
+		return value, nil
+	})
+	transform := NewZodTransform(source, func(value string, ctx *RefinementContext) (int, error) {
+		return len(value), nil
+	})
+
+	chainedTransform := transform.Transform(func(value int, ctx *RefinementContext) (any, error) {
+		return value * 2, nil
+	})
+	got, err := chainedTransform.Parse("gozod")
+	require.NoError(t, err)
+	assert.Equal(t, 10, got)
+
+	target := newTestZodType[any](ZodTypeNumber, func(input any, ctx *ParseContext) (any, error) {
+		value, ok := input.(int)
+		if !ok {
+			return nil, ErrInvalidTransformType
+		}
+		return value + 1, nil
+	})
+	piped := transform.Pipe(target)
+	pipeGot, err := piped.Parse("go")
+	require.NoError(t, err)
+	assert.Equal(t, 3, pipeGot)
+}
+
+func TestZodPipe_ChainsTransformAndPipe(t *testing.T) {
+	t.Parallel()
+
+	source := newTestZodType(ZodTypeString, func(input any, ctx *ParseContext) (string, error) {
+		value, ok := input.(string)
+		if !ok {
+			return "", ErrInvalidTransformType
+		}
+		return value, nil
+	})
+	target := newTestZodType[any](ZodTypeNumber, func(input any, ctx *ParseContext) (any, error) {
+		value, ok := input.(int)
+		if !ok {
+			return nil, ErrInvalidTransformType
+		}
+		return value, nil
+	})
+	pipe := NewZodPipe(source, target, func(input string, ctx *ParseContext) (int, error) {
+		return len(input), nil
+	})
+
+	transformed := pipe.Transform(func(value int, ctx *RefinementContext) (any, error) {
+		return value * 10, nil
+	})
+	got, err := transformed.Parse("go")
+	require.NoError(t, err)
+	assert.Equal(t, 20, got)
+
+	next := newTestZodType[any](ZodTypeNumber, func(input any, ctx *ParseContext) (any, error) {
+		value, ok := input.(int)
+		if !ok {
+			return nil, ErrInvalidTransformType
+		}
+		return value + 1, nil
+	})
+	piped := pipe.Pipe(next)
+	pipeGot, err := piped.Parse("gozod")
+	require.NoError(t, err)
+	assert.Equal(t, 6, pipeGot)
+}

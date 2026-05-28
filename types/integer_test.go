@@ -1,7 +1,6 @@
 package types_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -2304,7 +2303,10 @@ func TestInt_IsOptionalAndIsNilable(t *testing.T) {
 		// Test various integer types
 		testCases := []struct {
 			name   string
-			schema any
+			schema interface {
+				IsOptional() bool
+				IsNilable() bool
+			}
 		}{
 			{"Int8", Int8()},
 			{"Int16", Int16()},
@@ -2318,20 +2320,8 @@ func TestInt_IsOptionalAndIsNilable(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				// Use reflection to call IsOptional and IsNilable methods
-				schemaValue := reflect.ValueOf(tc.schema)
-
-				isOptionalMethod := schemaValue.MethodByName("IsOptional")
-				isNilableMethod := schemaValue.MethodByName("IsNilable")
-
-				require.True(t, isOptionalMethod.IsValid(), "IsOptional method should exist")
-				require.True(t, isNilableMethod.IsValid(), "IsNilable method should exist")
-
-				isOptionalResult := isOptionalMethod.Call(nil)[0].Bool()
-				isNilableResult := isNilableMethod.Call(nil)[0].Bool()
-
-				assert.False(t, isOptionalResult, "%s schema should not be optional", tc.name)
-				assert.False(t, isNilableResult, "%s schema should not be nilable", tc.name)
+				assert.False(t, tc.schema.IsOptional(), "%s schema should not be optional", tc.name)
+				assert.False(t, tc.schema.IsNilable(), "%s schema should not be nilable", tc.name)
 			})
 		}
 	})

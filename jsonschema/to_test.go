@@ -625,6 +625,26 @@ func TestToJSONSchema_Arrays(t *testing.T) {
 		assert.NoError(t, err)
 		assertJSONEquals(t, expected, string(jsonSchemaBytes))
 	})
+
+	t.Run("Tuple schema", func(t *testing.T) {
+		schema := types.Tuple(types.String(), types.Int().Optional())
+		expected := `{"type":"array","prefixItems":[{"type":"string"},{"type":"integer"}],"minItems":1,"maxItems":2}`
+		js, err := ToJSONSchema(schema)
+		assert.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(js)
+		assert.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
+
+	t.Run("Tuple schema with rest", func(t *testing.T) {
+		schema := types.TupleWithRest([]core.ZodSchema{types.String()}, types.Bool())
+		expected := `{"type":"array","prefixItems":[{"type":"string"}],"items":{"type":"boolean"}}`
+		js, err := ToJSONSchema(schema)
+		assert.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(js)
+		assert.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
 }
 
 // =============================================================================
@@ -645,6 +665,16 @@ func TestToJSONSchema_Unions(t *testing.T) {
 	t.Run("Multiple Types", func(t *testing.T) {
 		schema := types.Union([]any{types.String(), types.Int(), types.Bool()})
 		expected := `{"anyOf":[{"type":"string"},{"type":"integer"},{"type":"boolean"}]}`
+		js, err := ToJSONSchema(schema)
+		assert.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(js)
+		assert.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
+
+	t.Run("Exclusive union", func(t *testing.T) {
+		schema := types.Xor([]any{types.String(), types.Float()})
+		expected := `{"oneOf":[{"type":"string"},{"type":"number"}]}`
 		js, err := ToJSONSchema(schema)
 		assert.NoError(t, err)
 		jsonSchemaBytes, err := json.Marshal(js)

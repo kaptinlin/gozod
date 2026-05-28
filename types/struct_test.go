@@ -76,6 +76,20 @@ func TestStruct_BasicFunctionality(t *testing.T) {
 		assert.Equal(t, validUser, result)
 	})
 
+	t.Run("map input uses json field names", func(t *testing.T) {
+		schema := Struct[Person]()
+
+		result, err := schema.Parse(map[any]any{
+			"id":        int64(7),
+			"full_name": "Jane Doe",
+			"active":    true,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 7, result.ID)
+		assert.Equal(t, "Jane Doe", result.FullName)
+		assert.True(t, result.Active)
+	})
+
 	t.Run("empty struct", func(t *testing.T) {
 		type Empty struct{}
 		schema := Struct[Empty]()

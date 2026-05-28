@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,4 +146,65 @@ func BenchmarkCheckExecution(b *testing.B) {
 		newPayload := core.NewParsePayload("test")
 		executeCheck(check, newPayload)
 	}
+}
+
+type propertyTestSchema struct {
+	parse func(any, *core.ParseContext) (any, error)
+}
+
+func (s propertyTestSchema) ParseAny(input any, ctx ...*core.ParseContext) (any, error) {
+	var parseCtx *core.ParseContext
+	if len(ctx) > 0 {
+		parseCtx = ctx[0]
+	}
+	return s.parse(input, parseCtx)
+}
+
+func (s propertyTestSchema) Internals() *core.ZodTypeInternals {
+	return &core.ZodTypeInternals{Type: core.ZodTypeAny}
+}
+
+func (s propertyTestSchema) IsOptional() bool {
+	return false
+}
+
+func (s propertyTestSchema) IsNilable() bool {
+	return false
+}
+
+func TestNewProperty_ValidatesPresentMapProperty(t *testing.T) {
+	schema := propertyTestSchema{
+		parse: func(input any, ctx *core.ParseContext) (any, error) {
+			age, ok := input.(int)
+			if !ok || age < 18 {
+				return nil, errors.New("age must be at least 18")
+			}
+			return age, nil
+		},
+	}
+	check := NewProperty("age", schema)
+
+	valid := core.NewParsePayload(map[string]any{"age": 21})
+	executeCheck(check, valid)
+	assert.Empty(t, valid.Issues())
+
+	missing := core.NewParsePayload(map[string]any{"name": "gopher"})
+	executeCheck(check, missing)
+	assert.Empty(t, missing.Issues())
+
+	nonMap := core.NewParsePayload("not an object")
+	executeCheck(check, nonMap)
+	assert.Empty(t, nonMap.Issues())
+
+	invalid := core.NewParsePayloadWithPath(map[string]any{"age": 17}, []any{"user"})
+	executeCheck(check, invalid)
+	issues := invalid.Issues()
+	require.Len(t, issues, 1)
+	assert.Equal(t, core.Custom, issues[0].Code)
+	assert.Equal(t, "age must be at least 18", issues[0].Message)
+	require.Len(t, issues[0].Path, 2)
+	assert.Equal(t, "user", issues[0].Path[0])
+	assert.Equal(t, "age", issues[0].Path[1])
+	assert.Equal(t, "property", issues[0].Properties["origin"])
+	assert.Equal(t, "age", issues[0].Properties["property"])
 }

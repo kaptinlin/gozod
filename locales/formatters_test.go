@@ -11,16 +11,51 @@ import (
 
 func TestDefaultLocaleFormattersProduceMessages(t *testing.T) {
 	// DefaultLocales is process-wide, so this test runs serially.
-	issue := core.ZodRawIssue{
-		Code:       core.InvalidType,
-		Input:      123,
-		Properties: map[string]any{"expected": "string"},
+	issues := []core.ZodRawIssue{
+		{
+			Code:       core.InvalidType,
+			Input:      123,
+			Properties: map[string]any{"expected": "string"},
+		},
+		{
+			Code: core.TooSmall,
+			Properties: map[string]any{
+				"origin":    "string",
+				"minimum":   3,
+				"inclusive": true,
+			},
+		},
+		{
+			Code: core.TooBig,
+			Properties: map[string]any{
+				"origin":    "array",
+				"maximum":   2,
+				"inclusive": false,
+			},
+		},
+		{
+			Code: core.InvalidFormat,
+			Properties: map[string]any{
+				"format": "starts_with",
+				"prefix": "go",
+			},
+		},
+		{
+			Code:       core.NotMultipleOf,
+			Properties: map[string]any{"divisor": 5},
+		},
+		{
+			Code:       core.UnrecognizedKeys,
+			Properties: map[string]any{"keys": []string{"extra"}},
+		},
 	}
 
 	for locale, formatter := range DefaultLocales {
 		t.Run(locale, func(t *testing.T) {
 			require.NotNil(t, formatter)
-			assert.NotEmpty(t, formatter(issue))
+			for _, issue := range issues {
+				assert.NotEmpty(t, formatter(issue))
+			}
 		})
 	}
 }
