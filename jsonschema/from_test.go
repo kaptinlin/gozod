@@ -61,6 +61,83 @@ func TestFromJSONSchema_String(t *testing.T) {
 		_, err = zodSchema.ParseAny("not-an-email")
 		assert.Error(t, err)
 	})
+
+	t.Run("string with pattern", func(t *testing.T) {
+		schema := &lib.Schema{}
+		schema.Type = []string{"string"}
+		schema.Pattern = new("^[A-Z]{2}\\d+$")
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		result, err := zodSchema.ParseAny("AB12")
+		require.NoError(t, err)
+		assert.Equal(t, "AB12", result)
+
+		_, err = zodSchema.ParseAny("ab12")
+		require.Error(t, err)
+	})
+
+	t.Run("invalid pattern returns sentinel", func(t *testing.T) {
+		schema := &lib.Schema{}
+		schema.Type = []string{"string"}
+		schema.Pattern = new("[")
+
+		_, err := FromJSONSchema(schema)
+		require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+	})
+}
+
+func TestFromJSONSchema_StringFormats(t *testing.T) {
+	tests := []struct {
+		name    string
+		format  string
+		valid   string
+		invalid string
+	}{
+		{name: "uuid", format: "uuid", valid: "550e8400-e29b-41d4-a716-446655440000", invalid: "not-a-uuid"},
+		{name: "uri", format: "uri", valid: "https://example.com", invalid: "not a url"},
+		{name: "url", format: "url", valid: "https://example.com", invalid: "not a url"},
+		{name: "date-time", format: "date-time", valid: "2023-12-25T15:30:45Z", invalid: "2023-12-25 15:30:45"},
+		{name: "date", format: "date", valid: "2024-02-29", invalid: "2024-02-30"},
+		{name: "time", format: "time", valid: "15:30:45", invalid: "25:00:00"},
+		{name: "ipv4", format: "ipv4", valid: "192.168.0.1", invalid: "999.999.999.999"},
+		{name: "ipv6", format: "ipv6", valid: "2001:db8::1", invalid: "192.168.0.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := &lib.Schema{}
+			schema.Type = []string{"string"}
+			schema.Format = &tt.format
+
+			zodSchema, err := FromJSONSchema(schema)
+			require.NoError(t, err)
+
+			result, err := zodSchema.ParseAny(tt.valid)
+			require.NoError(t, err)
+			assert.Equal(t, tt.valid, result)
+
+			_, err = zodSchema.ParseAny(tt.invalid)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestFromJSONSchema_UnknownStringFormatFallsBack(t *testing.T) {
+	schema := &lib.Schema{}
+	schema.Type = []string{"string"}
+	schema.Format = new("slug")
+
+	zodSchema, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	result, err := zodSchema.ParseAny("not a slug, but still a string")
+	require.NoError(t, err)
+	assert.Equal(t, "not a slug, but still a string", result)
+
+	_, err = zodSchema.ParseAny(123)
+	require.Error(t, err)
 }
 
 func TestFromJSONSchema_Number(t *testing.T) {
@@ -193,6 +270,78 @@ func TestFromJSONSchema_Object(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
+
+	t.Run("optional properties validate only when present", func(t *testing.T) {
+		nameSchema := &lib.Schema{}
+		nameSchema.Type = []string{"string"}
+
+		activeSchema := &lib.Schema{}
+		activeSchema.Type = []string{"boolean"}
+
+		tagSchema := &lib.Schema{}
+		tagSchema.Type = []string{"string"}
+		tagsSchema := &lib.Schema{}
+		tagsSchema.Type = []string{"array"}
+		tagsSchema.Items = tagSchema
+
+		citySchema := &lib.Schema{}
+		citySchema.Type = []string{"string"}
+		profileSchema := &lib.Schema{}
+		profileSchema.Type = []string{"object"}
+		profileSchema.Properties = &lib.SchemaMap{"city": citySchema}
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.Properties = &lib.SchemaMap{
+			"name":    nameSchema,
+			"active":  activeSchema,
+			"tags":    tagsSchema,
+			"profile": profileSchema,
+		}
+		schema.Required = []string{"name"}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		result, err := zodSchema.ParseAny(map[string]any{"name": "Ada"})
+		require.NoError(t, err)
+		assert.Equal(t, "Ada", result.(map[string]any)["name"])
+
+		result, err = zodSchema.ParseAny(map[string]any{
+			"name":    "Ada",
+			"active":  true,
+			"tags":    []any{"go", "zod"},
+			"profile": map[string]any{"city": "London"},
+		})
+		require.NoError(t, err)
+		got := result.(map[string]any)
+		assert.Equal(t, true, got["active"])
+		assert.Equal(t, []any{"go", "zod"}, got["tags"])
+
+		_, err = zodSchema.ParseAny(map[string]any{"name": "Ada", "active": "yes"})
+		require.Error(t, err)
+
+		_, err = zodSchema.ParseAny(map[string]any{"name": "Ada", "tags": []any{"go", 1}})
+		require.Error(t, err)
+	})
+}
+
+func TestFromJSONSchema_ResolvedRef(t *testing.T) {
+	target := &lib.Schema{}
+	target.Type = []string{"string"}
+	target.MinLength = new(float64(3))
+
+	schema := &lib.Schema{ResolvedRef: target}
+
+	zodSchema, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	result, err := zodSchema.ParseAny("Ada")
+	require.NoError(t, err)
+	assert.Equal(t, "Ada", result)
+
+	_, err = zodSchema.ParseAny("Al")
+	require.Error(t, err)
 }
 
 func TestFromJSONSchema_Enum(t *testing.T) {

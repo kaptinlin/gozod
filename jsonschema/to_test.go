@@ -645,6 +645,16 @@ func TestToJSONSchema_Arrays(t *testing.T) {
 		assert.NoError(t, err)
 		assertJSONEquals(t, expected, string(jsonSchemaBytes))
 	})
+
+	t.Run("single schema array remains variable length", func(t *testing.T) {
+		schema := types.Array([]any{types.String()})
+		expected := `{"type":"array","items":{"type":"string"}}`
+		js, err := ToJSONSchema(schema)
+		assert.NoError(t, err)
+		jsonSchemaBytes, err := json.Marshal(js)
+		assert.NoError(t, err)
+		assertJSONEquals(t, expected, string(jsonSchemaBytes))
+	})
 }
 
 // =============================================================================
@@ -1858,6 +1868,26 @@ func TestToJSONSchemaExtractSchemasWithID(t *testing.T) {
 	assert.Contains(t, resultStr, `"middle_name":{"$ref":"#/$defs/name"}`)
 	assert.Contains(t, resultStr, `"age":{"$ref":"#/$defs/age"}`)
 	assert.Contains(t, resultStr, `"last_name":{"anyOf":[{"$ref":"#/$defs/name"},{"type":"null"}]}`)
+}
+
+func TestToJSONSchemaExtractSchemasWithIDUsesCustomURI(t *testing.T) {
+	name := types.String().Meta(core.GlobalMeta{ID: "name"})
+	schema := types.Struct[map[string]any](core.ObjectSchema{
+		"first_name": name,
+		"last_name":  name.Optional(),
+	})
+
+	result, err := ToJSONSchema(schema, Options{
+		URI: func(id string) string { return "urn:test:" + id },
+	})
+	assert.NoError(t, err)
+	resultBytes, err := json.Marshal(result)
+	assert.NoError(t, err)
+	resultStr := string(resultBytes)
+
+	assert.Contains(t, resultStr, `"$defs":{"name":{"type":"string"}}`)
+	assert.Contains(t, resultStr, `"first_name":{"$ref":"urn:test:name"}`)
+	assert.Contains(t, resultStr, `"last_name":{"$ref":"urn:test:name"}`)
 }
 
 func TestToJSONSchemaUnrepresentableLiteral(t *testing.T) {

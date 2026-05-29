@@ -48,7 +48,7 @@ func processModifiersCore[T any](
 
 	// Prefault/PrefaultFunc — preprocessing, continues normal parsing.
 	if internals.PrefaultValue != nil {
-		return internals.PrefaultValue, false, nil
+		return cloneutil.Clone(internals.PrefaultValue), false, nil
 	}
 	if internals.PrefaultFunc != nil {
 		return internals.PrefaultFunc(), false, nil

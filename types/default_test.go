@@ -104,6 +104,49 @@ func TestDefaultValueCloning(t *testing.T) {
 		assert.Equal(t, 1, origMeta["count"], "Original nested meta map should not be modified")
 	})
 
+	t.Run("Nested composite prefault cloning", func(t *testing.T) {
+		prefaultValue := map[string]any{
+			"items": []any{
+				map[string]any{"name": "first"},
+			},
+			"meta": map[string]any{
+				"count": 1,
+			},
+		}
+		schema := Any().Prefault(prefaultValue)
+
+		res1, err := schema.Parse(nil)
+		require.NoError(t, err, "First parse failed")
+
+		items1, ok := res1.(map[string]any)["items"].([]any)
+		require.True(t, ok, "Expected nested items slice")
+		item1, ok := items1[0].(map[string]any)
+		require.True(t, ok, "Expected nested item map")
+		item1["name"] = "modified"
+
+		meta1, ok := res1.(map[string]any)["meta"].(map[string]any)
+		require.True(t, ok, "Expected nested meta map")
+		meta1["count"] = 999
+
+		res2, err := schema.Parse(nil)
+		require.NoError(t, err, "Second parse failed")
+
+		items2 := res2.(map[string]any)["items"].([]any)
+		item2 := items2[0].(map[string]any)
+		meta2 := res2.(map[string]any)["meta"].(map[string]any)
+
+		assert.Equal(t, "modified", item1["name"], "First result should stay modified")
+		assert.Equal(t, "first", item2["name"], "Nested map in second result should be isolated")
+		assert.Equal(t, 999, meta1["count"], "First result nested map should stay modified")
+		assert.Equal(t, 1, meta2["count"], "Nested map in second result should be isolated")
+
+		origItems := prefaultValue["items"].([]any)
+		origItem := origItems[0].(map[string]any)
+		origMeta := prefaultValue["meta"].(map[string]any)
+		assert.Equal(t, "first", origItem["name"], "Original nested map should not be modified")
+		assert.Equal(t, 1, origMeta["count"], "Original nested meta map should not be modified")
+	})
+
 	t.Run("Modifier cloning keeps default internals isolated", func(t *testing.T) {
 		defaultValue := map[string]any{
 			"items": []any{
