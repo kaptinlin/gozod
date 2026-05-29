@@ -3,6 +3,7 @@ package jsonschema
 
 import (
 	"errors"
+	"reflect"
 	"regexp"
 	"slices"
 
@@ -446,7 +447,7 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 	for key, propSchema := range *s.Properties {
 		propZodSchema, err := ctx.convert(propSchema)
 		if err != nil {
-			continue // Skip on error in this context
+			return nil, err
 		}
 
 		// Make optional if not in required list
@@ -467,9 +468,10 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 		} else if s.AdditionalProperties.Boolean == nil {
 			// It's a schema - use catchall
 			catchallSchema, err := ctx.convert(s.AdditionalProperties)
-			if err == nil {
-				result = result.Passthrough().WithCatchall(catchallSchema)
+			if err != nil {
+				return nil, err
 			}
+			result = result.Passthrough().WithCatchall(catchallSchema)
 		}
 		// If true, default passthrough behavior
 	}
@@ -482,24 +484,20 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 
 // makeOptional wraps a schema in Optional if it supports it.
 func makeOptional(schema core.ZodSchema) core.ZodSchema {
-	// Try different schema types
-	switch s := schema.(type) {
-	case *types.ZodString[string]:
-		return s.Optional()
-	case *types.ZodIntegerTyped[int, int]:
-		return s.Optional()
-	case *types.ZodFloatTyped[float64, float64]:
-		return s.Optional()
-	case *types.ZodBool[bool]:
-		return s.Optional()
-	case *types.ZodSlice[any, []any]:
-		return s.Optional()
-	case *types.ZodObject[map[string]any, map[string]any]:
-		return s.Optional()
-	default:
-		// For unknown types, return as-is
+	if schema == nil {
+		return nil
+	}
+
+	method := reflect.ValueOf(schema).MethodByName("Optional")
+	if !method.IsValid() || method.Type().NumIn() != 0 || method.Type().NumOut() != 1 {
 		return schema
 	}
+
+	optional, ok := method.Call(nil)[0].Interface().(core.ZodSchema)
+	if !ok {
+		return schema
+	}
+	return optional
 }
 
 // convertConst converts a const value.

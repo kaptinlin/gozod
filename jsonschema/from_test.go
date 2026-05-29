@@ -326,6 +326,45 @@ func TestFromJSONSchema_Object(t *testing.T) {
 	})
 }
 
+func TestFromJSONSchema_ObjectOptionalEnumProperty(t *testing.T) {
+	t.Parallel()
+
+	statusSchema := &lib.Schema{Enum: []any{"draft", "published"}}
+	schema := &lib.Schema{}
+	schema.Type = []string{"object"}
+	schema.Properties = &lib.SchemaMap{"status": statusSchema}
+
+	zodSchema, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	result, err := zodSchema.ParseAny(map[string]any{})
+	require.NoError(t, err)
+	assert.NotContains(t, result.(map[string]any), "status")
+
+	result, err = zodSchema.ParseAny(map[string]any{"status": "draft"})
+	require.NoError(t, err)
+	assert.Equal(t, "draft", result.(map[string]any)["status"])
+
+	_, err = zodSchema.ParseAny(map[string]any{"status": "archived"})
+	require.Error(t, err)
+}
+
+func TestFromJSONSchema_ObjectPropertyConversionError(t *testing.T) {
+	t.Parallel()
+
+	codeSchema := &lib.Schema{}
+	codeSchema.Type = []string{"string"}
+	codeSchema.Pattern = new("[")
+
+	schema := &lib.Schema{}
+	schema.Type = []string{"object"}
+	schema.Properties = &lib.SchemaMap{"code": codeSchema}
+	schema.Required = []string{"code"}
+
+	_, err := FromJSONSchema(schema)
+	require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+}
+
 func TestFromJSONSchema_ResolvedRef(t *testing.T) {
 	target := &lib.Schema{}
 	target.Type = []string{"string"}
@@ -711,6 +750,26 @@ func TestFromJSONSchema_ObjectAdditionalProperties(t *testing.T) {
 
 		_, err = zodSchema.ParseAny(map[string]any{"name": "Ada", "extra": "wrong"})
 		require.Error(t, err)
+	})
+
+	t.Run("schema conversion errors are returned", func(t *testing.T) {
+		t.Parallel()
+
+		nameSchema := &lib.Schema{}
+		nameSchema.Type = []string{"string"}
+
+		additionalSchema := &lib.Schema{}
+		additionalSchema.Type = []string{"string"}
+		additionalSchema.Pattern = new("[")
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.Properties = &lib.SchemaMap{"name": nameSchema}
+		schema.Required = []string{"name"}
+		schema.AdditionalProperties = additionalSchema
+
+		_, err := FromJSONSchema(schema)
+		require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
 	})
 
 	t.Run("record validates values", func(t *testing.T) {
