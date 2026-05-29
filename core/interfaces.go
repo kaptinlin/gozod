@@ -132,7 +132,7 @@ type ZodTypeInternals struct {
 }
 
 // Clone creates a deep copy of the internals for copy-on-write modifications.
-// Deep copied: Checks slice, Values map, Bag map.
+// Deep copied: Checks slice, Values map, Bag map and values.
 // Shared (immutable): function pointers, Pattern, Error.
 func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 	if z == nil {
@@ -152,7 +152,10 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 		cp.Values = maps.Clone(z.Values)
 	}
 	if len(z.Bag) > 0 {
-		cp.Bag = maps.Clone(z.Bag)
+		cp.Bag = make(map[string]any, len(z.Bag))
+		for key, value := range z.Bag {
+			cp.Bag[key] = cloneutil.Clone(value)
+		}
 	}
 	return &cp
 }

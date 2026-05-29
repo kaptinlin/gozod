@@ -95,6 +95,19 @@ func createMockInternals() *core.ZodTypeInternals {
 	}
 }
 
+func TestMergeInternalsState_ClonesBagValues(t *testing.T) {
+	t.Parallel()
+
+	dst := createMockInternals()
+	src := createMockInternals()
+	src.Bag["patterns"] = []string{"^[a-z]+$"}
+
+	MergeInternalsState(dst, src)
+	src.Bag["patterns"].([]string)[0] = "changed"
+
+	assert.Equal(t, []string{"^[a-z]+$"}, dst.Bag["patterns"])
+}
+
 // =============================================================================
 // PARSEPRIMITIVE TESTS
 // =============================================================================

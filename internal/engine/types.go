@@ -223,9 +223,11 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 
 	if len(src.Bag) > 0 {
 		if dst.Bag == nil {
-			dst.Bag = make(map[string]any)
+			dst.Bag = make(map[string]any, len(src.Bag))
 		}
-		dst.Bag = mapx.Merge(dst.Bag, src.Bag)
+		for key, value := range src.Bag {
+			dst.Bag[key] = cloneutil.Clone(value)
+		}
 	}
 
 	if src.Pattern != nil {

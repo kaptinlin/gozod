@@ -26,7 +26,7 @@ func TestZodTypeInternals_CloneCopiesMutableState(t *testing.T) {
 		DefaultValue:  map[string][]int{"scores": {1, 2}},
 		PrefaultValue: []string{"prefault"},
 		Values:        map[any]struct{}{"a": {}},
-		Bag:           map[string]any{"description": "original"},
+		Bag:           map[string]any{"description": "original", "patterns": []string{"^[a-z]+$"}},
 	}
 
 	cloned := original.Clone()
@@ -37,11 +37,13 @@ func TestZodTypeInternals_CloneCopiesMutableState(t *testing.T) {
 	original.PrefaultValue.([]string)[0] = "changed"
 	original.Values["b"] = struct{}{}
 	original.Bag["description"] = "changed"
+	original.Bag["patterns"].([]string)[0] = "changed"
 
 	assert.Len(t, cloned.Checks, 1)
 	assert.Contains(t, cloned.Values, "a")
 	assert.NotContains(t, cloned.Values, "b")
 	assert.Equal(t, "original", cloned.Bag["description"])
+	assert.Equal(t, []string{"^[a-z]+$"}, cloned.Bag["patterns"])
 
 	wantDefault := map[string][]int{"scores": {1, 2}}
 	if diff := cmp.Diff(wantDefault, cloned.DefaultValue); diff != "" {
