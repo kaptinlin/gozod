@@ -677,6 +677,13 @@ func TestFromJSONSchema_StrictModeUnsupportedKeywords(t *testing.T) {
 			want: ErrJSONSchemaContains,
 		},
 		{
+			name: "uniqueItems",
+			schema: func() *lib.Schema {
+				return &lib.Schema{UniqueItems: new(true)}
+			},
+			want: ErrUnsupportedJSONSchemaKeyword,
+		},
+		{
 			name: "minContains",
 			schema: func() *lib.Schema {
 				minContains := float64(1)

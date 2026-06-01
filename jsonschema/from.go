@@ -162,6 +162,9 @@ func (ctx *fromJSONSchemaContext) checkUnsupportedFeatures(s *lib.Schema) error 
 	if s.UnevaluatedItems != nil {
 		return ErrJSONSchemaUnevaluatedItems
 	}
+	if s.UniqueItems != nil && *s.UniqueItems {
+		return ErrUnsupportedJSONSchemaKeyword
+	}
 	if len(s.DependentSchemas) > 0 {
 		return ErrJSONSchemaDependentSchemas
 	}
