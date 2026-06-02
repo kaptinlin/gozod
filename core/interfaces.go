@@ -223,7 +223,7 @@ func (z *ZodTypeInternals) SetCoerce(value bool) {
 
 // SetDefaultValue sets a default value.
 func (z *ZodTypeInternals) SetDefaultValue(value any) {
-	z.DefaultValue = value
+	z.DefaultValue = cloneutil.Clone(value)
 	z.DefaultPriority = nextModifierPriority()
 }
 
@@ -235,7 +235,7 @@ func (z *ZodTypeInternals) SetDefaultFunc(fn func() any) {
 
 // SetPrefaultValue sets a prefault value.
 func (z *ZodTypeInternals) SetPrefaultValue(value any) {
-	z.PrefaultValue = value
+	z.PrefaultValue = cloneutil.Clone(value)
 	z.PrefaultPriority = nextModifierPriority()
 }
 

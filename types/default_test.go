@@ -147,6 +147,58 @@ func TestDefaultValueCloning(t *testing.T) {
 		assert.Equal(t, 1, origMeta["count"], "Original nested meta map should not be modified")
 	})
 
+	t.Run("Default clones caller-owned value at schema construction", func(t *testing.T) {
+		defaultSlice := []string{"a", "b"}
+		schema := Slice[string](String()).Default(defaultSlice)
+
+		defaultSlice[0] = "external"
+
+		res, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b"}, res)
+	})
+
+	t.Run("Prefault clones caller-owned value at schema construction", func(t *testing.T) {
+		prefaultSlice := []string{"a", "b"}
+		schema := Slice[string](String()).Prefault(prefaultSlice)
+
+		prefaultSlice[0] = "external"
+
+		res, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b"}, res)
+	})
+
+	t.Run("DefaultFunc clones returned mutable value", func(t *testing.T) {
+		shared := []string{"a", "b"}
+		schema := Slice[string](String()).DefaultFunc(func() []string {
+			return shared
+		})
+
+		res1, err := schema.Parse(nil)
+		require.NoError(t, err)
+		res1[0] = "modified"
+
+		res2, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b"}, res2)
+	})
+
+	t.Run("PrefaultFunc clones returned mutable value", func(t *testing.T) {
+		shared := []string{"a", "b"}
+		schema := Slice[string](String()).PrefaultFunc(func() []string {
+			return shared
+		})
+
+		res1, err := schema.Parse(nil)
+		require.NoError(t, err)
+		res1[0] = "modified"
+
+		res2, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b"}, res2)
+	})
+
 	t.Run("Modifier cloning keeps default internals isolated", func(t *testing.T) {
 		defaultValue := map[string]any{
 			"items": []any{

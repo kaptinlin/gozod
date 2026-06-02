@@ -51,7 +51,7 @@ func processModifiersCore[T any](
 		return cloneutil.Clone(internals.PrefaultValue), false, nil
 	}
 	if internals.PrefaultFunc != nil {
-		return internals.PrefaultFunc(), false, nil
+		return cloneutil.Clone(internals.PrefaultFunc()), false, nil
 	}
 
 	// NonOptional — higher priority than Optional/Nilable.
@@ -129,7 +129,7 @@ func resolveDefault(internals *core.ZodTypeInternals) any {
 		return cloneutil.Clone(internals.DefaultValue)
 	}
 	if internals.DefaultFunc != nil {
-		return internals.DefaultFunc()
+		return cloneutil.Clone(internals.DefaultFunc())
 	}
 	return nil
 }
