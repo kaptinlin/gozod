@@ -677,6 +677,13 @@ func TestFromJSONSchema_StrictModeUnsupportedKeywords(t *testing.T) {
 			want: ErrJSONSchemaContains,
 		},
 		{
+			name: "not",
+			schema: func() *lib.Schema {
+				return &lib.Schema{Not: &lib.Schema{Type: []string{"string"}}}
+			},
+			want: ErrUnsupportedJSONSchemaKeyword,
+		},
+		{
 			name: "uniqueItems",
 			schema: func() *lib.Schema {
 				return &lib.Schema{UniqueItems: new(true)}
