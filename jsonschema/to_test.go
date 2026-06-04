@@ -1101,6 +1101,16 @@ func TestToJSONSchema_LazySchemas(t *testing.T) {
 		assert.NoError(t, err)
 		assertJSONEquals(t, expected, string(jsonSchemaBytes))
 	})
+
+	t.Run("Cycles throw on recursive lazy schema", func(t *testing.T) {
+		var node core.ZodSchema
+		node = types.Object(core.ObjectSchema{
+			"child": types.LazyAny(func() any { return node }),
+		})
+
+		_, err := ToJSONSchema(node, Options{Cycles: "throw"})
+		require.ErrorIs(t, err, ErrCircularReference)
+	})
 }
 
 // =============================================================================

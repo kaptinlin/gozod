@@ -1394,6 +1394,9 @@ func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
 		if zodSchema := resolveLazyInner(inner); zodSchema != nil {
 			// Check if this creates a cycle by looking for the inner schema in our path
 			if _, found := c.seen[zodSchema]; found {
+				if c.opts.Cycles == "throw" {
+					return nil, ErrCircularReference
+				}
 				// This is a cycle, return a reference to the root or $defs if available
 				if id := c.getID(zodSchema); id != "" {
 					return &lib.Schema{Ref: "#/$defs/" + id}, nil
@@ -1412,6 +1415,9 @@ func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
 				if zodSchema := resolveLazyInner(results[0].Interface()); zodSchema != nil {
 					// Detect potential cycles
 					if _, found := c.seen[zodSchema]; found {
+						if c.opts.Cycles == "throw" {
+							return nil, ErrCircularReference
+						}
 						if id := c.getID(zodSchema); id != "" {
 							return &lib.Schema{Ref: "#/$defs/" + id}, nil
 						}

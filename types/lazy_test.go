@@ -565,6 +565,63 @@ func TestLazy_DefaultAndPrefault(t *testing.T) {
 		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
+	t.Run("Default clones mutable values", func(t *testing.T) {
+		shared := map[string]any{"items": []any{"a"}}
+		schema := LazyAny(func() any { return Any() }).Default(shared)
+
+		first, err := schema.Parse(nil)
+		require.NoError(t, err)
+		firstMap := first.(map[string]any)
+		firstMap["items"].([]any)[0] = "changed"
+
+		second, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "a", second.(map[string]any)["items"].([]any)[0])
+		assert.Equal(t, "a", shared["items"].([]any)[0])
+	})
+
+	t.Run("DefaultFunc clones returned mutable values", func(t *testing.T) {
+		shared := map[string]any{"items": []any{"a"}}
+		schema := LazyAny(func() any { return Any() }).DefaultFunc(func() any { return shared })
+
+		first, err := schema.Parse(nil)
+		require.NoError(t, err)
+		first.(map[string]any)["items"].([]any)[0] = "changed"
+
+		second, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "a", second.(map[string]any)["items"].([]any)[0])
+		assert.Equal(t, "a", shared["items"].([]any)[0])
+	})
+
+	t.Run("Prefault clones mutable values", func(t *testing.T) {
+		shared := map[string]any{"items": []any{"a"}}
+		schema := LazyAny(func() any { return Any() }).Prefault(shared)
+
+		first, err := schema.Parse(nil)
+		require.NoError(t, err)
+		first.(map[string]any)["items"].([]any)[0] = "changed"
+
+		second, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "a", second.(map[string]any)["items"].([]any)[0])
+		assert.Equal(t, "a", shared["items"].([]any)[0])
+	})
+
+	t.Run("PrefaultFunc clones returned mutable values", func(t *testing.T) {
+		shared := map[string]any{"items": []any{"a"}}
+		schema := LazyAny(func() any { return Any() }).PrefaultFunc(func() any { return shared })
+
+		first, err := schema.Parse(nil)
+		require.NoError(t, err)
+		first.(map[string]any)["items"].([]any)[0] = "changed"
+
+		second, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "a", second.(map[string]any)["items"].([]any)[0])
+		assert.Equal(t, "a", shared["items"].([]any)[0])
+	})
+
 	// Test 6: Error handling for Prefault validation failure
 	t.Run("Prefault validation failure returns error", func(t *testing.T) {
 		schema := LazyAny(func() any {

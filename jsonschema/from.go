@@ -3,6 +3,8 @@ package jsonschema
 
 import (
 	"errors"
+	"fmt"
+	"math/big"
 	"reflect"
 	"regexp"
 	"slices"
@@ -80,7 +82,13 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 		return types.Never(), nil // false schema rejects everything
 	}
 
-	// Handle $ref (already pre-resolved by kaptinlin/jsonschema)
+	// Handle $ref (already pre-resolved by kaptinlin/jsonschema).
+	if s.Ref != "" {
+		if s.ResolvedRef == nil {
+			return nil, fmt.Errorf("%w: unresolved $ref %q", ErrInvalidJSONSchema, s.Ref)
+		}
+		return ctx.convert(s.ResolvedRef)
+	}
 	if s.ResolvedRef != nil {
 		return ctx.convert(s.ResolvedRef)
 	}
@@ -222,6 +230,8 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 			return ctx.convertArray(s)
 		case "object":
 			return ctx.convertObject(s)
+		default:
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, s.Type[0])
 		}
 	}
 
@@ -229,8 +239,23 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 	return types.Unknown(), nil
 }
 
+func isSupportedJSONSchemaType(typeName string) bool {
+	switch typeName {
+	case "string", "number", "integer", "boolean", "null", "array", "object":
+		return true
+	default:
+		return false
+	}
+}
+
 // convertMultiType handles schemas with multiple types like ["string", "null"].
 func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchema, error) {
+	for _, typeName := range s.Type {
+		if !isSupportedJSONSchemaType(typeName) {
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, typeName)
+		}
+	}
+
 	schemas := make([]core.ZodSchema, 0, len(s.Type))
 
 	typeChecks := []struct {
@@ -268,18 +293,12 @@ func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchem
 
 // convertString converts a string type schema.
 func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, error) {
-	// Check for format first - some formats use dedicated types
+	schema := types.String()
 	if s.Format != nil {
-		formatSchema := ctx.getFormatSchema(*s.Format)
-		if formatSchema != nil {
-			// Note: Format schemas don't support minLength/maxLength/pattern
-			// In strict mode, we could error here if those are present
-			return formatSchema, nil
+		if formatSchema := ctx.getFormatSchema(*s.Format); formatSchema != nil {
+			schema = formatSchema
 		}
 	}
-
-	// Standard string schema
-	schema := types.String()
 
 	// Apply constraints
 	if s.MinLength != nil {
@@ -299,27 +318,26 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 	return schema, nil
 }
 
-// getFormatSchema returns a dedicated schema for known formats, or nil for unknown formats.
-func (ctx *fromJSONSchemaContext) getFormatSchema(format string) core.ZodSchema {
+// getFormatSchema returns a dedicated string schema for known formats, or nil for unknown formats.
+func (ctx *fromJSONSchemaContext) getFormatSchema(format string) *types.ZodString[string] {
 	switch format {
 	case "email":
-		return types.Email()
+		return types.Email().ZodString
 	case "uuid":
-		return types.UUID()
+		return types.UUID().ZodString
 	case "uri", "url":
-		return types.URL()
+		return types.URL().ZodString
 	case "date-time":
-		return types.IsoDateTime()
+		return types.IsoDateTime().ZodString
 	case "date":
-		return types.IsoDate()
+		return types.IsoDate().ZodString
 	case "time":
-		return types.IsoTime()
+		return types.IsoTime().ZodString
 	case "ipv4":
-		return types.IPv4()
+		return types.IPv4().ZodString
 	case "ipv6":
-		return types.IPv6()
+		return types.IPv6().ZodString
 	default:
-		// Unknown format - return nil to fall back to basic string
 		return nil
 	}
 }
@@ -357,29 +375,45 @@ func (ctx *fromJSONSchemaContext) convertNumber(s *lib.Schema) (core.ZodSchema, 
 func (ctx *fromJSONSchemaContext) convertInteger(s *lib.Schema) (core.ZodSchema, error) {
 	schema := types.Int()
 
-	// Apply constraints
 	if s.Minimum != nil {
-		val, _ := s.Minimum.Float64()
-		schema = schema.Min(int64(val))
+		schema = schema.Min(ratCeilInt64(s.Minimum))
 	}
 	if s.Maximum != nil {
-		val, _ := s.Maximum.Float64()
-		schema = schema.Max(int64(val))
+		schema = schema.Max(ratFloorInt64(s.Maximum))
 	}
 	if s.ExclusiveMinimum != nil {
-		val, _ := s.ExclusiveMinimum.Float64()
-		schema = schema.Gt(int64(val))
+		schema = schema.Min(ratFloorInt64(s.ExclusiveMinimum) + 1)
 	}
 	if s.ExclusiveMaximum != nil {
-		val, _ := s.ExclusiveMaximum.Float64()
-		schema = schema.Lt(int64(val))
+		schema = schema.Max(ratCeilInt64(s.ExclusiveMaximum) - 1)
 	}
 	if s.MultipleOf != nil {
-		val, _ := s.MultipleOf.Float64()
-		schema = schema.MultipleOf(int64(val))
+		if divisor := ratIntegerMultipleDivisor(s.MultipleOf); divisor > 1 {
+			schema = schema.MultipleOf(divisor)
+		}
 	}
 
 	return schema, nil
+}
+
+func ratFloorInt64(r *lib.Rat) int64 {
+	var floor big.Int
+	floor.Div(r.Num(), r.Denom())
+	return floor.Int64()
+}
+
+func ratCeilInt64(r *lib.Rat) int64 {
+	ceil := ratFloorInt64(r)
+	if !r.IsInt() {
+		ceil++
+	}
+	return ceil
+}
+
+func ratIntegerMultipleDivisor(r *lib.Rat) int64 {
+	var numerator big.Int
+	numerator.Abs(r.Num())
+	return numerator.Int64()
 }
 
 // convertArray converts an array type schema.

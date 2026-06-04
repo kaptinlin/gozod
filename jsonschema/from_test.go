@@ -140,6 +140,48 @@ func TestFromJSONSchema_UnknownStringFormatFallsBack(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFromJSONSchema_StringFormatPreservesLengthAndPatternConstraints(t *testing.T) {
+	format := "email"
+	minLength := float64(20)
+	pattern := "^[^@]+@example\\.com$"
+	schema := &lib.Schema{
+		Type:      []string{"string"},
+		Format:    &format,
+		MinLength: &minLength,
+		Pattern:   &pattern,
+	}
+
+	zodSchema, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	_, err = zodSchema.ParseAny("short@example.com")
+	require.Error(t, err)
+
+	_, err = zodSchema.ParseAny("long-enough@example.org")
+	require.Error(t, err)
+
+	result, err := zodSchema.ParseAny("long-enough@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, "long-enough@example.com", result)
+}
+
+func TestFromJSONSchema_InvalidReferencesAndTypes(t *testing.T) {
+	t.Run("unresolved ref errors", func(t *testing.T) {
+		_, err := FromJSONSchema(&lib.Schema{Ref: "#/$defs/Missing"})
+		require.ErrorIs(t, err, ErrInvalidJSONSchema)
+	})
+
+	t.Run("unknown type errors", func(t *testing.T) {
+		_, err := FromJSONSchema(&lib.Schema{Type: []string{"strng"}})
+		require.ErrorIs(t, err, ErrUnsupportedJSONSchemaType)
+	})
+
+	t.Run("unknown multi-type member errors", func(t *testing.T) {
+		_, err := FromJSONSchema(&lib.Schema{Type: []string{"string", "strng"}})
+		require.ErrorIs(t, err, ErrUnsupportedJSONSchemaType)
+	})
+}
+
 func TestFromJSONSchema_Number(t *testing.T) {
 	t.Run("basic number", func(t *testing.T) {
 		schema := &lib.Schema{}
@@ -906,6 +948,43 @@ func TestFromJSONSchema_NumberAndIntegerConstraints(t *testing.T) {
 		_, err = zodSchema.ParseAny(11)
 		require.Error(t, err)
 		_, err = zodSchema.ParseAny(5)
+		require.Error(t, err)
+	})
+
+	t.Run("fractional integer bounds use integer-domain semantics", func(t *testing.T) {
+		t.Parallel()
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"integer"}
+		schema.Minimum = lib.NewRat("1.5")
+		schema.ExclusiveMaximum = lib.NewRat("4.5")
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, err = zodSchema.ParseAny(1)
+		require.Error(t, err)
+		_, err = zodSchema.ParseAny(2)
+		require.NoError(t, err)
+		_, err = zodSchema.ParseAny(4)
+		require.NoError(t, err)
+		_, err = zodSchema.ParseAny(5)
+		require.Error(t, err)
+	})
+
+	t.Run("fractional integer multipleOf maps to exact integer divisor", func(t *testing.T) {
+		t.Parallel()
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"integer"}
+		schema.MultipleOf = lib.NewRat("1.5")
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		_, err = zodSchema.ParseAny(3)
+		require.NoError(t, err)
+		_, err = zodSchema.ParseAny(2)
 		require.Error(t, err)
 	})
 }

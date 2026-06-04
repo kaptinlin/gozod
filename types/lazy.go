@@ -8,6 +8,7 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 )
 
 // LazyConstraint restricts values to any or *any for lazy schema types.
@@ -102,16 +103,16 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 			return zero, issues.CreateNonOptionalError(pc)
 		}
 		if in.DefaultValue != nil {
-			return any(in.DefaultValue).(T), nil //nolint:unconvert // Default values flow through the schema's generic output type.
+			return lazyModifierValue[T](in.DefaultValue), nil
 		}
 		if in.DefaultFunc != nil {
-			return any(in.DefaultFunc()).(T), nil //nolint:unconvert // Default values flow through the schema's generic output type.
+			return lazyModifierValue[T](in.DefaultFunc()), nil
 		}
 		switch {
 		case in.PrefaultValue != nil:
-			input = in.PrefaultValue
+			input = cloneutil.Clone(in.PrefaultValue)
 		case in.PrefaultFunc != nil:
-			input = in.PrefaultFunc()
+			input = cloneutil.Clone(in.PrefaultFunc())
 		case in.Optional || in.Nilable:
 			var zero T
 			return zero, nil
@@ -127,6 +128,18 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 		return zero, err
 	}
 	return z.convertResult(result), nil
+}
+
+func lazyModifierValue[T LazyConstraint](value any) T {
+	cloned := cloneutil.Clone(value)
+	var zero T
+	if cloned == nil {
+		return zero
+	}
+	if _, ok := any(zero).(*any); ok {
+		return any(new(cloned)).(T)
+	}
+	return any(cloned).(T) //nolint:unconvert // Modifier values flow through the schema's generic output type.
 }
 
 // MustParse validates input and panics on error.
