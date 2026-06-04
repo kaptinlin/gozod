@@ -757,6 +757,27 @@ func TestFromJSONSchema_ObjectAdditionalProperties(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("true preserves unknown keys", func(t *testing.T) {
+		t.Parallel()
+
+		nameSchema := &lib.Schema{}
+		nameSchema.Type = []string{"string"}
+
+		schema := &lib.Schema{}
+		schema.Type = []string{"object"}
+		schema.Properties = &lib.SchemaMap{"name": nameSchema}
+		schema.Required = []string{"name"}
+		schema.AdditionalProperties = &lib.Schema{Boolean: new(true)}
+
+		zodSchema, err := FromJSONSchema(schema)
+		require.NoError(t, err)
+
+		result, err := zodSchema.ParseAny(map[string]any{"name": "Ada", "extra": true})
+		require.NoError(t, err)
+		assert.Equal(t, "Ada", result.(map[string]any)["name"])
+		assert.Equal(t, true, result.(map[string]any)["extra"])
+	})
+
 	t.Run("schema validates unknown keys", func(t *testing.T) {
 		t.Parallel()
 

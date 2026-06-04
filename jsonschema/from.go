@@ -486,10 +486,13 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 
 	// Handle additionalProperties
 	if s.AdditionalProperties != nil {
-		// Check if it's a boolean false (strict mode)
-		if s.AdditionalProperties.Boolean != nil && !*s.AdditionalProperties.Boolean {
-			result = result.Strict()
-		} else if s.AdditionalProperties.Boolean == nil {
+		if s.AdditionalProperties.Boolean != nil {
+			if *s.AdditionalProperties.Boolean {
+				result = result.Passthrough()
+			} else {
+				result = result.Strict()
+			}
+		} else {
 			// It's a schema - use catchall
 			catchallSchema, err := ctx.convert(s.AdditionalProperties)
 			if err != nil {
@@ -497,7 +500,6 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 			}
 			result = result.Passthrough().WithCatchall(catchallSchema)
 		}
-		// If true, default passthrough behavior
 	}
 
 	// Update the placeholder reference
