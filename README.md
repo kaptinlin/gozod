@@ -1,6 +1,6 @@
 # GoZod
 
-[![Go Module](https://img.shields.io/badge/go-1.26.3%2B-blue.svg)](https://golang.org/)
+[![Go Module](https://img.shields.io/badge/go-1.26.4%2B-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A TypeScript Zod v4-inspired validation library for Go with strict type semantics, fluent schemas, struct tags, and JSON Schema Draft 2020-12 interoperability
@@ -22,7 +22,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 go get github.com/kaptinlin/gozod
 ```
 
-Requires **Go 1.26.3+**.
+Requires **Go 1.26.4+**.
 
 ## Quick Start
 
