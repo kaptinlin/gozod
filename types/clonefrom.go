@@ -13,6 +13,11 @@ func syncCloneMetadata(source, target core.ZodSchema) {
 	core.GlobalRegistry.Remove(target)
 }
 
+func finalizeClone(source, target core.ZodSchema) {
+	core.CopyGlobalMeta(source, target)
+	core.AttachChecks(target)
+}
+
 func cloneWithPreservedChecks(source, target core.ZodSchema, clone func()) {
 	if source == nil || target == nil || clone == nil {
 		return

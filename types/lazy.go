@@ -242,8 +242,9 @@ func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
 
 // Meta stores metadata for this lazy schema.
 func (z *ZodLazy[T]) Meta(meta core.GlobalMeta) *ZodLazy[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.

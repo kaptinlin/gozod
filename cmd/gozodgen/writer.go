@@ -227,89 +227,61 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 
 // generateValidatorChain returns the validator method chain for a rule.
 func generateValidatorChain(rule tagparser.TagRule, fieldType reflect.Type) string {
-	switch rule.Name {
-	case "required":
-		// Required is handled by the optional logic
-		return ""
-	case "min":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Min(%s)", rule.Params[0])
-		}
-	case "max":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Max(%s)", rule.Params[0])
-		}
-	case "email":
-		return ".Email()"
-	case "url":
-		return ".URL()"
-	case "uuid":
-		// UUID fields should use the UUID constructor instead of String + constraint
-		return ""
-	case "ipv4":
-		return ".IPv4()"
-	case "ipv6":
-		return ".IPv6()"
-	case "gt":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Gt(%s)", rule.Params[0])
-		}
-	case "gte":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Gte(%s)", rule.Params[0])
-		}
-	case "lt":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Lt(%s)", rule.Params[0])
-		}
-	case "lte":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Lte(%s)", rule.Params[0])
-		}
-	case "enum":
-		// Enum should use the Enum constructor, not a method on String
-		return ""
-	case "regex":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Regex(regexp.MustCompile(%q))", rule.Params[0])
-		}
-	case "default":
-		if len(rule.Params) > 0 {
-			value := rule.Params[0]
-			if len(rule.Params) > 1 && !strings.HasPrefix(value, "[") && !strings.HasPrefix(value, "{") {
-				value = strings.Join(rule.Params, " ")
-			}
-			return generateDefaultValue(value, fieldType)
-		}
-	case "prefault":
-		if len(rule.Params) > 0 {
-			value := rule.Params[0]
-			if len(rule.Params) > 1 && !strings.HasPrefix(value, "[") && !strings.HasPrefix(value, "{") {
-				value = strings.Join(rule.Params, " ")
-			}
-			return generatePrefaultValue(value, fieldType)
-		}
-	case "refine":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Refine(%s)", rule.Params[0])
-		}
-	case "check":
-		if len(rule.Params) > 0 {
-			return fmt.Sprintf(".Check(%s)", rule.Params[0])
-		}
-	case "trim":
-		return ".Trim()"
-	case "lowercase":
-		return ".ToLowerCase()"
-	case "uppercase":
-		return ".ToUpperCase()"
-	case "nilable":
-		return ".Nilable()"
-	case "time":
-		// Time validation is handled by the Time() constructor
+	plan := tagparser.CompileRule(rule)
+	if plan.Method == "" {
 		return ""
 	}
-	return ""
+
+	switch plan.Op {
+	case tagparser.RuleDefault, tagparser.RulePrefault:
+		value, ok := plan.JoinedValue()
+		if !ok {
+			return ""
+		}
+		return generateTypedValue(plan.Method, value, fieldType)
+	case tagparser.RuleMethod:
+		if plan.Method == "Regex" {
+			if value, ok := plan.FirstParam(); ok {
+				return fmt.Sprintf(".Regex(regexp.MustCompile(%q))", value)
+			}
+			return ""
+		}
+		if value, ok := plan.FirstParam(); ok && requiresMethodArg(plan.Method) {
+			if requiresStringArg(plan.Method) {
+				return fmt.Sprintf(".%s(%q)", plan.Method, value)
+			}
+			return fmt.Sprintf(".%s(%s)", plan.Method, value)
+		}
+		if requiresMethodArg(plan.Method) {
+			return ""
+		}
+		return fmt.Sprintf(".%s()", plan.Method)
+	case tagparser.RuleStringCheck:
+		if plan.Method == "" {
+			return ""
+		}
+		return fmt.Sprintf(".%s()", plan.Method)
+	default:
+		return ""
+	}
+}
+
+func requiresStringArg(method string) bool {
+	switch method {
+	case "Includes", "StartsWith", "EndsWith":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresMethodArg(method string) bool {
+	switch method {
+	case "Min", "Max", "Length", "Gt", "Gte", "Lt", "Lte", "Includes", "StartsWith", "EndsWith", "MultipleOf", "Refine", "Check":
+		return true
+	default:
+		return false
+	}
 }
 
 // baseConstructor returns the GoZod constructor for a type name with circular reference detection.

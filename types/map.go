@@ -255,8 +255,9 @@ func (z *ZodMap[T, R]) PrefaultFunc(fn func() T) *ZodMap[T, R] {
 
 // Meta stores metadata for this map schema.
 func (z *ZodMap[T, R]) Meta(meta core.GlobalMeta) *ZodMap[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -388,13 +389,13 @@ func (z *ZodMap[T, R]) withCheck(c core.ZodCheck) *ZodMap[T, R] {
 
 func (z *ZodMap[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodMap[T, *T] {
 	clone := &ZodMap[T, *T]{internals: z.newMapInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
 func (z *ZodMap[T, R]) withInternals(in *core.ZodTypeInternals) *ZodMap[T, R] {
 	clone := &ZodMap[T, R]{internals: z.newMapInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

@@ -645,34 +645,49 @@ func TestGetTypeNameFromAST(t *testing.T) {
 	}
 }
 
-func TestSmartSplitTagRules(t *testing.T) {
+func TestStructAnalyzer_ParseTagRulesPreservesStructuredParams(t *testing.T) {
 	tests := []struct {
 		name string
 		tag  string
-		want []string
+		want []tagparser.TagRule
 	}{
 		{
 			name: "simple rules",
 			tag:  "required,min=2,max=10",
-			want: []string{"required", "min=2", "max=10"},
+			want: []tagparser.TagRule{
+				{Name: "required"},
+				{Name: "min", Params: []string{"2"}},
+				{Name: "max", Params: []string{"10"}},
+			},
 		},
 		{
 			name: "json object preserves commas",
 			tag:  `required,meta={"label":"user,name","nested":{"min":1}},max=10`,
-			want: []string{"required", `meta={"label":"user,name","nested":{"min":1}}`, "max=10"},
+			want: []tagparser.TagRule{
+				{Name: "required"},
+				{Name: "meta", Params: []string{`{"label":"user,name","nested":{"min":1}}`}},
+				{Name: "max", Params: []string{"10"}},
+			},
 		},
 		{
 			name: "json array preserves commas",
 			tag:  `enum=["a,b","c"],required`,
-			want: []string{`enum=["a,b","c"]`, "required"},
+			want: []tagparser.TagRule{
+				{Name: "enum", Params: []string{`["a,b","c"]`}},
+				{Name: "required"},
+			},
 		},
 	}
 
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := smartSplitTagRules(tt.tag)
+			got, err := analyzer.parseTagRules(tt.tag)
+			require.NoError(t, err)
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("smartSplitTagRules() mismatch (-want +got):\n%s", diff)
+				t.Errorf("parseTagRules() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

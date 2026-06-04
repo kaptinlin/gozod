@@ -134,6 +134,11 @@ type Example struct {
 
 For code generation and struct-derived schemas, GoZod treats `required`, `optional`, and `coerce` as structural tag rules. The validation chain is built from the remaining rules, and `.Optional()` is appended at the end when the field is non-required or pointer-backed.
 
+The reflection path (`FromStruct[T]`) and code-generation path (`gozodgen`) use
+the same tag parser and rule plan. This keeps a tag such as
+`gozod:"trim,lowercase,min=2"` on one semantic path whether it is interpreted at
+runtime or emitted as generated Go code.
+
 ### Field Processing
 
 ```go
@@ -163,6 +168,9 @@ schema := gozod.FromStruct[User]()
 | `url` | Valid URL format | `gozod:"url"` |
 | `uuid` | Valid UUID format | `gozod:"uuid"` |
 | `regex=pattern` | Custom regex pattern | `gozod:"regex=^[A-Z][a-z]+$"` |
+| `trim` | Trim surrounding whitespace before later checks | `gozod:"trim,min=1"` |
+| `lowercase` | Convert to lowercase before later checks | `gozod:"trim,lowercase"` |
+| `uppercase` | Convert to uppercase before later checks | `gozod:"uppercase"` |
 
 ### Numeric Validation
 

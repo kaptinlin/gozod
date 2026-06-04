@@ -1,6 +1,7 @@
 package jsonschema
 
 import (
+	"maps"
 	"reflect"
 	"regexp"
 	"strings"
@@ -29,6 +30,25 @@ func assertJSONEquals(t *testing.T, expected string, actualJSON string) {
 	if !isSubset(expectedVal, actualVal) {
 		assert.Equal(t, expectedVal, actualVal)
 	}
+}
+
+func TestToJSONSchema_DoesNotMutateInternalsBag(t *testing.T) {
+	schema := types.String().
+		StartsWith("test").
+		EndsWith(".com").
+		Min(3)
+
+	before := maps.Clone(schema.Internals().Bag)
+	require.NotEmpty(t, before)
+	require.Contains(t, before, "patterns")
+
+	_, err := ToJSONSchema(schema)
+	require.NoError(t, err)
+	assert.Equal(t, before, schema.Internals().Bag)
+
+	_, err = ToJSONSchema(schema)
+	require.NoError(t, err)
+	assert.Equal(t, before, schema.Internals().Bag)
 }
 
 // isSubset recursively verifies that exp is a subset of act (i.e., all keys/values in exp are present in act).

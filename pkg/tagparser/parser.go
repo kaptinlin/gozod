@@ -5,6 +5,7 @@ package tagparser
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -37,6 +38,12 @@ type JSONField struct {
 // ErrTypeMustBeStruct indicates that the input type is neither a
 // struct nor a pointer to struct.
 var ErrTypeMustBeStruct = errors.New("tagparser: type must be a struct or pointer to struct")
+
+// ErrRuleRequiresParam indicates that a tag rule used "=" without a value.
+var ErrRuleRequiresParam = errors.New("tagparser: rule requires a parameter")
+
+// ErrEmptyRuleName indicates that a tag rule has no rule name.
+var ErrEmptyRuleName = errors.New("tagparser: empty rule name")
 
 // FieldInfo represents parsed information about a struct field.
 type FieldInfo struct {
@@ -156,7 +163,11 @@ func (p *TagParser) ParseTagString(tag string) ([]TagRule, error) {
 	rules := make([]TagRule, 0, len(parts))
 
 	for _, part := range parts {
-		if rule := parseRule(strings.TrimSpace(part)); rule.Name != "" {
+		rule, err := parseRule(strings.TrimSpace(part))
+		if err != nil {
+			return nil, err
+		}
+		if rule.Name != "" {
 			rules = append(rules, rule)
 		}
 	}
@@ -234,35 +245,50 @@ func splitParts(tag string) []string {
 
 // parseRule parses a single rule string (e.g. "min=2")
 // into a [TagRule].
-func parseRule(part string) TagRule {
+func parseRule(part string) (TagRule, error) {
 	if part == "" {
-		return TagRule{}
+		return TagRule{}, nil
 	}
 
 	name, raw, ok := strings.Cut(part, "=")
 	if !ok {
-		return TagRule{Name: strings.TrimSpace(part)}
+		name = strings.TrimSpace(part)
+		if name == "" {
+			return TagRule{}, ErrEmptyRuleName
+		}
+		return TagRule{Name: name}, nil
 	}
 
 	name = strings.TrimSpace(name)
 	raw = strings.TrimSpace(raw)
-
-	var params []string
-	if raw != "" {
-		if quoted, ok := strings.CutPrefix(raw, "'"); ok {
-			if quoted, ok := strings.CutSuffix(quoted, "'"); ok {
-				params = []string{unescaper.Replace(quoted)}
-				return TagRule{Name: name, Params: params}
-			}
-		}
-		if strings.Contains(raw, " ") {
-			params = strings.Fields(raw)
-		} else {
-			params = []string{raw}
-		}
+	if name == "" {
+		return TagRule{}, ErrEmptyRuleName
+	}
+	if raw == "" {
+		return TagRule{}, fmt.Errorf("%w: %s", ErrRuleRequiresParam, name)
 	}
 
-	return TagRule{Name: name, Params: params}
+	var params []string
+	if quoted, ok := strings.CutPrefix(raw, "'"); ok {
+		if quoted, ok := strings.CutSuffix(quoted, "'"); ok {
+			params = []string{unescaper.Replace(quoted)}
+			return TagRule{Name: name, Params: params}, nil
+		}
+	}
+	if isStructuredParam(raw) || name == "regex" {
+		params = []string{raw}
+	} else if strings.Contains(raw, " ") {
+		params = strings.Fields(raw)
+	} else {
+		params = []string{raw}
+	}
+
+	return TagRule{Name: name, Params: params}, nil
+}
+
+func isStructuredParam(raw string) bool {
+	return (strings.HasPrefix(raw, "[") && strings.HasSuffix(raw, "]")) ||
+		(strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}"))
 }
 
 // JSONFieldName resolves the JSON field name and skip marker for a struct field.

@@ -207,8 +207,9 @@ func (z *ZodSet[T, R]) PrefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 
 // Meta stores metadata for this set schema.
 func (z *ZodSet[T, R]) Meta(meta core.GlobalMeta) *ZodSet[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -297,13 +298,13 @@ func (z *ZodSet[T, R]) Or(other any) *ZodUnion[any, any] {
 
 func (z *ZodSet[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSet[T, R] {
 	clone := &ZodSet[T, R]{internals: z.newSetInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
 func (z *ZodSet[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSet[T, *map[T]struct{}] {
 	clone := &ZodSet[T, *map[T]struct{}]{internals: z.newSetInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

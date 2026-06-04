@@ -498,16 +498,33 @@ func TestFromJSONSchema_MultiType(t *testing.T) {
 	})
 }
 
-func TestFromJSONSchema_StrictMode(t *testing.T) {
-	t.Run("strict mode fails on if/then/else", func(t *testing.T) {
+func TestFromJSONSchema_UnsupportedDefaultsToError(t *testing.T) {
+	t.Run("default conversion fails on if/then/else", func(t *testing.T) {
 		ifSchema := &lib.Schema{}
 		ifSchema.Type = []string{"string"}
 
 		schema := &lib.Schema{}
 		schema.If = ifSchema
 
-		_, err := FromJSONSchema(schema, FromJSONSchemaOptions{StrictMode: true})
+		_, err := FromJSONSchema(schema)
 		assert.ErrorIs(t, err, ErrJSONSchemaIfThenElse)
+	})
+
+	t.Run("explicit lossy mode reports ignored keywords", func(t *testing.T) {
+		ifSchema := &lib.Schema{}
+		ifSchema.Type = []string{"string"}
+
+		schema := &lib.Schema{}
+		schema.If = ifSchema
+
+		var keywords []string
+		zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
+			AllowLossy:    true,
+			LossyKeywords: &keywords,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, zodSchema)
+		assert.Equal(t, []string{"if/then/else"}, keywords)
 	})
 }
 
@@ -617,7 +634,7 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 	})
 }
 
-func TestFromJSONSchema_StrictModeUnsupportedKeywords(t *testing.T) {
+func TestFromJSONSchema_DefaultUnsupportedKeywords(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -712,7 +729,7 @@ func TestFromJSONSchema_StrictModeUnsupportedKeywords(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := FromJSONSchema(tt.schema(), FromJSONSchemaOptions{StrictMode: true})
+			_, err := FromJSONSchema(tt.schema())
 			require.ErrorIs(t, err, tt.want)
 		})
 	}

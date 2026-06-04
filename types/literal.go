@@ -178,8 +178,9 @@ func (z *ZodLiteral[T, R]) Describe(description string) *ZodLiteral[T, R] {
 
 // Meta stores metadata for this literal schema.
 func (z *ZodLiteral[T, R]) Meta(meta core.GlobalMeta) *ZodLiteral[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Refine adds a typed custom validation function.
@@ -232,7 +233,7 @@ func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -242,7 +243,7 @@ func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiter
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

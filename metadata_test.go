@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kaptinlin/gozod"
+	"github.com/kaptinlin/gozod/core"
 )
 
 // TestDescribeGlobalFunction tests the gozod.Describe() global function
@@ -328,10 +329,10 @@ func TestMetadataImmutability(t *testing.T) {
 		original := gozod.String()
 		described := original.Describe("Described version")
 
-		// Original should not have metadata
-		_, _ = gozod.GlobalRegistry.Get(original)
-		// Note: Original may or may not have metadata depending on implementation
-		// The key is that described has the correct metadata
+		assert.NotSame(t, original, described)
+		_, ok := gozod.GlobalRegistry.Get(original)
+		assert.False(t, ok)
+
 		meta, ok := gozod.GlobalRegistry.Get(described)
 		assert.True(t, ok)
 		assert.Equal(t, "Described version", meta.Description)
@@ -341,11 +342,71 @@ func TestMetadataImmutability(t *testing.T) {
 		original := gozod.Int()
 		withMeta := original.Meta(gozod.GlobalMeta{Title: "Age"})
 
-		// withMeta should have metadata
+		assert.NotSame(t, original, withMeta)
+		_, ok := gozod.GlobalRegistry.Get(original)
+		assert.False(t, ok)
+
 		meta, ok := gozod.GlobalRegistry.Get(withMeta)
 		assert.True(t, ok)
 		assert.Equal(t, "Age", meta.Title)
 	})
+}
+
+func TestMetadataCopyOnWriteRepresentativeSchemas(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func() (core.ZodSchema, core.ZodSchema)
+	}{
+		{
+			name: "string",
+			build: func() (core.ZodSchema, core.ZodSchema) {
+				original := gozod.String()
+				return original, original.Meta(gozod.GlobalMeta{Title: "String"})
+			},
+		},
+		{
+			name: "integer",
+			build: func() (core.ZodSchema, core.ZodSchema) {
+				original := gozod.Int()
+				return original, original.Meta(gozod.GlobalMeta{Title: "Integer"})
+			},
+		},
+		{
+			name: "object",
+			build: func() (core.ZodSchema, core.ZodSchema) {
+				original := gozod.Object(gozod.ObjectSchema{"name": gozod.String()})
+				return original, original.Meta(gozod.GlobalMeta{Title: "Object"})
+			},
+		},
+		{
+			name: "slice",
+			build: func() (core.ZodSchema, core.ZodSchema) {
+				original := gozod.Slice[string](gozod.String())
+				return original, original.Meta(gozod.GlobalMeta{Title: "Slice"})
+			},
+		},
+		{
+			name: "format wrapper",
+			build: func() (core.ZodSchema, core.ZodSchema) {
+				original := gozod.Email()
+				return original, original.Meta(gozod.GlobalMeta{Title: "Email"})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original, withMeta := tt.build()
+
+			assert.NotSame(t, original, withMeta)
+			_, ok := gozod.GlobalRegistry.Get(original)
+			assert.False(t, ok)
+
+			meta, ok := gozod.GlobalRegistry.Get(withMeta)
+			assert.True(t, ok)
+			assert.NotEmpty(t, meta.Title)
+		})
+	}
 }
 
 // TestMetadataChaining tests chaining metadata with other operations

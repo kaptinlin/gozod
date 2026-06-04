@@ -255,8 +255,9 @@ func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
 
 // Meta stores metadata for this record schema.
 func (z *ZodRecord[T, R]) Meta(meta core.GlobalMeta) *ZodRecord[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -345,7 +346,7 @@ func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord
 	clone := &ZodRecord[T, *T]{
 		internals: z.newRecordInternals(in),
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -353,7 +354,7 @@ func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T,
 	clone := &ZodRecord[T, R]{
 		internals: z.newRecordInternals(in),
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

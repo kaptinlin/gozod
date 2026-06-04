@@ -1,20 +1,20 @@
 # GoZod
 
-[![Go Module](https://img.shields.io/badge/go-module-blue.svg)](https://golang.org/)
+[![Go Module](https://img.shields.io/badge/go-1.26.3%2B-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A TypeScript Zod v4-inspired validation library for Go with strict type semantics, fluent schemas, and JSON Schema interoperability
+A TypeScript Zod v4-inspired validation library for Go with strict type semantics, fluent schemas, struct tags, and JSON Schema Draft 2020-12 interoperability
 
 ## Features
 
-- **Strict type semantics**: Value and pointer schemas accept exact input types unless you explicitly opt into coercion.
-- **Dual parsing modes**: Use `Parse(any)` for dynamic data and `StrictParse(T)` when the input type is already known.
-- **Rich schema surface**: Compose primitives, collections, structs, unions, intersections, metadata, transforms, and refinements.
-- **Struct tags**: Build schemas from Go structs with `gozod:"..."` rules and alternate tag names through `WithTagName`.
-- **Optional code generation**: Use `gozodgen` for generated schema helpers in tag-heavy hot paths.
-- **Localized errors**: Inspect `*gozod.ZodError`, flatten or prettify failures, and use locale bundles from `locales/`.
-- **JSON Schema bridge**: Convert to and from JSON Schema Draft 2020-12 with the bundled `jsonschema` package.
-- **Curated dependency surface**: Built on JSON v2, `jsonschema`, `deepclone`, and i18n helpers instead of a framework stack.
+- **Strict type semantics**: Value schemas and pointer schemas accept exact input types unless coercion is explicit.
+- **Dual parsing modes**: Use `Parse(any)` for dynamic data and `StrictParse(T)` for known Go values.
+- **Fluent schema API**: Compose primitives, collections, structs, unions, intersections, transforms, refinements, defaults, and metadata.
+- **Struct tags**: Build schemas from Go structs with `gozod:"..."` tags, JSON field names, custom tag keys, and circular-reference support.
+- **Generated schemas**: Use `gozodgen` for tag-heavy paths where generated helpers are preferable to reflection.
+- **Localized errors**: Inspect `*gozod.ZodError`, prettify or flatten failures, and switch message bundles through `locales/`.
+- **JSON Schema bridge**: Convert GoZod schemas to JSON Schema and import JSON Schema back into GoZod with explicit lossy-conversion controls.
+- **Focused dependency surface**: Uses JSON v2, `jsonschema`, `deepclone`, JWT parsing, and Unicode helpers without a framework stack.
 
 ## Installation
 
@@ -22,7 +22,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 go get github.com/kaptinlin/gozod
 ```
 
-Requires the Go version declared in `go.mod`.
+Requires **Go 1.26.3+**.
 
 ## Quick Start
 
@@ -37,9 +37,9 @@ import (
 )
 
 func main() {
-	schema := gozod.String().Min(2).Email()
+	email := gozod.String().Min(5).Email()
 
-	value, err := schema.Parse("dev@example.com")
+	value, err := email.Parse("dev@example.com")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,29 +50,29 @@ func main() {
 
 ## Parse and StrictParse
 
-GoZod keeps runtime parsing and compile-time constrained parsing separate.
+Use `Parse(any)` at boundaries where input is dynamic. Use `StrictParse(T)` when your program already has the target Go type.
 
 ```go
-nameSchema := gozod.String().Min(2).Max(50)
+name := gozod.String().Min(2).Max(50)
 
-name, err := nameSchema.Parse("Alice")
+fromJSON, err := name.Parse("Alice")
 if err != nil {
 	log.Fatal(err)
 }
 
-strictName, err := nameSchema.StrictParse("Alice")
+knownValue, err := name.StrictParse("Grace")
 if err != nil {
 	log.Fatal(err)
 }
 
-fmt.Println(name, strictName)
+fmt.Println(fromJSON, knownValue)
 ```
 
-Use `Parse(any)` when data arrives from JSON, maps, or other dynamic sources. Use `StrictParse(T)` when your program already has the target Go type and you want the strict side of the API.
+`StrictParse` keeps the call site compile-time constrained. `Parse` keeps the boundary flexible and returns ordinary Go errors.
 
-## Struct Tags and Generated Schemas
+## Struct Tags
 
-Use `FromStruct[T]()` for declarative validation on native Go structs.
+Use `FromStruct[T]()` when validation belongs next to a Go struct.
 
 ```go
 package main
@@ -85,9 +85,9 @@ import (
 )
 
 type User struct {
-	Name  string `gozod:"required,min=2,max=50"`
-	Email string `gozod:"required,email"`
-	Age   int    `gozod:"min=18,max=120"`
+	Name  string `json:"name" gozod:"required,min=2,max=50"`
+	Email string `json:"email" gozod:"required,email"`
+	Age   int    `json:"age" gozod:"min=18,max=120"`
 }
 
 func main() {
@@ -106,47 +106,89 @@ func main() {
 }
 ```
 
-If you use a different tag key, pass `gozod.WithTagName("validate")`.
-
-For generated helpers, install and run `gozodgen`:
-
-```bash
-go install github.com/kaptinlin/gozod/cmd/gozodgen@latest
-go generate ./...
-```
-
-See [docs/tags.md](docs/tags.md) and [cmd/gozodgen](cmd/gozodgen/) for the full struct-tag and code-generation workflow.
+Use `gozod.WithTagName("validate")` when your project uses another tag key. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
 
 ## Programmatic Schemas
 
-Use `Object`, `Struct`, `Union`, `Intersection`, and related constructors when you want the schema shape in code.
+Use root constructors when you want the schema shape in code.
 
 ```go
-userSchema := gozod.Object(gozod.ObjectSchema{
+user := gozod.Object(gozod.ObjectSchema{
 	"name":  gozod.String().Min(2),
 	"email": gozod.Email(),
 	"age":   gozod.Int().Min(18),
 })
 
-contactSchema := gozod.Union([]any{
+contact := gozod.Union([]any{
 	gozod.Email(),
 	gozod.URL(),
 })
 
-_, _ = userSchema.Parse(map[string]any{
+parsedUser, err := user.Parse(map[string]any{
 	"name":  "Grace",
 	"email": "grace@example.com",
 	"age":   28,
 })
+if err != nil {
+	log.Fatal(err)
+}
 
-_, _ = contactSchema.Parse("https://example.com")
+parsedContact, err := contact.Parse("https://example.com")
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(parsedUser, parsedContact)
 ```
 
-For coercion-first flows, use the constructors in [coerce/](coerce/).
+For conversion-first flows, import [coerce/](coerce/) and choose coercion explicitly.
 
-## JSON Schema Integration
+```go
+import "github.com/kaptinlin/gozod/coerce"
 
-GoZod can translate schemas to JSON Schema Draft 2020-12 and back.
+age, err := coerce.Int().Parse("42")
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(age)
+```
+
+## Defaults, Prefaults, and Metadata
+
+`Default` short-circuits validation for nil input. `Prefault` runs the fallback through the full parsing pipeline.
+
+```go
+displayName := gozod.String().Min(3).Default("Guest")
+normalized := gozod.String().
+	Trim().
+	ToLowerCase().
+	Prefault("  Example  ")
+
+name, _ := displayName.Parse(nil)
+slug, _ := normalized.Parse(nil)
+
+fmt.Println(name, slug)
+```
+
+Metadata modifiers are copy-on-write. The original schema is left unchanged and metadata is registered on the returned schema.
+
+```go
+email := gozod.Email().Meta(gozod.GlobalMeta{
+	Title:       "Email Address",
+	Description: "Primary contact email",
+	Examples:    []any{"user@example.com"},
+})
+
+meta, ok := gozod.GlobalRegistry.Get(email)
+fmt.Println(ok, meta.Title)
+```
+
+See [docs/metadata.md](docs/metadata.md) for registries and JSON Schema metadata merging.
+
+## JSON Schema
+
+`gozod.ToJSONSchema` returns a `*jsonschema.Schema` from `github.com/kaptinlin/jsonschema`.
 
 ```go
 schema := gozod.Object(gozod.ObjectSchema{
@@ -159,7 +201,7 @@ if err != nil {
 	log.Fatal(err)
 }
 
-result := jsonSchema.ValidateMap(map[string]any{
+result := jsonSchema.Validate(map[string]any{
 	"name": "Lin",
 	"age":  30,
 })
@@ -167,14 +209,31 @@ result := jsonSchema.ValidateMap(map[string]any{
 fmt.Println(result.IsValid())
 ```
 
-See [docs/json-schema.md](docs/json-schema.md) for conversion details and compatibility notes.
+`gozod.FromJSONSchema` fails closed on unsupported JSON Schema keywords. Use `AllowLossy` only when dropping unsupported keywords is intentional.
+
+```go
+var ignored []string
+zodSchema, err := gozod.FromJSONSchema(jsonSchema, gozod.FromJSONSchemaOptions{
+	AllowLossy:    true,
+	LossyKeywords: &ignored,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+_, _ = zodSchema.ParseAny(map[string]any{"name": "Lin", "age": 30})
+fmt.Println(ignored)
+```
+
+See [docs/json-schema.md](docs/json-schema.md) for conversion options, unsupported features, registries, and Draft 2020-12 notes.
 
 ## Error Handling
 
-Validation failures return `error`. Inspect them as `*gozod.ZodError` when you need structured details.
+Validation failures return `error`. Use GoZod helpers when you need structured inspection or presentation.
 
 ```go
 schema := gozod.String().Min(5)
+
 _, err := schema.Parse("hi")
 if err == nil {
 	return
@@ -186,23 +245,35 @@ if gozod.IsZodError(err, &zodErr) {
 }
 ```
 
-See [docs/error-customization.md](docs/error-customization.md) and [docs/error-formatting.md](docs/error-formatting.md) for custom messages and output shapes.
+See [docs/error-customization.md](docs/error-customization.md) and [docs/error-formatting.md](docs/error-formatting.md).
 
-## Examples and Documentation
+## Code Generation
 
-- [docs/api.md](docs/api.md) — API reference and method surface
-- [docs/basics.md](docs/basics.md) — core concepts and common patterns
-- [docs/tags.md](docs/tags.md) — struct-tag validation guide
-- [docs/json-schema.md](docs/json-schema.md) — JSON Schema conversion
-- [docs/feature-mapping.md](docs/feature-mapping.md) — TypeScript Zod v4 to GoZod mapping
-- [docs/metadata.md](docs/metadata.md) — schema metadata and registries
-- [examples/README.md](examples/README.md) — runnable examples by topic
+Install `gozodgen` when generated struct-tag schemas fit your path better than reflection:
 
-Run an example directly:
+```bash
+go install github.com/kaptinlin/gozod/cmd/gozodgen@latest
+go generate ./...
+```
+
+See [cmd/gozodgen](cmd/gozodgen/) and [examples/code_generation](examples/code_generation/).
+
+## Documentation
+
+- [docs/basics.md](docs/basics.md) - core concepts and common patterns
+- [docs/api.md](docs/api.md) - API reference and method surface
+- [docs/tags.md](docs/tags.md) - struct-tag validation guide
+- [docs/json-schema.md](docs/json-schema.md) - JSON Schema conversion
+- [docs/metadata.md](docs/metadata.md) - schema metadata and registries
+- [docs/feature-mapping.md](docs/feature-mapping.md) - TypeScript Zod v4 to GoZod mapping
+- [examples/README.md](examples/README.md) - runnable examples by topic
+
+Run examples directly:
 
 ```bash
 go run ./examples/quickstart
 go run ./examples/struct_tags
+go run ./examples/error_handling
 ```
 
 ## Performance
@@ -211,9 +282,7 @@ GoZod includes benchmarks for parsing, checks, tags, transforms, and configurati
 
 - Prefer `StrictParse` when the input type is already known.
 - Use [coerce/](coerce/) only when conversion is part of the requirement.
-- Use `gozodgen` for tag-heavy hot paths where reflection cost matters.
-
-Run the benchmark suite with:
+- Use `gozodgen` for tag-heavy hot paths where generated helpers are worth the extra file.
 
 ```bash
 go test -bench=. ./...
@@ -222,10 +291,12 @@ go test -bench=. ./...
 ## Development
 
 ```bash
-task test                         # Run the default test suite
-task test:race                    # Run race-enabled tests for lightweight packages
-task lint                         # Run golangci-lint and tidy checks
-task verify                       # Run deps, fmt, vet, lint, test, and govulncheck
+task test                           # Run go test -race ./...
+task test:race                      # Run race tests for core and lightweight utility packages
+task lint                           # Run golangci-lint and tidy-lint
+task golangci-lint                  # Run golangci-lint v2 only
+task tidy-lint                      # Verify go.mod and go.sum stay tidy
+task verify                         # Run deps, fmt, vet, lint, test, and vuln
 go test -tags=contractcheck ./types # Audit compile-time schema contracts
 ```
 

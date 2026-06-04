@@ -239,8 +239,9 @@ func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
 
 // Meta attaches GlobalMeta to this object schema via the global registry.
 func (z *ZodObject[T, R]) Meta(meta core.GlobalMeta) *ZodObject[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -539,14 +540,14 @@ func (z *ZodObject[T, R]) newObjectInternals(in *core.ZodTypeInternals) *ZodObje
 // withPtrInternals creates a new instance with pointer constraint type.
 func (z *ZodObject[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodObject[T, *T] {
 	clone := &ZodObject[T, *T]{internals: z.newObjectInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
 // withInternals creates a new instance preserving the constraint type.
 func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T, R] {
 	clone := &ZodObject[T, R]{internals: z.newObjectInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

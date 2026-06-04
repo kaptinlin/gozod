@@ -1,8 +1,10 @@
 # GoZod Feature Mapping Reference
 
-This document provides a comprehensive feature mapping between TypeScript Zod v4 and GoZod validation library, detailing correspondences, unique features, and implementation status.
+This document maps TypeScript Zod v4 concepts to GoZod behavior. It is a
+navigation aid, not a source-of-truth completion checklist; executable tests
+and package documentation define the current contract.
 
-## TypeScript Zod v4 Complete Mapping
+## TypeScript Zod v4 Behavior Mapping
 
 ### Basic Type Mapping
 
@@ -124,8 +126,8 @@ This document provides a comprehensive feature mapping between TypeScript Zod v4
 | `.startsWith(str)` | `.StartsWith(str)` | ✅ | Prefix validation |
 | `.endsWith(str)` | `.EndsWith(str)` | ✅ | Suffix validation |
 | `.trim()` | `.Trim()` | ✅ | Whitespace trimming transformation |
-| `.toLowerCase()` | `.ToLower()` | ✅ | Unicode-aware case conversion |
-| `.toUpperCase()` | `.ToUpper()` | ✅ | Unicode-aware case conversion |
+| `.toLowerCase()` | `.ToLowerCase()` | ✅ | Unicode-aware case conversion |
+| `.toUpperCase()` | `.ToUpperCase()` | ✅ | Unicode-aware case conversion |
 | `.lowercase()` | `.Lowercase()` | ✅ | Validates string has no uppercase letters |
 | `.uppercase()` | `.Uppercase()` | ✅ | Validates string has no lowercase letters |
 | `.normalize(form?)` | `.Normalize(form?)` | ✅ | Unicode normalization (NFC, NFD, NFKC, NFKD) |
@@ -518,4 +520,6 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 
 ---
 
-This comprehensive mapping demonstrates GoZod's complete compatibility with TypeScript Zod v4 while providing significant Go-specific enhancements including strict type semantics, performance optimizations, declarative struct tags, and a robust custom validator system.
+This mapping highlights how GoZod translates Zod v4 ideas into Go-native APIs:
+strict type semantics, `Parse` / `StrictParse`, declarative struct tags, and
+generated schemas for tag-heavy paths.

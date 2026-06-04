@@ -24,8 +24,7 @@ func newFormatCheck(
 	params ...any,
 ) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: checkID}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef(checkID, formatCheckParams(format, pattern), cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -46,6 +45,14 @@ func newFormatCheck(
 	}
 }
 
+func formatCheckParams(format string, pattern *regexp.Regexp) map[string]any {
+	params := map[string]any{"format": format}
+	if pattern != nil {
+		params["pattern"] = pattern.String()
+	}
+	return params
+}
+
 // Email creates an email format validation check.
 func Email(params ...any) core.ZodCheck {
 	return newFormatCheck("email", validate.Email, "email", regex.Email, params...)
@@ -54,8 +61,7 @@ func Email(params ...any) core.ZodCheck {
 // EmailWithPattern creates an email validation check with a custom regex pattern.
 func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "email"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("email", formatCheckParams("email", pattern), cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -107,8 +113,14 @@ func URL(params ...any) core.ZodCheck {
 // URLWithOptions creates a URL validation check with optional constraints.
 func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "url"}
-	ApplyCheckParams(def, cp)
+	checkParams := formatCheckParams("uri", regex.URL)
+	if options.Hostname != nil {
+		checkParams["hostnamePattern"] = options.Hostname.String()
+	}
+	if options.Protocol != nil {
+		checkParams["protocolPattern"] = options.Protocol.String()
+	}
+	def := newCheckDef("url", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -161,13 +173,14 @@ func MACWithDelimiter(delimiter string, params ...any) core.ZodCheck {
 // MACWithOptions creates a MAC address validation check with full configuration.
 func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "mac"}
-	ApplyCheckParams(def, cp)
-
 	delim := options.Delimiter
 	if delim == "" {
 		delim = ":"
 	}
+	pattern := regex.MAC(delim)
+	checkParams := formatCheckParams("mac", pattern)
+	checkParams["delimiter"] = delim
+	def := newCheckDef("mac", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -179,7 +192,7 @@ func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
 		OnAttach: []func(any){
 			func(schema any) {
 				SetBagProperty(schema, "format", "mac")
-				addPatternToSchema(schema, regex.MAC(delim).String())
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -199,8 +212,9 @@ func CIDRv6(params ...any) core.ZodCheck {
 // Base64 creates a Base64 encoding validation check.
 func Base64(params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "base64"}
-	ApplyCheckParams(def, cp)
+	checkParams := formatCheckParams("base64", regex.Base64)
+	checkParams["contentEncoding"] = "base64"
+	def := newCheckDef("base64", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -223,8 +237,9 @@ func Base64(params ...any) core.ZodCheck {
 // Base64URL creates a Base64URL encoding validation check.
 func Base64URL(params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "base64url"}
-	ApplyCheckParams(def, cp)
+	checkParams := formatCheckParams("base64url", regex.Base64URL)
+	checkParams["contentEncoding"] = "base64url"
+	def := newCheckDef("base64url", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -257,8 +272,11 @@ func JWTWithAlgorithm(algorithm string, params ...any) core.ZodCheck {
 // JWTWithOptions creates a JWT token validation check with full configuration.
 func JWTWithOptions(options validate.JWTOptions, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "jwt"}
-	ApplyCheckParams(def, cp)
+	checkParams := map[string]any{"format": "jwt"}
+	if options.Algorithm != nil {
+		checkParams["algorithm"] = *options.Algorithm
+	}
+	def := newCheckDef("jwt", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -284,8 +302,22 @@ func E164(params ...any) core.ZodCheck {
 // ISODateTimeWithOptions creates an ISO 8601 datetime validation check with options.
 func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "iso_datetime"}
-	ApplyCheckParams(def, cp)
+	pattern := regex.Datetime(regex.DatetimeOptions{
+		Precision: options.Precision,
+		Offset:    options.Offset,
+		Local:     options.Local,
+	})
+	checkParams := formatCheckParams("iso_datetime", pattern)
+	if options.Precision != nil {
+		checkParams["precision"] = *options.Precision
+	}
+	if options.Offset {
+		checkParams["offset"] = true
+	}
+	if options.Local {
+		checkParams["local"] = true
+	}
+	def := newCheckDef("iso_datetime", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -297,7 +329,7 @@ func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) 
 		OnAttach: []func(any){
 			func(schema any) {
 				SetBagProperty(schema, "format", "iso_datetime")
-				addPatternToSchema(schema, regex.DefaultDatetime.String())
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -318,8 +350,7 @@ func ISODate(params ...any) core.ZodCheck {
 // Validates that the ISO date is on or after the specified minimum date.
 func ISODateMin(minDate string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "min_date"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("min_date", map[string]any{"minimum": minDate}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -340,8 +371,7 @@ func ISODateMin(minDate string, params ...any) core.ZodCheck {
 // Validates that the ISO date is on or before the specified maximum date.
 func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "max_date"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("max_date", map[string]any{"maximum": maxDate}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -362,8 +392,12 @@ func ISODateMax(maxDate string, params ...any) core.ZodCheck {
 // Uses self-reference to attach Inst on the created issue.
 func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "iso_time"}
-	ApplyCheckParams(def, cp)
+	pattern := regex.Time(regex.TimeOptions{Precision: options.Precision})
+	checkParams := formatCheckParams("iso_time", pattern)
+	if options.Precision != nil {
+		checkParams["precision"] = *options.Precision
+	}
+	def := newCheckDef("iso_time", checkParams, cp)
 
 	var check *core.ZodCheckInternals
 	check = &core.ZodCheckInternals{
@@ -378,7 +412,7 @@ func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.Zod
 		OnAttach: []func(any){
 			func(schema any) {
 				SetBagProperty(schema, "format", "iso_time")
-				addPatternToSchema(schema, regex.DefaultTime.String())
+				addPatternToSchema(schema, pattern.String())
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -429,8 +463,11 @@ func NanoID(params ...any) core.ZodCheck {
 // JSON creates a JSON format validation check.
 func JSON(params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "json"}
-	ApplyCheckParams(def, cp)
+	checkParams := map[string]any{
+		"contentMediaType": "application/json",
+		"pattern":          regex.JSONString.String(),
+	}
+	def := newCheckDef("json", checkParams, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,

@@ -539,10 +539,13 @@ func TestGenerateValidatorChain(t *testing.T) {
 		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ".IPv6()"},
 		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
 		{name: "regex with quotes", rule: tagparser.TagRule{Name: "regex", Params: []string{"^\"[A-Z]+\"$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^\"[A-Z]+\"$"))`},
+		{name: "includes", rule: tagparser.TagRule{Name: "includes", Params: []string{"PROD"}}, fieldType: reflect.TypeFor[string](), expected: `.Includes("PROD")`},
+		{name: "starts with", rule: tagparser.TagRule{Name: "startswith", Params: []string{"ID-"}}, fieldType: reflect.TypeFor[string](), expected: `.StartsWith("ID-")`},
 
 		// Numeric validators
 		{name: "gte", rule: tagparser.TagRule{Name: "gte", Params: []string{"0"}}, fieldType: reflect.TypeFor[int](), expected: ".Gte(0)"},
 		{name: "lt", rule: tagparser.TagRule{Name: "lt", Params: []string{"100"}}, fieldType: reflect.TypeFor[int](), expected: ".Lt(100)"},
+		{name: "multiple of", rule: tagparser.TagRule{Name: "multipleof", Params: []string{"5"}}, fieldType: reflect.TypeFor[int](), expected: ".MultipleOf(5)"},
 
 		// Prefault
 		{name: "prefault string", rule: tagparser.TagRule{Name: "prefault", Params: []string{"test"}}, fieldType: reflect.TypeFor[string](), expected: `.Prefault("test")`},

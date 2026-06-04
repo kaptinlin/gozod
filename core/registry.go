@@ -106,3 +106,32 @@ func CopyGlobalMeta(from, to ZodSchema) {
 		GlobalRegistry.Add(to, meta)
 	}
 }
+
+// MergeGlobalMeta overlays update on base, keeping base fields when update
+// leaves them empty.
+func MergeGlobalMeta(base, update GlobalMeta) GlobalMeta {
+	if update.ID != "" {
+		base.ID = update.ID
+	}
+	if update.Title != "" {
+		base.Title = update.Title
+	}
+	if update.Description != "" {
+		base.Description = update.Description
+	}
+	if len(update.Examples) > 0 {
+		base.Examples = update.Examples
+	}
+	return base
+}
+
+// ApplyGlobalMeta merges update from source metadata and stores it on target.
+func ApplyGlobalMeta(source, target ZodSchema, update GlobalMeta) {
+	if source == nil || target == nil {
+		return
+	}
+	if existing, ok := GlobalRegistry.Get(source); ok {
+		update = MergeGlobalMeta(existing, update)
+	}
+	GlobalRegistry.Add(target, update)
+}

@@ -246,8 +246,9 @@ func (z *ZodUnion[T, R]) PrefaultFunc(fn func() T) *ZodUnion[T, R] {
 
 // Meta attaches metadata to this schema.
 func (z *ZodUnion[T, R]) Meta(meta core.GlobalMeta) *ZodUnion[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe sets a human-readable description for this schema.
@@ -339,7 +340,7 @@ func (z *ZodUnion[T, R]) withPtrInternals(
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -351,7 +352,7 @@ func (z *ZodUnion[T, R]) withInternals(
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

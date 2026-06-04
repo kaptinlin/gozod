@@ -475,25 +475,8 @@ func (z *ZodString[T]) withCheck(check core.ZodCheck) *ZodString[T] {
 
 // withMeta clones internals, merges metadata, and returns a new schema.
 func (z *ZodString[T]) withMeta(meta core.GlobalMeta) *ZodString[T] {
-	clone := z.withInternals(&z.internals.ZodTypeInternals)
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		core.GlobalRegistry.Add(clone, meta)
-		return clone
-	}
-	if meta.ID != "" {
-		existing.ID = meta.ID
-	}
-	if meta.Title != "" {
-		existing.Title = meta.Title
-	}
-	if meta.Description != "" {
-		existing.Description = meta.Description
-	}
-	if len(meta.Examples) > 0 {
-		existing.Examples = meta.Examples
-	}
-	core.GlobalRegistry.Add(clone, existing)
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
 	return clone
 }
 
@@ -505,9 +488,7 @@ func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*s
 			Def:              z.internals.Def,
 		},
 	}
-	if meta, ok := core.GlobalRegistry.Get(z); ok {
-		core.GlobalRegistry.Add(clone, meta)
-	}
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -519,9 +500,7 @@ func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 			Def:              z.internals.Def,
 		},
 	}
-	if meta, ok := core.GlobalRegistry.Get(z); ok {
-		core.GlobalRegistry.Add(clone, meta)
-	}
+	finalizeClone(z, clone)
 	return clone
 }
 

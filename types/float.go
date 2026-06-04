@@ -213,8 +213,9 @@ func (z *ZodFloatTyped[T, R]) PrefaultFunc(fn func() float64) *ZodFloatTyped[T, 
 
 // Meta stores metadata for this float schema in the global registry.
 func (z *ZodFloatTyped[T, R]) Meta(meta core.GlobalMeta) *ZodFloatTyped[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -544,7 +545,7 @@ func (z *ZodFloatTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFloat
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -554,7 +555,7 @@ func (z *ZodFloatTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFl
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

@@ -367,26 +367,16 @@ func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
 
 func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	internals := schema.Internals()
+	bag := cloneBag(internals)
 	var jsonSchema *lib.Schema
 	var err error
-
-	// Execute OnAttach callbacks so that checks can annotate Bag/metadata
-	for _, chk := range internals.Checks {
-		if zc := chk.Zod(); zc != nil {
-			for _, fn := range zc.OnAttach {
-				if fn != nil {
-					fn(schema)
-				}
-			}
-		}
-	}
 
 	switch internals.Type {
 	case core.ZodTypeString,
 		core.ZodTypeIPv4, core.ZodTypeIPv6, core.ZodTypeHostname, core.ZodTypeMAC, core.ZodTypeE164,
 		core.ZodTypeCIDRv4, core.ZodTypeCIDRv6, core.ZodTypeURL:
 		jsonSchema = &lib.Schema{Type: []string{"string"}}
-		c.applyStringBag(jsonSchema, internals)
+		c.applyStringBag(jsonSchema, bag)
 	case core.ZodTypeInt, core.ZodTypeInteger, core.ZodTypeInt8, core.ZodTypeInt16, core.ZodTypeInt32, core.ZodTypeInt64,
 		core.ZodTypeUint, core.ZodTypeUint8, core.ZodTypeUint16, core.ZodTypeUint32, core.ZodTypeUint64, core.ZodTypeUintptr:
 		jsonSchema = &lib.Schema{Type: []string{"integer"}}
@@ -462,7 +452,7 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	case core.ZodTypeLiteral:
 		jsonSchema, err = c.convertLiteral(schema)
 	case core.ZodTypeFile:
-		jsonSchema, err = c.convertFile(schema)
+		jsonSchema, err = c.convertFile(bag)
 	case core.ZodTypeLazy:
 		jsonSchema, err = c.convertLazy(schema)
 	case core.ZodTypeMap:
@@ -513,21 +503,27 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 		return nil, err
 	}
 
-	if internals != nil && internals.Bag != nil {
-		bag := internals.Bag
+	if len(bag) > 0 {
 		c.applyBag(jsonSchema, bag)
 	}
 
 	return jsonSchema, nil
 }
 
-func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTypeInternals) {
-	if internals.Bag == nil {
+func cloneBag(internals *core.ZodTypeInternals) map[string]any {
+	if internals == nil || len(internals.Bag) == 0 {
+		return nil
+	}
+	return maps.Clone(internals.Bag)
+}
+
+func (c *converter) applyStringBag(jsonSchema *lib.Schema, bag map[string]any) {
+	if len(bag) == 0 {
 		return
 	}
 
 	// Process aggregated patterns from the bag
-	if patternsRaw, ok := internals.Bag["patterns"]; ok {
+	if patternsRaw, ok := bag["patterns"]; ok {
 		if patterns, ok := patternsRaw.([]string); ok && len(patterns) > 0 {
 			// Deduplicate patterns to handle schemas that add the same check multiple ways
 			uniquePatterns := make(map[string]struct{})
@@ -551,31 +547,31 @@ func (c *converter) applyStringBag(jsonSchema *lib.Schema, internals *core.ZodTy
 				}
 			}
 
-			// Remove patterns from bag so applyBag doesn't re-add them
-			delete(internals.Bag, "patterns")
+			// Remove patterns from the local copy so applyBag doesn't re-add them.
+			delete(bag, "patterns")
 		}
 	}
 
 	// Apply other string-related properties from the bag
-	if val, ok := internals.Bag["format"].(string); ok {
+	if val, ok := bag["format"].(string); ok {
 		jsonSchema.Format = &val
 	}
-	if v, ok := internals.Bag["minLength"]; ok {
+	if v, ok := bag["minLength"]; ok {
 		if n, ok := toFloat(v); ok {
 			jsonSchema.MinLength = &n
 		}
 	}
-	if v, ok := internals.Bag["maxLength"]; ok {
+	if v, ok := bag["maxLength"]; ok {
 		if n, ok := toFloat(v); ok {
 			jsonSchema.MaxLength = &n
 		}
 	}
-	if v, ok := internals.Bag["contentEncoding"]; ok {
+	if v, ok := bag["contentEncoding"]; ok {
 		if ce, ok := v.(string); ok {
 			jsonSchema.ContentEncoding = &ce
 		}
 	}
-	if v, ok := internals.Bag["contentMediaType"]; ok {
+	if v, ok := bag["contentMediaType"]; ok {
 		if cmt, ok := v.(string); ok {
 			jsonSchema.ContentMediaType = &cmt
 		}
@@ -1291,19 +1287,18 @@ func (c *converter) convertLiteral(schema core.ZodSchema) (*lib.Schema, error) {
 	return jsonSchema, nil
 }
 
-// convertFile handles ZodFile -> JSON Schema file representation
-func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
+// convertFile handles ZodFile -> JSON Schema file representation.
+func (c *converter) convertFile(bag map[string]any) (*lib.Schema, error) {
 	s := &lib.Schema{
 		Type:            []string{"string"},
 		Format:          new("binary"),
 		ContentEncoding: new("binary"),
 	}
 
-	internals := schema.Internals()
-	c.applyBag(s, internals.Bag) // Bag is applied here.
+	c.applyBag(s, bag)
 
 	// Handle multiple MIME types
-	if mimes, ok := internals.Bag["mime"].([]string); ok && len(mimes) > 1 {
+	if mimes, ok := bag["mime"].([]string); ok && len(mimes) > 1 {
 		anyOf := make([]*lib.Schema, len(mimes))
 		for i, mime := range mimes {
 			itemSchema := &lib.Schema{
@@ -1313,19 +1308,19 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 				ContentMediaType: new(mime),
 			}
 			// Apply min/max/size constraints using helper conversion
-			if v, ok := internals.Bag["size"]; ok {
+			if v, ok := bag["size"]; ok {
 				if f, ok := toFloat(v); ok {
 					maxLength := f
 					itemSchema.MinLength = &f
 					itemSchema.MaxLength = &maxLength
 				}
 			} else {
-				if v, ok := internals.Bag["minSize"]; ok {
+				if v, ok := bag["minSize"]; ok {
 					if f, ok := toFloat(v); ok {
 						itemSchema.MinLength = &f
 					}
 				}
-				if v, ok := internals.Bag["maxSize"]; ok {
+				if v, ok := bag["maxSize"]; ok {
 					if f, ok := toFloat(v); ok {
 						itemSchema.MaxLength = &f
 					}
@@ -1342,10 +1337,11 @@ func (c *converter) convertFile(schema core.ZodSchema) (*lib.Schema, error) {
 		s.MinLength = nil
 		s.MaxLength = nil
 
-		// Remove size-related bag entries so upstream code won't reapply them
-		delete(internals.Bag, "minSize")
-		delete(internals.Bag, "maxSize")
-		delete(internals.Bag, "size")
+		// Remove size-related entries from the local copy so the final bag pass
+		// does not reapply them to the top-level schema.
+		delete(bag, "minSize")
+		delete(bag, "maxSize")
+		delete(bag, "size")
 	}
 
 	return s, nil

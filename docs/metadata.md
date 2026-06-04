@@ -84,6 +84,10 @@ All schema types support `.Describe()` and `.Meta()`:
 - **Special**: Any, Unknown, Never, Nil, Lazy, Function, Enum
 - **Format**: StringBool, File
 
+`.Describe()` and `.Meta()` are copy-on-write modifiers. They return a new
+schema instance and register metadata on that returned schema; the original
+schema is left unchanged.
+
 ---
 
 ## Check Factories (Zod v4 Compatible)

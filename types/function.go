@@ -208,8 +208,9 @@ func (z *ZodFunction[T]) PrefaultFunc(fn func() any) *ZodFunction[T] {
 
 // Meta stores metadata for this function schema.
 func (z *ZodFunction[T]) Meta(meta core.GlobalMeta) *ZodFunction[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.

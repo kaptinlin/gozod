@@ -27,13 +27,6 @@ func IntCoerce(m map[string]any, key string) (int, bool) {
 	}
 }
 
-// Int returns the int value for key.
-//
-// Deprecated: use [IntCoerce] for explicit numeric coercion.
-func Int(m map[string]any, key string) (int, bool) {
-	return IntCoerce(m, key)
-}
-
 // Float64Coerce returns the float64 value for key, with
 // numeric coercion from float32, int, int32, and int64.
 func Float64Coerce(m map[string]any, key string) (float64, bool) {
@@ -51,13 +44,6 @@ func Float64Coerce(m map[string]any, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-// Float64 returns the float64 value for key.
-//
-// Deprecated: use [Float64Coerce] for explicit numeric coercion.
-func Float64(m map[string]any, key string) (float64, bool) {
-	return Float64Coerce(m, key)
 }
 
 // Strings returns the []string value for key.

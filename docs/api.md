@@ -308,8 +308,8 @@ gozod.String().Regex(`^\d{3}-\d{2}-\d{4}$`)
 // Built-in transformations
 schema := gozod.String().
     Trim().              // Remove whitespace
-    ToLower().           // Convert to lowercase
-    ToUpper().           // Convert to uppercase
+    ToLowerCase().       // Convert to lowercase
+    ToUpperCase().       // Convert to uppercase
     Slugify()            // URL-friendly: "Hello World!" → "hello-world"
 
 result, err := schema.Parse("  HELLO WORLD  ")  // Result: "hello-world"

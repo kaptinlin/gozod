@@ -1,5 +1,7 @@
 package core
 
+import "maps"
+
 // ZodCheck represents the interface for any validation constraint.
 type ZodCheck interface {
 	Zod() *ZodCheckInternals
@@ -19,11 +21,47 @@ func (c *ZodCheckInternals) Zod() *ZodCheckInternals {
 	return c
 }
 
+// AttachCheck runs a check's construction-time attachment hooks on schema.
+func AttachCheck(schema ZodSchema, check ZodCheck) {
+	if schema == nil || check == nil {
+		return
+	}
+	internals := check.Zod()
+	if internals == nil {
+		return
+	}
+	for _, attach := range internals.OnAttach {
+		if attach != nil {
+			attach(schema)
+		}
+	}
+}
+
+// AttachChecks runs construction-time attachment hooks for all schema checks.
+func AttachChecks(schema ZodSchema) {
+	if schema == nil || schema.Internals() == nil {
+		return
+	}
+	for _, check := range schema.Internals().Checks {
+		AttachCheck(schema, check)
+	}
+}
+
 // ZodCheckDef defines the static configuration for a validation check.
 type ZodCheckDef struct {
-	Check string
-	Error *ZodErrorMap
-	Abort bool
+	Check  string
+	Params map[string]any
+	Error  *ZodErrorMap
+	Abort  bool
+}
+
+// NewZodCheckDef creates a check definition with cloned semantic parameters.
+func NewZodCheckDef(check string, params map[string]any) *ZodCheckDef {
+	def := &ZodCheckDef{Check: check}
+	if len(params) > 0 {
+		def.Params = maps.Clone(params)
+	}
+	return def
 }
 
 // CheckParams defines parameters for attaching a validation check.

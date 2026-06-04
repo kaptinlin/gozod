@@ -303,8 +303,9 @@ func (i *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R]
 
 // Meta stores metadata for this schema.
 func (i *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
-	core.GlobalRegistry.Add(i, meta)
-	return i
+	clone := i.withInternals(i.internals.Clone())
+	core.ApplyGlobalMeta(i, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -387,13 +388,13 @@ func (i *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
 
 func (i *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
 	clone := &ZodIntersection[T, *T]{internals: i.newIntersectionInternals(in)}
-	core.CopyGlobalMeta(i, clone)
+	finalizeClone(i, clone)
 	return clone
 }
 
 func (i *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntersection[T, R] {
 	clone := &ZodIntersection[T, R]{internals: i.newIntersectionInternals(in)}
-	core.CopyGlobalMeta(i, clone)
+	finalizeClone(i, clone)
 	return clone
 }
 

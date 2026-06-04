@@ -32,9 +32,11 @@ var (
 
 // FromJSONSchemaOptions configures the JSON Schema to GoZod conversion.
 type FromJSONSchemaOptions struct {
-	// StrictMode causes conversion to fail on unsupported features.
-	// If false, unsupported features are silently ignored.
-	StrictMode bool
+	// AllowLossy permits conversion to ignore unsupported JSON Schema keywords.
+	// The default is fail-closed: unsupported keywords return an error.
+	AllowLossy bool
+	// LossyKeywords receives unsupported keywords ignored when AllowLossy is true.
+	LossyKeywords *[]string
 }
 
 // FromJSONSchema converts a kaptinlin/jsonschema Schema to a GoZod schema.
@@ -83,11 +85,12 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 		return ctx.convert(s.ResolvedRef)
 	}
 
-	// Check for unsupported features in strict mode
-	if ctx.options.StrictMode {
-		if err := ctx.checkUnsupportedFeatures(s); err != nil {
-			return nil, err
+	unsupported := ctx.unsupportedFeatures(s)
+	if len(unsupported) > 0 {
+		if !ctx.options.AllowLossy {
+			return nil, unsupported[0].err
 		}
+		ctx.recordLossyKeywords(unsupported)
 	}
 
 	// Handle composition keywords first
@@ -145,39 +148,54 @@ func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchem
 	}
 }
 
-// checkUnsupportedFeatures returns an error if unsupported keywords are present.
-func (ctx *fromJSONSchemaContext) checkUnsupportedFeatures(s *lib.Schema) error {
+type unsupportedFeature struct {
+	keyword string
+	err     error
+}
+
+// unsupportedFeatures returns unsupported keywords present on the schema.
+func (ctx *fromJSONSchemaContext) unsupportedFeatures(s *lib.Schema) []unsupportedFeature {
+	var unsupported []unsupportedFeature
 	if s.If != nil || s.Then != nil || s.Else != nil {
-		return ErrJSONSchemaIfThenElse
+		unsupported = append(unsupported, unsupportedFeature{keyword: "if/then/else", err: ErrJSONSchemaIfThenElse})
 	}
 	if s.PatternProperties != nil && len(*s.PatternProperties) > 0 {
-		return ErrJSONSchemaPatternProperties
+		unsupported = append(unsupported, unsupportedFeature{keyword: "patternProperties", err: ErrJSONSchemaPatternProperties})
 	}
 	if s.DynamicRef != "" {
-		return ErrJSONSchemaDynamicRef
+		unsupported = append(unsupported, unsupportedFeature{keyword: "$dynamicRef", err: ErrJSONSchemaDynamicRef})
 	}
 	if s.UnevaluatedProperties != nil {
-		return ErrJSONSchemaUnevaluatedProps
+		unsupported = append(unsupported, unsupportedFeature{keyword: "unevaluatedProperties", err: ErrJSONSchemaUnevaluatedProps})
 	}
 	if s.UnevaluatedItems != nil {
-		return ErrJSONSchemaUnevaluatedItems
+		unsupported = append(unsupported, unsupportedFeature{keyword: "unevaluatedItems", err: ErrJSONSchemaUnevaluatedItems})
 	}
 	if s.Not != nil {
-		return ErrUnsupportedJSONSchemaKeyword
+		unsupported = append(unsupported, unsupportedFeature{keyword: "not", err: ErrUnsupportedJSONSchemaKeyword})
 	}
 	if s.UniqueItems != nil && *s.UniqueItems {
-		return ErrUnsupportedJSONSchemaKeyword
+		unsupported = append(unsupported, unsupportedFeature{keyword: "uniqueItems", err: ErrUnsupportedJSONSchemaKeyword})
 	}
 	if len(s.DependentSchemas) > 0 {
-		return ErrJSONSchemaDependentSchemas
+		unsupported = append(unsupported, unsupportedFeature{keyword: "dependentSchemas", err: ErrJSONSchemaDependentSchemas})
 	}
 	if s.PropertyNames != nil {
-		return ErrJSONSchemaPropertyNames
+		unsupported = append(unsupported, unsupportedFeature{keyword: "propertyNames", err: ErrJSONSchemaPropertyNames})
 	}
 	if s.Contains != nil || s.MinContains != nil || s.MaxContains != nil {
-		return ErrJSONSchemaContains
+		unsupported = append(unsupported, unsupportedFeature{keyword: "contains", err: ErrJSONSchemaContains})
 	}
-	return nil
+	return unsupported
+}
+
+func (ctx *fromJSONSchemaContext) recordLossyKeywords(features []unsupportedFeature) {
+	if ctx.options.LossyKeywords == nil {
+		return
+	}
+	for _, feature := range features {
+		*ctx.options.LossyKeywords = append(*ctx.options.LossyKeywords, feature.keyword)
+	}
 }
 
 // convertByType converts based on the type keyword.

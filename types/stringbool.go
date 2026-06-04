@@ -184,8 +184,9 @@ func (z *ZodStringBool[T]) PrefaultFunc(fn func() string) *ZodStringBool[T] {
 
 // Meta stores metadata in the global registry.
 func (z *ZodStringBool[T]) Meta(meta core.GlobalMeta) *ZodStringBool[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -392,7 +393,7 @@ func (z *ZodStringBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodStrin
 			Falsy:            z.internals.Falsy,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -406,7 +407,7 @@ func (z *ZodStringBool[T]) withInternals(in *core.ZodTypeInternals) *ZodStringBo
 			Falsy:            z.internals.Falsy,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

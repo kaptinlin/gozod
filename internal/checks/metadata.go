@@ -23,7 +23,7 @@ func (c *ZodCheckDescribe) Zod() *core.ZodCheckInternals {
 //	schema := gozod.String().Check(gozod.Describe("User email"))
 func Describe(description string) core.ZodCheck {
 	return &ZodCheckDescribe{
-		internals: newMetadataCheck("describe", func(meta *core.GlobalMeta) {
+		internals: newMetadataCheck("describe", map[string]any{"description": description}, func(meta *core.GlobalMeta) {
 			meta.Description = description
 		}),
 	}
@@ -51,7 +51,7 @@ func (c *ZodCheckMeta) Zod() *core.ZodCheckInternals {
 //	}))
 func Meta(metadata core.GlobalMeta) core.ZodCheck {
 	return &ZodCheckMeta{
-		internals: newMetadataCheck("meta", func(existing *core.GlobalMeta) {
+		internals: newMetadataCheck("meta", map[string]any{"metadata": metadata}, func(existing *core.GlobalMeta) {
 			if metadata.ID != "" {
 				existing.ID = metadata.ID
 			}
@@ -68,9 +68,9 @@ func Meta(metadata core.GlobalMeta) core.ZodCheck {
 	}
 }
 
-func newMetadataCheck(name string, apply func(*core.GlobalMeta)) *core.ZodCheckInternals {
+func newMetadataCheck(name string, params map[string]any, apply func(*core.GlobalMeta)) *core.ZodCheckInternals {
 	return &core.ZodCheckInternals{
-		Def:   &core.ZodCheckDef{Check: name},
+		Def:   newCheckDef(name, params, nil),
 		Check: func(_ *core.ParsePayload) {},
 		OnAttach: []func(any){
 			func(schema any) {

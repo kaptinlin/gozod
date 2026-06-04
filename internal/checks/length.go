@@ -11,8 +11,7 @@ import (
 // MaxLength creates a maximum length validation check.
 func MaxLength(maximum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "max_length"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("max_length", map[string]any{"maximum": maximum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -31,8 +30,7 @@ func MaxLength(maximum int, params ...any) core.ZodCheck {
 // MinLength creates a minimum length validation check.
 func MinLength(minimum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "min_length"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("min_length", map[string]any{"minimum": minimum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -51,8 +49,7 @@ func MinLength(minimum int, params ...any) core.ZodCheck {
 // Length creates an exact length validation check.
 func Length(exact int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "length_equals"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("length_equals", map[string]any{"exact": exact}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -80,8 +77,7 @@ func Length(exact int, params ...any) core.ZodCheck {
 // MaxSize creates a maximum size validation check.
 func MaxSize(maximum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "max_size"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("max_size", map[string]any{"maximum": maximum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -103,8 +99,7 @@ func MaxSize(maximum int, params ...any) core.ZodCheck {
 // MinSize creates a minimum size validation check.
 func MinSize(minimum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "min_size"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("min_size", map[string]any{"minimum": minimum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -126,8 +121,7 @@ func MinSize(minimum int, params ...any) core.ZodCheck {
 // Size creates an exact size validation check.
 func Size(exact int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "size_equals"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("size_equals", map[string]any{"exact": exact}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -161,8 +155,7 @@ func Size(exact int, params ...any) core.ZodCheck {
 // LengthRange creates a length range validation check.
 func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "length_range"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("length_range", map[string]any{"minimum": minimum, "maximum": maximum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -187,8 +180,7 @@ func LengthRange(minimum, maximum int, params ...any) core.ZodCheck {
 // SizeRange creates a size range validation check.
 func SizeRange(minimum, maximum int, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "size_range"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("size_range", map[string]any{"minimum": minimum, "maximum": maximum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -12,12 +11,6 @@ import (
 	"strings"
 
 	"github.com/kaptinlin/gozod/pkg/tagparser"
-)
-
-var (
-	errInvalidRuleFormat = errors.New("invalid rule format")
-	errRuleRequiresParam = errors.New("rule requires a parameter")
-	errEmptyRuleName     = errors.New("empty rule name")
 )
 
 // timeType is a marker type for time.Time detection.
@@ -421,64 +414,7 @@ func extractTagValue(tagString, tagName string) string {
 
 // parseTagRules parses gozod tag rules with proper handling of complex JSON values.
 func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, error) {
-	if tagValue == "" {
-		return nil, nil
-	}
-
-	parts := smartSplitTagRules(tagValue)
-	rules := make([]tagparser.TagRule, 0, len(parts))
-
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		rule := tagparser.TagRule{}
-
-		// Check if rule has parameters (contains =)
-		if strings.Contains(part, "=") {
-			ruleParts := strings.SplitN(part, "=", 2)
-			if len(ruleParts) != 2 {
-				return nil, fmt.Errorf("%w: %s", errInvalidRuleFormat, part)
-			}
-
-			rule.Name = strings.TrimSpace(ruleParts[0])
-			paramValue := strings.TrimSpace(ruleParts[1])
-
-			if paramValue == "" {
-				return nil, fmt.Errorf("%w: %s", errRuleRequiresParam, rule.Name)
-			}
-
-			// Handle complex parameters (JSON arrays/objects) and enum values
-			switch {
-			case (strings.HasPrefix(paramValue, "[") && strings.HasSuffix(paramValue, "]")) ||
-				(strings.HasPrefix(paramValue, "{") && strings.HasSuffix(paramValue, "}")):
-				// Complex parameter (JSON array or object)
-				rule.Params = []string{paramValue}
-			case rule.Name == "enum" && strings.Contains(paramValue, " "):
-				// Enum values separated by spaces
-				rule.Params = strings.Fields(paramValue)
-			case strings.Contains(paramValue, " ") && rule.Name != "regex":
-				// Multiple space-separated parameters (but not for regex)
-				rule.Params = strings.Fields(paramValue)
-			default:
-				// Single parameter
-				rule.Params = []string{paramValue}
-			}
-		} else {
-			// Simple rule without parameters
-			rule.Name = strings.TrimSpace(part)
-		}
-
-		if rule.Name == "" {
-			return nil, errEmptyRuleName
-		}
-
-		rules = append(rules, rule)
-	}
-
-	return rules, nil
+	return tagparser.New().ParseTagString(tagValue)
 }
 
 // getTypeNameFromAST extracts the type name string from an AST expression.
@@ -500,60 +436,4 @@ func getTypeNameFromAST(expr ast.Expr) string {
 	default:
 		return "unknown"
 	}
-}
-
-// smartSplitTagRules splits tag rules by comma while respecting JSON arrays and objects.
-func smartSplitTagRules(tagValue string) []string {
-	var parts []string
-	var current strings.Builder
-	var inQuotes bool
-	var inBraces, inBrackets int
-
-	for i, char := range tagValue {
-		switch char {
-		case '"':
-			if i == 0 || tagValue[i-1] != '\\' {
-				inQuotes = !inQuotes
-			}
-			current.WriteRune(char)
-		case '[':
-			if !inQuotes {
-				inBrackets++
-			}
-			current.WriteRune(char)
-		case ']':
-			if !inQuotes {
-				inBrackets--
-			}
-			current.WriteRune(char)
-		case '{':
-			if !inQuotes {
-				inBraces++
-			}
-			current.WriteRune(char)
-		case '}':
-			if !inQuotes {
-				inBraces--
-			}
-			current.WriteRune(char)
-		case ',':
-			if !inQuotes && inBraces == 0 && inBrackets == 0 {
-				// This is a rule separator
-				parts = append(parts, current.String())
-				current.Reset()
-			} else {
-				// This is inside a JSON value
-				current.WriteRune(char)
-			}
-		default:
-			current.WriteRune(char)
-		}
-	}
-
-	// Add the final part
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-
-	return parts
 }

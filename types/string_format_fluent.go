@@ -4,35 +4,14 @@ import "github.com/kaptinlin/gozod/core"
 
 func wrapStringFluent[T StringConstraint, W core.ZodSchema](source core.ZodSchema, base *ZodString[T], wrap func(*ZodString[T]) W) W {
 	wrapped := wrap(base)
-	core.CopyGlobalMeta(source, wrapped)
+	finalizeClone(source, wrapped)
 	return wrapped
 }
 
 func withStringWrapperMeta[T StringConstraint, W core.ZodSchema](source core.ZodSchema, base *ZodString[T], wrap func(*ZodString[T]) W, meta core.GlobalMeta) W {
 	clone := wrap(base.withInternals(base.Internals().Clone()))
-	existing, ok := core.GlobalRegistry.Get(source)
-	if !ok {
-		core.GlobalRegistry.Add(clone, meta)
-		return clone
-	}
-	core.GlobalRegistry.Add(clone, mergeGlobalMeta(existing, meta))
+	core.ApplyGlobalMeta(source, clone, meta)
 	return clone
-}
-
-func mergeGlobalMeta(existing, meta core.GlobalMeta) core.GlobalMeta {
-	if meta.ID != "" {
-		existing.ID = meta.ID
-	}
-	if meta.Title != "" {
-		existing.Title = meta.Title
-	}
-	if meta.Description != "" {
-		existing.Description = meta.Description
-	}
-	if len(meta.Examples) > 0 {
-		existing.Examples = meta.Examples
-	}
-	return existing
 }
 
 // Default sets a fallback value returned when input is nil.

@@ -212,8 +212,9 @@ func (z *ZodBool[T]) NonOptional() *ZodBool[bool] {
 
 // Meta stores metadata in the global registry.
 func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -360,7 +361,7 @@ func (z *ZodBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodBool[*bool]
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -370,7 +371,7 @@ func (z *ZodBool[T]) withInternals(in *core.ZodTypeInternals) *ZodBool[T] {
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

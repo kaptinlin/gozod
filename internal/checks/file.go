@@ -3,6 +3,7 @@ package checks
 import (
 	"mime/multipart"
 	"os"
+	"slices"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
@@ -11,8 +12,7 @@ import (
 // MinFileSize creates a minimum file size validation check.
 func MinFileSize(minimum int64, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "min_file_size"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("min_file_size", map[string]any{"minimum": minimum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -31,8 +31,7 @@ func MinFileSize(minimum int64, params ...any) core.ZodCheck {
 // MaxFileSize creates a maximum file size validation check.
 func MaxFileSize(maximum int64, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "max_file_size"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("max_file_size", map[string]any{"maximum": maximum}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -51,8 +50,7 @@ func MaxFileSize(maximum int64, params ...any) core.ZodCheck {
 // FileSize creates an exact file size validation check.
 func FileSize(expected int64, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "file_size_equals"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("file_size_equals", map[string]any{"exact": expected}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -80,8 +78,7 @@ func FileSize(expected int64, params ...any) core.ZodCheck {
 // Mime creates a MIME type validation check for file schemas.
 func Mime(mimeTypes []string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "mime_type"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("mime_type", map[string]any{"mime": slices.Clone(mimeTypes)}, cp)
 
 	allowed := make(map[string]struct{}, len(mimeTypes))
 	for _, m := range mimeTypes {

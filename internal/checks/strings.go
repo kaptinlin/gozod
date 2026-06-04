@@ -13,8 +13,7 @@ import (
 // Regex creates a regex pattern validation check.
 func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "regex"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("regex", map[string]any{"pattern": pattern.String()}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -35,8 +34,8 @@ func Regex(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 // Includes creates a substring inclusion check.
 func Includes(substring string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "includes"}
-	ApplyCheckParams(def, cp)
+	pattern := regexp.QuoteMeta(substring)
+	def := newCheckDef("includes", map[string]any{"substring": substring, "pattern": pattern}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -48,7 +47,7 @@ func Includes(substring string, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				addPatternToSchema(schema, regexp.QuoteMeta(substring))
+				addPatternToSchema(schema, pattern)
 			},
 		},
 	}
@@ -57,8 +56,8 @@ func Includes(substring string, params ...any) core.ZodCheck {
 // StartsWith creates a prefix validation check.
 func StartsWith(prefix string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "starts_with"}
-	ApplyCheckParams(def, cp)
+	pattern := "^" + regexp.QuoteMeta(prefix) + ".*"
+	def := newCheckDef("starts_with", map[string]any{"prefix": prefix, "pattern": pattern}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -70,7 +69,7 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				addPatternToSchema(schema, "^"+regexp.QuoteMeta(prefix)+".*")
+				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -80,8 +79,8 @@ func StartsWith(prefix string, params ...any) core.ZodCheck {
 // EndsWith creates a suffix validation check.
 func EndsWith(suffix string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "ends_with"}
-	ApplyCheckParams(def, cp)
+	pattern := ".*" + regexp.QuoteMeta(suffix) + "$"
+	def := newCheckDef("ends_with", map[string]any{"suffix": suffix, "pattern": pattern}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -93,7 +92,7 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				addPatternToSchema(schema, ".*"+regexp.QuoteMeta(suffix)+"$")
+				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -103,8 +102,8 @@ func EndsWith(suffix string, params ...any) core.ZodCheck {
 // Lowercase creates a lowercase format validation check.
 func Lowercase(params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "lowercase"}
-	ApplyCheckParams(def, cp)
+	const pattern = "^[^A-Z]*$"
+	def := newCheckDef("lowercase", map[string]any{"pattern": pattern}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -115,7 +114,7 @@ func Lowercase(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				addPatternToSchema(schema, "^[^A-Z]*$")
+				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -125,8 +124,8 @@ func Lowercase(params ...any) core.ZodCheck {
 // Uppercase creates an uppercase format validation check.
 func Uppercase(params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "uppercase"}
-	ApplyCheckParams(def, cp)
+	const pattern = "^[^a-z]*$"
+	def := newCheckDef("uppercase", map[string]any{"pattern": pattern}, cp)
 
 	return &core.ZodCheckInternals{
 		Def: def,
@@ -137,7 +136,7 @@ func Uppercase(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				addPatternToSchema(schema, "^[^a-z]*$")
+				addPatternToSchema(schema, pattern)
 				SetBagProperty(schema, "type", "string")
 			},
 		},
@@ -148,8 +147,7 @@ func Uppercase(params ...any) core.ZodCheck {
 // lexicographic comparison, suitable for ISO 8601 date/time strings.
 func StringGte(minValue string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "string_gte"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("string_gte", map[string]any{"minimum": minValue, "inclusive": true}, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {
@@ -173,8 +171,7 @@ func StringGte(minValue string, params ...any) core.ZodCheck {
 // lexicographic comparison, suitable for ISO 8601 date/time strings.
 func StringLte(maxValue string, params ...any) core.ZodCheck {
 	cp := NormalizeCheckParams(params...)
-	def := &core.ZodCheckDef{Check: "string_lte"}
-	ApplyCheckParams(def, cp)
+	def := newCheckDef("string_lte", map[string]any{"maximum": maxValue, "inclusive": true}, cp)
 
 	internals := &core.ZodCheckInternals{Def: def}
 	internals.Check = func(payload *core.ParsePayload) {

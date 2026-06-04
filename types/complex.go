@@ -323,8 +323,9 @@ func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 
 // Meta stores metadata in the global registry.
 func (z *ZodComplex[T]) Meta(meta core.GlobalMeta) *ZodComplex[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -578,7 +579,7 @@ func (z *ZodComplex[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodComplex[
 			Def:              z.internals.Def,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -590,7 +591,7 @@ func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] 
 			Def:              z.internals.Def,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

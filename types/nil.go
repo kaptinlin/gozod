@@ -179,8 +179,9 @@ func (z *ZodNil[T, R]) PrefaultFunc(fn func() T) *ZodNil[T, R] {
 
 // Meta stores metadata in the global registry.
 func (z *ZodNil[T, R]) Meta(meta core.GlobalMeta) *ZodNil[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -322,7 +323,7 @@ func (z *ZodNil[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNil[T, *T
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -332,7 +333,7 @@ func (z *ZodNil[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNil[T, R] {
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

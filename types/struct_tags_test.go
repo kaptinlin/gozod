@@ -108,6 +108,20 @@ func TestFromStruct_NoTags(t *testing.T) {
 	}
 }
 
+func TestFromStruct_StringTransformTags(t *testing.T) {
+	type Input struct {
+		Slug string `gozod:"trim,lowercase"`
+		Code string `gozod:"uppercase"`
+	}
+
+	schema := FromStruct[Input]()
+	got, err := schema.Parse(Input{Slug: " Hello ", Code: "ab"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "hello", got.Slug)
+	assert.Equal(t, "AB", got.Code)
+}
+
 // =============================================================================
 // INTEGRATION TESTS
 // =============================================================================

@@ -218,8 +218,9 @@ func (z *ZodDiscriminatedUnion[T, R]) PrefaultFunc(fn func() T) *ZodDiscriminate
 
 // Meta stores metadata in the global registry.
 func (z *ZodDiscriminatedUnion[T, R]) Meta(meta core.GlobalMeta) *ZodDiscriminatedUnion[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -304,7 +305,7 @@ func (z *ZodDiscriminatedUnion[T, R]) withPtrInternals(in *core.ZodTypeInternals
 		Options:          z.internals.Options,
 		DiscMap:          z.internals.DiscMap,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -317,7 +318,7 @@ func (z *ZodDiscriminatedUnion[T, R]) withInternals(in *core.ZodTypeInternals) *
 		Options:          z.internals.Options,
 		DiscMap:          z.internals.DiscMap,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

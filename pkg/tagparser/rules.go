@@ -1,0 +1,150 @@
+package tagparser
+
+import "strings"
+
+// RuleOp identifies the semantic operation represented by a tag rule.
+type RuleOp string
+
+// RuleOp values describe shared tag-rule operations.
+const (
+	RuleStructural  RuleOp = "structural"
+	RuleMethod      RuleOp = "method"
+	RuleStringCheck RuleOp = "string_check"
+	RuleTime        RuleOp = "time"
+	RulePositive    RuleOp = "positive"
+	RuleNegative    RuleOp = "negative"
+	RuleFinite      RuleOp = "finite"
+	RuleNonEmpty    RuleOp = "nonempty"
+	RuleEnum        RuleOp = "enum"
+	RuleLiteral     RuleOp = "literal"
+	RuleDefault     RuleOp = "default"
+	RulePrefault    RuleOp = "prefault"
+	RuleUnsupported RuleOp = "unsupported"
+)
+
+// RulePlan is the shared semantic plan for a parsed tag rule.
+type RulePlan struct {
+	Rule   TagRule
+	Op     RuleOp
+	Method string
+}
+
+// CompileRule converts a parsed tag rule into a shared semantic plan.
+func CompileRule(rule TagRule) RulePlan {
+	plan := RulePlan{Rule: rule, Op: RuleUnsupported}
+	switch rule.Name {
+	case "required", "optional", "coerce":
+		plan.Op = RuleStructural
+	case "nilable":
+		plan.Op = RuleMethod
+		plan.Method = "Nilable"
+	case "min":
+		plan.Op = RuleMethod
+		plan.Method = "Min"
+	case "max":
+		plan.Op = RuleMethod
+		plan.Method = "Max"
+	case "length":
+		plan.Op = RuleMethod
+		plan.Method = "Length"
+	case "gt":
+		plan.Op = RuleMethod
+		plan.Method = "Gt"
+	case "gte":
+		plan.Op = RuleMethod
+		plan.Method = "Gte"
+	case "lt":
+		plan.Op = RuleMethod
+		plan.Method = "Lt"
+	case "lte":
+		plan.Op = RuleMethod
+		plan.Method = "Lte"
+	case "regex":
+		plan.Op = RuleMethod
+		plan.Method = "Regex"
+	case "includes":
+		plan.Op = RuleMethod
+		plan.Method = "Includes"
+	case "startswith":
+		plan.Op = RuleMethod
+		plan.Method = "StartsWith"
+	case "endswith":
+		plan.Op = RuleMethod
+		plan.Method = "EndsWith"
+	case "multipleof":
+		plan.Op = RuleMethod
+		plan.Method = "MultipleOf"
+	case "default":
+		plan.Op = RuleDefault
+		plan.Method = "Default"
+	case "prefault":
+		plan.Op = RulePrefault
+		plan.Method = "Prefault"
+	case "refine":
+		plan.Op = RuleMethod
+		plan.Method = "Refine"
+	case "check":
+		plan.Op = RuleMethod
+		plan.Method = "Check"
+	case "trim":
+		plan.Op = RuleMethod
+		plan.Method = "Trim"
+	case "lowercase":
+		plan.Op = RuleMethod
+		plan.Method = "ToLowerCase"
+	case "uppercase":
+		plan.Op = RuleMethod
+		plan.Method = "ToUpperCase"
+	case "email":
+		plan.Op = RuleStringCheck
+		plan.Method = "Email"
+	case "url":
+		plan.Op = RuleStringCheck
+		plan.Method = "URL"
+	case "uuid":
+		plan.Op = RuleStringCheck
+	case "ipv4":
+		plan.Op = RuleStringCheck
+		plan.Method = "IPv4"
+	case "ipv6":
+		plan.Op = RuleStringCheck
+		plan.Method = "IPv6"
+	case "cidrv4", "cidrv6", "cuid", "cuid2", "jwt", "iso_datetime", "iso_date", "iso_time", "iso_duration":
+		plan.Op = RuleStringCheck
+	case "time":
+		plan.Op = RuleTime
+	case "positive":
+		plan.Op = RulePositive
+	case "negative":
+		plan.Op = RuleNegative
+	case "finite":
+		plan.Op = RuleFinite
+	case "nonempty":
+		plan.Op = RuleNonEmpty
+	case "enum":
+		plan.Op = RuleEnum
+	case "literal":
+		plan.Op = RuleLiteral
+	}
+	return plan
+}
+
+// FirstParam returns the first parameter for rules that take one argument.
+func (p RulePlan) FirstParam() (string, bool) {
+	if len(p.Rule.Params) == 0 {
+		return "", false
+	}
+	return p.Rule.Params[0], true
+}
+
+// JoinedValue returns a single value for default-like rules.
+func (p RulePlan) JoinedValue() (string, bool) {
+	if len(p.Rule.Params) == 0 {
+		return "", false
+	}
+	value := p.Rule.Params[0]
+	if len(p.Rule.Params) > 1 && !strings.HasPrefix(value, "[") && !strings.HasPrefix(value, "{") {
+		value = strings.Join(p.Rule.Params, " ")
+	}
+	return value, true
+}

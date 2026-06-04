@@ -310,8 +310,9 @@ func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 
 // Meta stores metadata.
 func (z *ZodStruct[T, R]) Meta(meta core.GlobalMeta) *ZodStruct[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -462,13 +463,13 @@ func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
 
 func (z *ZodStruct[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodStruct[T, *T] {
 	clone := &ZodStruct[T, *T]{internals: z.newStructInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
 func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T, R] {
 	clone := &ZodStruct[T, R]{internals: z.newStructInternals(in)}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -2181,173 +2182,42 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 
 	// Apply tag-driven validation rules; structural flags are handled elsewhere.
 	for _, rule := range fieldInfo.ValidationRules() {
-		// Handle simple rules without parameters
-		switch rule.Name {
-		case "required":
-			// Already handled above
-		case "optional":
-			// Optional is handled at struct level, not individual field level
-		case "coerce":
-			// Coercion is already handled in createSchemaFromTypeWithInfo
-		case "nilable":
-			schema = applyNilableModifier(schema)
-		case "email":
-			// Replace string schema with email schema
-			// But preserve pointer type if it's a pointer schema
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = Email()
-			case *ZodString[*string]:
-				schema = EmailPtr()
-			}
-		case "url":
-			// Replace string schema with URL schema
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = URL()
-			case *ZodString[*string]:
-				schema = URLPtr()
-			}
-		case "uuid":
-			// Replace string schema with UUID schema
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = UUID()
-			case *ZodString[*string]:
-				schema = UUIDPtr()
-			}
-		case "ipv4":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IPv4()
-			case *ZodString[*string]:
-				schema = IPv4Ptr()
-			}
-		case "ipv6":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IPv6()
-			case *ZodString[*string]:
-				schema = IPv6Ptr()
-			}
-		case "cidrv4":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = CIDRv4()
-			case *ZodString[*string]:
-				schema = CIDRv4Ptr()
-			}
-		case "cidrv6":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = CIDRv6()
-			case *ZodString[*string]:
-				schema = CIDRv6Ptr()
-			}
-		case "cuid":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = CUID()
-			case *ZodString[*string]:
-				schema = CUIDPtr()
-			}
-		case "cuid2":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = CUID2()
-			case *ZodString[*string]:
-				schema = CUID2Ptr()
-			}
-		case "jwt":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = JWT()
-			case *ZodString[*string]:
-				schema = JWTPtr()
-			}
-		case "iso_datetime":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IsoDateTime()
-			case *ZodString[*string]:
-				schema = IsoDateTimePtr()
-			}
-		case "iso_date":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IsoDate()
-			case *ZodString[*string]:
-				schema = IsoDatePtr()
-			}
-		case "iso_time":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IsoTime()
-			case *ZodString[*string]:
-				schema = IsoTimePtr()
-			}
-		case "iso_duration":
-			switch schema.(type) {
-			case *ZodString[string]:
-				schema = IsoDuration()
-			case *ZodString[*string]:
-				schema = IsoDurationPtr()
-			}
-		case "time":
-			// Special handling for time.Time fields
+		plan := tagparser.CompileRule(rule)
+		switch plan.Op {
+		case tagparser.RuleStructural:
+			continue
+		case tagparser.RuleStringCheck:
+			schema = applyStringCheckRule(schema, rule.Name)
+		case tagparser.RuleTime:
 			schema = Time()
-		case "positive":
+		case tagparser.RulePositive:
 			schema = applyPositiveModifier(schema)
-		case "negative":
+		case tagparser.RuleNegative:
 			schema = applyNegativeModifier(schema)
-		case "finite":
-			if floatSchema, ok := schema.(*ZodFloatTyped[float64, float64]); ok {
-				schema = floatSchema.Finite()
-			}
-			if float32Schema, ok := schema.(*ZodFloatTyped[float32, float32]); ok {
-				schema = float32Schema.Finite()
-			}
-		case "nonempty":
-			if stringSchema, ok := schema.(*ZodString[string]); ok {
-				schema = stringSchema.Min(1)
-			} else if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
-				schema = sliceSchema.Min(1)
-			} else if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
-				schema = sliceIntSchema.Min(1)
-			} else if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
-				schema = sliceAnySchema.Min(1)
-			} else if mapStrSchema, ok := schema.(*ZodMap[map[string]string, map[string]string]); ok {
-				schema = mapStrSchema.Min(1)
-			} else if mapIntSchema, ok := schema.(*ZodMap[map[string]int, map[string]int]); ok {
-				schema = mapIntSchema.Min(1)
-			} else if mapAnySchema, ok := schema.(*ZodMap[map[string]any, map[string]any]); ok {
-				schema = mapAnySchema.Min(1)
-			}
-		case "enum":
-			// Handle enum with all parameters
+		case tagparser.RuleFinite:
+			schema = applyFiniteModifier(schema)
+		case tagparser.RuleNonEmpty:
+			schema = applyNonEmptyModifier(schema)
+		case tagparser.RuleEnum:
 			if len(rule.Params) > 0 {
 				schema = applyEnumConstraint(schema, rule.Params)
 			}
-		case "literal":
-			// Handle literal with single parameter
-			if len(rule.Params) > 0 {
-				schema = applyLiteralConstraint(schema, rule.Params[0])
+		case tagparser.RuleLiteral:
+			if value, ok := plan.FirstParam(); ok {
+				schema = applyLiteralConstraint(schema, value)
 			}
-		case "default":
-			// Handle default values
-			if len(rule.Params) > 0 {
-				schema = applyDefaultValue(schema, rule.Params[0])
+		case tagparser.RuleDefault:
+			if value, ok := plan.JoinedValue(); ok {
+				schema = applyDefaultValue(schema, value)
 			}
-		case "prefault":
-			// Handle prefault values
-			if len(rule.Params) > 0 {
-				schema = applyPrefaultValue(schema, rule.Params[0])
+		case tagparser.RulePrefault:
+			if value, ok := plan.JoinedValue(); ok {
+				schema = applyPrefaultValue(schema, value)
 			}
-		default:
-			// Handle parameterized rules (pass only first parameter)
-			if len(rule.Params) > 0 && rule.Name != "enum" && rule.Name != "literal" {
-				schema = applyParameterizedRule(schema, rule.Name, rule.Params[0])
-			}
+		case tagparser.RuleMethod:
+			schema = applyMethodRule(schema, plan)
+		case tagparser.RuleUnsupported:
+			continue
 		}
 	}
 
@@ -2359,6 +2229,152 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 		// If required, leave as is - pointer constructors by default don't accept nil for Parse
 	}
 
+	return schema
+}
+
+func applyMethodRule(schema core.ZodSchema, plan tagparser.RulePlan) core.ZodSchema {
+	switch plan.Method {
+	case "Nilable":
+		return applyNilableModifier(schema)
+	case "Trim":
+		return applyStringTransformRule(schema, "trim")
+	case "ToLowerCase":
+		return applyStringTransformRule(schema, "lowercase")
+	case "ToUpperCase":
+		return applyStringTransformRule(schema, "uppercase")
+	default:
+		if value, ok := plan.FirstParam(); ok {
+			return applyParameterizedRule(schema, plan.Rule.Name, value)
+		}
+		return schema
+	}
+}
+
+func applyStringTransformRule(schema core.ZodSchema, ruleName string) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		switch ruleName {
+		case "trim":
+			return s.Trim()
+		case "lowercase":
+			return s.ToLowerCase()
+		case "uppercase":
+			return s.ToUpperCase()
+		}
+	case *ZodString[*string]:
+		switch ruleName {
+		case "trim":
+			return s.Trim()
+		case "lowercase":
+			return s.ToLowerCase()
+		case "uppercase":
+			return s.ToUpperCase()
+		}
+	}
+	return schema
+}
+
+func applyStringCheckRule(schema core.ZodSchema, ruleName string) core.ZodSchema {
+	switch ruleName {
+	case "email":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return Email()
+		case *ZodString[*string]:
+			return EmailPtr()
+		}
+	case "url":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return URL()
+		case *ZodString[*string]:
+			return URLPtr()
+		}
+	case "uuid":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return UUID()
+		case *ZodString[*string]:
+			return UUIDPtr()
+		}
+	case "ipv4":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IPv4()
+		case *ZodString[*string]:
+			return IPv4Ptr()
+		}
+	case "ipv6":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IPv6()
+		case *ZodString[*string]:
+			return IPv6Ptr()
+		}
+	case "cidrv4":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return CIDRv4()
+		case *ZodString[*string]:
+			return CIDRv4Ptr()
+		}
+	case "cidrv6":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return CIDRv6()
+		case *ZodString[*string]:
+			return CIDRv6Ptr()
+		}
+	case "cuid":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return CUID()
+		case *ZodString[*string]:
+			return CUIDPtr()
+		}
+	case "cuid2":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return CUID2()
+		case *ZodString[*string]:
+			return CUID2Ptr()
+		}
+	case "jwt":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return JWT()
+		case *ZodString[*string]:
+			return JWTPtr()
+		}
+	case "iso_datetime":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IsoDateTime()
+		case *ZodString[*string]:
+			return IsoDateTimePtr()
+		}
+	case "iso_date":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IsoDate()
+		case *ZodString[*string]:
+			return IsoDatePtr()
+		}
+	case "iso_time":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IsoTime()
+		case *ZodString[*string]:
+			return IsoTimePtr()
+		}
+	case "iso_duration":
+		switch schema.(type) {
+		case *ZodString[string]:
+			return IsoDuration()
+		case *ZodString[*string]:
+			return IsoDurationPtr()
+		}
+	}
 	return schema
 }
 
@@ -2412,6 +2428,41 @@ func applyNegativeModifier(schema core.ZodSchema) core.ZodSchema {
 		return s.Negative()
 	case *ZodFloatTyped[float32, float32]:
 		return s.Negative()
+	}
+	return schema
+}
+
+func applyFiniteModifier(schema core.ZodSchema) core.ZodSchema {
+	if floatSchema, ok := schema.(*ZodFloatTyped[float64, float64]); ok {
+		return floatSchema.Finite()
+	}
+	if float32Schema, ok := schema.(*ZodFloatTyped[float32, float32]); ok {
+		return float32Schema.Finite()
+	}
+	return schema
+}
+
+func applyNonEmptyModifier(schema core.ZodSchema) core.ZodSchema {
+	if stringSchema, ok := schema.(*ZodString[string]); ok {
+		return stringSchema.Min(1)
+	}
+	if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
+		return sliceSchema.Min(1)
+	}
+	if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
+		return sliceIntSchema.Min(1)
+	}
+	if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
+		return sliceAnySchema.Min(1)
+	}
+	if mapStrSchema, ok := schema.(*ZodMap[map[string]string, map[string]string]); ok {
+		return mapStrSchema.Min(1)
+	}
+	if mapIntSchema, ok := schema.(*ZodMap[map[string]int, map[string]int]); ok {
+		return mapIntSchema.Min(1)
+	}
+	if mapAnySchema, ok := schema.(*ZodMap[map[string]any, map[string]any]); ok {
+		return mapAnySchema.Min(1)
 	}
 	return schema
 }

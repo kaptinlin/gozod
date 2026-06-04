@@ -118,6 +118,12 @@ func ApplyCheckParams(def *core.ZodCheckDef, cp *core.CheckParams) {
 	}
 }
 
+func newCheckDef(check string, params map[string]any, cp *core.CheckParams) *core.ZodCheckDef {
+	def := core.NewZodCheckDef(check, params)
+	ApplyCheckParams(def, cp)
+	return def
+}
+
 // ApplySchemaParamsToCheck applies SchemaParams to a check definition.
 func ApplySchemaParamsToCheck(def *core.ZodCheckDef, sp *core.SchemaParams) {
 	if sp == nil {
@@ -140,13 +146,11 @@ func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 	cp := utils.NormalizeCustomParams(utils.FirstParam(args...))
 
 	def := &ZodCheckCustomDef{
-		ZodCheckDef: core.ZodCheckDef{
-			Check: "custom",
-			Abort: cp.Abort,
-		},
-		Fn:     fn,
-		Params: make(map[string]any),
+		ZodCheckDef: *core.NewZodCheckDef("custom", nil),
+		Fn:          fn,
+		Params:      make(map[string]any),
 	}
+	def.Abort = cp.Abort
 
 	switch fn.(type) {
 	case core.ZodRefineFn[T], func(T) bool:
@@ -167,6 +171,9 @@ func NewCustom[T any](fn any, args ...any) *ZodCheckCustom {
 	}
 	if len(cp.Path) > 0 {
 		def.Params["path"] = cp.Path
+	}
+	if len(def.Params) > 0 {
+		def.ZodCheckDef.Params = maps.Clone(def.Params)
 	}
 
 	internals := &ZodCheckCustomInternals{
@@ -190,7 +197,7 @@ func NewZodCheckOverwrite(transform func(any) any, args ...any) *ZodCheckOverwri
 	sp := utils.NormalizeParams(utils.FirstParam(args...))
 
 	def := &ZodCheckOverwriteDef{
-		ZodCheckDef: core.ZodCheckDef{Check: "overwrite"},
+		ZodCheckDef: *core.NewZodCheckDef("overwrite", nil),
 		Transform:   transform,
 	}
 	ApplySchemaParamsToCheck(&def.ZodCheckDef, sp)
@@ -214,7 +221,7 @@ func NewProperty(property string, schema core.ZodSchema, args ...any) *ZodCheckP
 	sp := utils.NormalizeParams(utils.FirstParam(args...))
 
 	def := &ZodCheckPropertyDef{
-		ZodCheckDef: core.ZodCheckDef{Check: "property"},
+		ZodCheckDef: *core.NewZodCheckDef("property", map[string]any{"property": property}),
 		Property:    property,
 		Schema:      schema,
 	}

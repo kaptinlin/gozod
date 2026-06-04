@@ -531,17 +531,27 @@ zodSchema, _ := gozod.FromJSONSchema(schema)
 result, _ := zodSchema.ParseAny([]any{"hello", true, false})
 ```
 
-### Strict Mode
+### Unsupported Keywords
 
-Use `StrictMode: true` to fail on unsupported JSON Schema features:
+`FromJSONSchema` fails by default when a JSON Schema keyword cannot be represented
+without losing validation semantics:
 
 ```go
-zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
-    StrictMode: true,
-})
+zodSchema, err := gozod.FromJSONSchema(schema)
 if err != nil {
     // Handle unsupported features
 }
+```
+
+Use `AllowLossy: true` only when partial import is intentional. Pass
+`LossyKeywords` to receive the ignored keywords:
+
+```go
+var ignored []string
+zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
+    AllowLossy:    true,
+    LossyKeywords: &ignored,
+})
 ```
 
 ### Supported Conversions

@@ -223,8 +223,9 @@ func (z *ZodBigInt[T]) PrefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
 
 // Meta stores metadata for this schema in the global registry.
 func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.
@@ -450,7 +451,7 @@ func (z *ZodBigInt[T]) withPtrInternals(
 			Def:              z.internals.Def,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -462,7 +463,7 @@ func (z *ZodBigInt[T]) withInternals(in *core.ZodTypeInternals) *ZodBigInt[T] {
 			Def:              z.internals.Def,
 		},
 	}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

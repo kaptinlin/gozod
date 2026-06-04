@@ -187,8 +187,9 @@ func (z *ZodNever[T, R]) PrefaultFunc(fn func() T) *ZodNever[T, R] {
 
 // Meta stores metadata for this schema in the global registry.
 func (z *ZodNever[T, R]) Meta(meta core.GlobalMeta) *ZodNever[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description for this schema in the global registry.
@@ -260,7 +261,7 @@ func (z *ZodNever[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNever[T
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -270,7 +271,7 @@ func (z *ZodNever[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNever[T, R
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 

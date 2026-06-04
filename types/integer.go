@@ -76,7 +76,7 @@ func (z *ZodIntegerTyped[T, R]) withInternals(in *core.ZodTypeInternals) *ZodInt
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -87,7 +87,7 @@ func (z *ZodIntegerTyped[T, R]) withPtrInternals(in *core.ZodTypeInternals) *Zod
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	core.CopyGlobalMeta(z, clone)
+	finalizeClone(z, clone)
 	return clone
 }
 
@@ -285,8 +285,9 @@ func (z *ZodIntegerTyped[T, R]) PrefaultFunc(fn func() R) *ZodIntegerTyped[T, R]
 func (z *ZodIntegerTyped[T, R]) Meta(
 	meta core.GlobalMeta,
 ) *ZodIntegerTyped[T, R] {
-	core.GlobalRegistry.Add(z, meta)
-	return z
+	clone := z.withInternals(z.internals.Clone())
+	core.ApplyGlobalMeta(z, clone, meta)
+	return clone
 }
 
 // Describe registers a description in the global registry.

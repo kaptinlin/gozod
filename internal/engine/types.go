@@ -39,16 +39,7 @@ func InitZodType[T core.ZodType[any]](schema T, def *core.ZodTypeDef) {
 		i.Values = make(map[any]struct{})
 	}
 
-	for _, c := range i.Checks {
-		if c == nil {
-			continue
-		}
-		if ci := c.Zod(); ci != nil {
-			for _, fn := range ci.OnAttach {
-				fn(any(schema).(core.ZodType[any]))
-			}
-		}
-	}
+	core.AttachChecks(schema)
 }
 
 // NewBaseZodTypeInternals creates a ZodTypeInternals with initialized collections.
@@ -96,13 +87,7 @@ func AddCheck[T interface{ Internals() *core.ZodTypeInternals }](
 		}
 	}
 
-	if check != nil {
-		if ci := check.Zod(); ci != nil {
-			for _, fn := range ci.OnAttach {
-				fn(dst)
-			}
-		}
-	}
+	core.AttachCheck(dst, check)
 
 	return dst
 }
