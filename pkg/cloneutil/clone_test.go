@@ -109,3 +109,29 @@ func TestClone_NilValues(t *testing.T) {
 	require.True(t, ok)
 	assert.Nil(t, clonedInt)
 }
+
+type cloneableSample struct {
+	Value string
+	Data  []int
+}
+
+func (s cloneableSample) Clone() any {
+	return cloneableSample{
+		Value: s.Value + " cloned",
+		Data:  append([]int(nil), s.Data...),
+	}
+}
+
+func TestClone_UsesCloneableForStructs(t *testing.T) {
+	t.Parallel()
+
+	original := cloneableSample{Value: "original", Data: []int{1, 2}}
+	cloned, ok := cloneutil.Clone(original).(cloneableSample)
+	require.True(t, ok)
+
+	assert.Equal(t, "original cloned", cloned.Value)
+	assert.Equal(t, []int{1, 2}, cloned.Data)
+
+	original.Data[0] = 99
+	assert.Equal(t, []int{1, 2}, cloned.Data)
+}
