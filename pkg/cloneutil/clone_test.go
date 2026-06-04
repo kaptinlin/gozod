@@ -55,6 +55,11 @@ func TestClone_DeepCopiesCompositeValues(t *testing.T) {
 func TestClone_PreservesSpecialValueSemantics(t *testing.T) {
 	t.Parallel()
 
+	fn := func() string { return "ok" }
+	clonedFunc, ok := cloneutil.Clone(fn).(func() string)
+	require.True(t, ok)
+	assert.Equal(t, "ok", clonedFunc())
+
 	instant := time.Date(2026, 5, 4, 12, 30, 0, 0, time.UTC)
 	intValue := big.NewInt(42)
 	floatValue := big.NewFloat(12.5)
@@ -115,11 +120,11 @@ type cloneableSample struct {
 	Data  []int
 }
 
-func (s cloneableSample) Clone() any {
+func (s cloneableSample) Clone() (cloneableSample, error) {
 	return cloneableSample{
 		Value: s.Value + " cloned",
 		Data:  append([]int(nil), s.Data...),
-	}
+	}, nil
 }
 
 func TestClone_UsesCloneableForStructs(t *testing.T) {

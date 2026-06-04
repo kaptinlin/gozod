@@ -21,10 +21,14 @@ func Clone(v any) any {
 	if cloned, ok := cloneSpecialValue(reflect.ValueOf(v)); ok {
 		return cloned.Interface()
 	}
-	return deepclone.Clone(v)
+	return deepclone.MustClone(v)
 }
 
 func cloneSpecialValue(v reflect.Value) (reflect.Value, bool) {
+	if v.Kind() == reflect.Func {
+		return v, true
+	}
+
 	switch val := v.Interface().(type) {
 	case time.Time:
 		return reflect.ValueOf(val), true
