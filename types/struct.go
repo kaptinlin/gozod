@@ -40,7 +40,19 @@ type structFieldBinding struct {
 	skipJSON bool
 }
 
-func structFieldBindings(t reflect.Type) []structFieldBinding {
+// defaultFormat is the struct tag consulted for field names when a
+// struct schema does not select another format.
+const defaultFormat = "json"
+
+// formatOrDefault normalizes an empty format to the "json" default.
+func formatOrDefault(format string) string {
+	if format == "" {
+		return defaultFormat
+	}
+	return format
+}
+
+func structFieldBindings(format string, t reflect.Type) []structFieldBinding {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -48,13 +60,14 @@ func structFieldBindings(t reflect.Type) []structFieldBinding {
 		return nil
 	}
 
+	format = formatOrDefault(format)
 	bindings := make([]structFieldBinding, 0, t.NumField())
 	for field := range t.Fields() {
 		if !field.IsExported() {
 			continue
 		}
 
-		jsonField := tagparser.JSONFieldName(field)
+		jsonField := tagparser.FieldName(format, field)
 		bindings = append(bindings, structFieldBinding{
 			field:    field,
 			index:    field.Index[0],
@@ -65,8 +78,8 @@ func structFieldBindings(t reflect.Type) []structFieldBinding {
 	return bindings
 }
 
-func findStructFieldBinding(t reflect.Type, name string) (structFieldBinding, bool) {
-	for _, binding := range structFieldBindings(t) {
+func findStructFieldBinding(format string, t reflect.Type, name string) (structFieldBinding, bool) {
+	for _, binding := range structFieldBindings(format, t) {
 		if binding.field.Name == name || (!binding.skipJSON && binding.jsonName == name) {
 			return binding, true
 		}
@@ -92,6 +105,8 @@ type ZodStructInternals struct {
 	IsPartial bool
 	// PartialExceptions marks fields that remain required in partial mode.
 	PartialExceptions map[string]bool
+	// Format is the struct tag used for field names (default "json").
+	Format string
 }
 
 // ZodStruct represents a type-safe struct validation schema.
@@ -272,6 +287,7 @@ func (z *ZodStruct[T, R]) NonOptional() *ZodStruct[T, T] {
 			ZodTypeInternals: *in,
 			Def:              z.internals.Def,
 			Shape:            z.internals.Shape,
+			Format:           z.internals.Format,
 		},
 	}
 }
@@ -432,6 +448,7 @@ func (z *ZodStruct[T, R]) Partial(keys ...[]string) *ZodStruct[T, R] {
 		Shape:             z.internals.Shape,
 		IsPartial:         true,
 		PartialExceptions: partialExceptions,
+		Format:            z.internals.Format,
 	}}
 }
 
@@ -454,6 +471,7 @@ func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
 		Shape:             z.internals.Shape,
 		IsPartial:         true,              // Keep as partial, but with specific required fields
 		PartialExceptions: partialExceptions, // Fields in this map are required
+		Format:            z.internals.Format,
 	}}
 }
 
@@ -489,6 +507,7 @@ func (z *ZodStruct[T, R]) newStructInternals(in *core.ZodTypeInternals) *ZodStru
 		Shape:             maps.Clone(z.internals.Shape),
 		IsPartial:         z.internals.IsPartial,
 		PartialExceptions: maps.Clone(z.internals.PartialExceptions),
+		Format:            z.internals.Format,
 	}
 }
 
@@ -635,7 +654,7 @@ func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
 	// Handle map conversion
 	switch m := input.(type) {
 	case map[string]any:
-		if converted, ok := convertMapToStructStrict[T](m); ok {
+		if converted, ok := convertMapToStructStrict[T](z.internals.Format, m); ok {
 			return converted, true
 		}
 	case map[any]any:
@@ -645,7 +664,7 @@ func (z *ZodStruct[T, R]) extractStructForEngine(input any) (T, bool) {
 				strMap[ks] = v
 			}
 		}
-		if converted, ok := convertMapToStructStrict[T](strMap); ok {
+		if converted, ok := convertMapToStructStrict[T](z.internals.Format, strMap); ok {
 			return converted, true
 		}
 	}
@@ -704,7 +723,7 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 	// Handle map conversion
 	switch m := input.(type) {
 	case map[string]any:
-		if converted, ok := convertMapToStructStrict[T](m); ok {
+		if converted, ok := convertMapToStructStrict[T](z.internals.Format, m); ok {
 			return &converted, true
 		}
 	case map[any]any:
@@ -714,7 +733,7 @@ func (z *ZodStruct[T, R]) extractStructPtrForEngine(input any) (*T, bool) {
 				strMap[ks] = v
 			}
 		}
-		if converted, ok := convertMapToStructStrict[T](strMap); ok {
+		if converted, ok := convertMapToStructStrict[T](z.internals.Format, strMap); ok {
 			return &converted, true
 		}
 	}
@@ -792,7 +811,7 @@ func (z *ZodStruct[T, R]) parseStructWithDefaults(input any, ctx *core.ParseCont
 			continue // Skip nil schemas
 		}
 
-		// Find the struct field (check both field name and json tag)
+		// Find the struct field (check both field name and format tag)
 		fieldValue, found := z.getStructFieldValue(val, structType, fieldName)
 		if !found {
 			// Field not found in struct - handle missing required fields
@@ -907,7 +926,7 @@ func (z *ZodStruct[T, R]) setStructFieldValue(structVal reflect.Value, structTyp
 		return z.setReflectFieldValue(fieldVal, value)
 	}
 
-	binding, found := findStructFieldBinding(structType, fieldName)
+	binding, found := findStructFieldBinding(z.internals.Format, structType, fieldName)
 	if !found {
 		return ErrFieldNotFoundOrNotSettable
 	}
@@ -1160,7 +1179,7 @@ func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect
 	newStruct := reflect.New(targetType).Elem()
 
 	// Convert map to struct by matching field names
-	for _, binding := range structFieldBindings(targetType) {
+	for _, binding := range structFieldBindings(z.internals.Format, targetType) {
 		// Look for value in map by exact field name match
 		var mapValue any
 		var found bool
@@ -1193,13 +1212,13 @@ func (z *ZodStruct[T, R]) convertMapToStruct(sourceValue any, targetType reflect
 	return newStruct.Interface()
 }
 
-// getStructFieldValue gets the value of a struct field by name or json tag
+// getStructFieldValue gets the value of a struct field by name or format tag
 func (z *ZodStruct[T, R]) getStructFieldValue(val reflect.Value, structType reflect.Type, fieldName string) (reflect.Value, bool) {
 	if field := val.FieldByName(fieldName); field.IsValid() {
 		return field, true
 	}
 
-	binding, found := findStructFieldBinding(structType, fieldName)
+	binding, found := findStructFieldBinding(z.internals.Format, structType, fieldName)
 	if !found {
 		return reflect.Value{}, false
 	}
@@ -1438,7 +1457,7 @@ func (z *ZodStruct[T, R]) With(fn func(value R, payload *core.ParsePayload), par
 }
 
 // convertMapToStructStrict converts a map to a struct with strict field matching.
-func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
+func convertMapToStructStrict[T any](format string, data map[string]any) (T, bool) {
 	var zero T
 	t := reflect.TypeOf(zero)
 	if t.Kind() != reflect.Struct {
@@ -1447,7 +1466,7 @@ func convertMapToStructStrict[T any](data map[string]any) (T, bool) {
 
 	v := reflect.New(t).Elem()
 
-	for _, binding := range structFieldBindings(t) {
+	for _, binding := range structFieldBindings(format, t) {
 		if binding.skipJSON {
 			continue
 		}
@@ -1484,12 +1503,22 @@ type FromStructOption func(*fromStructConfig)
 
 type fromStructConfig struct {
 	tagName string
+	format  string
 }
 
 // WithTagName sets the struct tag name used by FromStruct helpers.
 func WithTagName(name string) FromStructOption {
 	return func(c *fromStructConfig) {
 		c.tagName = name
+	}
+}
+
+// WithFormat sets the struct tag used for field names (e.g. "yaml",
+// "toml"). It defaults to "json" and controls JSON Schema property names and
+// validation error paths.
+func WithFormat(name string) FromStructOption {
+	return func(c *fromStructConfig) {
+		c.format = name
 	}
 }
 
@@ -1507,7 +1536,7 @@ func WithTagName(name string) FromStructOption {
 //	result, err := types.ValidateStruct(&Config{Port: 8080}, types.WithTagName("validate"))
 //	config := result.(*Config)  // Host is now "localhost"
 func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
-	cfg := &fromStructConfig{tagName: "gozod"}
+	cfg := &fromStructConfig{tagName: "gozod", format: defaultFormat}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -1524,13 +1553,13 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	structType := rv.Type()
 
 	// Parse struct tags
-	parser := tagparser.NewWithTagName(cfg.tagName)
+	parser := tagparser.NewWithTags(cfg.tagName, cfg.format)
 	parsedFields, err := parser.ParseStructTags(structType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse struct tags: %w", err)
 	}
 
-	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
+	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.format)
 
 	var allIssues []core.ZodIssue
 	result := reflect.New(structType).Elem()
@@ -1581,46 +1610,50 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 
 // FromStruct builds a struct schema from tags on T.
 func FromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
-	cfg := &fromStructConfig{tagName: "gozod"}
-	for _, opt := range opts {
-		opt(cfg)
+	cfg := newFromStructConfig(opts)
+	structType := reflect.TypeOf(*new(T))
+
+	var s *ZodStruct[T, T]
+	if fieldSchemas := fromStructFieldSchemas(structType, cfg); len(fieldSchemas) == 0 {
+		s = Struct[T]()
+	} else {
+		s = Struct[T](fieldSchemas)
 	}
-
-	var zero T
-	structType := reflect.TypeOf(zero)
-
-	if !hasTagsWithName(structType, cfg.tagName) {
-		return Struct[T]()
-	}
-
-	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
-	if len(fieldSchemas) == 0 {
-		return Struct[T]()
-	}
-
-	return Struct[T](fieldSchemas)
+	s.internals.Format = cfg.format
+	return s
 }
 
 // FromStructPtr builds a struct schema for *T from tags on T.
 func FromStructPtr[T any](opts ...FromStructOption) *ZodStruct[T, *T] {
-	cfg := &fromStructConfig{tagName: "gozod"}
+	cfg := newFromStructConfig(opts)
+	structType := reflect.TypeOf(*new(T))
+
+	var s *ZodStruct[T, *T]
+	if fieldSchemas := fromStructFieldSchemas(structType, cfg); len(fieldSchemas) == 0 {
+		s = StructPtr[T]()
+	} else {
+		s = StructPtr[T](fieldSchemas)
+	}
+	s.internals.Format = cfg.format
+	return s
+}
+
+// newFromStructConfig builds a config with defaults applied and options merged.
+func newFromStructConfig(opts []FromStructOption) *fromStructConfig {
+	cfg := &fromStructConfig{tagName: "gozod", format: defaultFormat}
 	for _, opt := range opts {
 		opt(cfg)
 	}
+	return cfg
+}
 
-	var zero T
-	structType := reflect.TypeOf(zero)
-
+// fromStructFieldSchemas derives field schemas from a struct type, or returns
+// nil when the type carries no rule tags.
+func fromStructFieldSchemas(structType reflect.Type, cfg *fromStructConfig) core.StructSchema {
 	if !hasTagsWithName(structType, cfg.tagName) {
-		return StructPtr[T]()
+		return nil
 	}
-
-	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName)
-	if len(fieldSchemas) == 0 {
-		return StructPtr[T]()
-	}
-
-	return StructPtr[T](fieldSchemas)
+	return parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.format)
 }
 
 // hasTagsWithName checks if a struct type has any tags with the given name
@@ -1647,22 +1680,24 @@ func hasGozodTags(structType reflect.Type) bool {
 	return hasTagsWithName(structType, "gozod")
 }
 
-// parseStructTagsToSchemasWithTag converts struct tags to field schemas using custom tag name
-func parseStructTagsToSchemasWithTag(structType reflect.Type, tagName string) core.StructSchema {
+// parseStructTagsToSchemasWithTag converts struct tags to field schemas using a
+// custom rule tag and format (field name) tag.
+func parseStructTagsToSchemasWithTag(structType reflect.Type, tagName, format string) core.StructSchema {
 	visited := make(map[reflect.Type]bool)
-	return parseStructTagsToSchemasWithCycleDetection(structType, tagName, visited)
+	return parseStructTagsToSchemasWithCycleDetection(structType, tagName, format, visited)
 }
 
-// parseStructTagsToSchemas converts struct tags to field schemas (internal helper using "gozod")
+// parseStructTagsToSchemas converts struct tags to field schemas (internal helper
+// using the "gozod" rule tag and "json" format).
 func parseStructTagsToSchemas(structType reflect.Type) core.StructSchema {
-	return parseStructTagsToSchemasWithTag(structType, "gozod")
+	return parseStructTagsToSchemasWithTag(structType, "gozod", defaultFormat)
 }
 
 // parseStructTagsToSchemasWithCycleDetection parses struct tags with cycle detection
-func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName string, visited map[reflect.Type]bool) core.StructSchema {
+func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName, format string, visited map[reflect.Type]bool) core.StructSchema {
 	schemas := make(core.StructSchema)
 
-	parser := tagparser.NewWithTagName(tagName)
+	parser := tagparser.NewWithTags(tagName, format)
 	fields, err := parser.ParseStructTags(structType)
 	if err != nil {
 		return schemas
@@ -1684,7 +1719,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName
 
 		// Create basic schema based on field type
 		// Pass the field info and visited map for cycle detection
-		schema := createSchemaFromTypeWithCycleDetection(field.Type, field, tagName, visited)
+		schema := createSchemaFromTypeWithCycleDetection(field.Type, field, tagName, format, visited)
 		if schema != nil {
 			// Apply parsed tag rules
 			schema = applyParsedTagRules(schema, field)
@@ -1696,7 +1731,7 @@ func parseStructTagsToSchemasWithCycleDetection(structType reflect.Type, tagName
 }
 
 // createSchemaFromTypeWithCycleDetection creates a schema with cycle detection
-func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, tagName string, visited map[reflect.Type]bool) core.ZodSchema {
+func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo tagparser.FieldInfo, tagName, format string, visited map[reflect.Type]bool) core.ZodSchema {
 	// Check for circular reference
 	actualType := fieldType
 	isPointer := actualType.Kind() == reflect.Pointer
@@ -1743,7 +1778,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 		var schema core.ZodSchema
 		if hasTagsWithName(actualType, tagName) {
 			// Parse nested struct tags recursively with cycle detection
-			fieldSchemas := parseStructTagsToSchemasWithCycleDetection(actualType, tagName, visited)
+			fieldSchemas := parseStructTagsToSchemasWithCycleDetection(actualType, tagName, format, visited)
 			if len(fieldSchemas) > 0 {
 				schema = Object(fieldSchemas)
 			} else {

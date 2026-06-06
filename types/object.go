@@ -67,6 +67,8 @@ type ZodObjectInternals struct {
 	PartialExceptions map[string]bool
 	// HasUserRefinements reports whether user-defined refinements are attached.
 	HasUserRefinements bool
+	// Format is the struct tag used for field names (default "json").
+	Format string
 }
 
 // ZodObject represents a type-safe object validation schema.
@@ -207,6 +209,15 @@ func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
 	in.SetOptional(false)
 	in.SetNonOptional(true)
 	return &ZodObject[T, T]{internals: z.newObjectInternals(in)}
+}
+
+// WithFormat returns a new schema that resolves struct field names using
+// the named struct tag (e.g. "yaml", "toml") instead of the default "json"
+// when a struct value is coerced to an object.
+func (z *ZodObject[T, R]) WithFormat(format string) *ZodObject[T, R] {
+	clone := z.withInternals(z.internals.Clone())
+	clone.internals.Format = format
+	return clone
 }
 
 // Default sets a default value returned when input is nil, bypassing validation.
@@ -534,6 +545,7 @@ func (z *ZodObject[T, R]) newObjectInternals(in *core.ZodTypeInternals) *ZodObje
 		IsPartial:          z.internals.IsPartial,
 		PartialExceptions:  maps.Clone(z.internals.PartialExceptions),
 		HasUserRefinements: z.internals.HasUserRefinements,
+		Format:             z.internals.Format,
 	}
 }
 
@@ -678,7 +690,7 @@ func (z *ZodObject[T, R]) extractObject(v any) (map[string]any, error) {
 				continue
 			}
 
-			jsonField := tagparser.JSONFieldName(field)
+			jsonField := tagparser.FieldName(formatOrDefault(z.internals.Format), field)
 			if jsonField.Skip {
 				continue
 			}

@@ -42,4 +42,17 @@ func main() {
 	if err != nil {
 		fmt.Printf("✗ Validation failed: %v\n", err)
 	}
+
+	// WithFormat selects which struct tag supplies field names. These
+	// appear in validation error paths and JSON Schema output. Handy when the
+	// struct is decoded from YAML/TOML instead of JSON.
+	type Account struct {
+		UserName string `gozod:"min=3" json:"userName" yaml:"user_name"`
+	}
+
+	yamlSchema := gozod.FromStruct[Account](gozod.WithFormat("yaml"))
+	if _, err := yamlSchema.Parse(Account{UserName: "ab"}); err != nil {
+		// Error path reads "user_name" (yaml) rather than "userName" (json).
+		fmt.Printf("✗ yaml-named field failed: %v\n", err)
+	}
 }

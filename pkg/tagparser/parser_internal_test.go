@@ -8,14 +8,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestJSONFieldName(t *testing.T) {
+func TestFieldName(t *testing.T) {
 	tests := []struct {
 		name     string
+		tagName  string
 		field    reflect.StructField
 		expected JSONField
 	}{
 		{
-			name: "no json tag",
+			name:    "no json tag",
+			tagName: "json",
 			field: reflect.StructField{
 				Name: "TestField",
 				Tag:  "",
@@ -23,7 +25,8 @@ func TestJSONFieldName(t *testing.T) {
 			expected: JSONField{Name: "TestField"},
 		},
 		{
-			name: "json tag with name",
+			name:    "json tag with name",
+			tagName: "json",
 			field: reflect.StructField{
 				Name: "TestField",
 				Tag:  `json:"test_field"`,
@@ -31,7 +34,8 @@ func TestJSONFieldName(t *testing.T) {
 			expected: JSONField{Name: "test_field"},
 		},
 		{
-			name: "json tag with omitempty",
+			name:    "json tag with omitempty",
+			tagName: "json",
 			field: reflect.StructField{
 				Name: "TestField",
 				Tag:  `json:"test_field,omitempty"`,
@@ -39,7 +43,8 @@ func TestJSONFieldName(t *testing.T) {
 			expected: JSONField{Name: "test_field"},
 		},
 		{
-			name: "json tag with dash (skip)",
+			name:    "json tag with dash (skip)",
+			tagName: "json",
 			field: reflect.StructField{
 				Name: "TestField",
 				Tag:  `json:"-"`,
@@ -47,18 +52,64 @@ func TestJSONFieldName(t *testing.T) {
 			expected: JSONField{Skip: true},
 		},
 		{
-			name: "json tag omitempty only",
+			name:    "json tag omitempty only",
+			tagName: "json",
 			field: reflect.StructField{
 				Name: "TestField",
 				Tag:  `json:",omitempty"`,
 			},
 			expected: JSONField{Name: "TestField"},
 		},
+		{
+			name:    "yaml tag with name",
+			tagName: "yaml",
+			field: reflect.StructField{
+				Name: "TestField",
+				Tag:  `json:"json_name" yaml:"yaml_name"`,
+			},
+			expected: JSONField{Name: "yaml_name"},
+		},
+		{
+			name:    "yaml tag with dash (skip)",
+			tagName: "yaml",
+			field: reflect.StructField{
+				Name: "TestField",
+				Tag:  `json:"json_name" yaml:"-"`,
+			},
+			expected: JSONField{Skip: true},
+		},
+		{
+			name:    "toml tag with name and options",
+			tagName: "toml",
+			field: reflect.StructField{
+				Name: "TestField",
+				Tag:  `toml:"toml_name,omitempty"`,
+			},
+			expected: JSONField{Name: "toml_name"},
+		},
+		{
+			name:    "chosen tag absent falls back to field name",
+			tagName: "yaml",
+			field: reflect.StructField{
+				Name: "TestField",
+				Tag:  `json:"json_name"`,
+			},
+			expected: JSONField{Name: "TestField"},
+		},
+		{
+			name:    "custom tag name",
+			tagName: "db",
+			field: reflect.StructField{
+				Name: "TestField",
+				Tag:  `db:"db_col"`,
+			},
+			expected: JSONField{Name: "db_col"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := JSONFieldName(tt.field)
+			result := FieldName(tt.tagName, tt.field)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

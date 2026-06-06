@@ -180,6 +180,44 @@ func TestTagParser_CustomTagName(t *testing.T) {
 	assert.False(t, emailField.Required, "Email field should not be required (wrong tag name)")
 }
 
+func TestNewWithTags_FormatTag(t *testing.T) {
+	parser := tagparser.NewWithTags("gozod", "yaml")
+
+	type TestStruct struct {
+		Name    string `gozod:"required" json:"json_name" yaml:"yaml_name"`
+		Skipped string `yaml:"-" json:"present"`
+		NoYAML  string `json:"json_only"`
+	}
+
+	fields, err := parser.ParseStructTags(reflect.TypeFor[TestStruct]())
+	require.NoError(t, err)
+
+	// Skipped is excluded via its yaml:"-"; the json tag is ignored.
+	assert.Len(t, fields, 2)
+
+	nameField := findField(fields, "Name")
+	require.NotNil(t, nameField, "Name field not found")
+	assert.Equal(t, "yaml_name", nameField.JSONName, "field name should come from yaml tag")
+
+	// Field without a yaml tag falls back to the Go field name, not the json tag.
+	noYAML := findField(fields, "NoYAML")
+	require.NotNil(t, noYAML, "NoYAML field not found")
+	assert.Equal(t, "NoYAML", noYAML.JSONName)
+}
+
+func TestNewWithTags_EmptyFormatTagFallsBackToJSON(t *testing.T) {
+	parser := tagparser.NewWithTags("gozod", "")
+
+	type TestStruct struct {
+		Name string `json:"json_name" yaml:"yaml_name"`
+	}
+
+	fields, err := parser.ParseStructTags(reflect.TypeFor[TestStruct]())
+	require.NoError(t, err)
+	require.Len(t, fields, 1)
+	assert.Equal(t, "json_name", fields[0].JSONName, "empty format tag should default to json")
+}
+
 func TestTagParser_PointerToStruct(t *testing.T) {
 	parser := tagparser.New()
 

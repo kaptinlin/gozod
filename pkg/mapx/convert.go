@@ -65,7 +65,7 @@ func convertMap[K comparable, V any](m map[K]V) map[any]any {
 
 // structKeys extracts exported field names from a struct.
 func structKeys(v any) []string {
-	m := structx.Marshal(v)
+	m := structx.Marshal("json", v)
 	if m == nil {
 		return nil
 	}

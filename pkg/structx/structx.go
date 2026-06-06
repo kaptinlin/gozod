@@ -15,10 +15,10 @@ var (
 	ErrTargetTypeMustBeStruct = errors.New("target type must be struct")
 )
 
-// ToMap converts a struct to map[string]any using json tag field names.
-// It returns [ErrInvalidStructInput] if input is nil, a nil pointer,
-// or not a struct type.
-func ToMap(input any) (map[string]any, error) {
+// ToMap converts a struct to map[string]any using the named format tag
+// (e.g. "json", "yaml", "toml") for field names. It returns
+// [ErrInvalidStructInput] if input is nil, a nil pointer, or not a struct type.
+func ToMap(format string, input any) (map[string]any, error) {
 	v, ok := structValue(input)
 	if !ok {
 		return nil, ErrInvalidStructInput
@@ -31,7 +31,7 @@ func ToMap(input any) (map[string]any, error) {
 			continue
 		}
 
-		jsonField := tagparser.JSONFieldName(f)
+		jsonField := tagparser.FieldName(format, f)
 		if jsonField.Skip {
 			continue
 		}
@@ -42,27 +42,29 @@ func ToMap(input any) (map[string]any, error) {
 	return m, nil
 }
 
-// FromMap converts map[string]any to a struct of the given type.
-// It returns [ErrTargetTypeMustBeStruct] if target is not a struct type.
-// Fields are matched by json tag name, falling back to the Go field name.
-func FromMap(data map[string]any, target reflect.Type) (any, error) {
-	return Unmarshal(data, target)
+// FromMap converts map[string]any to a struct of the given type using the named
+// format tag for field names. It returns [ErrTargetTypeMustBeStruct] if target is
+// not a struct type. Fields are matched by tag name, falling back to the Go
+// field name.
+func FromMap(format string, data map[string]any, target reflect.Type) (any, error) {
+	return Unmarshal(format, data, target)
 }
 
-// Marshal converts a struct to map[string]any using json tag field names.
-// Marshal returns nil if input is nil, a nil pointer, or not a struct.
-func Marshal(input any) map[string]any {
-	m, err := ToMap(input)
+// Marshal converts a struct to map[string]any using the named format tag for
+// field names. Marshal returns nil if input is nil, a nil pointer, or not a struct.
+func Marshal(format string, input any) map[string]any {
+	m, err := ToMap(format, input)
 	if err != nil {
 		return nil
 	}
 	return m
 }
 
-// Unmarshal converts map[string]any to a struct of the given type.
-// It returns [ErrTargetTypeMustBeStruct] if typ is not a struct type.
-// Fields are matched by json tag name, falling back to the Go field name.
-func Unmarshal(data map[string]any, typ reflect.Type) (any, error) {
+// Unmarshal converts map[string]any to a struct of the given type using the
+// named format tag for field names. It returns [ErrTargetTypeMustBeStruct] if typ
+// is not a struct type. Fields are matched by tag name, falling back to the Go
+// field name.
+func Unmarshal(format string, data map[string]any, typ reflect.Type) (any, error) {
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
@@ -79,7 +81,7 @@ func Unmarshal(data map[string]any, typ reflect.Type) (any, error) {
 			continue
 		}
 
-		name := fieldName(f)
+		name := fieldName(format, f)
 		if name == "" {
 			continue
 		}
@@ -129,10 +131,10 @@ func setField(dst reflect.Value, src reflect.Value, targetType reflect.Type) {
 	}
 }
 
-// fieldName returns the map key for a struct field based on its json tag.
-// It returns an empty string for fields that should be skipped (json:"-").
-func fieldName(field reflect.StructField) string {
-	jsonField := tagparser.JSONFieldName(field)
+// fieldName returns the map key for a struct field based on the named format
+// tag. It returns an empty string for fields that should be skipped (tag "-").
+func fieldName(format string, field reflect.StructField) string {
+	jsonField := tagparser.FieldName(format, field)
 	if jsonField.Skip {
 		return ""
 	}

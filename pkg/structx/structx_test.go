@@ -37,18 +37,18 @@ type testEmptyJSONName struct {
 
 func TestToMap(t *testing.T) {
 	t.Run("nil input returns error", func(t *testing.T) {
-		_, err := ToMap(nil)
+		_, err := ToMap("json", nil)
 		assert.ErrorIs(t, err, ErrInvalidStructInput)
 	})
 
 	t.Run("non-struct returns error", func(t *testing.T) {
-		_, err := ToMap("not a struct")
+		_, err := ToMap("json", "not a struct")
 		assert.ErrorIs(t, err, ErrInvalidStructInput)
 	})
 
 	t.Run("struct converts correctly", func(t *testing.T) {
 		user := testUser{Name: "Alice", Age: 30, Email: "alice@example.com"}
-		got, err := ToMap(user)
+		got, err := ToMap("json", user)
 		require.NoError(t, err)
 
 		assert.Equal(t, "Alice", got["name"])
@@ -58,19 +58,19 @@ func TestToMap(t *testing.T) {
 
 	t.Run("pointer to struct converts correctly", func(t *testing.T) {
 		user := &testUser{Name: "Bob", Age: 25}
-		got, err := ToMap(user)
+		got, err := ToMap("json", user)
 		require.NoError(t, err)
 		assert.Equal(t, "Bob", got["name"])
 	})
 
 	t.Run("nil pointer returns error", func(t *testing.T) {
 		var user *testUser
-		_, err := ToMap(user)
+		_, err := ToMap("json", user)
 		assert.ErrorIs(t, err, ErrInvalidStructInput)
 	})
 
 	t.Run("empty json name uses field name", func(t *testing.T) {
-		got, err := ToMap(testEmptyJSONName{WithEmpty: "value", Secret: "hidden"})
+		got, err := ToMap("json", testEmptyJSONName{WithEmpty: "value", Secret: "hidden"})
 		require.NoError(t, err)
 
 		assert.Equal(t, "value", got["WithEmpty"])
@@ -83,13 +83,13 @@ func TestToMap(t *testing.T) {
 func TestFromMap(t *testing.T) {
 	t.Run("non-struct type returns error", func(t *testing.T) {
 		data := map[string]any{"a": 1}
-		_, err := FromMap(data, reflect.TypeFor[string]())
+		_, err := FromMap("json", data, reflect.TypeFor[string]())
 		assert.ErrorIs(t, err, ErrTargetTypeMustBeStruct)
 	})
 
 	t.Run("map converts to struct", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": 30}
-		result, err := FromMap(data, reflect.TypeFor[testUser]())
+		result, err := FromMap("json", data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user, ok := result.(testUser)
@@ -100,7 +100,7 @@ func TestFromMap(t *testing.T) {
 
 	t.Run("pointer type converts correctly", func(t *testing.T) {
 		data := map[string]any{"host": "localhost", "port": 8080}
-		result, err := FromMap(data, reflect.TypeFor[*testConfig]())
+		result, err := FromMap("json", data, reflect.TypeFor[*testConfig]())
 		require.NoError(t, err)
 
 		config, ok := result.(testConfig)
@@ -111,21 +111,21 @@ func TestFromMap(t *testing.T) {
 
 func TestMarshal(t *testing.T) {
 	t.Run("nil input returns nil", func(t *testing.T) {
-		assert.Nil(t, Marshal(nil))
+		assert.Nil(t, Marshal("json", nil))
 	})
 
 	t.Run("nil pointer returns nil", func(t *testing.T) {
 		var user *testUser
-		assert.Nil(t, Marshal(user))
+		assert.Nil(t, Marshal("json", user))
 	})
 
 	t.Run("non-struct returns nil", func(t *testing.T) {
-		assert.Nil(t, Marshal("string"))
+		assert.Nil(t, Marshal("json", "string"))
 	})
 
 	t.Run("struct marshals correctly", func(t *testing.T) {
 		user := testUser{Name: "Alice", Age: 30}
-		got := Marshal(user)
+		got := Marshal("json", user)
 
 		require.NotNil(t, got)
 		assert.Equal(t, "Alice", got["name"])
@@ -134,7 +134,7 @@ func TestMarshal(t *testing.T) {
 
 	t.Run("struct without json tags uses field names", func(t *testing.T) {
 		s := testNoTags{Name: "Bob", Age: 25}
-		got := Marshal(s)
+		got := Marshal("json", s)
 
 		assert.Equal(t, "Bob", got["Name"])
 		assert.Equal(t, 25, got["Age"])
@@ -142,7 +142,7 @@ func TestMarshal(t *testing.T) {
 
 	t.Run("json:- skips field", func(t *testing.T) {
 		s := testSkipField{Name: "Alice", Secret: "password"}
-		got := Marshal(s)
+		got := Marshal("json", s)
 
 		assert.Equal(t, "Alice", got["name"])
 		assert.NotContains(t, got, "Secret")
@@ -151,7 +151,7 @@ func TestMarshal(t *testing.T) {
 
 	t.Run("unexported fields are skipped", func(t *testing.T) {
 		user := testUser{Name: "Alice", Age: 30}
-		got := Marshal(user)
+		got := Marshal("json", user)
 		assert.NotContains(t, got, "private")
 	})
 }
@@ -159,13 +159,13 @@ func TestMarshal(t *testing.T) {
 func TestUnmarshal(t *testing.T) {
 	t.Run("non-struct type returns error", func(t *testing.T) {
 		data := map[string]any{"a": 1}
-		_, err := Unmarshal(data, reflect.TypeFor[string]())
+		_, err := Unmarshal("json", data, reflect.TypeFor[string]())
 		assert.ErrorIs(t, err, ErrTargetTypeMustBeStruct)
 	})
 
 	t.Run("correctly unmarshals data", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": 30}
-		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user, ok := result.(testUser)
@@ -175,7 +175,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles missing fields gracefully", func(t *testing.T) {
 		data := map[string]any{"name": "Bob"}
-		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -185,7 +185,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles nil values gracefully", func(t *testing.T) {
 		data := map[string]any{"name": nil, "age": 25}
-		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -195,7 +195,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("handles type conversion", func(t *testing.T) {
 		data := map[string]any{"name": "Alice", "age": int64(30)}
-		result, err := Unmarshal(data, reflect.TypeFor[testUser]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testUser]())
 		require.NoError(t, err)
 
 		user := result.(testUser)
@@ -204,7 +204,7 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("empty json name uses field name", func(t *testing.T) {
 		data := map[string]any{"WithEmpty": "value", "Secret": "hidden", "-": "dash"}
-		result, err := Unmarshal(data, reflect.TypeFor[testEmptyJSONName]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testEmptyJSONName]())
 		require.NoError(t, err)
 
 		got := result.(testEmptyJSONName)
@@ -282,7 +282,7 @@ func TestFieldName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
 			f, _ := st.FieldByName(tt.field)
-			got := fieldName(f)
+			got := fieldName("json", f)
 			assert.Equal(t, tt.want, got)
 		})
 	}

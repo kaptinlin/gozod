@@ -31,7 +31,7 @@ func WithAbort() core.SchemaParams {
 func ProcessSchemaParams(params ...core.SchemaParams) map[string]any {
 	cfg := make(map[string]any)
 	for _, p := range params {
-		if m, err := structx.ToMap(p); err == nil {
+		if m, err := structx.ToMap("json", p); err == nil {
 			cfg = mapx.Merge(cfg, m)
 		}
 	}

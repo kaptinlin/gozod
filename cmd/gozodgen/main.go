@@ -11,6 +11,8 @@
 //	-suffix string     Output file suffix (default: "_gen.go")
 //	-package string    Specify package name (default: auto-detect)
 //	-tags string       Build tags
+//	-format string     Struct tag used for field names (default: "json")
+//	-method string     Name of the generated method (default: "Schema")
 //	-verbose          Verbose output
 //	-dry-run          Preview generated code without writing files
 //	-force            Force regeneration of all files
@@ -22,15 +24,24 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode"
 )
 
 var errConfigNil = errors.New("config cannot be nil")
+
+// Defaults for the field-name format tag and the generated method name.
+const (
+	defaultFormat     = "json"
+	defaultMethodName = "Schema"
+)
 
 // Command line flags
 var (
 	outputSuffix = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
 	packageName  = flag.String("package", "", "Specify package name (default: auto-detect)")
 	buildTags    = flag.String("tags", "", "Build tags")
+	formatFlag   = flag.String("format", defaultFormat, "Struct tag used for field names (e.g. json, yaml, toml)")
+	method       = flag.String("method", defaultMethodName, "Name of the generated method")
 	verbose      = flag.Bool("verbose", false, "Verbose output")
 	dryRun       = flag.Bool("dry-run", false, "Preview generated code without writing files")
 	force        = flag.Bool("force", false, "Force regeneration of all files")
@@ -43,6 +54,10 @@ func main() {
 	if *help {
 		showHelp()
 		return
+	}
+
+	if !isExportedIdent(*method) {
+		log.Fatalf("[ERROR] invalid -method %q: must be a valid exported Go identifier", *method)
 	}
 
 	// Get target packages from command line arguments
@@ -66,6 +81,8 @@ func main() {
 		OutputSuffix: *outputSuffix,
 		PackageName:  *packageName,
 		BuildTags:    parseBuildTags(*buildTags),
+		Format:       *formatFlag,
+		MethodName:   *method,
 		Verbose:      *verbose,
 		DryRun:       *dryRun,
 		Force:        *force,
@@ -129,6 +146,12 @@ EXAMPLES:
     # Use custom output suffix
     gozodgen -suffix="_schema.go"
 
+    # Resolve field names from yaml tags
+    gozodgen -format=yaml
+
+    # Generate a method named Validate instead of Schema
+    gozodgen -method=Validate
+
     # Force regeneration with custom suffix
     gozodgen -force -suffix="_validators.go"
 
@@ -171,9 +194,25 @@ type GeneratorConfig struct {
 	OutputSuffix string   // File suffix for generated files
 	PackageName  string   // Override package name
 	BuildTags    []string // Build tags to include
+	Format       string   // Struct tag used for field names (default "json")
+	MethodName   string   // Generated method name (default "Schema")
 	Verbose      bool     // Enable verbose logging
 	DryRun       bool     // Preview mode without writing files
 	Force        bool     // Force regeneration
+}
+
+// isExportedIdent reports whether s is a valid exported Go identifier
+// (begins with an uppercase letter, followed by letters, digits, or underscores).
+func isExportedIdent(s string) bool {
+	for i, r := range s {
+		switch {
+		case i == 0 && !unicode.IsUpper(r):
+			return false
+		case i > 0 && !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'):
+			return false
+		}
+	}
+	return s != ""
 }
 
 // FieldSchemaInfo contains field schema generation information.
@@ -199,10 +238,16 @@ func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create analyzer: %w", err)
 	}
+	if config.Format != "" {
+		analyzer.format = config.Format
+	}
 
 	writer, err := NewFileWriter("", config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
 	if err != nil {
 		return nil, fmt.Errorf("create writer: %w", err)
+	}
+	if config.MethodName != "" {
+		writer.methodName = config.MethodName
 	}
 
 	return &CodeGenerator{

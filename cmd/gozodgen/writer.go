@@ -47,6 +47,7 @@ type FileWriter struct {
 	outputDir    string
 	packageName  string
 	outputSuffix string
+	methodName   string
 	templates    *template.Template
 	dryRun       bool
 	verbose      bool
@@ -63,6 +64,7 @@ func NewFileWriter(outputDir, packageName, outputSuffix string, dryRun, verbose 
 		outputDir:    outputDir,
 		packageName:  packageName,
 		outputSuffix: outputSuffix,
+		methodName:   defaultMethodName,
 		templates:    tmpl,
 		dryRun:       dryRun,
 		verbose:      verbose,
@@ -115,6 +117,7 @@ func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
 	data := &TemplateData{
 		PackageName:   pkgName,
 		StructName:    info.Name,
+		MethodName:    w.methodName,
 		Fields:        info.Fields,
 		FieldSchemas:  fieldSchemas,
 		Imports:       w.generateImports(info),
@@ -468,6 +471,7 @@ func (w *FileWriter) outputPath(sourceFilePath, structName string) string {
 type TemplateData struct {
 	PackageName   string
 	StructName    string
+	MethodName    string
 	Fields        []tagparser.FieldInfo
 	FieldSchemas  []FieldSchemaInfo
 	Imports       []string
@@ -488,9 +492,9 @@ import (
 {{- end}}
 )
 
-// Schema returns a pre-built gozod schema for {{.StructName}}
+// {{.MethodName}} returns a pre-built gozod schema for {{.StructName}}
 // This generated function provides zero-reflection validation with optimal performance
-func ({{.StructName | receiverName}} {{.StructName}}) Schema() *gozod.ZodStruct[{{.StructName}}, {{.StructName}}] {
+func ({{.StructName | receiverName}} {{.StructName}}) {{.MethodName}}() *gozod.ZodStruct[{{.StructName}}, {{.StructName}}] {
 	return gozod.Struct[{{.StructName}}](gozod.StructSchema{
 {{- range .FieldSchemas}}
 		"{{.FieldName}}": {{.SchemaCode}},

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const defaultTagName = "gozod"
+const defaultRulesTag = "gozod"
 
 // unescaper handles escape sequences in tag parameters
 // using a single-pass replacer.
@@ -58,22 +58,43 @@ type FieldInfo struct {
 	Nilable  bool         // whether the parsed rules include "nilable"
 }
 
-// TagParser handles gozod tag parsing with configurable tag name.
+// defaultFormatTag is the struct tag consulted for field names
+// when a caller does not select another format.
+const defaultFormatTag = "json"
+
+// TagParser handles gozod tag parsing with configurable tag names.
+// rulesTagName selects the rule tag (default "gozod"); formatTagName selects
+// the tag that supplies field names (default "json").
 type TagParser struct {
-	tagName string
+	rulesTagName  string
+	formatTagName string
 }
 
-// New creates a [TagParser] with the default "gozod" tag name.
+// New creates a [TagParser] with the default "gozod" rule tag and "json"
+// format tag.
 func New() *TagParser {
-	return &TagParser{tagName: defaultTagName}
+	return &TagParser{rulesTagName: defaultRulesTag, formatTagName: defaultFormatTag}
 }
 
-// NewWithTagName creates a [TagParser] with a custom tag name.
+// NewWithTagName creates a [TagParser] with a custom rule tag and the default
+// "json" format tag.
 func NewWithTagName(name string) *TagParser {
 	if strings.TrimSpace(name) == "" {
-		name = defaultTagName
+		name = defaultRulesTag
 	}
-	return &TagParser{tagName: name}
+	return &TagParser{rulesTagName: name, formatTagName: defaultFormatTag}
+}
+
+// NewWithTags creates a [TagParser] with custom rule and format tags.
+// Empty values fall back to the defaults ("gozod" and "json").
+func NewWithTags(ruleTag, formatTag string) *TagParser {
+	if strings.TrimSpace(ruleTag) == "" {
+		ruleTag = defaultRulesTag
+	}
+	if strings.TrimSpace(formatTag) == "" {
+		formatTag = defaultFormatTag
+	}
+	return &TagParser{rulesTagName: ruleTag, formatTagName: formatTag}
 }
 
 // ParseStructTags parses all gozod tags in a struct type
@@ -109,12 +130,12 @@ func (p *TagParser) parseStructFields(typ reflect.Type) ([]FieldInfo, error) {
 			continue
 		}
 
-		tag := f.Tag.Get(p.tagName)
+		tag := f.Tag.Get(p.rulesTagName)
 		if tag == "-" {
 			continue
 		}
 
-		jsonField := JSONFieldName(f)
+		jsonField := FieldName(p.formatTagName, f)
 		if jsonField.Skip {
 			continue
 		}
@@ -291,9 +312,11 @@ func isStructuredParam(raw string) bool {
 		(strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}"))
 }
 
-// JSONFieldName resolves the JSON field name and skip marker for a struct field.
-func JSONFieldName(f reflect.StructField) JSONField {
-	tag := f.Tag.Get("json")
+// FieldName resolves the field name and skip marker for a struct field using
+// the named struct tag (e.g. "json", "yaml", "toml"). An absent tag falls back
+// to the Go field name; a tag value of "-" marks the field as skipped.
+func FieldName(tagName string, f reflect.StructField) JSONField {
+	tag := f.Tag.Get(tagName)
 	if tag == "" {
 		return JSONField{Name: f.Name}
 	}
