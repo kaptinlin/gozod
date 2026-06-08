@@ -180,13 +180,13 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 
 	// Merge modifiers.
 	if src.DefaultValue != nil {
-		dst.SetDefaultValue(cloneutil.Clone(src.DefaultValue))
+		dst.SetDefaultValue(src.DefaultValue)
 	}
 	if src.DefaultFunc != nil {
 		dst.SetDefaultFunc(src.DefaultFunc)
 	}
 	if src.PrefaultValue != nil {
-		dst.SetPrefaultValue(cloneutil.Clone(src.PrefaultValue))
+		dst.SetPrefaultValue(src.PrefaultValue)
 	}
 	if src.PrefaultFunc != nil {
 		dst.SetPrefaultFunc(src.PrefaultFunc)

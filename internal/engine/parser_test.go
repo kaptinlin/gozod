@@ -95,16 +95,22 @@ func createMockInternals() *core.ZodTypeInternals {
 	}
 }
 
-func TestMergeInternalsState_ClonesBagValues(t *testing.T) {
+func TestMergeInternalsState_ClonesMutableValues(t *testing.T) {
 	t.Parallel()
 
 	dst := createMockInternals()
 	src := createMockInternals()
+	src.SetDefaultValue(map[string]any{"name": "default"})
+	src.SetPrefaultValue(map[string]any{"name": "prefault"})
 	src.Bag["patterns"] = []string{"^[a-z]+$"}
 
 	MergeInternalsState(dst, src)
+	src.DefaultValue.(map[string]any)["name"] = "changed"
+	src.PrefaultValue.(map[string]any)["name"] = "changed"
 	src.Bag["patterns"].([]string)[0] = "changed"
 
+	assert.Equal(t, map[string]any{"name": "default"}, dst.DefaultValue)
+	assert.Equal(t, map[string]any{"name": "prefault"}, dst.PrefaultValue)
 	assert.Equal(t, []string{"^[a-z]+$"}, dst.Bag["patterns"])
 }
 
