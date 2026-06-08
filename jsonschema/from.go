@@ -310,7 +310,7 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 	if s.Pattern != nil {
 		re, err := regexp.Compile(*s.Pattern)
 		if err != nil {
-			return nil, ErrJSONSchemaPatternCompile
+			return nil, fmt.Errorf("%w: %q: %w", ErrJSONSchemaPatternCompile, *s.Pattern, err)
 		}
 		schema = schema.Regex(re)
 	}

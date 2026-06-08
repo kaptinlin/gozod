@@ -1,6 +1,7 @@
 package jsonschema
 
 import (
+	"regexp/syntax"
 	"testing"
 
 	lib "github.com/kaptinlin/jsonschema"
@@ -85,6 +86,11 @@ func TestFromJSONSchema_String(t *testing.T) {
 
 		_, err := FromJSONSchema(schema)
 		require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+
+		var syntaxErr *syntax.Error
+		require.ErrorAs(t, err, &syntaxErr)
+		assert.Equal(t, syntax.ErrMissingBracket, syntaxErr.Code)
+		assert.Equal(t, "[", syntaxErr.Expr)
 	})
 }
 
