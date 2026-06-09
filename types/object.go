@@ -67,8 +67,8 @@ type ZodObjectInternals struct {
 	PartialExceptions map[string]bool
 	// HasUserRefinements reports whether user-defined refinements are attached.
 	HasUserRefinements bool
-	// Format is the struct tag used for field names (default "json").
-	Format string
+	// FieldNameTag is the struct tag used for field names (default "json").
+	FieldNameTag string
 }
 
 // ZodObject represents a type-safe object validation schema.
@@ -100,6 +100,10 @@ func (z *ZodObject[T, R]) IsOptional() bool {
 // IsNilable reports whether this schema accepts nil values.
 func (z *ZodObject[T, R]) IsNilable() bool {
 	return z.internals.IsNilable()
+}
+
+func (z *ZodObject[T, R]) fieldNameTag() string {
+	return fieldNameTagOrDefault(z.internals.FieldNameTag)
 }
 
 // withCheck clones internals, adds a check, and returns a new instance.
@@ -211,12 +215,12 @@ func (z *ZodObject[T, R]) NonOptional() *ZodObject[T, T] {
 	return &ZodObject[T, T]{internals: z.newObjectInternals(in)}
 }
 
-// WithFormat returns a new schema that resolves struct field names using
+// WithFieldNameTag returns a new schema that resolves struct field names using
 // the named struct tag (e.g. "yaml", "toml") instead of the default "json"
 // when a struct value is coerced to an object.
-func (z *ZodObject[T, R]) WithFormat(format string) *ZodObject[T, R] {
+func (z *ZodObject[T, R]) WithFieldNameTag(fieldNameTag string) *ZodObject[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	clone.internals.Format = format
+	clone.internals.FieldNameTag = fieldNameTag
 	return clone
 }
 
@@ -308,7 +312,9 @@ func (z *ZodObject[T, R]) Pick(keys []string, params ...any) (*ZodObject[T, R], 
 		}
 		newShape[key] = schema
 	}
-	return ObjectTyped[T, R](newShape, params...), nil
+	result := ObjectTyped[T, R](newShape, params...)
+	result.internals.FieldNameTag = z.internals.FieldNameTag
+	return result, nil
 }
 
 // MustPick is like Pick but panics on error.
@@ -341,7 +347,9 @@ func (z *ZodObject[T, R]) Omit(keys []string, params ...any) (*ZodObject[T, R], 
 			newShape[key] = schema
 		}
 	}
-	return ObjectTyped[T, R](newShape, params...), nil
+	result := ObjectTyped[T, R](newShape, params...)
+	result.internals.FieldNameTag = z.internals.FieldNameTag
+	return result, nil
 }
 
 // MustOmit is like Omit but panics on error.
@@ -372,6 +380,7 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 	newShape := maps.Clone(z.internals.Shape)
 	maps.Copy(newShape, augmentation)
 	newObj := ObjectTyped[T, R](newShape, params...)
+	newObj.internals.FieldNameTag = z.internals.FieldNameTag
 
 	// Preserve refinements for non-overlapping key extensions (Zod v4 fix: 0fe88407).
 	if z.internals.HasUserRefinements {
@@ -385,14 +394,18 @@ func (z *ZodObject[T, R]) Extend(augmentation core.ObjectSchema, params ...any) 
 func (z *ZodObject[T, R]) SafeExtend(augmentation core.ObjectSchema, params ...any) *ZodObject[T, R] {
 	newShape := maps.Clone(z.internals.Shape)
 	maps.Copy(newShape, augmentation)
-	return ObjectTyped[T, R](newShape, params...)
+	result := ObjectTyped[T, R](newShape, params...)
+	result.internals.FieldNameTag = z.internals.FieldNameTag
+	return result
 }
 
 // Merge combines two object schemas, clearing all checks/refinements.
 func (z *ZodObject[T, R]) Merge(other *ZodObject[T, R], params ...any) *ZodObject[T, R] {
 	newShape := maps.Clone(z.internals.Shape)
 	maps.Copy(newShape, other.internals.Shape)
-	return ObjectTyped[T, R](newShape, params...)
+	result := ObjectTyped[T, R](newShape, params...)
+	result.internals.FieldNameTag = z.internals.FieldNameTag
+	return result
 }
 
 // Partial makes all fields optional, or specific fields if keys are provided.
@@ -545,7 +558,7 @@ func (z *ZodObject[T, R]) newObjectInternals(in *core.ZodTypeInternals) *ZodObje
 		IsPartial:          z.internals.IsPartial,
 		PartialExceptions:  maps.Clone(z.internals.PartialExceptions),
 		HasUserRefinements: z.internals.HasUserRefinements,
-		Format:             z.internals.Format,
+		FieldNameTag:       z.internals.FieldNameTag,
 	}
 }
 
@@ -690,11 +703,11 @@ func (z *ZodObject[T, R]) extractObject(v any) (map[string]any, error) {
 				continue
 			}
 
-			jsonField := tagparser.FieldName(formatOrDefault(z.internals.Format), field)
-			if jsonField.Skip {
+			fieldKey := tagparser.FieldName(fieldNameTagOrDefault(z.internals.FieldNameTag), field)
+			if fieldKey.Skip {
 				continue
 			}
-			result[jsonField.Name] = value.Interface()
+			result[fieldKey.Name] = value.Interface()
 		}
 		return result, nil
 	}

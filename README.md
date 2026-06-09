@@ -106,7 +106,7 @@ func main() {
 }
 ```
 
-Use `gozod.WithTagName("validate")` when your project uses another tag key, and `gozod.WithFormat("yaml")` to resolve field names (error paths and JSON Schema) from `yaml`/`toml` tags instead of `json`. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
+Use `gozod.WithTagName("validate")` when your project uses another rule tag, and `gozod.WithFieldNameTag("yaml")` to resolve field names (error paths and JSON Schema) from `yaml`/`toml` tags instead of `json`. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
 
 ## Programmatic Schemas
 

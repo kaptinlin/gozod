@@ -1531,7 +1531,7 @@ func TestStruct_PartialAndRequired_Integration(t *testing.T) {
 	})
 }
 
-func TestStruct_JSONFieldMapping(t *testing.T) {
+func TestStruct_FieldNameResultMapping(t *testing.T) {
 	t.Run("parse maps json omitempty-only tag to Go field name", func(t *testing.T) {
 		type TagCase struct {
 			Name     string `json:"name"`

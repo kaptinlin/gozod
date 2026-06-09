@@ -12,7 +12,7 @@
 // treated as a contract error.
 //
 // A parser is configured with two tag names: the rule tag (default "gozod")
-// and the format tag that supplies field names (default "json"). Use
+// and the field-name tag that supplies field names (default "json"). Use
 // [NewWithTags] to select both, or [FieldName] to resolve a single field's
-// name from a chosen format tag such as "yaml" or "toml".
+// name from a chosen field-name tag such as "yaml" or "toml".
 package tagparser

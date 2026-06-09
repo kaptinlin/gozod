@@ -11,7 +11,8 @@
 //	-suffix string     Output file suffix (default: "_gen.go")
 //	-package string    Specify package name (default: auto-detect)
 //	-tags string       Build tags
-//	-format string     Struct tag used for field names (default: "json")
+//	-field-name-tag string
+//	                   Struct tag used for field names (default: "json")
 //	-method string     Name of the generated method (default: "Schema")
 //	-verbose          Verbose output
 //	-dry-run          Preview generated code without writing files
@@ -29,23 +30,23 @@ import (
 
 var errConfigNil = errors.New("config cannot be nil")
 
-// Defaults for the field-name format tag and the generated method name.
+// Defaults for the field-name tag and the generated method name.
 const (
-	defaultFormat     = "json"
-	defaultMethodName = "Schema"
+	defaultFieldNameTag = "json"
+	defaultMethodName   = "Schema"
 )
 
 // Command line flags
 var (
-	outputSuffix = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
-	packageName  = flag.String("package", "", "Specify package name (default: auto-detect)")
-	buildTags    = flag.String("tags", "", "Build tags")
-	formatFlag   = flag.String("format", defaultFormat, "Struct tag used for field names (e.g. json, yaml, toml)")
-	method       = flag.String("method", defaultMethodName, "Name of the generated method")
-	verbose      = flag.Bool("verbose", false, "Verbose output")
-	dryRun       = flag.Bool("dry-run", false, "Preview generated code without writing files")
-	force        = flag.Bool("force", false, "Force regeneration of all files")
-	help         = flag.Bool("help", false, "Show help message")
+	outputSuffix     = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
+	packageName      = flag.String("package", "", "Specify package name (default: auto-detect)")
+	buildTags        = flag.String("tags", "", "Build tags")
+	fieldNameTagFlag = flag.String("field-name-tag", defaultFieldNameTag, "Struct tag used for field names (e.g. json, yaml, toml)")
+	method           = flag.String("method", defaultMethodName, "Name of the generated method")
+	verbose          = flag.Bool("verbose", false, "Verbose output")
+	dryRun           = flag.Bool("dry-run", false, "Preview generated code without writing files")
+	force            = flag.Bool("force", false, "Force regeneration of all files")
+	help             = flag.Bool("help", false, "Show help message")
 )
 
 func main() {
@@ -81,7 +82,7 @@ func main() {
 		OutputSuffix: *outputSuffix,
 		PackageName:  *packageName,
 		BuildTags:    parseBuildTags(*buildTags),
-		Format:       *formatFlag,
+		FieldNameTag: *fieldNameTagFlag,
 		MethodName:   *method,
 		Verbose:      *verbose,
 		DryRun:       *dryRun,
@@ -147,7 +148,7 @@ EXAMPLES:
     gozodgen -suffix="_schema.go"
 
     # Resolve field names from yaml tags
-    gozodgen -format=yaml
+    gozodgen -field-name-tag=yaml
 
     # Generate a method named Validate instead of Schema
     gozodgen -method=Validate
@@ -194,7 +195,7 @@ type GeneratorConfig struct {
 	OutputSuffix string   // File suffix for generated files
 	PackageName  string   // Override package name
 	BuildTags    []string // Build tags to include
-	Format       string   // Struct tag used for field names (default "json")
+	FieldNameTag string   // Struct tag used for field names (default "json")
 	MethodName   string   // Generated method name (default "Schema")
 	Verbose      bool     // Enable verbose logging
 	DryRun       bool     // Preview mode without writing files
@@ -208,7 +209,7 @@ func isExportedIdent(s string) bool {
 		switch {
 		case i == 0 && !unicode.IsUpper(r):
 			return false
-		case i > 0 && !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'):
+		case i > 0 && !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_':
 			return false
 		}
 	}
@@ -238,8 +239,8 @@ func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create analyzer: %w", err)
 	}
-	if config.Format != "" {
-		analyzer.format = config.Format
+	if config.FieldNameTag != "" {
+		analyzer.fieldNameTag = config.FieldNameTag
 	}
 
 	writer, err := NewFileWriter("", config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
@@ -248,6 +249,9 @@ func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	}
 	if config.MethodName != "" {
 		writer.methodName = config.MethodName
+	}
+	if config.FieldNameTag != "" {
+		writer.fieldNameTag = config.FieldNameTag
 	}
 
 	return &CodeGenerator{

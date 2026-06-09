@@ -2087,7 +2087,7 @@ func TestToJSONSchema_RefWithOptionalAndDescribe(t *testing.T) {
 	assert.Contains(t, resultStr, "bar")
 }
 
-func TestToJSONSchema_FromStructFormat(t *testing.T) {
+func TestToJSONSchema_FromStructFieldNameTag(t *testing.T) {
 	type User struct {
 		UserName string `gozod:"min=3" json:"userName" yaml:"user_name"`
 	}
@@ -2100,8 +2100,8 @@ func TestToJSONSchema_FromStructFormat(t *testing.T) {
 		assertJSONEquals(t, `{"properties":{"userName":{"type":"string","minLength":3}}}`, string(b))
 	})
 
-	t.Run("WithFormat yaml uses yaml property name", func(t *testing.T) {
-		js, err := ToJSONSchema(types.FromStruct[User](types.WithFormat("yaml")))
+	t.Run("WithFieldNameTag yaml uses yaml property name", func(t *testing.T) {
+		js, err := ToJSONSchema(types.FromStruct[User](types.WithFieldNameTag("yaml")))
 		require.NoError(t, err)
 		b, err := json.Marshal(js)
 		require.NoError(t, err)

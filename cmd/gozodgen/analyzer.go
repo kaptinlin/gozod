@@ -18,11 +18,11 @@ type timeType struct{}
 
 // StructAnalyzer analyzes Go source files to find structs requiring code generation.
 type StructAnalyzer struct {
-	fset     *token.FileSet
-	packages map[string]*types.Package
-	imports  map[string]string
-	info     *types.Info
-	format   string // struct tag used for field names (default "json")
+	fset         *token.FileSet
+	packages     map[string]*types.Package
+	imports      map[string]string
+	info         *types.Info
+	fieldNameTag string // struct tag used for field names (default "json")
 }
 
 // GenerationInfo contains information about a struct that needs code generation.
@@ -44,11 +44,11 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 	}
 
 	return &StructAnalyzer{
-		fset:     token.NewFileSet(),
-		packages: make(map[string]*types.Package),
-		imports:  make(map[string]string),
-		info:     info,
-		format:   defaultFormat,
+		fset:         token.NewFileSet(),
+		packages:     make(map[string]*types.Package),
+		imports:      make(map[string]string),
+		info:         info,
+		fieldNameTag: defaultFieldNameTag,
 	}, nil
 }
 
@@ -206,11 +206,16 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				continue
 			}
 
+			fieldKey, skip := a.extractFieldKey(field, name.Name)
+			if skip {
+				continue
+			}
+
 			info := tagparser.FieldInfo{
 				Name:     name.Name,
 				Type:     a.getReflectType(field.Type),
 				TypeName: getTypeNameFromAST(field.Type),
-				JSONName: a.extractFieldName(field),
+				FieldKey: fieldKey,
 			}
 
 			hasGozodTag, err := a.applyGoZodTag(&info, field)
@@ -381,32 +386,27 @@ func (a *StructAnalyzer) applyGoZodTag(info *tagparser.FieldInfo, field *ast.Fie
 	return true, nil
 }
 
-// extractFieldName extracts the field name from the configured format tag.
-func (a *StructAnalyzer) extractFieldName(field *ast.Field) string {
-	fallbackName := firstFieldName(field)
+// extractFieldKey extracts the schema key from the configured field-name tag.
+func (a *StructAnalyzer) extractFieldKey(field *ast.Field, fallbackName string) (string, bool) {
 	if field.Tag == nil {
-		return fallbackName
+		return fallbackName, false
 	}
 
 	tagValue := strings.Trim(field.Tag.Value, "`")
-	formatTag := extractTagValue(tagValue, a.format)
-	if formatTag == "" {
-		return fallbackName
+	fieldNameTagValue := extractTagValue(tagValue, a.fieldNameTag)
+	if fieldNameTagValue == "" {
+		return fallbackName, false
 	}
 
-	name, _, _ := strings.Cut(formatTag, ",")
+	name, _, _ := strings.Cut(fieldNameTagValue, ",")
 	name = strings.TrimSpace(name)
-	if name == "" || name == "-" {
-		return fallbackName
+	if name == "-" {
+		return "", true
 	}
-	return name
-}
-
-func firstFieldName(field *ast.Field) string {
-	if len(field.Names) == 0 {
-		return ""
+	if name == "" {
+		return fallbackName, false
 	}
-	return field.Names[0].Name
+	return name, false
 }
 
 // extractTagValue returns the value for a specific tag key.

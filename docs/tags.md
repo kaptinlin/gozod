@@ -152,11 +152,11 @@ type User struct {
 schema := gozod.FromStruct[User]()
 ```
 
-### Field Name Format (json / yaml / toml)
+### Field Name Tags (json / yaml / toml)
 
 By default GoZod resolves field names from the `json` tag. These names
 appear in validation **error paths** and **JSON Schema** property names. Use
-`WithFormat` to resolve them from another struct tag instead — handy when your
+`WithFieldNameTag` to resolve them from another struct tag instead — handy when your
 struct is decoded from YAML or TOML:
 
 ```go
@@ -168,15 +168,15 @@ type User struct {
 schema := gozod.FromStruct[User]()
 
 // Error paths and JSON Schema use "user_name" (yaml).
-yamlSchema := gozod.FromStruct[User](gozod.WithFormat("yaml"))
+yamlSchema := gozod.FromStruct[User](gozod.WithFieldNameTag("yaml"))
 ```
 
-`WithFormat` accepts any struct tag key (`"json"`, `"yaml"`, `"toml"`, or a
-custom one) and is handled exactly like `json`: a missing tag falls back to the
-Go field name, and `tag:"-"` skips the field. GoZod validates Go structs — it
-does not decode YAML/TOML bytes itself; decode into your struct first, then
-validate. The same choice is available on hand-built schemas via
-`gozod.Object(shape).WithFormat("yaml")`.
+`WithFieldNameTag` accepts any struct tag key (`"json"`, `"yaml"`, `"toml"`,
+or a custom one) and is handled exactly like `json`: a missing tag falls back
+to the Go field name, and `tag:"-"` skips the field. GoZod validates Go structs
+— it does not decode YAML/TOML bytes itself; decode into your struct first,
+then validate. The same choice is available on hand-built schemas via
+`gozod.Object(shape).WithFieldNameTag("yaml")`.
 
 ---
 
@@ -544,12 +544,12 @@ func main() {
 
 ```bash
 gozodgen                       # default: json field names, Schema() method
-gozodgen -format=yaml          # resolve field names from yaml tags
+gozodgen -field-name-tag=yaml  # resolve field names from yaml tags
 gozodgen -method=Validate      # generate a Validate() method instead of Schema()
 ```
 
-`-format` defaults to `json`; `-method` defaults to `Schema` and must be a valid
-exported Go identifier.
+`-field-name-tag` defaults to `json`; `-method` defaults to `Schema` and must
+be a valid exported Go identifier.
 
 ### StrictParse for Known Types
 

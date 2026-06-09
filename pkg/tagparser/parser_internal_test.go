@@ -13,7 +13,7 @@ func TestFieldName(t *testing.T) {
 		name     string
 		tagName  string
 		field    reflect.StructField
-		expected JSONField
+		expected FieldNameResult
 	}{
 		{
 			name:    "no json tag",
@@ -22,7 +22,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  "",
 			},
-			expected: JSONField{Name: "TestField"},
+			expected: FieldNameResult{Name: "TestField"},
 		},
 		{
 			name:    "json tag with name",
@@ -31,7 +31,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"test_field"`,
 			},
-			expected: JSONField{Name: "test_field"},
+			expected: FieldNameResult{Name: "test_field"},
 		},
 		{
 			name:    "json tag with omitempty",
@@ -40,7 +40,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"test_field,omitempty"`,
 			},
-			expected: JSONField{Name: "test_field"},
+			expected: FieldNameResult{Name: "test_field"},
 		},
 		{
 			name:    "json tag with dash (skip)",
@@ -49,7 +49,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"-"`,
 			},
-			expected: JSONField{Skip: true},
+			expected: FieldNameResult{Skip: true},
 		},
 		{
 			name:    "json tag omitempty only",
@@ -58,7 +58,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:",omitempty"`,
 			},
-			expected: JSONField{Name: "TestField"},
+			expected: FieldNameResult{Name: "TestField"},
 		},
 		{
 			name:    "yaml tag with name",
@@ -67,7 +67,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"json_name" yaml:"yaml_name"`,
 			},
-			expected: JSONField{Name: "yaml_name"},
+			expected: FieldNameResult{Name: "yaml_name"},
 		},
 		{
 			name:    "yaml tag with dash (skip)",
@@ -76,7 +76,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"json_name" yaml:"-"`,
 			},
-			expected: JSONField{Skip: true},
+			expected: FieldNameResult{Skip: true},
 		},
 		{
 			name:    "toml tag with name and options",
@@ -85,7 +85,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `toml:"toml_name,omitempty"`,
 			},
-			expected: JSONField{Name: "toml_name"},
+			expected: FieldNameResult{Name: "toml_name"},
 		},
 		{
 			name:    "chosen tag absent falls back to field name",
@@ -94,7 +94,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `json:"json_name"`,
 			},
-			expected: JSONField{Name: "TestField"},
+			expected: FieldNameResult{Name: "TestField"},
 		},
 		{
 			name:    "custom tag name",
@@ -103,7 +103,7 @@ func TestFieldName(t *testing.T) {
 				Name: "TestField",
 				Tag:  `db:"db_col"`,
 			},
-			expected: JSONField{Name: "db_col"},
+			expected: FieldNameResult{Name: "db_col"},
 		},
 	}
 

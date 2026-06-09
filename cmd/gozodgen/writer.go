@@ -48,6 +48,7 @@ type FileWriter struct {
 	packageName  string
 	outputSuffix string
 	methodName   string
+	fieldNameTag string
 	templates    *template.Template
 	dryRun       bool
 	verbose      bool
@@ -65,6 +66,7 @@ func NewFileWriter(outputDir, packageName, outputSuffix string, dryRun, verbose 
 		packageName:  packageName,
 		outputSuffix: outputSuffix,
 		methodName:   defaultMethodName,
+		fieldNameTag: defaultFieldNameTag,
 		templates:    tmpl,
 		dryRun:       dryRun,
 		verbose:      verbose,
@@ -115,13 +117,14 @@ func (w *FileWriter) generateCode(info *GenerationInfo) (string, error) {
 	}
 
 	data := &TemplateData{
-		PackageName:   pkgName,
-		StructName:    info.Name,
-		MethodName:    w.methodName,
-		Fields:        info.Fields,
-		FieldSchemas:  fieldSchemas,
-		Imports:       w.generateImports(info),
-		GeneratedTime: time.Now().Format(time.RFC3339),
+		PackageName:      pkgName,
+		StructName:       info.Name,
+		MethodName:       w.methodName,
+		FieldNameTagCall: w.fieldNameTagCall(),
+		Fields:           info.Fields,
+		FieldSchemas:     fieldSchemas,
+		Imports:          w.generateImports(info),
+		GeneratedTime:    time.Now().Format(time.RFC3339),
 	}
 
 	var buf strings.Builder
@@ -167,7 +170,7 @@ func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structNa
 			return nil, fmt.Errorf("generate schema for field %s: %w", field.Name, err)
 		}
 		schemas = append(schemas, FieldSchemaInfo{
-			FieldName:  field.JSONName,
+			FieldName:  field.FieldKey,
 			SchemaCode: code,
 		})
 	}
@@ -216,7 +219,7 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 
 	// General case
 	var b strings.Builder
-	b.WriteString(baseConstructor(typeName, structName))
+	b.WriteString(baseConstructor(typeName, structName, w.fieldNameTag))
 	for _, rule := range field.ValidationRules() {
 		if code := generateValidatorChain(rule, field.Type); code != "" {
 			b.WriteString(code)
@@ -288,23 +291,23 @@ func requiresMethodArg(method string) bool {
 }
 
 // baseConstructor returns the GoZod constructor for a type name with circular reference detection.
-func baseConstructor(typeName, structName string) string {
+func baseConstructor(typeName, structName, fieldNameTag string) string {
 	if base, ok := strings.CutPrefix(typeName, "*"); ok {
 		if basicTypes[base] {
 			return basicTypeConstructor(base)
 		}
 		if structName != "" && base == structName {
-			return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() })", base)
+			return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return %s })", fromStructConstructor(base, fieldNameTag))
 		}
-		return fmt.Sprintf("gozod.FromStruct[%s]()", base)
+		return fromStructConstructor(base, fieldNameTag)
 	}
 
 	if elem, ok := strings.CutPrefix(typeName, "[]"); ok {
 		clean := strings.TrimPrefix(elem, "*")
 		if structName != "" && clean == structName {
-			return fmt.Sprintf("gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", clean)
+			return fmt.Sprintf("gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return %s }))", fromStructConstructor(clean, fieldNameTag))
 		}
-		return fmt.Sprintf("gozod.Slice(%s)", baseConstructor(elem, structName))
+		return fmt.Sprintf("gozod.Slice(%s)", baseConstructor(elem, structName, fieldNameTag))
 	}
 
 	if strings.HasPrefix(typeName, "map[") {
@@ -312,9 +315,9 @@ func baseConstructor(typeName, structName string) string {
 			valType := typeName[idx+1:]
 			clean := strings.TrimPrefix(valType, "*")
 			if structName != "" && clean == structName {
-				return fmt.Sprintf("gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() }))", clean)
+				return fmt.Sprintf("gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return %s }))", fromStructConstructor(clean, fieldNameTag))
 			}
-			return fmt.Sprintf("gozod.Record(%s)", baseConstructor(valType, structName))
+			return fmt.Sprintf("gozod.Record(%s)", baseConstructor(valType, structName, fieldNameTag))
 		}
 		return "gozod.Record(gozod.Any())"
 	}
@@ -326,12 +329,26 @@ func baseConstructor(typeName, structName string) string {
 		return "gozod.Time()"
 	}
 	if structName != "" && typeName == structName {
-		return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[%s]() })", typeName)
+		return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return %s })", fromStructConstructor(typeName, fieldNameTag))
 	}
 	if typeName != "unknown" {
-		return fmt.Sprintf("gozod.FromStruct[%s]()", typeName)
+		return fromStructConstructor(typeName, fieldNameTag)
 	}
 	return "gozod.Any()"
+}
+
+func fromStructConstructor(typeName, fieldNameTag string) string {
+	if fieldNameTag == "" || fieldNameTag == defaultFieldNameTag {
+		return fmt.Sprintf("gozod.FromStruct[%s]()", typeName)
+	}
+	return fmt.Sprintf("gozod.FromStruct[%s](gozod.WithFieldNameTag(%q))", typeName, fieldNameTag)
+}
+
+func (w *FileWriter) fieldNameTagCall() string {
+	if w.fieldNameTag == "" || w.fieldNameTag == defaultFieldNameTag {
+		return ""
+	}
+	return fmt.Sprintf(".WithFieldNameTag(%q)", w.fieldNameTag)
 }
 
 // basicTypeConstructor returns the GoZod constructor for a basic Go type.
@@ -469,13 +486,14 @@ func (w *FileWriter) outputPath(sourceFilePath, structName string) string {
 
 // TemplateData contains data passed to code generation templates.
 type TemplateData struct {
-	PackageName   string
-	StructName    string
-	MethodName    string
-	Fields        []tagparser.FieldInfo
-	FieldSchemas  []FieldSchemaInfo
-	Imports       []string
-	GeneratedTime string
+	PackageName      string
+	StructName       string
+	MethodName       string
+	FieldNameTagCall string
+	Fields           []tagparser.FieldInfo
+	FieldSchemas     []FieldSchemaInfo
+	Imports          []string
+	GeneratedTime    string
 }
 
 // loadTemplates loads the code generation templates.
@@ -499,9 +517,9 @@ func ({{.StructName | receiverName}} {{.StructName}}) {{.MethodName}}() *gozod.Z
 {{- range .FieldSchemas}}
 		"{{.FieldName}}": {{.SchemaCode}},
 {{- end}}
-	})
-}
-`
+		}){{.FieldNameTagCall}}
+	}
+	`
 
 	// Create template with custom functions
 	tmpl := template.New("main").Funcs(template.FuncMap{

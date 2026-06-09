@@ -8,10 +8,10 @@ func WithTagName(name string) FromStructOption {
 	return types.WithTagName(name)
 }
 
-// WithFormat sets the struct tag used for field names (e.g. "yaml",
+// WithFieldNameTag sets the struct tag used for field names (e.g. "yaml",
 // "toml"). It defaults to "json".
-func WithFormat(name string) FromStructOption {
-	return types.WithFormat(name)
+func WithFieldNameTag(name string) FromStructOption {
+	return types.WithFieldNameTag(name)
 }
 
 func FromStruct[T any](opts ...FromStructOption) *types.ZodStruct[T, T] {

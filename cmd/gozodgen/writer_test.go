@@ -247,7 +247,7 @@ type User struct {
 		FilePath: sourcePath,
 		Fields: []tagparser.FieldInfo{{
 			Name:     "Name",
-			JSONName: "name",
+			FieldKey: "name",
 			Type:     reflect.TypeFor[string](),
 			Rules:    []tagparser.TagRule{{Name: "required"}},
 		}},
@@ -265,7 +265,7 @@ func TestFileWriter_GenerateCodeUsesInfoPackage(t *testing.T) {
 		Package: "models",
 		Fields: []tagparser.FieldInfo{{
 			Name:     "Name",
-			JSONName: "name",
+			FieldKey: "name",
 			Type:     reflect.TypeFor[string](),
 			Rules:    []tagparser.TagRule{{Name: "required"}},
 		}},
@@ -282,7 +282,7 @@ func TestFileWriter_GenerateCodeReturnsTemplateError(t *testing.T) {
 		Package: "main",
 		Fields: []tagparser.FieldInfo{{
 			Name:     "Name",
-			JSONName: "name",
+			FieldKey: "name",
 			Type:     reflect.TypeFor[string](),
 			Rules:    []tagparser.TagRule{{Name: "required"}},
 		}},
@@ -306,7 +306,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 				Fields: []tagparser.FieldInfo{
 					{
 						Name:     "ID",
-						JSONName: "id",
+						FieldKey: "id",
 						Type:     reflect.TypeFor[string](),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},
@@ -315,7 +315,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 					},
 					{
 						Name:     "Name",
-						JSONName: "name",
+						FieldKey: "name",
 						Type:     reflect.TypeFor[string](),
 						Rules: []tagparser.TagRule{
 							{Name: "required"},
@@ -514,12 +514,20 @@ func TestCircularReferenceHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := baseConstructor(tt.typeName, tt.structName)
+			result := baseConstructor(tt.typeName, tt.structName, defaultFieldNameTag)
 			if !strings.Contains(result, tt.expected) {
 				assert.Equal(t, tt.expected, result)
 			}
 		})
 	}
+}
+
+func TestBaseConstructor_FieldNameTag(t *testing.T) {
+	result := baseConstructor("Profile", "User", "yaml")
+	assert.Equal(t, `gozod.FromStruct[Profile](gozod.WithFieldNameTag("yaml"))`, result)
+
+	self := baseConstructor("*Node", "Node", "yaml")
+	assert.Contains(t, self, `gozod.FromStruct[Node](gozod.WithFieldNameTag("yaml"))`)
 }
 
 func TestGenerateValidatorChain(t *testing.T) {

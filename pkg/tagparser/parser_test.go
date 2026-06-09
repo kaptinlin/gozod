@@ -133,7 +133,7 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 	// Verify Name field
 	nameField := findField(fields, "Name")
 	require.NotNil(t, nameField, "Name field not found")
-	assert.Equal(t, "name", nameField.JSONName)
+	assert.Equal(t, "name", nameField.FieldKey)
 	assert.True(t, nameField.Required, "Name field should be required")
 	assert.False(t, nameField.Optional, "Name field should not be optional")
 	assert.Len(t, nameField.Rules, 3)
@@ -197,12 +197,12 @@ func TestNewWithTags_FormatTag(t *testing.T) {
 
 	nameField := findField(fields, "Name")
 	require.NotNil(t, nameField, "Name field not found")
-	assert.Equal(t, "yaml_name", nameField.JSONName, "field name should come from yaml tag")
+	assert.Equal(t, "yaml_name", nameField.FieldKey, "field name should come from yaml tag")
 
 	// Field without a yaml tag falls back to the Go field name, not the json tag.
 	noYAML := findField(fields, "NoYAML")
 	require.NotNil(t, noYAML, "NoYAML field not found")
-	assert.Equal(t, "NoYAML", noYAML.JSONName)
+	assert.Equal(t, "NoYAML", noYAML.FieldKey)
 }
 
 func TestNewWithTags_EmptyFormatTagFallsBackToJSON(t *testing.T) {
@@ -215,7 +215,7 @@ func TestNewWithTags_EmptyFormatTagFallsBackToJSON(t *testing.T) {
 	fields, err := parser.ParseStructTags(reflect.TypeFor[TestStruct]())
 	require.NoError(t, err)
 	require.Len(t, fields, 1)
-	assert.Equal(t, "json_name", fields[0].JSONName, "empty format tag should default to json")
+	assert.Equal(t, "json_name", fields[0].FieldKey, "empty field-name tag should default to json")
 }
 
 func TestTagParser_PointerToStruct(t *testing.T) {

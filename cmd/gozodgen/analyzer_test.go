@@ -455,10 +455,10 @@ type User struct {
 	assert.True(t, structs[0].HasGenerate)
 	require.Len(t, structs[0].Fields, 1)
 	assert.Equal(t, "Name", structs[0].Fields[0].Name)
-	assert.Equal(t, "Name", structs[0].Fields[0].JSONName)
+	assert.Equal(t, "Name", structs[0].Fields[0].FieldKey)
 }
 
-func TestStructAnalyzer_ParseStructFieldsWithJSONFallbacks(t *testing.T) {
+func TestStructAnalyzer_ParseStructFieldsWithFieldNameFallbacks(t *testing.T) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "test.go", `package main
 
@@ -480,33 +480,26 @@ type User struct {
 
 	fields, err := analyzer.parseStructFields(structType)
 	require.NoError(t, err)
-	require.Len(t, fields, 3)
+	require.Len(t, fields, 2)
 
 	assert.Equal(t, "Name", fields[0].info.Name)
 	assert.Equal(t, reflect.TypeFor[string](), fields[0].info.Type)
 	assert.Equal(t, "string", fields[0].info.TypeName)
-	assert.Equal(t, "Name", fields[0].info.JSONName)
+	assert.Equal(t, "Name", fields[0].info.FieldKey)
 	assert.False(t, fields[0].hasGozodTag)
 
 	assert.Equal(t, "Alias", fields[1].info.Name)
 	assert.Equal(t, reflect.TypeFor[string](), fields[1].info.Type)
 	assert.Equal(t, "string", fields[1].info.TypeName)
-	assert.Equal(t, "Alias", fields[1].info.JSONName)
+	assert.Equal(t, "Alias", fields[1].info.FieldKey)
 	assert.False(t, fields[1].hasGozodTag)
 
-	assert.Equal(t, "Hidden", fields[2].info.Name)
-	assert.Equal(t, reflect.TypeFor[string](), fields[2].info.Type)
-	assert.Equal(t, "string", fields[2].info.TypeName)
-	assert.Equal(t, "Hidden", fields[2].info.JSONName)
-	assert.Equal(t, "required", fields[2].info.GoZodTag)
-	assert.True(t, fields[2].info.Required)
-	assert.True(t, fields[2].hasGozodTag)
-	if diff := cmp.Diff([]tagparser.TagRule{{Name: "required"}}, fields[2].info.Rules); diff != "" {
-		t.Errorf("parseStructFields() rules mismatch (-want +got):\n%s", diff)
+	for _, field := range fields {
+		assert.NotEqual(t, "Hidden", field.info.Name)
 	}
 }
 
-func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
+func TestStructAnalyzer_ExtractFieldKey(t *testing.T) {
 	analyzer, err := NewStructAnalyzer()
 	require.NoError(t, err)
 
@@ -514,6 +507,7 @@ func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
 		name  string
 		field *ast.Field
 		want  string
+		skip  bool
 	}{
 		{
 			name:  "unnamed field without tag uses empty name",
@@ -544,25 +538,31 @@ func TestStructAnalyzer_ExtractJSONName(t *testing.T) {
 			want: "Alias",
 		},
 		{
-			name: "ignored json tag falls back to field name",
+			name: "ignored json tag skips field",
 			field: &ast.Field{
 				Names: []*ast.Ident{{Name: "Hidden"}},
 				Tag:   &ast.BasicLit{Value: "`json:\"-\"`"},
 			},
-			want: "Hidden",
+			skip: true,
 		},
 		{
-			name: "ignored json tag without field name uses empty name",
+			name: "ignored json tag without field name skips field",
 			field: &ast.Field{
 				Tag: &ast.BasicLit{Value: "`json:\"-\"`"},
 			},
-			want: "",
+			skip: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, analyzer.extractFieldName(tt.field))
+			fallbackName := ""
+			if len(tt.field.Names) > 0 {
+				fallbackName = tt.field.Names[0].Name
+			}
+			got, skip := analyzer.extractFieldKey(tt.field, fallbackName)
+			assert.Equal(t, tt.skip, skip)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

@@ -29,8 +29,8 @@ type TagRule struct {
 	Params []string // e.g., ["2"] for "min=2"
 }
 
-// JSONField represents the resolved JSON contract for a struct field.
-type JSONField struct {
+// FieldNameResult represents the resolved schema key for a struct field.
+type FieldNameResult struct {
 	Name string
 	Skip bool
 }
@@ -50,7 +50,7 @@ type FieldInfo struct {
 	Name     string       // Go field name
 	Type     reflect.Type // field type
 	TypeName string       // AST type name for circular reference detection
-	JSONName string       // from json tag, or Go field name
+	FieldKey string       // from the field-name tag, or Go field name
 	GoZodTag string       // raw gozod tag value
 	Rules    []TagRule    // parsed tag rules before helper-level filtering
 	Required bool         // whether the parsed rules include "required"
@@ -58,43 +58,43 @@ type FieldInfo struct {
 	Nilable  bool         // whether the parsed rules include "nilable"
 }
 
-// defaultFormatTag is the struct tag consulted for field names
-// when a caller does not select another format.
-const defaultFormatTag = "json"
+// defaultFieldNameTag is the struct tag consulted for field names when callers
+// do not select another tag.
+const defaultFieldNameTag = "json"
 
 // TagParser handles gozod tag parsing with configurable tag names.
-// rulesTagName selects the rule tag (default "gozod"); formatTagName selects
-// the tag that supplies field names (default "json").
+// rulesTagName selects the rule tag (default "gozod"); fieldNameTag selects the
+// tag that supplies field names (default "json").
 type TagParser struct {
-	rulesTagName  string
-	formatTagName string
+	rulesTagName string
+	fieldNameTag string
 }
 
 // New creates a [TagParser] with the default "gozod" rule tag and "json"
-// format tag.
+// field-name tag.
 func New() *TagParser {
-	return &TagParser{rulesTagName: defaultRulesTag, formatTagName: defaultFormatTag}
+	return &TagParser{rulesTagName: defaultRulesTag, fieldNameTag: defaultFieldNameTag}
 }
 
 // NewWithTagName creates a [TagParser] with a custom rule tag and the default
-// "json" format tag.
+// "json" field-name tag.
 func NewWithTagName(name string) *TagParser {
 	if strings.TrimSpace(name) == "" {
 		name = defaultRulesTag
 	}
-	return &TagParser{rulesTagName: name, formatTagName: defaultFormatTag}
+	return &TagParser{rulesTagName: name, fieldNameTag: defaultFieldNameTag}
 }
 
-// NewWithTags creates a [TagParser] with custom rule and format tags.
+// NewWithTags creates a [TagParser] with custom rule and field-name tags.
 // Empty values fall back to the defaults ("gozod" and "json").
-func NewWithTags(ruleTag, formatTag string) *TagParser {
+func NewWithTags(ruleTag, fieldNameTag string) *TagParser {
 	if strings.TrimSpace(ruleTag) == "" {
 		ruleTag = defaultRulesTag
 	}
-	if strings.TrimSpace(formatTag) == "" {
-		formatTag = defaultFormatTag
+	if strings.TrimSpace(fieldNameTag) == "" {
+		fieldNameTag = defaultFieldNameTag
 	}
-	return &TagParser{rulesTagName: ruleTag, formatTagName: formatTag}
+	return &TagParser{rulesTagName: ruleTag, fieldNameTag: fieldNameTag}
 }
 
 // ParseStructTags parses all gozod tags in a struct type
@@ -135,15 +135,15 @@ func (p *TagParser) parseStructFields(typ reflect.Type) ([]FieldInfo, error) {
 			continue
 		}
 
-		jsonField := FieldName(p.formatTagName, f)
-		if jsonField.Skip {
+		fieldKey := FieldName(p.fieldNameTag, f)
+		if fieldKey.Skip {
 			continue
 		}
 
 		info := FieldInfo{
 			Name:     f.Name,
 			Type:     f.Type,
-			JSONName: jsonField.Name,
+			FieldKey: fieldKey.Name,
 			GoZodTag: tag,
 		}
 
@@ -315,13 +315,13 @@ func isStructuredParam(raw string) bool {
 // FieldName resolves the field name and skip marker for a struct field using
 // the named struct tag (e.g. "json", "yaml", "toml"). An absent tag falls back
 // to the Go field name; a tag value of "-" marks the field as skipped.
-func FieldName(tagName string, f reflect.StructField) JSONField {
+func FieldName(tagName string, f reflect.StructField) FieldNameResult {
 	tag := f.Tag.Get(tagName)
 	if tag == "" {
-		return JSONField{Name: f.Name}
+		return FieldNameResult{Name: f.Name}
 	}
 	if tag == "-" {
-		return JSONField{Skip: true}
+		return FieldNameResult{Skip: true}
 	}
 
 	name, _, _ := strings.Cut(tag, ",")
@@ -329,7 +329,7 @@ func FieldName(tagName string, f reflect.StructField) JSONField {
 	if name == "" {
 		name = f.Name
 	}
-	return JSONField{Name: name}
+	return FieldNameResult{Name: name}
 }
 
 // hasRule reports whether a rule with the given name exists.

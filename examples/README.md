@@ -16,6 +16,6 @@ A curated set of examples to help you explore GoZod quickly without feeling over
 | `i18n` | Multilingual errors – switch to Simplified Chinese locale |
 | `config` | Real-world JSON config validation using `MustParse` |
 | `struct_tags` | Declarative struct tag validation with `gozod:"required,min=2"` |
-| `custom_tag` | Custom rule tag via `WithTagName` and yaml/toml field names via `WithFormat` |
+| `custom_tag` | Custom rule tag via `WithTagName` and yaml/toml field names via `WithFieldNameTag` |
 | `circular_references` | Automatic circular reference detection and handling |
 | `code_generation` | Zero-overhead code generation with `go generate` |

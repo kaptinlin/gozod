@@ -30,7 +30,7 @@ type testSkipField struct {
 	Secret string `json:"-"`
 }
 
-type testEmptyJSONName struct {
+type testEmptyFieldKey struct {
 	WithEmpty string `json:",omitempty"`
 	Secret    string `json:"-"`
 }
@@ -70,7 +70,7 @@ func TestToMap(t *testing.T) {
 	})
 
 	t.Run("empty json name uses field name", func(t *testing.T) {
-		got, err := ToMap("json", testEmptyJSONName{WithEmpty: "value", Secret: "hidden"})
+		got, err := ToMap("json", testEmptyFieldKey{WithEmpty: "value", Secret: "hidden"})
 		require.NoError(t, err)
 
 		assert.Equal(t, "value", got["WithEmpty"])
@@ -204,10 +204,10 @@ func TestUnmarshal(t *testing.T) {
 
 	t.Run("empty json name uses field name", func(t *testing.T) {
 		data := map[string]any{"WithEmpty": "value", "Secret": "hidden", "-": "dash"}
-		result, err := Unmarshal("json", data, reflect.TypeFor[testEmptyJSONName]())
+		result, err := Unmarshal("json", data, reflect.TypeFor[testEmptyFieldKey]())
 		require.NoError(t, err)
 
-		got := result.(testEmptyJSONName)
+		got := result.(testEmptyFieldKey)
 		assert.Equal(t, "value", got.WithEmpty)
 		assert.Empty(t, got.Secret)
 	})

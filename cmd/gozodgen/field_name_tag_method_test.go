@@ -5,28 +5,40 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kaptinlin/gozod/pkg/tagparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
-func TestStructAnalyzer_ExtractFieldName_Format(t *testing.T) {
+func TestStructAnalyzer_ExtractFieldKey_FieldNameTag(t *testing.T) {
 	analyzer, err := NewStructAnalyzer()
 	require.NoError(t, err)
-	analyzer.format = "yaml"
+	analyzer.fieldNameTag = "yaml"
 
 	field := &ast.Field{
 		Names: []*ast.Ident{{Name: "UserName"}},
 		Tag:   &ast.BasicLit{Value: "`json:\"userName\" yaml:\"user_name\"`"},
 	}
-	assert.Equal(t, "user_name", analyzer.extractFieldName(field))
+	fieldKey, skip := analyzer.extractFieldKey(field, "UserName")
+	assert.False(t, skip)
+	assert.Equal(t, "user_name", fieldKey)
 
-	// A field without the chosen format tag falls back to the Go field name.
+	// A field without the chosen field-name tag falls back to the Go field name.
 	noYAML := &ast.Field{
 		Names: []*ast.Ident{{Name: "UserName"}},
 		Tag:   &ast.BasicLit{Value: "`json:\"userName\"`"},
 	}
-	assert.Equal(t, "UserName", analyzer.extractFieldName(noYAML))
+	fieldKey, skip = analyzer.extractFieldKey(noYAML, "UserName")
+	assert.False(t, skip)
+	assert.Equal(t, "UserName", fieldKey)
+
+	ignored := &ast.Field{
+		Names: []*ast.Ident{{Name: "Secret"}},
+		Tag:   &ast.BasicLit{Value: "`yaml:\"-\"`"},
+	}
+	_, skip = analyzer.extractFieldKey(ignored, "Secret")
+	assert.True(t, skip)
 }
 
 func TestFileWriter_MethodName(t *testing.T) {
@@ -39,7 +51,7 @@ func TestFileWriter_MethodName(t *testing.T) {
 		Package: "main",
 		Fields: []tagparser.FieldInfo{{
 			Name:     "Name",
-			JSONName: "name",
+			FieldKey: "name",
 			Type:     reflect.TypeFor[string](),
 			Rules:    []tagparser.TagRule{{Name: "required"}},
 		}},
