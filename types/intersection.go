@@ -26,6 +26,8 @@ type ZodIntersectionInternals struct {
 	Def   *ZodIntersectionDef
 	Left  core.ZodSchema
 	Right core.ZodSchema
+	// Format is the struct tag used for field names (default "json").
+	Format string
 }
 
 // ZodIntersection is an intersection validation schema with dual generic parameters.
@@ -108,7 +110,7 @@ func (i *ZodIntersection[T, R]) validateValue(value any, chks []core.ZodCheck, c
 		return nil, issues.NewZodError(mergedIssues)
 	}
 
-	merged, err := mergeValues(leftResult, rightResult)
+	merged, err := mergeValues(i.internals.Format, leftResult, rightResult)
 	if err != nil {
 		iss := issues.CreateCustomIssue(err.Error(), map[string]any{"type": "intersection"}, value)
 		return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(iss, ctx, core.Config())})
@@ -207,7 +209,7 @@ func (i *ZodIntersection[T, R]) StrictParse(input T, ctx ...*core.ParseContext) 
 		return zero, issues.NewZodError(mergedIssues)
 	}
 
-	merged, err := mergeValues(leftResult, rightResult)
+	merged, err := mergeValues(i.internals.Format, leftResult, rightResult)
 	if err != nil {
 		iss := issues.CreateCustomIssue(err.Error(), map[string]any{"type": "intersection"}, converted)
 		var zero R
@@ -233,6 +235,15 @@ func (i *ZodIntersection[T, R]) MustStrictParse(input T, ctx ...*core.ParseConte
 		panic(err)
 	}
 	return result
+}
+
+// WithFormat returns a new schema that resolves struct field names using
+// the named struct tag (e.g. "yaml", "toml") instead of the default "json"
+// when struct operands are merged via map conversion.
+func (i *ZodIntersection[T, R]) WithFormat(format string) *ZodIntersection[T, R] {
+	clone := i.withInternals(i.internals.Clone())
+	clone.internals.Format = format
+	return clone
 }
 
 // Optional returns a schema that accepts T or nil, with constraint type *T.
@@ -269,6 +280,7 @@ func (i *ZodIntersection[T, R]) NonOptional() *ZodIntersection[T, T] {
 			Def:              i.internals.Def,
 			Left:             i.internals.Left,
 			Right:            i.internals.Right,
+			Format:           i.internals.Format,
 		},
 	}
 }
@@ -413,6 +425,7 @@ func (i *ZodIntersection[T, R]) newIntersectionInternals(in *core.ZodTypeInterna
 		Def:              i.internals.Def,
 		Left:             i.internals.Left,
 		Right:            i.internals.Right,
+		Format:           i.internals.Format,
 	}
 }
 
@@ -477,7 +490,7 @@ func convertToIntersectionConstraintValue[T any, R any](value any) (R, bool) {
 }
 
 // mergeValues attempts to merge two validated values.
-func mergeValues(a, b any) (any, error) {
+func mergeValues(format string, a, b any) (any, error) {
 	if reflect.DeepEqual(a, b) {
 		return a, nil
 	}
@@ -507,7 +520,7 @@ func mergeValues(a, b any) (any, error) {
 	case reflect.Slice, reflect.Array:
 		return mergeSlices(a, b)
 	case reflect.Struct:
-		return mergeMaps(structToMap(av), structToMap(bv))
+		return mergeMaps(structToMap(format, av), structToMap(format, bv))
 	default:
 		return nil, issues.CreateIncompatibleTypesError("different values", a, b, nil, &core.ParseContext{})
 	}
@@ -557,18 +570,20 @@ func mergeSlices(a, b any) (any, error) {
 	return a, nil
 }
 
-// structToMap converts a struct to map[string]any using exported fields and json tags.
-func structToMap(v reflect.Value) map[string]any {
+// structToMap converts a struct to map[string]any using exported fields and the
+// named format (default "json") for field names.
+func structToMap(format string, v reflect.Value) map[string]any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
+	format = formatOrDefault(format)
 	m := make(map[string]any, v.NumField())
 	for field, value := range v.Fields() {
 		if !field.IsExported() || !value.CanInterface() {
 			continue
 		}
 
-		jsonField := tagparser.JSONFieldName(field)
+		jsonField := tagparser.FieldName(format, field)
 		if jsonField.Skip {
 			continue
 		}

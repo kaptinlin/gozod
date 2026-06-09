@@ -43,7 +43,7 @@ func TestStructToMapJSONTags(t *testing.T) {
 		hidden   string
 	}
 
-	got := structToMap(reflect.ValueOf(tagCase{
+	got := structToMap("json", reflect.ValueOf(tagCase{
 		Name:     "Alice",
 		Nickname: "Al",
 		Secret:   "hidden",

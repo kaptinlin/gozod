@@ -22,6 +22,7 @@ type StructAnalyzer struct {
 	packages map[string]*types.Package
 	imports  map[string]string
 	info     *types.Info
+	format   string // struct tag used for field names (default "json")
 }
 
 // GenerationInfo contains information about a struct that needs code generation.
@@ -47,6 +48,7 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 		packages: make(map[string]*types.Package),
 		imports:  make(map[string]string),
 		info:     info,
+		format:   defaultFormat,
 	}, nil
 }
 
@@ -208,7 +210,7 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 				Name:     name.Name,
 				Type:     a.getReflectType(field.Type),
 				TypeName: getTypeNameFromAST(field.Type),
-				JSONName: a.extractJSONName(field),
+				JSONName: a.extractFieldName(field),
 			}
 
 			hasGozodTag, err := a.applyGoZodTag(&info, field)
@@ -379,20 +381,20 @@ func (a *StructAnalyzer) applyGoZodTag(info *tagparser.FieldInfo, field *ast.Fie
 	return true, nil
 }
 
-// extractJSONName extracts the JSON field name from a struct tag.
-func (a *StructAnalyzer) extractJSONName(field *ast.Field) string {
+// extractFieldName extracts the field name from the configured format tag.
+func (a *StructAnalyzer) extractFieldName(field *ast.Field) string {
 	fallbackName := firstFieldName(field)
 	if field.Tag == nil {
 		return fallbackName
 	}
 
 	tagValue := strings.Trim(field.Tag.Value, "`")
-	jsonTag := extractTagValue(tagValue, "json")
-	if jsonTag == "" {
+	formatTag := extractTagValue(tagValue, a.format)
+	if formatTag == "" {
 		return fallbackName
 	}
 
-	name, _, _ := strings.Cut(jsonTag, ",")
+	name, _, _ := strings.Cut(formatTag, ",")
 	name = strings.TrimSpace(name)
 	if name == "" || name == "-" {
 		return fallbackName

@@ -10,7 +10,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 - **Strict type semantics**: Value schemas and pointer schemas accept exact input types unless coercion is explicit.
 - **Dual parsing modes**: Use `Parse(any)` for dynamic data and `StrictParse(T)` for known Go values.
 - **Fluent schema API**: Compose primitives, collections, structs, unions, intersections, transforms, refinements, defaults, and metadata.
-- **Struct tags**: Build schemas from Go structs with `gozod:"..."` tags, JSON field names, custom tag keys, and circular-reference support.
+- **Struct tags**: Build schemas from Go structs with `gozod:"..."` tags, json/yaml/toml field names, custom tag keys, and circular-reference support.
 - **Generated schemas**: Use `gozodgen` for tag-heavy paths where generated helpers are preferable to reflection.
 - **Localized errors**: Inspect `*gozod.ZodError`, prettify or flatten failures, and switch message bundles through `locales/`.
 - **JSON Schema bridge**: Convert GoZod schemas to JSON Schema and import JSON Schema back into GoZod with explicit lossy-conversion controls.
@@ -106,7 +106,7 @@ func main() {
 }
 ```
 
-Use `gozod.WithTagName("validate")` when your project uses another tag key. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
+Use `gozod.WithTagName("validate")` when your project uses another tag key, and `gozod.WithFormat("yaml")` to resolve field names (error paths and JSON Schema) from `yaml`/`toml` tags instead of `json`. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
 
 ## Programmatic Schemas
 

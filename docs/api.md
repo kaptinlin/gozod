@@ -498,6 +498,11 @@ schema := gozod.FromStruct[User]()
 result, err := schema.Parse(user)              // ✅ Tag-based validation
 ```
 
+`FromStruct[T]` / `FromStructPtr[T]` accept options:
+
+- `gozod.WithTagName("validate")` — read validation rules from a tag other than `gozod`.
+- `gozod.WithFormat("yaml")` — resolve field names (error paths and JSON Schema) from `yaml`/`toml`/custom tags instead of `json`.
+
 ### Nested Structs and Circular References
 
 ```go

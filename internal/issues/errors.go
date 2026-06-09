@@ -355,7 +355,7 @@ var excludedPropertyKeys = map[string]struct{}{
 
 // convertZodIssueToProperties converts a ZodIssue to properties map for the formatter.
 func convertZodIssueToProperties(issue ZodIssue) map[string]any {
-	if properties, err := structx.ToMap(issue); err == nil {
+	if properties, err := structx.ToMap("json", issue); err == nil {
 		result := mapx.Copy(properties)
 		maps.DeleteFunc(result, func(k string, _ any) bool {
 			_, excluded := excludedPropertyKeys[k]

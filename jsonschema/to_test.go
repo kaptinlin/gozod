@@ -2086,3 +2086,25 @@ func TestToJSONSchema_RefWithOptionalAndDescribe(t *testing.T) {
 	// Description "bar" should be preserved (on $ref site or in output)
 	assert.Contains(t, resultStr, "bar")
 }
+
+func TestToJSONSchema_FromStructFormat(t *testing.T) {
+	type User struct {
+		UserName string `gozod:"min=3" json:"userName" yaml:"user_name"`
+	}
+
+	t.Run("default uses json property name", func(t *testing.T) {
+		js, err := ToJSONSchema(types.FromStruct[User]())
+		require.NoError(t, err)
+		b, err := json.Marshal(js)
+		require.NoError(t, err)
+		assertJSONEquals(t, `{"properties":{"userName":{"type":"string","minLength":3}}}`, string(b))
+	})
+
+	t.Run("WithFormat yaml uses yaml property name", func(t *testing.T) {
+		js, err := ToJSONSchema(types.FromStruct[User](types.WithFormat("yaml")))
+		require.NoError(t, err)
+		b, err := json.Marshal(js)
+		require.NoError(t, err)
+		assertJSONEquals(t, `{"properties":{"user_name":{"type":"string","minLength":3}}}`, string(b))
+	})
+}
