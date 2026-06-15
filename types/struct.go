@@ -2227,12 +2227,15 @@ func createSchemaFromType(fieldType reflect.Type) core.ZodSchema {
 
 // applyParsedTagRules applies validation rules from parsed tagparser.FieldInfo
 func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) core.ZodSchema {
-	// We'll apply optional at the end, after all other rules
+	fieldPlan := tagparser.CompileFieldPlan(&fieldInfo)
+	if fieldPlan.RuntimePointerOptional == tagparser.OptionalPlacementBeforeOperations {
+		schema = applyOptionalToSchema(schema)
+	}
 
 	// Apply tag-driven validation rules; structural flags are handled elsewhere.
-	for _, rule := range fieldInfo.ValidationRules() {
-		plan := tagparser.CompileRule(rule)
-		switch plan.Op {
+	for _, operation := range fieldPlan.Operations {
+		rule := operation.Rule
+		switch operation.Op {
 		case tagparser.RuleStructural:
 			continue
 		case tagparser.RuleStringCheck:
@@ -2252,30 +2255,26 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 				schema = applyEnumConstraint(schema, rule.Params)
 			}
 		case tagparser.RuleLiteral:
-			if value, ok := plan.FirstParam(); ok {
+			if value, ok := operation.FirstParam(); ok {
 				schema = applyLiteralConstraint(schema, value)
 			}
 		case tagparser.RuleDefault:
-			if value, ok := plan.JoinedValue(); ok {
+			if value, ok := operation.JoinedValue(); ok {
 				schema = applyDefaultValue(schema, value)
 			}
 		case tagparser.RulePrefault:
-			if value, ok := plan.JoinedValue(); ok {
+			if value, ok := operation.JoinedValue(); ok {
 				schema = applyPrefaultValue(schema, value)
 			}
 		case tagparser.RuleMethod:
-			schema = applyMethodRule(schema, plan)
+			schema = applyMethodRule(schema, operation)
 		case tagparser.RuleUnsupported:
 			continue
 		}
 	}
 
-	// Apply optional/required for pointer fields AFTER all other rules
-	if fieldInfo.NeedsPointerOptional() {
-		// Make pointer fields optional (accept nil) unless marked as required
-		// Use type switch to handle each schema type's Optional() method
+	if fieldPlan.RuntimePointerOptional == tagparser.OptionalPlacementAfterOperations {
 		schema = applyOptionalToSchema(schema)
-		// If required, leave as is - pointer constructors by default don't accept nil for Parse
 	}
 
 	return schema

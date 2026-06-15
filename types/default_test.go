@@ -281,17 +281,42 @@ func TestDefaultValueBehavior(t *testing.T) {
 		assert.Equal(t, "provided", res)
 	})
 
-	t.Run("Default with Optional", func(t *testing.T) {
-		schema := String().Default("default").Optional()
+	t.Run("Default and Optional preserve chain order", func(t *testing.T) {
+		optionalThenDefault := String().Optional().Default("default")
+		res, err := optionalThenDefault.Parse(nil)
+		require.NoError(t, err, "Optional().Default().Parse(nil) failed")
+		require.NotNil(t, res, "Expected outer Default to supply a value")
+		assert.Equal(t, "default", *res)
 
-		// nil should use default
-		res, err := schema.Parse(nil)
-		require.NoError(t, err, "Parse(nil) failed")
-		// Result is *string
-		require.NotNil(t, res, "Expected non-nil result for default value")
-		str, ok := any(res).(*string)
-		require.True(t, ok, "Expected *string type")
-		assert.Equal(t, "default", *str)
+		defaultThenOptional := String().Default("default").Optional()
+		res, err = defaultThenOptional.Parse(nil)
+		require.NoError(t, err, "Default().Optional().Parse(nil) failed")
+		assert.Nil(t, res, "Expected outer Optional to short-circuit before inner Default")
+	})
+
+	t.Run("Repeated defaults keep each node payload", func(t *testing.T) {
+		outerDefault := String().Default("inner").Default("outer")
+		res, err := outerDefault.Parse(nil)
+		require.NoError(t, err, "Default(inner).Default(outer).Parse(nil) failed")
+		assert.Equal(t, "outer", res)
+
+		innerDefault := String().Default("outer").Default("inner").Optional().Default("outer")
+		ptr, err := innerDefault.Parse(nil)
+		require.NoError(t, err, "Repeated default chain with Optional failed")
+		require.NotNil(t, ptr)
+		assert.Equal(t, "outer", *ptr)
+	})
+
+	t.Run("Repeated prefaults keep each node payload", func(t *testing.T) {
+		outerPrefault := String().Min(5).Prefault("inner-valid").Prefault("outer-valid")
+		res, err := outerPrefault.Parse(nil)
+		require.NoError(t, err, "Prefault(inner).Prefault(outer).Parse(nil) failed")
+		assert.Equal(t, "outer-valid", res)
+
+		innerPrefault := String().Min(5).Prefault("outer-valid").Prefault("bad")
+		_, err = innerPrefault.Parse(nil)
+		require.Error(t, err, "outer Prefault payload should be validated independently")
+		assert.Contains(t, err.Error(), "Too small")
 	})
 
 	t.Run("Nested default values", func(t *testing.T) {

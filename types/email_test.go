@@ -144,8 +144,8 @@ func TestZodEmail_Modifiers(t *testing.T) {
 }
 
 func TestZodEmail_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		schema := Email().Default("default@example.com").Prefault("prefault@example.com")
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := Email().Prefault("prefault@example.com").Default("default@example.com")
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -189,20 +189,20 @@ func TestZodEmail_DefaultAndPrefault(t *testing.T) {
 		prefaultCalled := false
 
 		schema := Email().
-			DefaultFunc(func() string {
-				defaultCalled = true
-				return "default@example.com"
-			}).
 			PrefaultFunc(func() string {
 				prefaultCalled = true
 				return "prefault@example.com"
+			}).
+			DefaultFunc(func() string {
+				defaultCalled = true
+				return "default@example.com"
 			})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "default@example.com", result)
 		assert.True(t, defaultCalled, "DefaultFunc should be called")
-		assert.False(t, prefaultCalled, "PrefaultFunc should not be called when Default is present")
+		assert.False(t, prefaultCalled, "Inner PrefaultFunc should not be called when outer DefaultFunc handles nil")
 	})
 
 	t.Run("Prefault validation failure", func(t *testing.T) {
@@ -395,7 +395,7 @@ func TestZodEmail_ErrorHandling(t *testing.T) {
 
 func TestZodEmail_Integration(t *testing.T) {
 	t.Run("Chaining modifiers", func(t *testing.T) {
-		schema := Email().Default("default@example.com").Optional()
+		schema := Email().Optional().Default("default@example.com")
 
 		result, err := schema.Parse("test@example.com")
 		require.NoError(t, err)

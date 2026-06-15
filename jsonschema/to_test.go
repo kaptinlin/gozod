@@ -51,6 +51,86 @@ func TestToJSONSchema_DoesNotMutateInternalsBag(t *testing.T) {
 	assert.Equal(t, before, schema.Internals().Bag)
 }
 
+func TestToJSONSchema_LengthProjectionUsesCheckParams(t *testing.T) {
+	t.Run("string min and max", func(t *testing.T) {
+		schema := types.String().Min(3).Max(5)
+
+		_, err := schema.Parse("go")
+		require.Error(t, err)
+		_, err = schema.Parse("gozod")
+		require.NoError(t, err)
+
+		internals := schema.Internals()
+		require.Len(t, internals.Checks, 2)
+		assert.Equal(t, map[string]any{"minimum": 3}, internals.Checks[0].Zod().Def.Params)
+		assert.Equal(t, map[string]any{"maximum": 5}, internals.Checks[1].Zod().Def.Params)
+
+		internals.Bag = nil
+		got, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		require.NotNil(t, got.MinLength)
+		require.NotNil(t, got.MaxLength)
+		assert.Equal(t, 3.0, *got.MinLength)
+		assert.Equal(t, 5.0, *got.MaxLength)
+	})
+
+	t.Run("string exact length", func(t *testing.T) {
+		schema := types.String().Length(4)
+
+		_, err := schema.Parse("goz")
+		require.Error(t, err)
+		_, err = schema.Parse("zods")
+		require.NoError(t, err)
+
+		internals := schema.Internals()
+		require.Len(t, internals.Checks, 1)
+		assert.Equal(t, map[string]any{"exact": 4}, internals.Checks[0].Zod().Def.Params)
+
+		internals.Bag = nil
+		got, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		require.NotNil(t, got.MinLength)
+		require.NotNil(t, got.MaxLength)
+		assert.Equal(t, 4.0, *got.MinLength)
+		assert.Equal(t, 4.0, *got.MaxLength)
+	})
+
+	t.Run("slice min and max items", func(t *testing.T) {
+		schema := types.Slice[string](types.String()).Min(2).Max(3)
+
+		_, err := schema.Parse([]string{"one"})
+		require.Error(t, err)
+		_, err = schema.Parse([]string{"one", "two"})
+		require.NoError(t, err)
+
+		internals := schema.Internals()
+		assert.Equal(t, map[string]any{"minimum": 2}, checkDefParams(t, internals.Checks, "min_size"))
+		assert.Equal(t, map[string]any{"maximum": 3}, checkDefParams(t, internals.Checks, "max_size"))
+
+		internals.Bag = nil
+		got, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		require.NotNil(t, got.MinItems)
+		require.NotNil(t, got.MaxItems)
+		assert.Equal(t, 2.0, *got.MinItems)
+		assert.Equal(t, 3.0, *got.MaxItems)
+	})
+}
+
+func checkDefParams(t *testing.T, checks []core.ZodCheck, name string) map[string]any {
+	t.Helper()
+	for _, check := range checks {
+		if check == nil || check.Zod() == nil || check.Zod().Def == nil {
+			continue
+		}
+		if check.Zod().Def.Check == name {
+			return check.Zod().Def.Params
+		}
+	}
+	require.Failf(t, "missing check", "check %q not found", name)
+	return nil
+}
+
 // isSubset recursively verifies that exp is a subset of act (i.e., all keys/values in exp are present in act).
 func isSubset(exp, act any) bool {
 	switch e := exp.(type) {

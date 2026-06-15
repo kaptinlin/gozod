@@ -343,20 +343,20 @@ func TestInt_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestInt_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+	// Test 1: outer Default over inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		// Int64 type
-		schema1 := Int64().Default(100).Prefault(200)
+		schema1 := Int64().Prefault(200).Default(100)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		assert.Equal(t, int64(100), result1) // Should be default, not prefault
+		assert.Equal(t, int64(100), result1)
 
 		// Int64Ptr type
-		schema2 := Int64Ptr().Default(100).Prefault(200)
+		schema2 := Int64Ptr().Prefault(200).Default(100)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		assert.Equal(t, int64(100), *result2) // Should be default, not prefault
+		assert.Equal(t, int64(100), *result2)
 	})
 
 	// Test 2: Default short-circuits validation
@@ -1790,12 +1790,12 @@ func TestInt_ComprehensiveTypeSafety(t *testing.T) {
 
 func TestInt_TypeEvolutionChaining(t *testing.T) {
 	t.Run("type evolution through method chaining", func(t *testing.T) {
-		// Test: Int32() -> Default() -> Min() -> Optional()
-		// Type evolution: [int32, int32] -> [int32, int32] -> [int32, int32] -> [int32, *int32]
+		// Test: Int32() -> Min() -> Optional() -> Default()
+		// Type evolution: [int32, int32] -> [int32, int32] -> [int32, *int32] -> [int32, *int32]
 		schema := Int32(). // *ZodIntegerTyped[int32, int32]
-					Default(42). // *ZodIntegerTyped[int32, int32] (maintains type)
-					Min(0).      // *ZodIntegerTyped[int32, int32] (maintains type)
-					Optional()   // *ZodIntegerTyped[int32, *int32] (type conversion)
+					Min(0).     // *ZodIntegerTyped[int32, int32] (maintains type)
+					Optional(). // *ZodIntegerTyped[int32, *int32] (type conversion)
+					Default(42) // *ZodIntegerTyped[int32, *int32] (maintains pointer output)
 
 		var _ = schema
 
@@ -1806,10 +1806,10 @@ func TestInt_TypeEvolutionChaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, int32(100), *result)
 
-		// Test with nil - Default should always win (Zod v4 behavior)
+		// Test with nil - outer Default should handle nil first.
 		resultNil, err := schema.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, resultNil) // Default takes precedence over Optional
+		require.NotNil(t, resultNil)
 		assert.Equal(t, int32(42), *resultNil)
 	})
 

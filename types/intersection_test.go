@@ -115,7 +115,7 @@ func TestIntersection_Modifiers(t *testing.T) {
 
 func TestIntersection_Chaining(t *testing.T) {
 	t.Run("default then optional", func(t *testing.T) {
-		schema := Intersection(String(), String()).Default("default").Optional()
+		schema := Intersection(String(), String()).Optional().Default("default")
 		result, err := schema.Parse("test")
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -139,8 +139,8 @@ func TestIntersection_Chaining(t *testing.T) {
 }
 
 func TestIntersection_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		schema := Intersection(String(), String()).Default("default-value").Prefault("prefault-value").Optional()
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := Intersection(String(), String()).Optional().Prefault("prefault-value").Default("default-value")
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -148,7 +148,7 @@ func TestIntersection_DefaultAndPrefault(t *testing.T) {
 	})
 
 	t.Run("Default bypasses validation", func(t *testing.T) {
-		schema := Intersection(String(), String()).Default(123).Optional()
+		schema := Intersection(String(), String()).Optional().Default(123)
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -156,7 +156,7 @@ func TestIntersection_DefaultAndPrefault(t *testing.T) {
 	})
 
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
-		schema := Intersection(String(), String()).Prefault("valid-string").Optional()
+		schema := Intersection(String(), String()).Optional().Prefault("valid-string")
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
@@ -174,15 +174,15 @@ func TestIntersection_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 		schema := Intersection(String(), String()).
-			DefaultFunc(func() any {
-				defaultCalled = true
-				return "default-func"
-			}).
+			Optional().
 			PrefaultFunc(func() any {
 				prefaultCalled = true
 				return "prefault-func"
 			}).
-			Optional()
+			DefaultFunc(func() any {
+				defaultCalled = true
+				return "default-func"
+			})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestIntersection_DefaultAndPrefault(t *testing.T) {
 	})
 
 	t.Run("Prefault validation failure", func(t *testing.T) {
-		schema := Intersection(String(), String()).Prefault(123).Optional()
+		schema := Intersection(String(), String()).Optional().Prefault(123)
 		result, err := schema.Parse(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "expected string, received number")

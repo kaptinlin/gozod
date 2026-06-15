@@ -788,14 +788,14 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 		assert.False(t, called, "DefaultFunc should not be called for empty string")
 	})
 
-	// Test Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		schema := String().Min(5).Default("hi").Prefault("fallback value")
+	// Test outer Default over inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := String().Min(5).Prefault("fallback value").Default("hi")
 
-		// Nil input should use default (short-circuit), not prefault
+		// Nil input should use outer default, not inner prefault.
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
-		assert.Equal(t, "hi", result, "Default should take priority over prefault")
+		assert.Equal(t, "hi", result, "outer Default should handle nil before inner Prefault")
 	})
 
 	// Test Default short-circuit mechanism
@@ -972,8 +972,8 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 		schema2 := StringPtr().Default("value2") // Unified API: accepts string, not *string
 		schema3 := String().DefaultFunc(func() string { return "func1" })
 		schema4 := StringPtr().DefaultFunc(func() string { return "func2" }) // Unified: returns string
-		schema5 := String().Min(10).Default("short").Prefault("long enough")
-		schema6 := StringPtr().Min(10).Default("short").Prefault("long enough ptr") // Unified API
+		schema5 := String().Min(10).Prefault("long enough").Default("short")
+		schema6 := StringPtr().Min(10).Prefault("long enough ptr").Default("short") // Unified API
 
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
@@ -995,12 +995,12 @@ func TestString_Modifiers_DefaultAndPrefault(t *testing.T) {
 
 		result5, err5 := schema5.Parse(nil)
 		require.NoError(t, err5)
-		assert.Equal(t, "short", result5) // Default has higher priority than Prefault
+		assert.Equal(t, "short", result5) // Outer Default short-circuits inner Prefault.
 
 		result6, err6 := schema6.Parse(nil)
 		require.NoError(t, err6)
 		require.NotNil(t, result6)
-		assert.Equal(t, "short", *result6) // Default has higher priority than Prefault
+		assert.Equal(t, "short", *result6) // Outer Default short-circuits inner Prefault.
 	})
 
 	// Test StringPtr Prefault behavior (only on nil input)

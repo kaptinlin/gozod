@@ -161,38 +161,95 @@ type unsupportedFeature struct {
 	err     error
 }
 
+type unsupportedImportKeyword struct {
+	keyword string
+	err     error
+	present func(*lib.Schema) bool
+}
+
+var unsupportedImportKeywords = []unsupportedImportKeyword{
+	{
+		keyword: "if/then/else",
+		err:     ErrJSONSchemaIfThenElse,
+		present: func(s *lib.Schema) bool {
+			return s.If != nil || s.Then != nil || s.Else != nil
+		},
+	},
+	{
+		keyword: "patternProperties",
+		err:     ErrJSONSchemaPatternProperties,
+		present: func(s *lib.Schema) bool {
+			return s.PatternProperties != nil && len(*s.PatternProperties) > 0
+		},
+	},
+	{
+		keyword: "$dynamicRef",
+		err:     ErrJSONSchemaDynamicRef,
+		present: func(s *lib.Schema) bool {
+			return s.DynamicRef != ""
+		},
+	},
+	{
+		keyword: "unevaluatedProperties",
+		err:     ErrJSONSchemaUnevaluatedProps,
+		present: func(s *lib.Schema) bool {
+			return s.UnevaluatedProperties != nil
+		},
+	},
+	{
+		keyword: "unevaluatedItems",
+		err:     ErrJSONSchemaUnevaluatedItems,
+		present: func(s *lib.Schema) bool {
+			return s.UnevaluatedItems != nil
+		},
+	},
+	{
+		keyword: "not",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			return s.Not != nil
+		},
+	},
+	{
+		keyword: "uniqueItems",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			return s.UniqueItems != nil && *s.UniqueItems
+		},
+	},
+	{
+		keyword: "dependentSchemas",
+		err:     ErrJSONSchemaDependentSchemas,
+		present: func(s *lib.Schema) bool {
+			return len(s.DependentSchemas) > 0
+		},
+	},
+	{
+		keyword: "propertyNames",
+		err:     ErrJSONSchemaPropertyNames,
+		present: func(s *lib.Schema) bool {
+			return s.PropertyNames != nil
+		},
+	},
+	{
+		keyword: "contains",
+		err:     ErrJSONSchemaContains,
+		present: func(s *lib.Schema) bool {
+			return s.Contains != nil || s.MinContains != nil || s.MaxContains != nil
+		},
+	},
+}
+
 // unsupportedFeatures returns unsupported keywords present on the schema.
 func (ctx *fromJSONSchemaContext) unsupportedFeatures(s *lib.Schema) []unsupportedFeature {
 	var unsupported []unsupportedFeature
-	if s.If != nil || s.Then != nil || s.Else != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "if/then/else", err: ErrJSONSchemaIfThenElse})
-	}
-	if s.PatternProperties != nil && len(*s.PatternProperties) > 0 {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "patternProperties", err: ErrJSONSchemaPatternProperties})
-	}
-	if s.DynamicRef != "" {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "$dynamicRef", err: ErrJSONSchemaDynamicRef})
-	}
-	if s.UnevaluatedProperties != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "unevaluatedProperties", err: ErrJSONSchemaUnevaluatedProps})
-	}
-	if s.UnevaluatedItems != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "unevaluatedItems", err: ErrJSONSchemaUnevaluatedItems})
-	}
-	if s.Not != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "not", err: ErrUnsupportedJSONSchemaKeyword})
-	}
-	if s.UniqueItems != nil && *s.UniqueItems {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "uniqueItems", err: ErrUnsupportedJSONSchemaKeyword})
-	}
-	if len(s.DependentSchemas) > 0 {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "dependentSchemas", err: ErrJSONSchemaDependentSchemas})
-	}
-	if s.PropertyNames != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "propertyNames", err: ErrJSONSchemaPropertyNames})
-	}
-	if s.Contains != nil || s.MinContains != nil || s.MaxContains != nil {
-		unsupported = append(unsupported, unsupportedFeature{keyword: "contains", err: ErrJSONSchemaContains})
+	for _, keyword := range unsupportedImportKeywords {
+		if keyword.present(s) {
+			unsupported = append(unsupported, unsupportedFeature{
+				keyword: keyword.keyword,
+				err:     keyword.err,
+			})
+		}
 	}
 	return unsupported
 }

@@ -32,6 +32,19 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 		assert.False(t, transformCalled)
 	})
 
+	t.Run("Default nil skips transform", func(t *testing.T) {
+		transformCalled := false
+		schema := Any().Default(nil).Transform(func(input any, _ *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return input, nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+		assert.False(t, transformCalled)
+	})
+
 	t.Run("Prefault goes through transform", func(t *testing.T) {
 		transformCalled := false
 		schema := String().Prefault("prefault_value").Transform(func(input string, _ *core.RefinementContext) (any, error) {
@@ -45,9 +58,9 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 		assert.True(t, transformCalled)
 	})
 
-	t.Run("Default takes precedence over Prefault", func(t *testing.T) {
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		transformCalled := false
-		schema := String().Default("default_value").Prefault("prefault_value").Transform(func(input string, _ *core.RefinementContext) (any, error) {
+		schema := String().Prefault("prefault_value").Default("default_value").Transform(func(input string, _ *core.RefinementContext) (any, error) {
 			transformCalled = true
 			return strings.ToUpper(input), nil
 		})
@@ -56,6 +69,19 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "default_value", result)
 		assert.False(t, transformCalled)
+	})
+
+	t.Run("outer Prefault over inner Default", func(t *testing.T) {
+		transformCalled := false
+		schema := String().Default("default_value").Prefault("prefault_value").Transform(func(input string, _ *core.RefinementContext) (any, error) {
+			transformCalled = true
+			return strings.ToUpper(input), nil
+		})
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "PREFAULT_VALUE", result)
+		assert.True(t, transformCalled)
 	})
 
 	t.Run("valid input goes through transform", func(t *testing.T) {
@@ -143,6 +169,49 @@ func TestTransform_DefaultAndPrefault(t *testing.T) {
 		_, err := schema.Parse("hello")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transform issue")
+	})
+}
+
+func TestPipe_DefaultAndPrefault(t *testing.T) {
+	t.Run("Default bypasses source checks and feeds pipe target", func(t *testing.T) {
+		targetCalled := false
+		target := Any().RefineAny(func(value any) bool {
+			targetCalled = true
+			return value == "short"
+		})
+		schema := String().Min(10).Default("short").Pipe(target)
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "short", result)
+		assert.True(t, targetCalled)
+	})
+
+	t.Run("Prefault validates source before pipe target", func(t *testing.T) {
+		targetCalled := false
+		target := Any().RefineAny(func(value any) bool {
+			targetCalled = true
+			return true
+		})
+		schema := String().Min(10).Prefault("short").Pipe(target)
+
+		_, err := schema.Parse(nil)
+		require.Error(t, err)
+		assert.False(t, targetCalled)
+	})
+
+	t.Run("Prefault feeds valid value to pipe target", func(t *testing.T) {
+		targetCalled := false
+		target := Any().RefineAny(func(value any) bool {
+			targetCalled = true
+			return value == "long enough"
+		})
+		schema := String().Min(10).Prefault("long enough").Pipe(target)
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Equal(t, "long enough", result)
+		assert.True(t, targetCalled)
 	})
 }
 

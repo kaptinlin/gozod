@@ -170,8 +170,8 @@ func TestNil_Chaining(t *testing.T) {
 	t.Run("complex chaining", func(t *testing.T) {
 		schema := Nil().
 			Nilable().
-			Default("default").
-			Prefault("fallback")
+			Prefault("fallback").
+			Default("default")
 
 		// Valid nil input should use default value due to Default modifier
 		result, err := schema.Parse(nil)
@@ -190,12 +190,12 @@ func TestNil_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestNil_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		// Note: For Nil type, nil is a valid input, so we need to test with Optional to see Default behavior
-		schema := Nil().Optional().Default("default_value").Prefault("prefault_value")
+		schema := Nil().Optional().Prefault("prefault_value").Default("default_value")
 
-		// When input is nil, Default should take precedence for Optional Nil
+		// When input is nil, the outer Default should handle it first for Optional Nil.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -252,15 +252,15 @@ func TestNil_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Nil().Optional().DefaultFunc(func() any {
-			defaultCalled = true
-			return "default_func_value"
-		}).PrefaultFunc(func() any {
+		schema := Nil().Optional().PrefaultFunc(func() any {
 			prefaultCalled = true
 			return nil
+		}).DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func_value"
 		})
 
-		// DefaultFunc should be called and take precedence
+		// Outer DefaultFunc should be called first.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -272,13 +272,11 @@ func TestNil_DefaultAndPrefault(t *testing.T) {
 		assert.False(t, prefaultCalled) // PrefaultFunc should not be called
 	})
 
-	// Test 6: Prefault takes precedence over Optional for nil input (Zod v4 recommended order)
-	t.Run("Prefault takes precedence over Optional", func(t *testing.T) {
-		// Create a Nil schema with Prefault and Optional (recommended order)
-		// Since Nil type only accepts nil values, we use nil as prefault value
+	// Test 6: Nil prefault with Optional accepts nil input.
+	t.Run("Nil Prefault with Optional accepts nil", func(t *testing.T) {
+		// Since Nil type only accepts nil values, nil prefault should remain valid.
 		schema := Nil().Prefault(nil).Optional()
 
-		// Should return nil without error because Prefault takes precedence
 		result, err := schema.ParseAny(nil)
 		assert.NoError(t, err)
 		assert.Nil(t, result)

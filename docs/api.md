@@ -8,7 +8,7 @@ GoZod provides comprehensive data validation with:
 
 - **Type Safety**: Full Go generics support with preserved type information
 - **Complete Strict Type Semantics**: All methods require exact input types - no automatic conversions
-- **Maximum Performance**: Optimized validation pipeline with zero-overhead type handling
+- **Predictable Parsing**: Strict parsing by default, with explicit coercion APIs when callers want conversion
 - **Composable Schemas**: Chain validations, transformations, and type conversions
 - **Rich Validation**: Built-in validators for strings, numbers, objects, arrays, and more
 - **Flexible Modifiers**: Optional, Nilable, Default, and Prefault handling for complex scenarios
@@ -220,6 +220,24 @@ result, _ = schema.Parse("hi")           // ❌ Error: too small
 result, _ = schema.Parse(nil)            // ✅ "fallback" (validated like normal input)
 ```
 
+### Modifier Order
+
+Fluent modifiers are evaluated from the outside in. In practice, the last
+modifier in the chain gets the first chance to handle nil input.
+
+```go
+// Default is outermost, so nil input receives the fallback value.
+withDefault := gozod.String().Optional().Default("guest")
+name, _ := withDefault.Parse(nil) // *name == "guest"
+
+// Optional is outermost, so nil input stays nil and the inner Default is skipped.
+optionalFirst := gozod.String().Default("guest").Optional()
+missing, _ := optionalFirst.Parse(nil) // missing == nil
+```
+
+`Prefault()` follows the same ordering rule, but its fallback value still runs
+through the full validation pipeline instead of short-circuiting.
+
 ---
 
 ## 🔤 String Validation
@@ -281,12 +299,12 @@ precision := -1  // HH:MM only
 gozod.IsoTime(types.IsoTimeOptions{Precision: &precision})
 
 // Unique identifiers (types/ids.go)
-gozod.Uuid()                               // UUID format
-gozod.Uuid("v4")                           // UUID v4 specific
-gozod.Cuid()                               // CUID v1
-gozod.Cuid2()                              // CUID v2
-gozod.Ulid()                               // ULID format
-gozod.Nanoid()                             // NanoID format
+gozod.UUID()                               // UUID format
+gozod.UUID("v4")                           // UUID v4 specific
+gozod.CUID()                               // CUID v1
+gozod.CUID2()                              // CUID v2
+gozod.ULID()                               // ULID format
+gozod.NanoID()                             // NanoID format
 
 // Text encodings (types/text.go)
 gozod.Hex()                                // Hexadecimal string
@@ -328,7 +346,7 @@ result, err = transformSchema.Parse("hello world")  // Result: "hello_world"
 schema := gozod.Email().Describe("User's email address")
 
 // Add rich metadata
-schema = gozod.Uuid().Meta(core.GlobalMeta{
+schema = gozod.UUID().Meta(core.GlobalMeta{
     ID:          "user_id",
     Title:       "User ID",
     Description: "Unique identifier",

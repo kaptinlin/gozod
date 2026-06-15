@@ -291,14 +291,14 @@ func TestBool_Modifiers(t *testing.T) {
 			assert.Equal(t, true, *result)
 		})
 
-		// Test Default priority over Prefault
-		t.Run("Default priority over Prefault", func(t *testing.T) {
-			schema := Bool().Default(true).Prefault(false)
+		// Test outer Default over inner Prefault
+		t.Run("outer Default over inner Prefault", func(t *testing.T) {
+			schema := Bool().Prefault(false).Default(true)
 
-			// Nil input should use Default (higher priority), not Prefault
+			// Nil input should use the outer Default, not inner Prefault.
 			result, err := schema.Parse(nil)
 			require.NoError(t, err)
-			assert.Equal(t, true, result) // Default value, not Prefault value
+			assert.Equal(t, true, result)
 		})
 
 		// Test Default short-circuit bypasses validation
@@ -377,13 +377,13 @@ func TestBool_Modifiers(t *testing.T) {
 			defaultCalled := false
 			prefaultCalled := false
 			schema := Bool().
-				DefaultFunc(func() bool {
-					defaultCalled = true
-					return true
-				}).
 				PrefaultFunc(func() bool {
 					prefaultCalled = true
 					return false
+				}).
+				DefaultFunc(func() bool {
+					defaultCalled = true
+					return true
 				})
 
 			// Valid input should not call any function
@@ -393,12 +393,12 @@ func TestBool_Modifiers(t *testing.T) {
 			assert.False(t, defaultCalled)
 			assert.False(t, prefaultCalled)
 
-			// Nil input should call DefaultFunc (higher priority)
+			// Nil input should call outer DefaultFunc.
 			result, err = schema.Parse(nil)
 			require.NoError(t, err)
 			assert.Equal(t, true, result)
 			assert.True(t, defaultCalled)
-			assert.False(t, prefaultCalled) // Should not be called due to Default priority
+			assert.False(t, prefaultCalled)
 		})
 
 		// Test Transform interactions
@@ -988,15 +988,15 @@ func TestBool_Chaining(t *testing.T) {
 		assert.Equal(t, true, result)
 	})
 
-	t.Run("order independence verification", func(t *testing.T) {
-		// Different chaining orders should produce equivalent results
+	t.Run("non-nil values keep pointer output across modifier order", func(t *testing.T) {
+		// Non-nil inputs still pass through the inner schema in either wrapper order.
 		schema1 := Bool().Default(true).Optional()
 		schema2 := Bool().Optional().Default(true)
 
 		var _ = schema1
 		var _ = schema2
 
-		// Both should handle the same inputs similarly
+		// Both should preserve pointer output for non-nil values.
 		result1, err1 := schema1.Parse(false)
 		result2, err2 := schema2.Parse(false)
 

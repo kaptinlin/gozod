@@ -304,9 +304,8 @@ func TestComplex_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestComplex_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence for nil input
-		schema := Complex128().Default(complex(1.0, 2.0)).Prefault(complex(3.0, 4.0))
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := Complex128().Prefault(complex(3.0, 4.0)).Default(complex(1.0, 2.0))
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -362,13 +361,13 @@ func TestComplex_DefaultAndPrefault(t *testing.T) {
 		prefaultCalled := false
 
 		schema := Complex128().
-			DefaultFunc(func() complex128 {
-				defaultCalled = true
-				return complex(1.0, 2.0)
-			}).
 			PrefaultFunc(func() complex128 {
 				prefaultCalled = true
 				return complex(3.0, 4.0)
+			}).
+			DefaultFunc(func() complex128 {
+				defaultCalled = true
+				return complex(1.0, 2.0)
 			})
 
 		result, err := schema.Parse(nil)

@@ -427,8 +427,8 @@ func TestDiscriminatedUnion_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence for nil input
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, the outer Default should handle nil first.
 		schema := Object(core.ObjectSchema{
 			"type": LiteralOf([]string{"test"}),
 			"data": String(),
@@ -443,7 +443,7 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 			"data": "prefault",
 		}
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Default(defaultValue).Prefault(prefaultValue)
+		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue).Default(defaultValue)
 
 		result, err := discriminatedUnion.Parse(nil)
 		require.NoError(t, err)

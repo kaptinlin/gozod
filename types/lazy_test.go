@@ -494,16 +494,36 @@ func TestLazy_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestLazy_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		schema := LazyAny(func() any {
 			return String().Min(3)
-		}).Default("default_value").Prefault("prefault_value")
+		}).Prefault("prefault_value").Default("default_value")
 
-		// When input is nil, Default should take precedence
+		// When input is nil, the outer Default should handle it first.
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "default_value", result)
+	})
+
+	t.Run("outer Optional short-circuits inner Default", func(t *testing.T) {
+		schema := LazyAny(func() any {
+			return String()
+		}).Default("default_value").Optional()
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Default nil short-circuits validation", func(t *testing.T) {
+		schema := LazyAny(func() any {
+			return Never()
+		}).Default(nil)
+
+		result, err := schema.Parse(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
 	})
 
 	// Test 2: Default short-circuit mechanism
@@ -549,15 +569,15 @@ func TestLazy_DefaultAndPrefault(t *testing.T) {
 
 		schema := LazyAny(func() any {
 			return String().Min(3)
-		}).DefaultFunc(func() any {
-			defaultCalled = true
-			return "default_func"
 		}).PrefaultFunc(func() any {
 			prefaultCalled = true
 			return "prefault_func"
+		}).DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func"
 		})
 
-		// DefaultFunc should be called and take precedence
+		// Outer DefaultFunc should be called first.
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "default_func", result)

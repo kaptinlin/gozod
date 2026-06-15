@@ -307,9 +307,9 @@ func TestUnknown_Behavior(t *testing.T) {
 // =============================================================================
 
 func TestUnknown_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
-		schema := Unknown().Default("default_value").Prefault("prefault_value")
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, the outer Default should handle nil first.
+		schema := Unknown().Prefault("prefault_value").Default("default_value")
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -362,12 +362,12 @@ func TestUnknown_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Unknown().DefaultFunc(func() any {
-			defaultCalled = true
-			return "default_func"
-		}).PrefaultFunc(func() any {
+		schema := Unknown().PrefaultFunc(func() any {
 			prefaultCalled = true
 			return "prefault_func"
+		}).DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func"
 		})
 
 		result, err := schema.Parse(nil)
@@ -392,12 +392,11 @@ func TestUnknown_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, "valid_string", result)
 	})
 
-	t.Run("Optional takes priority over Default", func(t *testing.T) {
-		// When both Optional and Default are present, Default should still take priority
-		// because Default is processed before Optional check
-		schema := Unknown().Default("default_value").Optional()
+	t.Run("outer Default over inner Optional", func(t *testing.T) {
+		// When Default is outermost, nil should use the default value.
+		schema := Unknown().Optional().Default("default_value")
 
-		// Nil input should use default value, not return nil
+		// Nil input should use default value, not return nil.
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)

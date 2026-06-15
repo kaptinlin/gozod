@@ -40,18 +40,28 @@ type ZodTransform[In, Out any] struct {
 var _ ZodSchema = (*ZodTransform[any, any])(nil)
 
 // Parse validates input with the source schema, then applies the transformation.
-// When input is nil and the source has a default or default function, the default
+// When input is nil and the source uses an outer default modifier, the default
 // value is returned directly without running the transformation (Zod v4 semantics).
 func (t *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (out Out, _ error) {
 	sourceInternals := t.source.Internals()
-	hasDefault := isNilInput(input) && (sourceInternals.DefaultValue != nil || sourceInternals.DefaultFunc != nil)
+	hasDefault := isNilInput(input) && sourceInternals.NilInputUsesDefault()
 
 	if hasDefault {
 		validated, err := t.source.Parse(input, ctx...)
 		if err != nil {
 			return out, err
 		}
-		result, ok := any(validated).(Out)
+		validatedAny := any(validated)
+		if validatedAny == nil {
+			if outputAcceptsNil[Out]() {
+				return out, nil
+			}
+			return out, fmt.Errorf(
+				"default value <nil> is not compatible with output type %T: %w",
+				out, ErrInvalidTransformType,
+			)
+		}
+		result, ok := validatedAny.(Out)
 		if !ok {
 			return out, fmt.Errorf(
 				"default value type %T is not compatible with output type %T: %w",
@@ -74,6 +84,16 @@ func (t *ZodTransform[In, Out]) Parse(input any, ctx ...*ParseContext) (out Out,
 		return out, ctxErr
 	}
 	return result, nil
+}
+
+func outputAcceptsNil[Out any]() bool {
+	typ := reflect.TypeFor[Out]()
+	switch typ.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return true
+	default:
+		return false
+	}
 }
 
 // MustParse validates and transforms input, panicking on error.

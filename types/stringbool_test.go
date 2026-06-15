@@ -306,11 +306,11 @@ func TestStringBool_DefaultAndPrefault(t *testing.T) {
 		assert.True(t, called)
 	})
 
-	// Test Default priority over Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		schema := StringBool().Default(true).Prefault("false")
+	// Test outer Default over inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := StringBool().Prefault("false").Default(true)
 
-		// Nil input should use Default (higher priority), not Prefault
+		// Nil input should use the outer Default, not inner Prefault.
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, true, result) // Default value, not Prefault value

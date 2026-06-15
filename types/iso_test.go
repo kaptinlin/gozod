@@ -237,8 +237,8 @@ func TestISO_Modifiers(t *testing.T) {
 }
 
 func TestISO_DefaultAndPrefault(t *testing.T) {
-	t.Run("default_priority_over_prefault", func(t *testing.T) {
-		s := IsoDateTime().Default("2023-01-01T00:00:00Z").Prefault("2023-12-31T23:59:59Z")
+	t.Run("outer_default_over_inner_prefault", func(t *testing.T) {
+		s := IsoDateTime().Prefault("2023-12-31T23:59:59Z").Default("2023-01-01T00:00:00Z")
 
 		got, err := s.Parse(nil)
 		require.NoError(t, err)
@@ -273,12 +273,12 @@ func TestISO_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		s := IsoDateTime().DefaultFunc(func() string {
-			defaultCalled = true
-			return "2023-01-01T00:00:00Z"
-		}).PrefaultFunc(func() string {
+		s := IsoDateTime().PrefaultFunc(func() string {
 			prefaultCalled = true
 			return "2023-12-31T23:59:59Z"
+		}).DefaultFunc(func() string {
+			defaultCalled = true
+			return "2023-01-01T00:00:00Z"
 		})
 
 		got, err := s.Parse(nil)

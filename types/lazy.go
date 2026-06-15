@@ -98,27 +98,16 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 	in := &z.internals.ZodTypeInternals
 
 	if input == nil {
-		if in.NonOptional {
+		r, handled, err := engine.ProcessNilModifiers[T](input, in, core.ZodTypeLazy, pc)
+		if err != nil {
 			var zero T
-			return zero, issues.CreateNonOptionalError(pc)
+			return zero, err
 		}
-		if in.DefaultValue != nil {
-			return lazyModifierValue[T](in.DefaultValue), nil
+		if handled {
+			return lazyModifierValue[T](r), nil
 		}
-		if in.DefaultFunc != nil {
-			return lazyModifierValue[T](in.DefaultFunc()), nil
-		}
-		switch {
-		case in.PrefaultValue != nil:
-			input = cloneutil.Clone(in.PrefaultValue)
-		case in.PrefaultFunc != nil:
-			input = cloneutil.Clone(in.PrefaultFunc())
-		case in.Optional || in.Nilable:
-			var zero T
-			return zero, nil
-		default:
-			var zero T
-			return zero, issues.CreateInvalidTypeError(core.ZodTypeLazy, nil, pc)
+		if r != nil {
+			input = r
 		}
 	}
 

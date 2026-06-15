@@ -467,8 +467,8 @@ func TestStruct_Chaining(t *testing.T) {
 		// Chain with type evolution
 		defaultUser := User{Name: "Default", Age: 0, Email: "default@test.com"}
 		schema := Struct[User]().
-			Default(defaultUser). // Preserves struct type
-			Optional()            // Now returns pointer type
+			Optional().          // Now returns pointer type
+			Default(defaultUser) // Preserves pointer type and supplies nil fallback
 
 		// Test final behavior - should return pointer
 		validUser := User{Name: "John", Age: 25, Email: "john@test.com"}
@@ -477,7 +477,7 @@ func TestStruct_Chaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, validUser, *result)
 
-		// Test nil handling - Default should short-circuit and return default value
+		// Test nil handling - outer Default should short-circuit and return default value
 		result, err = schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -519,11 +519,10 @@ func TestStruct_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestStruct_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		defaultUser := User{Name: "default_user", Age: 0, Email: "default@test.com"}
 		prefaultUser := User{Name: "prefault_user", Age: 1, Email: "prefault@test.com"}
-		schema := Struct[User]().Default(defaultUser).Prefault(prefaultUser).Optional()
+		schema := Struct[User]().Optional().Prefault(prefaultUser).Default(defaultUser)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -535,7 +534,7 @@ func TestStruct_DefaultAndPrefault(t *testing.T) {
 		// Default should bypass validation and return immediately
 		// Create a struct that would fail validation but use as default
 		invalidDefault := User{Name: "", Age: -1, Email: "invalid-email"} // Invalid data
-		schema := Struct[User]().Default(invalidDefault).Optional()
+		schema := Struct[User]().Optional().Default(invalidDefault)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -546,7 +545,7 @@ func TestStruct_DefaultAndPrefault(t *testing.T) {
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
 		// Prefault value must pass struct validation
 		validUser := User{Name: "valid_prefault", Age: 25, Email: "valid@test.com"}
-		schema := Struct[User]().Prefault(validUser).Optional()
+		schema := Struct[User]().Optional().Prefault(validUser)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -557,7 +556,7 @@ func TestStruct_DefaultAndPrefault(t *testing.T) {
 	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
 		// Non-nil input that fails validation should not trigger Prefault
 		prefaultUser := User{Name: "prefault_fallback", Age: 30, Email: "prefault@test.com"}
-		schema := Struct[User]().Prefault(prefaultUser).Optional()
+		schema := Struct[User]().Optional().Prefault(prefaultUser)
 
 		// Invalid input should fail validation, not use Prefault
 		invalidUser := Person{ID: 1, FullName: "Wrong Type", Active: true} // Wrong struct type
@@ -570,13 +569,13 @@ func TestStruct_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Struct[User]().DefaultFunc(func() User {
-			defaultCalled = true
-			return User{Name: "default_func", Age: 0, Email: "default@test.com"}
-		}).PrefaultFunc(func() User {
+		schema := Struct[User]().Optional().PrefaultFunc(func() User {
 			prefaultCalled = true
 			return User{Name: "prefault_func", Age: 1, Email: "prefault@test.com"}
-		}).Optional()
+		}).DefaultFunc(func() User {
+			defaultCalled = true
+			return User{Name: "default_func", Age: 0, Email: "default@test.com"}
+		})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)

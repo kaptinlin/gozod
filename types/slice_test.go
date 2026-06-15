@@ -171,9 +171,9 @@ func TestSlice_ErrorHandling(t *testing.T) {
 // =============================================================================
 
 func TestSlice_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
-		schema := Slice[string](String()).Default([]string{"default_value"}).Prefault([]string{"prefault_value"}).Optional()
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, the outer Default should handle nil first.
+		schema := Slice[string](String()).Optional().Prefault([]string{"prefault_value"}).Default([]string{"default_value"})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestSlice_DefaultAndPrefault(t *testing.T) {
 
 	t.Run("Default short-circuits validation", func(t *testing.T) {
 		// Default should bypass validation and return immediately
-		schema := Slice[string](String().Min(10)).Default([]string{"short"}).Optional() // "short" < 10 chars
+		schema := Slice[string](String().Min(10)).Optional().Default([]string{"short"}) // "short" < 10 chars
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestSlice_DefaultAndPrefault(t *testing.T) {
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
 		// Prefault value must pass slice validation
 		validSlice := []string{"valid_prefault_element"}
-		schema := Slice[string](String().Min(5)).Prefault(validSlice).Optional()
+		schema := Slice[string](String().Min(5)).Optional().Prefault(validSlice)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestSlice_DefaultAndPrefault(t *testing.T) {
 
 	t.Run("Prefault only triggered by nil input", func(t *testing.T) {
 		// Non-nil input that fails validation should not trigger Prefault
-		schema := Slice[string](String().Min(10)).Prefault([]string{"prefault_fallback"}).Optional()
+		schema := Slice[string](String().Min(10)).Optional().Prefault([]string{"prefault_fallback"})
 
 		// Invalid input should fail validation, not use Prefault
 		_, err := schema.Parse([]string{"short"})
@@ -216,13 +216,13 @@ func TestSlice_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Slice[string](String()).DefaultFunc(func() []string {
-			defaultCalled = true
-			return []string{"default_func"}
-		}).PrefaultFunc(func() []string {
+		schema := Slice[string](String()).Optional().PrefaultFunc(func() []string {
 			prefaultCalled = true
 			return []string{"prefault_func"}
-		}).Optional()
+		}).DefaultFunc(func() []string {
+			defaultCalled = true
+			return []string{"default_func"}
+		})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -235,7 +235,7 @@ func TestSlice_DefaultAndPrefault(t *testing.T) {
 	t.Run("Prefault validation failure returns error", func(t *testing.T) {
 		// Prefault value that fails validation should return error
 		invalidPrefault := []string{"x"} // Too short
-		schema := Slice[string](String().Min(5)).Prefault(invalidPrefault).Optional()
+		schema := Slice[string](String().Min(5)).Optional().Prefault(invalidPrefault)
 
 		_, err := schema.Parse(nil)
 		assert.Error(t, err)

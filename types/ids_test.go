@@ -367,16 +367,16 @@ func TestUUID(t *testing.T) {
 }
 
 func TestIDs_DefaultAndPrefault(t *testing.T) {
-	t.Run("default has higher priority than prefault", func(t *testing.T) {
-		got1, err := CUID().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr").Parse(nil)
+	t.Run("outer default short-circuits inner prefault", func(t *testing.T) {
+		got1, err := CUID().Prefault("clegxv4h2000008ld9bs2a2vr").Default("ck7q2g3ak0001psr9pbfgx83z").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", got1)
 
-		got2, err := UUID().Default("123e4567-e89b-12d3-a456-426655440000").Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Parse(nil)
+		got2, err := UUID().Prefault("d9428888-122b-469b-84de-d6e0a77858b7").Default("123e4567-e89b-12d3-a456-426655440000").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "123e4567-e89b-12d3-a456-426655440000", got2)
 
-		got3, err := CUIDPtr().Default("ck7q2g3ak0001psr9pbfgx83z").Prefault("clegxv4h2000008ld9bs2a2vr").Parse(nil)
+		got3, err := CUIDPtr().Prefault("clegxv4h2000008ld9bs2a2vr").Default("ck7q2g3ak0001psr9pbfgx83z").Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, got3)
 		assert.Equal(t, "ck7q2g3ak0001psr9pbfgx83z", *got3)
@@ -437,7 +437,7 @@ func TestIDs_DefaultAndPrefault(t *testing.T) {
 			return "clegxv4h2000008ld9bs2a2vr"
 		}
 
-		got1, err := CUID().DefaultFunc(dfn).PrefaultFunc(pfn).Parse(nil)
+		got1, err := CUID().PrefaultFunc(pfn).DefaultFunc(dfn).Parse(nil)
 		require.NoError(t, err)
 		assert.True(t, defaultCalled)
 		assert.False(t, prefaultCalled)
@@ -467,19 +467,19 @@ func TestIDs_DefaultAndPrefault(t *testing.T) {
 	})
 
 	t.Run("all ID types with default and prefault", func(t *testing.T) {
-		got1, err := CUID2().Default("ahkiaa2j7k63ufbpq688f3id").Prefault("b3his4na8s72mb275evbr83d").Parse(nil)
+		got1, err := CUID2().Prefault("b3his4na8s72mb275evbr83d").Default("ahkiaa2j7k63ufbpq688f3id").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "ahkiaa2j7k63ufbpq688f3id", got1)
 
-		got2, err := XID().Default("chc2vbt2mcc0000abs80").Prefault("chc2vbt2mcc0000abs8g").Parse(nil)
+		got2, err := XID().Prefault("chc2vbt2mcc0000abs8g").Default("chc2vbt2mcc0000abs80").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "chc2vbt2mcc0000abs80", got2)
 
-		got3, err := KSUID().Default("24Stb6wH3k7W5PpkBN24q4jCnsa").Prefault("24Stb6wH3k7W5PpkBN24q4jCnsb").Parse(nil)
+		got3, err := KSUID().Prefault("24Stb6wH3k7W5PpkBN24q4jCnsb").Default("24Stb6wH3k7W5PpkBN24q4jCnsa").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "24Stb6wH3k7W5PpkBN24q4jCnsa", got3)
 
-		got4, err := NanoID().Default("J_ATaM-qZ8-Qk3Y-bY5c2").Prefault("c_U1bA-qZ8-Qk3Y-bY5c2").Parse(nil)
+		got4, err := NanoID().Prefault("c_U1bA-qZ8-Qk3Y-bY5c2").Default("J_ATaM-qZ8-Qk3Y-bY5c2").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "J_ATaM-qZ8-Qk3Y-bY5c2", got4)
 	})

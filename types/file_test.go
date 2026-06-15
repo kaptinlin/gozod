@@ -289,7 +289,7 @@ func TestFile_StrictParse(t *testing.T) {
 // =============================================================================
 
 func TestFile_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		defaultFile := &multipart.FileHeader{
 			Filename: "default.txt",
 			Header:   make(map[string][]string),
@@ -301,7 +301,7 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			Size:     2048,
 		}
 
-		schema1 := File().Default(defaultFile).Prefault(prefaultFile)
+		schema1 := File().Prefault(prefaultFile).Default(defaultFile)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
 		file1, ok := result1.(*multipart.FileHeader)
@@ -310,7 +310,7 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 		}
 		assert.Equal(t, "default.txt", file1.Filename)
 
-		schema2 := FilePtr().Default(defaultFile).Prefault(prefaultFile)
+		schema2 := FilePtr().Prefault(prefaultFile).Default(defaultFile)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
@@ -421,7 +421,7 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			}
 		}
 
-		schema1 := File().DefaultFunc(defaultFn).PrefaultFunc(prefaultFn)
+		schema1 := File().PrefaultFunc(prefaultFn).DefaultFunc(defaultFn)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
 		assert.True(t, defaultCalled)
@@ -471,7 +471,7 @@ func TestFile_DefaultAndPrefault(t *testing.T) {
 			Size:     2048,
 		}
 
-		schema := FilePtr().Default(defaultFile).Prefault(prefaultFile)
+		schema := FilePtr().Prefault(prefaultFile).Default(defaultFile)
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)

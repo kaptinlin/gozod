@@ -270,11 +270,11 @@ func TestIPv4_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestIPv4_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		schema := IPv4().Default("192.168.1.1").Prefault("10.0.0.1")
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := IPv4().Prefault("10.0.0.1").Default("192.168.1.1")
 
-		// When input is nil, Default should take precedence
+		// When input is nil, the outer Default should handle it first.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "192.168.1.1", result)
@@ -317,15 +317,15 @@ func TestIPv4_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := IPv4().DefaultFunc(func() string {
-			defaultCalled = true
-			return "192.168.1.1"
-		}).PrefaultFunc(func() string {
+		schema := IPv4().PrefaultFunc(func() string {
 			prefaultCalled = true
 			return "10.0.0.1"
+		}).DefaultFunc(func() string {
+			defaultCalled = true
+			return "192.168.1.1"
 		})
 
-		// DefaultFunc should be called and take precedence
+		// Outer DefaultFunc should be called first.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "192.168.1.1", result)

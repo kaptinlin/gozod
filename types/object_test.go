@@ -308,7 +308,7 @@ func TestObject_Chaining(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Default(defaultValue).Optional()
+		}).Optional().Default(defaultValue)
 
 		// Test final behavior
 		input := map[string]any{
@@ -339,7 +339,7 @@ func TestObject_Chaining(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String(),
 			"age":  Int(),
-		}).Default(defaultValue).Prefault(prefaultValue)
+		}).Prefault(prefaultValue).Default(defaultValue)
 
 		input := map[string]any{
 			"name": "John",
@@ -369,11 +369,11 @@ func TestObject_Chaining(t *testing.T) {
 }
 
 func TestObject_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, the outer Default should handle nil first.
 		schema := Object(core.ObjectSchema{
 			"name": String(),
-		}).Default(map[string]any{"name": "default_value"}).Prefault(map[string]any{"name": "prefault_value"}).Optional()
+		}).Optional().Prefault(map[string]any{"name": "prefault_value"}).Default(map[string]any{"name": "default_value"})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -385,7 +385,7 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 		// Default should bypass validation and return immediately
 		schema := Object(core.ObjectSchema{
 			"name": String().Min(10), // Strict validation that default won't pass
-		}).Default(map[string]any{"name": "short"}).Optional() // "short" < 10 chars
+		}).Optional().Default(map[string]any{"name": "short"}) // "short" < 10 chars
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -398,7 +398,7 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 		validObject := map[string]any{"name": "valid_prefault_name"}
 		schema := Object(core.ObjectSchema{
 			"name": String().Min(5),
-		}).Prefault(validObject).Optional()
+		}).Optional().Prefault(validObject)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -410,7 +410,7 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 		// Non-nil input that fails validation should not trigger Prefault
 		schema := Object(core.ObjectSchema{
 			"name": String().Min(10),
-		}).Prefault(map[string]any{"name": "prefault_fallback"}).Optional()
+		}).Optional().Prefault(map[string]any{"name": "prefault_fallback"})
 
 		// Invalid input should fail validation, not use Prefault
 		_, err := schema.Parse(map[string]any{"name": "short"})
@@ -424,13 +424,13 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 
 		schema := Object(core.ObjectSchema{
 			"name": String(),
+		}).Optional().PrefaultFunc(func() map[string]any {
+			prefaultCalled = true
+			return map[string]any{"name": "prefault_func"}
 		}).DefaultFunc(func() map[string]any {
 			defaultCalled = true
 			return map[string]any{"name": "default_func"}
-		}).PrefaultFunc(func() map[string]any {
-			prefaultCalled = true
-			return map[string]any{"name": "prefault_func"}
-		}).Optional()
+		})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -445,7 +445,7 @@ func TestObject_DefaultAndPrefault(t *testing.T) {
 		invalidPrefault := map[string]any{"name": "x"} // Too short
 		schema := Object(core.ObjectSchema{
 			"name": String().Min(5),
-		}).Prefault(invalidPrefault).Optional()
+		}).Optional().Prefault(invalidPrefault)
 
 		_, err := schema.Parse(nil)
 		assert.Error(t, err)

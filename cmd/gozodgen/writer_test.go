@@ -190,7 +190,20 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 				},
 			},
 			structName:     "User",
-			expectedSchema: `gozod.Enum("active", "inactive").Default("active")`,
+			expectedSchema: `gozod.Enum("active", "inactive").Optional().Default("active")`,
+			expectError:    false,
+		},
+		{
+			name: "optional field with default keeps default outermost",
+			field: tagparser.FieldInfo{
+				Name: "Nickname",
+				Type: reflect.TypeFor[string](),
+				Rules: []tagparser.TagRule{
+					{Name: "default", Params: []string{"guest"}},
+				},
+			},
+			structName:     "User",
+			expectedSchema: `gozod.String().Optional().Default("guest")`,
 			expectError:    false,
 		},
 		{
@@ -254,6 +267,9 @@ type User struct {
 	})
 	require.NoError(t, err)
 	helper.AssertFileExists("user_gen.go")
+
+	content := helper.ReadGeneratedFile("user_gen.go")
+	assert.NotContains(t, content, "Generated at:")
 }
 
 func TestFileWriter_GenerateCodeUsesInfoPackage(t *testing.T) {
@@ -333,6 +349,7 @@ func TestFileWriter_GenerateCode(t *testing.T) {
 			},
 			unexpectedContent: []string{
 				"github.com/kaptinlin/gozod/core",
+				"Generated at:",
 			},
 		},
 	}
@@ -574,7 +591,7 @@ func TestGenerateValidatorChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateValidatorChain(tt.rule, tt.fieldType)
+			result := generateValidatorChain(tagparser.CompileRule(tt.rule), tt.fieldType)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

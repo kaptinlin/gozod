@@ -1,6 +1,7 @@
 package tagparser_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,4 +76,73 @@ func TestRulePlan_JoinedValue(t *testing.T) {
 
 	assert.True(t, ok)
 	assert.Equal(t, "hello world", got)
+}
+
+func TestCompileFieldPlan(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                  string
+		field                 tagparser.FieldInfo
+		wantRuntimeOptional   tagparser.OptionalPlacement
+		wantGeneratedOptional tagparser.OptionalPlacement
+		wantOperationNames    []string
+		wantOperationMethods  []string
+	}{
+		{
+			name: "default makes generated optional inner",
+			field: tagparser.FieldInfo{
+				Type: reflect.TypeFor[string](),
+				Rules: []tagparser.TagRule{
+					{Name: "default", Params: []string{"guest"}},
+				},
+			},
+			wantRuntimeOptional:   tagparser.OptionalPlacementNone,
+			wantGeneratedOptional: tagparser.OptionalPlacementBeforeOperations,
+			wantOperationNames:    []string{"default"},
+			wantOperationMethods:  []string{"Default"},
+		},
+		{
+			name: "pointer default makes runtime and generated optional inner",
+			field: tagparser.FieldInfo{
+				Type: reflect.TypeFor[*string](),
+				Rules: []tagparser.TagRule{
+					{Name: "default", Params: []string{"guest"}},
+				},
+			},
+			wantRuntimeOptional:   tagparser.OptionalPlacementBeforeOperations,
+			wantGeneratedOptional: tagparser.OptionalPlacementBeforeOperations,
+			wantOperationNames:    []string{"default"},
+			wantOperationMethods:  []string{"Default"},
+		},
+		{
+			name: "plain optional stays outer",
+			field: tagparser.FieldInfo{
+				Type: reflect.TypeFor[string](),
+				Rules: []tagparser.TagRule{
+					{Name: "min", Params: []string{"2"}},
+				},
+			},
+			wantRuntimeOptional:   tagparser.OptionalPlacementNone,
+			wantGeneratedOptional: tagparser.OptionalPlacementAfterOperations,
+			wantOperationNames:    []string{"min"},
+			wantOperationMethods:  []string{"Min"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tagparser.CompileFieldPlan(&tt.field)
+
+			assert.Equal(t, tt.wantRuntimeOptional, got.RuntimePointerOptional)
+			assert.Equal(t, tt.wantGeneratedOptional, got.GeneratedOptional)
+			assert.Len(t, got.Operations, len(tt.wantOperationNames))
+			for i, operation := range got.Operations {
+				assert.Equal(t, tt.wantOperationNames[i], operation.Rule.Name)
+				assert.Equal(t, tt.wantOperationMethods[i], operation.Method)
+			}
+		})
+	}
 }

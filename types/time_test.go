@@ -320,20 +320,20 @@ func TestTime_DefaultAndPrefault(t *testing.T) {
 	defaultTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	prefaultTime := time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC)
 
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		// Time type
-		schema1 := Time().Default(defaultTime).Prefault(prefaultTime)
+		schema1 := Time().Prefault(prefaultTime).Default(defaultTime)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		assert.True(t, result1.Equal(defaultTime)) // Should be default, not prefault
+		assert.True(t, result1.Equal(defaultTime)) // Should be outer default, not inner prefault
 
 		// TimePtr type
-		schema2 := TimePtr().Default(defaultTime).Prefault(prefaultTime)
+		schema2 := TimePtr().Prefault(prefaultTime).Default(defaultTime)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		assert.True(t, result2.Equal(defaultTime)) // Should be default, not prefault
+		assert.True(t, result2.Equal(defaultTime)) // Should be outer default, not inner prefault
 	})
 
 	// Test 2: Default short-circuits validation
@@ -409,12 +409,12 @@ func TestTime_DefaultAndPrefault(t *testing.T) {
 			return prefaultTime
 		}
 
-		// Test DefaultFunc priority over PrefaultFunc
-		schema1 := Time().DefaultFunc(defaultFunc).PrefaultFunc(prefaultFunc)
+		// Test outer DefaultFunc over inner PrefaultFunc.
+		schema1 := Time().PrefaultFunc(prefaultFunc).DefaultFunc(defaultFunc)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
 		assert.True(t, defaultCalled)
-		assert.False(t, prefaultCalled) // Should not be called due to default priority
+		assert.False(t, prefaultCalled) // Should not be called because outer default handles nil.
 		assert.True(t, result1.Equal(defaultTime))
 
 		// Reset flags

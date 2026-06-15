@@ -192,24 +192,45 @@ func TestNever_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, 1, called)
 	})
 
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		schema := Never().Default("default_value").Prefault("prefault_value")
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := Never().Prefault("prefault_value").Default("default_value")
 
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "default_value", result)
 	})
 
-	t.Run("DefaultFunc priority over PrefaultFunc", func(t *testing.T) {
+	t.Run("Default nil short-circuits validation", func(t *testing.T) {
+		schema := Never().Default(nil)
+
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("DefaultFunc nil short-circuits validation", func(t *testing.T) {
+		called := false
+		schema := Never().DefaultFunc(func() any {
+			called = true
+			return nil
+		})
+
+		result, err := schema.ParseAny(nil)
+		require.NoError(t, err)
+		assert.True(t, called)
+		assert.Nil(t, result)
+	})
+
+	t.Run("outer DefaultFunc over inner PrefaultFunc", func(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Never().DefaultFunc(func() any {
-			defaultCalled = true
-			return "default_func_value"
-		}).PrefaultFunc(func() any {
+		schema := Never().PrefaultFunc(func() any {
 			prefaultCalled = true
 			return "prefault_func_value"
+		}).DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func_value"
 		})
 
 		result, err := schema.ParseAny(nil)
@@ -278,8 +299,8 @@ func TestNever_DefaultAndPrefault(t *testing.T) {
 	t.Run("multiple modifiers combination", func(t *testing.T) {
 		schema := Never().
 			Optional().
-			Default("default").
-			Prefault("prefault")
+			Prefault("prefault").
+			Default("default")
 
 		_, err := schema.Parse("anything")
 		require.Error(t, err)

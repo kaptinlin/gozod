@@ -821,12 +821,11 @@ func TestCoercion_ModifierChaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, true, *result) // Default short-circuits, returns default value
 
-		// Test order independence - Default should short-circuit regardless of order
+		// Reversed order makes Optional outermost, so nil short-circuits before Default.
 		schema2 := Bool().Default(true).Optional()
 		result, err = schema2.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.Equal(t, true, *result) // Default short-circuits regardless of order
+		assert.Nil(t, result)
 
 		// Test with actual value - both should work the same
 		result, err = schema1.Parse("true")
@@ -860,7 +859,7 @@ func TestCoercion_ModifierChaining(t *testing.T) {
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.Equal(t, true, *result) // Default takes precedence and short-circuits
+		assert.Equal(t, true, *result) // Outer Default short-circuits.
 
 		// Test StringPtr with modifiers
 		stringSchema := StringPtr().Optional()

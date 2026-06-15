@@ -49,6 +49,7 @@ REFACTOR.md
 # Project-specific
 /gozodgen
 cmd/gozodgen/gozodgen
+.codegraph/
 
 # Scratch/planning docs
 .workspace

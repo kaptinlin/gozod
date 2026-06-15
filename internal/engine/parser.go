@@ -42,7 +42,7 @@ func ParsePrimitive[T any, R any](
 			return zero, err
 		}
 		// Default/DefaultFunc short-circuit: skip Transform.
-		if isNilInput(input) && (internals.DefaultValue != nil || internals.DefaultFunc != nil) {
+		if isNilInput(input) && internals.NilInputUsesDefault() {
 			return converter(r, pc, expectedType)
 		}
 		// Other handled cases: apply Transform if present.
@@ -128,7 +128,7 @@ func ParseComplex[T any](
 			return nil, err
 		}
 		// Default/DefaultFunc short-circuit: skip Transform.
-		if isNilInput(input) && (internals.DefaultValue != nil || internals.DefaultFunc != nil) {
+		if isNilInput(input) && internals.NilInputUsesDefault() {
 			return r, nil
 		}
 		return applyTransformIfPresent(r, internals, pc)

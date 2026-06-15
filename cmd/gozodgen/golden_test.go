@@ -115,16 +115,12 @@ func TestGoldenFiles(t *testing.T) {
 	}
 }
 
-// normalizeGeneratedCode removes variable parts from generated code for comparison
+// normalizeGeneratedCode trims trailing empty lines for stable file comparison.
 func normalizeGeneratedCode(content string) string {
 	lines := strings.Split(content, "\n")
 	normalized := make([]string, 0, len(lines))
 
 	for _, line := range lines {
-		// Skip timestamp lines
-		if strings.Contains(line, "Generated at:") {
-			continue
-		}
 		// Skip empty lines at the end
 		if strings.TrimSpace(line) == "" && len(normalized) > 0 && strings.TrimSpace(normalized[len(normalized)-1]) == "" {
 			continue

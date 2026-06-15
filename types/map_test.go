@@ -217,8 +217,8 @@ func TestMap_Chaining(t *testing.T) {
 		// Chain with type evolution
 		defaultMap := map[any]any{"default": 1}
 		mapSchema := Map(String(), Int()).
-			Default(defaultMap). // Preserves map type
-			Optional()           // Now returns pointer type
+			Optional().         // Now returns pointer type
+			Default(defaultMap) // Outer default preserves pointer type
 
 		// Test final behavior - should return pointer
 		testMap := map[any]any{"test": 2}
@@ -227,7 +227,7 @@ func TestMap_Chaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, testMap, *result)
 
-		// Test nil handling - Default should short-circuit and return default value
+		// Test nil handling - outer Default should return default value
 		result, err = mapSchema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result)

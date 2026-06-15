@@ -8,7 +8,6 @@ import (
 	"maps"
 	"regexp"
 	"slices"
-	"sync/atomic"
 
 	"github.com/kaptinlin/gozod/pkg/cloneutil"
 )
@@ -17,13 +16,28 @@ import (
 // implement the ZodSchema interface.
 var ErrSchemaNotZodSchema = errors.New("schema does not implement ZodSchema interface")
 
-// modifierPriorityCounter tracks application order for modifiers.
-// Only relative priority matters, not absolute values.
-var modifierPriorityCounter atomic.Int64
+// ZodModifierKind identifies an ordered fluent modifier.
+type ZodModifierKind string
 
-// nextModifierPriority returns the next modifier priority value.
-func nextModifierPriority() int {
-	return int(modifierPriorityCounter.Add(1))
+const (
+	// ZodModifierOptional records an Optional modifier.
+	ZodModifierOptional ZodModifierKind = "optional"
+	// ZodModifierNilable records a Nilable modifier.
+	ZodModifierNilable ZodModifierKind = "nilable"
+	// ZodModifierNonOptional records a NonOptional modifier.
+	ZodModifierNonOptional ZodModifierKind = "nonoptional"
+	// ZodModifierDefault records a Default modifier.
+	ZodModifierDefault ZodModifierKind = "default"
+	// ZodModifierPrefault records a Prefault modifier.
+	ZodModifierPrefault ZodModifierKind = "prefault"
+)
+
+// ZodModifier records one fluent modifier application in call order.
+type ZodModifier struct {
+	Kind     ZodModifierKind
+	Value    any
+	HasValue bool
+	Func     func() any
 }
 
 // ZodSchema is the minimal non-generic runtime contract shared by all schemas.
@@ -111,10 +125,8 @@ type ZodTypeInternals struct {
 	PrefaultValue any
 	PrefaultFunc  func() any
 
-	// Modifier priority tracking (higher = applied later)
-	OptionalPriority int
-	PrefaultPriority int
-	DefaultPriority  int
+	// Ordered fluent modifier applications.
+	Modifiers []ZodModifier
 
 	// Transform function
 	Transform func(any, *RefinementContext) (any, error)
@@ -147,6 +159,14 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 	}
 	if len(z.Checks) > 0 {
 		cp.Checks = slices.Clone(z.Checks)
+	}
+	if len(z.Modifiers) > 0 {
+		cp.Modifiers = slices.Clone(z.Modifiers)
+		for i := range cp.Modifiers {
+			if cp.Modifiers[i].HasValue {
+				cp.Modifiers[i].Value = cloneutil.Clone(cp.Modifiers[i].Value)
+			}
+		}
 	}
 	if len(z.Values) > 0 {
 		cp.Values = maps.Clone(z.Values)
@@ -185,11 +205,27 @@ func (z *ZodTypeInternals) IsExactOptional() bool {
 	return z.ExactOptional
 }
 
+// NilInputUsesDefault reports whether nil input is claimed by an outer default modifier.
+func (z *ZodTypeInternals) NilInputUsesDefault() bool {
+	if len(z.Modifiers) == 0 {
+		return z.DefaultValue != nil || z.DefaultFunc != nil
+	}
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch modifier := z.Modifiers[i]; modifier.Kind {
+		case ZodModifierDefault:
+			return modifier.HasValue || modifier.Func != nil
+		case ZodModifierPrefault, ZodModifierOptional, ZodModifierNilable, ZodModifierNonOptional:
+			return false
+		}
+	}
+	return false
+}
+
 // SetOptional marks the field as optional.
 func (z *ZodTypeInternals) SetOptional(value bool) {
 	z.Optional = value
 	if value {
-		z.OptionalPriority = nextModifierPriority()
+		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierOptional})
 	}
 }
 
@@ -197,13 +233,16 @@ func (z *ZodTypeInternals) SetOptional(value bool) {
 func (z *ZodTypeInternals) SetNilable(value bool) {
 	z.Nilable = value
 	if value {
-		z.OptionalPriority = nextModifierPriority()
+		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierNilable})
 	}
 }
 
 // SetNonOptional marks the field as nonoptional.
 func (z *ZodTypeInternals) SetNonOptional(value bool) {
 	z.NonOptional = value
+	if value {
+		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierNonOptional})
+	}
 }
 
 // SetExactOptional enables exact optional mode.
@@ -212,7 +251,7 @@ func (z *ZodTypeInternals) SetExactOptional(value bool) {
 	z.ExactOptional = value
 	if value {
 		z.Optional = true
-		z.OptionalPriority = nextModifierPriority()
+		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierOptional})
 	}
 }
 
@@ -224,25 +263,39 @@ func (z *ZodTypeInternals) SetCoerce(value bool) {
 // SetDefaultValue sets a default value.
 func (z *ZodTypeInternals) SetDefaultValue(value any) {
 	z.DefaultValue = cloneutil.Clone(value)
-	z.DefaultPriority = nextModifierPriority()
+	z.Modifiers = append(z.Modifiers, ZodModifier{
+		Kind:     ZodModifierDefault,
+		Value:    cloneutil.Clone(value),
+		HasValue: true,
+	})
 }
 
 // SetDefaultFunc sets a default value function.
 func (z *ZodTypeInternals) SetDefaultFunc(fn func() any) {
 	z.DefaultFunc = fn
-	z.DefaultPriority = nextModifierPriority()
+	z.Modifiers = append(z.Modifiers, ZodModifier{
+		Kind: ZodModifierDefault,
+		Func: fn,
+	})
 }
 
 // SetPrefaultValue sets a prefault value.
 func (z *ZodTypeInternals) SetPrefaultValue(value any) {
 	z.PrefaultValue = cloneutil.Clone(value)
-	z.PrefaultPriority = nextModifierPriority()
+	z.Modifiers = append(z.Modifiers, ZodModifier{
+		Kind:     ZodModifierPrefault,
+		Value:    cloneutil.Clone(value),
+		HasValue: true,
+	})
 }
 
 // SetPrefaultFunc sets a prefault value function.
 func (z *ZodTypeInternals) SetPrefaultFunc(fn func() any) {
 	z.PrefaultFunc = fn
-	z.PrefaultPriority = nextModifierPriority()
+	z.Modifiers = append(z.Modifiers, ZodModifier{
+		Kind: ZodModifierPrefault,
+		Func: fn,
+	})
 }
 
 // SetTransform sets a transform function.

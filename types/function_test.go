@@ -153,7 +153,7 @@ func TestFunction_Modifiers(t *testing.T) {
 func TestFunction_Chaining(t *testing.T) {
 	t.Run("type evolution through chaining", func(t *testing.T) {
 		dflt := func() {}
-		schema := Function().Default(dflt).Optional()
+		schema := Function().Optional().Default(dflt)
 
 		fn := func(x int) int { return x * 2 }
 		result, err := schema.Parse(fn)
@@ -174,7 +174,7 @@ func TestFunction_Chaining(t *testing.T) {
 		dflt := func() int { return 1 }
 		pf := func() int { return 2 }
 
-		schema := Function().Default(dflt).Prefault(pf)
+		schema := Function().Prefault(pf).Default(dflt)
 
 		fn := func() int { return 3 }
 		result, err := schema.Parse(fn)
@@ -184,10 +184,10 @@ func TestFunction_Chaining(t *testing.T) {
 }
 
 func TestFunction_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		dflt := func() string { return "default" }
 		pf := func() string { return "prefault" }
-		schema := Function().Default(dflt).Prefault(pf)
+		schema := Function().Prefault(pf).Default(dflt)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestFunction_DefaultAndPrefault(t *testing.T) {
 			return func() string { return "prefault" }
 		}
 
-		schema := Function().DefaultFunc(dfltProvider).PrefaultFunc(pfProvider)
+		schema := Function().PrefaultFunc(pfProvider).DefaultFunc(dfltProvider)
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
 		assert.True(t, dfltCalled)
@@ -304,7 +304,7 @@ func TestFunction_DefaultAndPrefault(t *testing.T) {
 	t.Run("FunctionPtr with Default and Prefault", func(t *testing.T) {
 		dflt := func() string { return "default" }
 		pf := func() string { return "prefault" }
-		schema := FunctionPtr().Default(dflt).Prefault(pf)
+		schema := FunctionPtr().Prefault(pf).Default(dflt)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)

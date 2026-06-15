@@ -505,6 +505,7 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	if len(bag) > 0 {
 		c.applyBag(jsonSchema, bag)
 	}
+	c.applyCheckProjections(jsonSchema, internals)
 
 	return jsonSchema, nil
 }

@@ -128,9 +128,9 @@ func TestBigInt_Modifiers(t *testing.T) {
 		_ = BigIntPtr().Prefault(v)
 	})
 
-	t.Run("Default priority over Prefault", func(t *testing.T) {
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		def := big.NewInt(100)
-		s := BigIntPtr().Min(big.NewInt(150)).Default(def).Prefault(big.NewInt(200))
+		s := BigIntPtr().Min(big.NewInt(150)).Prefault(big.NewInt(200)).Default(def)
 		got, err := s.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, got)

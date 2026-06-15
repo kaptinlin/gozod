@@ -498,11 +498,11 @@ func TestRecord_ValidationMethods(t *testing.T) {
 // =============================================================================
 
 func TestRecord_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
-		// When both Default and Prefault are set, Default should take precedence
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		// When both Default and Prefault are set, the outer Default should handle nil first.
 		defaultRecord := map[string]any{"default": "value"}
 		prefaultRecord := map[string]any{"prefault": "value"}
-		schema := Record(String(), String()).Default(defaultRecord).Prefault(prefaultRecord).Optional()
+		schema := Record(String(), String()).Optional().Prefault(prefaultRecord).Default(defaultRecord)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -513,10 +513,10 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 	t.Run("Default bypasses validation (short-circuit)", func(t *testing.T) {
 		// Default should bypass record validation constraints
 		// Use DefaultFunc to provide invalid type that bypasses validation
-		schema := Record(String(), Int()).DefaultFunc(func() map[string]any {
+		schema := Record(String(), Int()).Optional().DefaultFunc(func() map[string]any {
 			// This will be converted to map[string]any but contains invalid data
 			return map[string]any{"invalid": "not-an-int"}
-		}).Optional()
+		})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -527,7 +527,7 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
 		// Prefault value must pass record validation
 		validRecord := map[string]any{"key": "value"}
-		schema := Record(String(), String()).Prefault(validRecord).Optional()
+		schema := Record(String(), String()).Optional().Prefault(validRecord)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -535,11 +535,11 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, validRecord, *result)
 	})
 
-	t.Run("nil input triggers Default, not Prefault", func(t *testing.T) {
-		// When input is nil, only Default should be triggered
+	t.Run("nil input triggers outer Default, not inner Prefault", func(t *testing.T) {
+		// When input is nil, only the outer Default should be triggered.
 		defaultRecord := map[string]any{"default": "value"}
 		prefaultRecord := map[string]any{"prefault": "value"}
-		schema := Record(String(), String()).Default(defaultRecord).Prefault(prefaultRecord).Optional()
+		schema := Record(String(), String()).Optional().Prefault(prefaultRecord).Default(defaultRecord)
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -547,7 +547,7 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 		assert.Equal(t, defaultRecord, *result)
 
 		// Test with only Prefault - should trigger on nil
-		schemaOnlyPrefault := Record(String(), String()).Prefault(prefaultRecord).Optional()
+		schemaOnlyPrefault := Record(String(), String()).Optional().Prefault(prefaultRecord)
 		result2, err := schemaOnlyPrefault.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, result2)
@@ -564,14 +564,15 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 		prefaultCalled := false
 
 		schema := Record(String(), String()).
-			DefaultFunc(func() map[string]any {
-				defaultCalled = true
-				return map[string]any{"default": "func"}
-			}).
+			Optional().
 			PrefaultFunc(func() map[string]any {
 				prefaultCalled = true
 				return map[string]any{"prefault": "func"}
-			}).Optional()
+			}).
+			DefaultFunc(func() map[string]any {
+				defaultCalled = true
+				return map[string]any{"default": "func"}
+			})
 
 		result, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -585,7 +586,7 @@ func TestRecord_DefaultAndPrefault(t *testing.T) {
 		// Prefault value that fails validation should return error
 		// Use invalid record that will fail value validation
 		invalidRecord := map[string]any{"key": 123} // 123 is not a string
-		schema := Record(String(), String()).Prefault(invalidRecord).Optional()
+		schema := Record(String(), String()).Optional().Prefault(invalidRecord)
 
 		_, err := schema.Parse(nil)
 		require.Error(t, err)

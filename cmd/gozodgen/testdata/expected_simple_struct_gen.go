@@ -14,7 +14,7 @@ func (u User) Schema() *gozod.ZodStruct[User, User] {
 		"name":       gozod.String().Min(2).Max(50),
 		"email":      gozod.String().Email(),
 		"age":        gozod.Int().Min(18).Max(120),
-		"status":     gozod.Enum("active", "inactive").Default("active").Optional(),
+		"status":     gozod.Enum("active", "inactive").Optional().Default("active"),
 		"created_at": gozod.Time(),
 	})
 }

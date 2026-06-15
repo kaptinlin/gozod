@@ -191,6 +191,9 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 	if src.PrefaultFunc != nil {
 		dst.SetPrefaultFunc(src.PrefaultFunc)
 	}
+	if len(src.Modifiers) > 0 {
+		dst.Modifiers = cloneModifiers(src.Modifiers)
+	}
 	if src.Transform != nil {
 		dst.SetTransform(src.Transform)
 	}
@@ -221,4 +224,17 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 	if src.Constructor != nil {
 		dst.Constructor = src.Constructor
 	}
+}
+
+func cloneModifiers(modifiers []core.ZodModifier) []core.ZodModifier {
+	if len(modifiers) == 0 {
+		return nil
+	}
+	cloned := slices.Clone(modifiers)
+	for i := range cloned {
+		if cloned[i].HasValue {
+			cloned[i].Value = cloneutil.Clone(cloned[i].Value)
+		}
+	}
+	return cloned
 }

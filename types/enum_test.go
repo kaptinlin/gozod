@@ -473,8 +473,8 @@ func TestEnum_Chaining(t *testing.T) {
 	t.Run("type evolution through chaining", func(t *testing.T) {
 		// Chain with type evolution
 		enum := Enum("red", "green", "blue").
-			Default("red"). // Preserves string type
-			Optional()      // Now returns pointer type
+			Optional().    // Now returns pointer type
+			Default("red") // Outer default preserves pointer type
 
 		// Test final behavior - should return pointer
 		result, err := enum.Parse("blue")
@@ -483,10 +483,10 @@ func TestEnum_Chaining(t *testing.T) {
 		assert.IsType(t, (*string)(nil), result)
 		assert.Equal(t, "blue", *result)
 
-		// Test nil handling - should return default value as pointer
+		// Test nil handling - outer Default should return default value as pointer
 		result, err = enum.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, result)       // default value takes precedence over optional
+		require.NotNil(t, result)
 		assert.Equal(t, "red", *result) // should return default value
 	})
 
@@ -628,11 +628,11 @@ func TestEnum_EnumSpecificMethods(t *testing.T) {
 // =============================================================================
 
 func TestEnum_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		enum := Enum("a", "b", "c").Default("a").Prefault("b")
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		enum := Enum("a", "b", "c").Prefault("b").Default("a")
 
-		// When input is nil, Default should take precedence
+		// When input is nil, the outer Default should handle it first.
 		result, err := enum.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)
@@ -675,15 +675,15 @@ func TestEnum_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		enum := Enum("a", "b", "c").DefaultFunc(func() string {
-			defaultCalled = true
-			return "a"
-		}).PrefaultFunc(func() string {
+		enum := Enum("a", "b", "c").PrefaultFunc(func() string {
 			prefaultCalled = true
 			return "b"
+		}).DefaultFunc(func() string {
+			defaultCalled = true
+			return "a"
 		})
 
-		// DefaultFunc should be called and take precedence
+		// Outer DefaultFunc should be called first.
 		result, err := enum.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)

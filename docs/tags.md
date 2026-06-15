@@ -132,7 +132,7 @@ type Example struct {
 }
 ```
 
-For code generation and struct-derived schemas, GoZod treats `required`, `optional`, and `coerce` as structural tag rules. The validation chain is built from the remaining rules, and `.Optional()` is appended at the end when the field is non-required or pointer-backed.
+For code generation and struct-derived schemas, GoZod treats `required`, `optional`, and `coerce` as structural tag rules. The validation chain is built from the remaining rules. When a non-required or pointer-backed field needs `.Optional()`, placement follows modifier order: if the chain contains `default` or `prefault`, `.Optional()` is placed before the planned operations so the fallback modifier remains outermost; otherwise `.Optional()` is appended after validation checks.
 
 The reflection path (`FromStruct[T]`) and code-generation path (`gozodgen`) use
 the same tag parser and rule plan. This keeps a tag such as

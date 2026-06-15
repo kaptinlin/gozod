@@ -178,17 +178,17 @@ func TestUnion_Modifiers(t *testing.T) {
 }
 
 func TestUnion_Chaining(t *testing.T) {
-	t.Run("Default then Optional", func(t *testing.T) {
+	t.Run("outer Default over inner Optional", func(t *testing.T) {
 		schema := Union([]any{String(), Int()}).
-			Default("fallback").
-			Optional()
+			Optional().
+			Default("fallback")
 
 		got, err := schema.Parse(42)
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		assert.Equal(t, 42, *got)
 
-		// nil triggers Default short-circuit
+		// nil triggers outer Default short-circuit
 		got, err = schema.Parse(nil)
 		require.NoError(t, err)
 		require.NotNil(t, got)
@@ -197,8 +197,8 @@ func TestUnion_Chaining(t *testing.T) {
 
 	t.Run("Default and Prefault", func(t *testing.T) {
 		schema := Union([]any{String(), Int()}).
-			Default("default").
-			Prefault("prefault")
+			Prefault("prefault").
+			Default("default")
 
 		got, err := schema.Parse("hello")
 		require.NoError(t, err)
@@ -219,8 +219,8 @@ func TestUnion_Chaining(t *testing.T) {
 }
 
 func TestUnion_DefaultAndPrefault(t *testing.T) {
-	t.Run("Default over Prefault", func(t *testing.T) {
-		schema := Union([]any{String(), Int()}).Default("default_value").Prefault("prefault_value")
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := Union([]any{String(), Int()}).Prefault("prefault_value").Default("default_value")
 
 		got, err := schema.Parse(nil)
 		require.NoError(t, err)
@@ -256,12 +256,12 @@ func TestUnion_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := Union([]any{String(), Int()}).DefaultFunc(func() any {
-			defaultCalled = true
-			return "default_func"
-		}).PrefaultFunc(func() any {
+		schema := Union([]any{String(), Int()}).PrefaultFunc(func() any {
 			prefaultCalled = true
 			return "prefault_func"
+		}).DefaultFunc(func() any {
+			defaultCalled = true
+			return "default_func"
 		})
 
 		got, err := schema.Parse(nil)

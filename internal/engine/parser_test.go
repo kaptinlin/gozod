@@ -114,6 +114,25 @@ func TestMergeInternalsState_ClonesMutableValues(t *testing.T) {
 	assert.Equal(t, []string{"^[a-z]+$"}, dst.Bag["patterns"])
 }
 
+func TestMergeInternalsState_PreservesOrderedModifierSpine(t *testing.T) {
+	t.Parallel()
+
+	dst := createMockInternals()
+	src := createMockInternals()
+	src.SetDefaultValue(map[string]any{"name": "default"})
+	src.SetOptional(true)
+	src.SetDefaultValue(nil)
+
+	MergeInternalsState(dst, src)
+	src.Modifiers[0].Value.(map[string]any)["name"] = "changed"
+
+	require.Len(t, dst.Modifiers, 3)
+	assert.Equal(t, map[string]any{"name": "default"}, dst.Modifiers[0].Value)
+	assert.Equal(t, core.ZodModifierOptional, dst.Modifiers[1].Kind)
+	assert.True(t, dst.Modifiers[2].HasValue)
+	assert.Nil(t, dst.Modifiers[2].Value)
+}
+
 // =============================================================================
 // PARSEPRIMITIVE TESTS
 // =============================================================================

@@ -48,7 +48,7 @@ Every GoZod schema accepts custom error messages through the error parameter:
 schema := gozod.String("Please enter a valid string")
 
 // SchemaParams struct
-schema := gozod.String(gozod.SchemaParams{
+schema := gozod.String(core.SchemaParams{
     Error: "Please enter a valid string",
 })
 

@@ -589,8 +589,8 @@ func TestHexModifiers(t *testing.T) {
 // =============================================================================
 
 func TestTextDefaultAndPrefault(t *testing.T) {
-	t.Run("default_over_prefault", func(t *testing.T) {
-		got, err := Emoji().Default("😀").Prefault("😁").Parse(nil)
+	t.Run("outer_default_over_inner_prefault", func(t *testing.T) {
+		got, err := Emoji().Prefault("😁").Default("😀").Parse(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "😀", got)
 	})
@@ -617,12 +617,12 @@ func TestTextDefaultAndPrefault(t *testing.T) {
 		defCalled := false
 		preCalled := false
 
-		s := Base64().DefaultFunc(func() string {
-			defCalled = true
-			return "SGVsbG8="
-		}).PrefaultFunc(func() string {
+		s := Base64().PrefaultFunc(func() string {
 			preCalled = true
 			return "V29ybGQ="
+		}).DefaultFunc(func() string {
+			defCalled = true
+			return "SGVsbG8="
 		})
 
 		got, err := s.Parse(nil)

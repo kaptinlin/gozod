@@ -207,7 +207,7 @@ and package documentation define the current contract.
 
 GoZod's declarative struct tag system provides a unique approach to validation through Go struct tags. Each tag rule directly corresponds to programmatic API methods:
 
-Structural rules such as `required`, `optional`, and `coerce` are interpreted outside the validation chain itself. Tag-derived schemas build their modifier/check chain from the remaining rules, then append `.Optional()` for non-required or pointer-backed fields.
+Structural rules such as `required`, `optional`, and `coerce` are interpreted outside the validation chain itself. Tag-derived schemas build their modifier/check chain from the remaining rules. Non-required or pointer-backed fields place `.Optional()` before the planned operation chain when `default` or `prefault` is present, so the fallback remains outermost; otherwise `.Optional()` is appended after validation checks.
 
 ### Core Tag Rules
 

@@ -141,7 +141,7 @@ If you prefer local encapsulation you can ignore `GlobalRegistry` entirely and s
 
 ## Integration with JSON Schema
 
-The `jsonschema.FromGoZod` converter will automatically consume registries:
+The `gozod.ToJSONSchema` converter will automatically consume registries:
 
 * **`ID` extraction** – Schemas that have an `ID` will be hoisted into `$defs` and referenced with `$ref`.
 * **Metadata merging** – Keys like `title`, `description` and `examples` will be copied onto the generated JSON-Schema nodes.
@@ -160,7 +160,7 @@ type FormField struct {
 
 formReg := gozod.NewRegistry[FormField]()
 
-userSchema := gozod.Object(map[string]gozod.Schema{
+userSchema := gozod.Object(gozod.ObjectSchema{
     "name":  gozod.String().Min(1),
     "email": gozod.Email(),
 })

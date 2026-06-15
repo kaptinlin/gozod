@@ -308,20 +308,20 @@ func TestFloat_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestFloat_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default has higher priority than Prefault", func(t *testing.T) {
+	// Test 1: outer Default over inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		// Float64 type
-		schema1 := Float64().Default(100.5).Prefault(200.5)
+		schema1 := Float64().Prefault(200.5).Default(100.5)
 		result1, err1 := schema1.Parse(nil)
 		require.NoError(t, err1)
-		assert.Equal(t, 100.5, result1) // Should be default, not prefault
+		assert.Equal(t, 100.5, result1)
 
 		// Float64Ptr type
-		schema2 := Float64Ptr().Default(100.5).Prefault(200.5)
+		schema2 := Float64Ptr().Prefault(200.5).Default(100.5)
 		result2, err2 := schema2.Parse(nil)
 		require.NoError(t, err2)
 		require.NotNil(t, result2)
-		assert.Equal(t, 100.5, *result2) // Should be default, not prefault
+		assert.Equal(t, 100.5, *result2)
 	})
 
 	// Test 2: Default short-circuits validation
@@ -1764,10 +1764,10 @@ func TestFloat_ComprehensiveTypeSafety(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, float64(99.9), *result)
 
-		// Test nil handling - Default should always win (Zod v4 behavior)
+		// Test nil handling - outer Default should handle nil first.
 		nilResult, err := withDefaultSchema.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, nilResult) // Default takes precedence over Nilable
+		require.NotNil(t, nilResult)
 		assert.Equal(t, 10.5, *nilResult)
 	})
 
@@ -1858,11 +1858,11 @@ func TestFloat_TypeEvolutionChaining(t *testing.T) {
 	t.Run("complex chaining with validation", func(t *testing.T) {
 		// Complex chaining preserving types throughout
 		schema := Float64(). // *ZodFloatTyped[float64, float64]
-					Min(10.0).     // *ZodFloatTyped[float64, float64]
-					Max(100.0).    // *ZodFloatTyped[float64, float64]
-					Positive().    // *ZodFloatTyped[float64, float64]
-					Default(50.0). // *ZodFloatTyped[float64, float64]
-					Nilable()      // *ZodFloatTyped[float64, *float64]
+					Min(10.0).    // *ZodFloatTyped[float64, float64]
+					Max(100.0).   // *ZodFloatTyped[float64, float64]
+					Positive().   // *ZodFloatTyped[float64, float64]
+					Nilable().    // *ZodFloatTyped[float64, *float64]
+					Default(50.0) // *ZodFloatTyped[float64, *float64]
 
 		_ = schema
 
@@ -1872,10 +1872,10 @@ func TestFloat_TypeEvolutionChaining(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, float64(75.5), *result)
 
-		// Test nil handling - Default should always win (Zod v4 behavior)
+		// Test nil handling - outer Default should handle nil first.
 		nilResult, err := schema.Parse(nil)
 		require.NoError(t, err)
-		require.NotNil(t, nilResult) // Default takes precedence over Nilable
+		require.NotNil(t, nilResult)
 		assert.Equal(t, float64(50.0), *nilResult)
 	})
 

@@ -287,7 +287,7 @@ type Product struct {
 		`.Min(1).Max(200)`,
 		`.Gt(0.0)`,
 		`.Enum("USD", "EUR", "GBP", "JPY")`,
-		`.Default(true).Optional()`,
+		`.Optional().Default(true)`,
 	)
 
 	// Should import regexp for regex validation

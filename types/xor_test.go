@@ -127,8 +127,8 @@ func TestZodXor_PrefaultFunc(t *testing.T) {
 	assert.True(t, called)
 }
 
-func TestZodXor_DefaultOverridesPrefault(t *testing.T) {
-	schema := XorOf(String(), Int()).Default("default").Prefault("prefault")
+func TestZodXor_OuterDefaultOverInnerPrefault(t *testing.T) {
+	schema := XorOf(String(), Int()).Prefault("prefault").Default("default")
 
 	result, err := schema.Parse(nil)
 	require.NoError(t, err)

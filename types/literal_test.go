@@ -345,11 +345,11 @@ func TestLiteral_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestLiteral_DefaultAndPrefault(t *testing.T) {
-	// Test 1: Default has higher priority than Prefault
-	t.Run("Default priority over Prefault", func(t *testing.T) {
-		schema := LiteralOf([]string{"hello", "world"}).Default("hello").Prefault("world")
+	// Test 1: Outer Default short-circuits inner Prefault.
+	t.Run("outer Default over inner Prefault", func(t *testing.T) {
+		schema := LiteralOf([]string{"hello", "world"}).Prefault("world").Default("hello")
 
-		// When input is nil, Default should take precedence
+		// When input is nil, the outer Default should handle it first.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "hello", result)
@@ -392,15 +392,15 @@ func TestLiteral_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		schema := LiteralOf([]string{"a", "b"}).DefaultFunc(func() string {
-			defaultCalled = true
-			return "a"
-		}).PrefaultFunc(func() string {
+		schema := LiteralOf([]string{"a", "b"}).PrefaultFunc(func() string {
 			prefaultCalled = true
 			return "b"
+		}).DefaultFunc(func() string {
+			defaultCalled = true
+			return "a"
 		})
 
-		// DefaultFunc should be called and take precedence
+		// Outer DefaultFunc should be called first.
 		result, err := schema.ParseAny(nil)
 		require.NoError(t, err)
 		assert.Equal(t, "a", result)

@@ -1,10 +1,8 @@
 # JSON Schema
 
-GoZod provides built-in support for converting schemas to [JSON Schema](https://json-schema.org/), making it easy to integrate with validation libraries and define structured data for APIs and AI applications.
+GoZod provides built-in support for converting schemas to [JSON Schema](https://json-schema.org/) for validation libraries, API contracts, and structured data exchange.
 
-> **New Feature** — GoZod introduces native [JSON Schema](https://json-schema.org/) conversion that integrates seamlessly with the [`kaptinlin/jsonschema`](https://github.com/kaptinlin/jsonschema) validator library. JSON Schema is widely used in [OpenAPI](https://www.openapis.org/) definitions and for defining [structured outputs](https://platform.openai.com/docs/guides/structured-outputs) for AI.
-
-> **Latest JSON Schema Support** — GoZod is compliant with JSON Schema Draft 2020-12. This library does not support earlier versions of JSON Schema, ensuring you always work with the most modern and feature-complete specification.
+GoZod emits Draft 2020-12-compatible schemas for the GoZod constructs it supports. JSON Schema import is intentionally fail-closed: unsupported keywords return an error unless `AllowLossy` is set, and lossy imports can record every ignored keyword through `LossyKeywords`.
 
 To convert a GoZod schema to JSON Schema, use the `gozod.ToJSONSchema()` function:
 
@@ -14,7 +12,7 @@ import (
     "github.com/kaptinlin/jsonschema"
 )
 
-schema := gozod.Struct(gozod.ObjectSchema{
+schema := gozod.Object(gozod.ObjectSchema{
     "name": gozod.String(),
     "age":  gozod.Int(),
 })
@@ -23,7 +21,7 @@ jsonSchema, _ := gozod.ToJSONSchema(schema)
 // Returns a *jsonschema.Schema instance ready for validation.
 ```
 
-All GoZod schemas and validation methods are converted to their closest JSON Schema equivalent. Some Go types have no analog and cannot be reasonably represented. See the [`unrepresentable`](#unrepresentable-types) section below for more information on handling these cases.
+Supported GoZod schemas and validation methods are converted to the closest JSON Schema equivalent. Some Go types and runtime behaviors have no honest JSON Schema analog and cannot be reasonably represented. See the [`unrepresentable`](#unrepresentable-types) section below for those cases.
 
 ## Direct Integration with kaptinlin/jsonschema
 
@@ -40,7 +38,7 @@ import (
 
 func main() {
     // Define GoZod schema
-    userSchema := gozod.Struct(gozod.ObjectSchema{
+    userSchema := gozod.Object(gozod.ObjectSchema{
         "username": gozod.String().Min(3),
         "email":    gozod.Email(),
         "age":      gozod.Int().Min(18),
@@ -76,7 +74,7 @@ GoZod converts the following schema types to the equivalent JSON Schema `format`
 ```go
 // Supported via `format`
 gozod.Email()         // => {"type": "string", "format": "email"}
-gozod.Uuid()          // => {"type": "string", "format": "uuid"}
+gozod.UUID()          // => {"type": "string", "format": "uuid"}
 gozod.URL()           // => {"type": "string", "format": "uri"}
 gozod.JWT()           // => {"type": "string", "format": "jwt"}
 gozod.IsoDateTime()   // => {"type": "string", "format": "date-time"}
@@ -100,16 +98,16 @@ String patterns and custom formats are supported via `pattern`:
 gozod.String().Regex(regexp.MustCompile("^[a-z]+$"))
 // => {"type": "string", "pattern": "^[a-z]+$"}
 
-gozod.Uuidv4()        // => {"type": "string", "format": "uuid", "pattern": "..."}
-gozod.Uuidv6()        // => {"type": "string", "format": "uuid", "pattern": "..."}
-gozod.Uuidv7()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.UUIDv4()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.UUIDv6()        // => {"type": "string", "format": "uuid", "pattern": "..."}
+gozod.UUIDv7()        // => {"type": "string", "format": "uuid", "pattern": "..."}
 gozod.CIDRv4()        // => {"type": "string", "format": "cidrv4", "pattern": "..."}
 gozod.CIDRv6()        // => {"type": "string", "format": "cidrv6", "pattern": "..."}
-gozod.Cuid()          // => {"type": "string", "format": "cuid", "pattern": "..."}
-gozod.Cuid2()         // => {"type": "string", "format": "cuid2", "pattern": "..."}
-gozod.Ulid()          // => {"type": "string", "format": "ulid", "pattern": "..."}
-gozod.Ksuid()         // => {"type": "string", "format": "ksuid", "pattern": "..."}
-gozod.Nanoid()        // => {"type": "string", "format": "nanoid", "pattern": "..."}
+gozod.CUID()          // => {"type": "string", "format": "cuid", "pattern": "..."}
+gozod.CUID2()         // => {"type": "string", "format": "cuid2", "pattern": "..."}
+gozod.ULID()          // => {"type": "string", "format": "ulid", "pattern": "..."}
+gozod.KSUID()         // => {"type": "string", "format": "ksuid", "pattern": "..."}
+gozod.NanoID()        // => {"type": "string", "format": "nanoid", "pattern": "..."}
 ```
 
 ## File Types
@@ -346,7 +344,7 @@ How to handle cycles. If a cycle is encountered as `gozod.ToJSONSchema()` traver
 ```go
 // Define a recursive user schema
 var UserSchema gozod.ZodSchema
-UserSchema = gozod.Struct(gozod.ObjectSchema{
+UserSchema = gozod.Object(gozod.ObjectSchema{
     "name": gozod.String(),
     "friend": gozod.Lazy(func() gozod.ZodSchema {
         return UserSchema
@@ -372,7 +370,7 @@ How to handle schemas that occur multiple times in the same schema. By default, 
 
 ```go
 nameSchema := gozod.String()
-userSchema := gozod.Struct(gozod.ObjectSchema{
+userSchema := gozod.Object(gozod.ObjectSchema{
     "firstName": nameSchema,
     "lastName":  nameSchema,
 })
@@ -440,16 +438,16 @@ registry := gozod.NewRegistry[gozod.GlobalMeta]()
 // Define schemas with IDs
 var userSchema, postSchema gozod.ZodSchema
 
-userSchema = gozod.Struct(gozod.ObjectSchema{
-    "id":   gozod.String().Uuid(),
+userSchema = gozod.Object(gozod.ObjectSchema{
+    "id":   gozod.UUID(),
     "name": gozod.String(),
     "posts": gozod.Lazy(func() gozod.ZodSchema {
         return gozod.Slice(postSchema)
     }),
 }).Meta(gozod.GlobalMeta{ID: "User"})
 
-postSchema = gozod.Struct(gozod.ObjectSchema{
-    "id":      gozod.String().Uuid(),
+postSchema = gozod.Object(gozod.ObjectSchema{
+    "id":      gozod.UUID(),
     "title":   gozod.String(),
     "author":  gozod.Lazy(func() gozod.ZodSchema { return userSchema }),
 }).Meta(gozod.GlobalMeta{ID: "Post"})
@@ -554,6 +552,26 @@ zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
 })
 ```
 
+Import does not claim the whole JSON Schema language. The current fail-closed
+keywords are:
+
+| Keyword | Reason |
+|---------|--------|
+| `if` / `then` / `else` | Conditional validation has no direct GoZod schema shape. |
+| `patternProperties` | Pattern-keyed object validation is not imported as object shape semantics. |
+| `$dynamicRef` | Dynamic reference resolution is outside GoZod's schema graph. |
+| `unevaluatedProperties` | Evaluation bookkeeping is a JSON Schema runtime concept. |
+| `unevaluatedItems` | Evaluation bookkeeping is a JSON Schema runtime concept. |
+| `not` | Negated schemas are not imported as a general validation form. |
+| `uniqueItems: true` | Slice uniqueness is not a first-class GoZod array contract. |
+| `dependentSchemas` | Cross-field schema dependency evaluation is not imported. |
+| `propertyNames` | Property-name schemas are not imported as object shape semantics. |
+| `contains` / `minContains` / `maxContains` | Positional search constraints are not imported. |
+
+Round-trip expectations apply only to the overlap GoZod owns: primitive types,
+known string formats, numeric and length constraints, arrays, tuples, objects,
+records, enums, literals, and `allOf` / `anyOf` / `oneOf` composition.
+
 ### Supported Conversions
 
 | JSON Schema | GoZod Schema |
@@ -572,7 +590,7 @@ zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
 | `const` | `gozod.Literal()` |
 | `enum` | `gozod.Enum()` |
 | `format: "email"` | `gozod.Email()` |
-| `format: "uuid"` | `gozod.Uuid()` |
+| `format: "uuid"` | `gozod.UUID()` |
 | `format: "uri"` | `gozod.URL()` |
 | `format: "date-time"` | `gozod.IsoDateTime()` |
 | `format: "date"` | `gozod.IsoDate()` |

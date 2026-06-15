@@ -546,6 +546,72 @@ func TestFromJSONSchema_MultiType(t *testing.T) {
 	})
 }
 
+func TestJSONSchemaSupportedSubsetRoundTrip(t *testing.T) {
+	minLength := float64(2)
+	maxLength := float64(20)
+	minItems := float64(1)
+	maxItems := float64(3)
+	email := "email"
+
+	input := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"name": {
+				Type:      []string{"string"},
+				MinLength: &minLength,
+				MaxLength: &maxLength,
+			},
+			"email": {
+				Type:   []string{"string"},
+				Format: &email,
+			},
+			"tags": {
+				Type:     []string{"array"},
+				Items:    &lib.Schema{Type: []string{"string"}},
+				MinItems: &minItems,
+				MaxItems: &maxItems,
+			},
+		},
+		Required:             []string{"name", "email"},
+		AdditionalProperties: &lib.Schema{Boolean: new(false)},
+	}
+
+	zodSchema, err := FromJSONSchema(input)
+	require.NoError(t, err)
+
+	exported, err := ToJSONSchema(zodSchema)
+	require.NoError(t, err)
+	require.Equal(t, lib.SchemaType{"object"}, exported.Type)
+	assert.ElementsMatch(t, []string{"name", "email"}, exported.Required)
+	require.NotNil(t, exported.AdditionalProperties)
+	require.NotNil(t, exported.AdditionalProperties.Boolean)
+	assert.False(t, *exported.AdditionalProperties.Boolean)
+
+	require.NotNil(t, exported.Properties)
+	nameSchema := (*exported.Properties)["name"]
+	require.NotNil(t, nameSchema)
+	assert.Equal(t, lib.SchemaType{"string"}, nameSchema.Type)
+	require.NotNil(t, nameSchema.MinLength)
+	require.NotNil(t, nameSchema.MaxLength)
+	assert.Equal(t, minLength, *nameSchema.MinLength)
+	assert.Equal(t, maxLength, *nameSchema.MaxLength)
+
+	emailSchema := (*exported.Properties)["email"]
+	require.NotNil(t, emailSchema)
+	require.NotNil(t, emailSchema.Format)
+	assert.Equal(t, email, *emailSchema.Format)
+
+	tagsSchema := (*exported.Properties)["tags"]
+	require.NotNil(t, tagsSchema)
+	assert.Equal(t, lib.SchemaType{"array"}, tagsSchema.Type)
+	require.NotNil(t, tagsSchema.Items)
+	assert.Equal(t, lib.SchemaType{"string"}, tagsSchema.Items.Type)
+	require.NotNil(t, tagsSchema.MinItems)
+	require.NotNil(t, tagsSchema.MaxItems)
+	assert.Equal(t, minItems, *tagsSchema.MinItems)
+	assert.Equal(t, maxItems, *tagsSchema.MaxItems)
+}
+
 func TestFromJSONSchema_UnsupportedDefaultsToError(t *testing.T) {
 	t.Run("default conversion fails on if/then/else", func(t *testing.T) {
 		ifSchema := &lib.Schema{}
@@ -574,6 +640,90 @@ func TestFromJSONSchema_UnsupportedDefaultsToError(t *testing.T) {
 		require.NotNil(t, zodSchema)
 		assert.Equal(t, []string{"if/then/else"}, keywords)
 	})
+}
+
+func TestFromJSONSchema_UnsupportedImportKeywordContract(t *testing.T) {
+	samples := map[string]func() *lib.Schema{
+		"if/then/else": func() *lib.Schema {
+			return &lib.Schema{If: &lib.Schema{Type: []string{"string"}}}
+		},
+		"patternProperties": func() *lib.Schema {
+			return &lib.Schema{PatternProperties: &lib.SchemaMap{"^x-": {Type: []string{"string"}}}}
+		},
+		"$dynamicRef": func() *lib.Schema {
+			return &lib.Schema{DynamicRef: "#node"}
+		},
+		"unevaluatedProperties": func() *lib.Schema {
+			return &lib.Schema{UnevaluatedProperties: &lib.Schema{Boolean: new(false)}}
+		},
+		"unevaluatedItems": func() *lib.Schema {
+			return &lib.Schema{UnevaluatedItems: &lib.Schema{Boolean: new(false)}}
+		},
+		"not": func() *lib.Schema {
+			return &lib.Schema{Not: &lib.Schema{Type: []string{"string"}}}
+		},
+		"uniqueItems": func() *lib.Schema {
+			return &lib.Schema{UniqueItems: new(true)}
+		},
+		"dependentSchemas": func() *lib.Schema {
+			return &lib.Schema{DependentSchemas: map[string]*lib.Schema{"card": {Boolean: new(true)}}}
+		},
+		"propertyNames": func() *lib.Schema {
+			return &lib.Schema{PropertyNames: &lib.Schema{Boolean: new(true)}}
+		},
+		"contains": func() *lib.Schema {
+			return &lib.Schema{Contains: &lib.Schema{Boolean: new(true)}}
+		},
+	}
+
+	require.Len(t, samples, len(unsupportedImportKeywords))
+	seen := make(map[string]struct{}, len(unsupportedImportKeywords))
+	for _, keyword := range unsupportedImportKeywords {
+		if _, ok := seen[keyword.keyword]; ok {
+			t.Fatalf("duplicate unsupported keyword contract: %s", keyword.keyword)
+		}
+		seen[keyword.keyword] = struct{}{}
+		if _, ok := samples[keyword.keyword]; !ok {
+			t.Fatalf("missing unsupported keyword sample: %s", keyword.keyword)
+		}
+	}
+
+	for _, keyword := range unsupportedImportKeywords {
+		t.Run(keyword.keyword, func(t *testing.T) {
+			schema := samples[keyword.keyword]()
+			require.True(t, keyword.present(schema), "sample must trigger contract predicate")
+
+			_, err := FromJSONSchema(schema)
+			require.ErrorIs(t, err, keyword.err)
+
+			var lossyKeywords []string
+			zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
+				AllowLossy:    true,
+				LossyKeywords: &lossyKeywords,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, zodSchema)
+			assert.Equal(t, []string{keyword.keyword}, lossyKeywords)
+		})
+	}
+}
+
+func TestFromJSONSchema_LossyRecordsEveryUnsupportedKeyword(t *testing.T) {
+	schema := &lib.Schema{
+		If:          &lib.Schema{Type: []string{"string"}},
+		DynamicRef:  "#node",
+		Not:         &lib.Schema{Type: []string{"integer"}},
+		UniqueItems: new(true),
+	}
+
+	var keywords []string
+	zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
+		AllowLossy:    true,
+		LossyKeywords: &keywords,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, zodSchema)
+	assert.Equal(t, []string{"if/then/else", "$dynamicRef", "not", "uniqueItems"}, keywords)
 }
 
 func TestFromJSONSchema_NilSchema(t *testing.T) {
