@@ -180,14 +180,15 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	typeName := field.EffectiveTypeName()
 	fieldPlan := tagparser.CompileFieldPlan(field)
 
-	// UUID special case
-	if field.IsUUIDStringField() {
+	// String-format constructors mirror runtime tag application: the first
+	// format rule replaces the base string schema, then later modifiers apply.
+	if constructor, consumedRule := stringFormatConstructor(field, fieldPlan); constructor != "" {
 		var b strings.Builder
-		b.WriteString("gozod.UUID()")
+		b.WriteString(constructor)
 		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
 			b.WriteString(".Optional()")
 		}
-		for _, operation := range fieldPlan.OperationsExcept("uuid") {
+		for _, operation := range fieldPlan.OperationsExcept(consumedRule) {
 			if code := generateValidatorChain(operation, field.Type); code != "" {
 				b.WriteString(code)
 			}
@@ -239,6 +240,28 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	return b.String(), nil
 }
 
+func stringFormatConstructor(field *tagparser.FieldInfo, fieldPlan tagparser.FieldPlan) (string, string) {
+	if field == nil || !isStringFieldType(field.Type) {
+		return "", ""
+	}
+	for _, operation := range fieldPlan.Operations {
+		if operation.Op == tagparser.RuleStringCheck && operation.Method != "" {
+			return fmt.Sprintf("gozod.%s()", operation.Method), operation.Rule.Name
+		}
+	}
+	return "", ""
+}
+
+func isStringFieldType(fieldType reflect.Type) bool {
+	if fieldType == nil {
+		return false
+	}
+	if fieldType.Kind() == reflect.Pointer {
+		fieldType = fieldType.Elem()
+	}
+	return fieldType.Kind() == reflect.String
+}
+
 // generateValidatorChain returns the validator method chain for a rule.
 func generateValidatorChain(plan tagparser.RulePlan, fieldType reflect.Type) string {
 	if plan.Method == "" {
@@ -270,10 +293,7 @@ func generateValidatorChain(plan tagparser.RulePlan, fieldType reflect.Type) str
 		}
 		return fmt.Sprintf(".%s()", plan.Method)
 	case tagparser.RuleStringCheck:
-		if plan.Method == "" {
-			return ""
-		}
-		return fmt.Sprintf(".%s()", plan.Method)
+		return ""
 	default:
 		return ""
 	}

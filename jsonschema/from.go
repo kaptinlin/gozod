@@ -39,6 +39,9 @@ type FromJSONSchemaOptions struct {
 	AllowLossy bool
 	// LossyKeywords receives unsupported keywords ignored when AllowLossy is true.
 	LossyKeywords *[]string
+	// Metadata receives imported JSON Schema metadata. Nil keeps the historical
+	// behavior of writing metadata to core.GlobalRegistry.
+	Metadata *core.Registry[core.GlobalMeta]
 }
 
 // FromJSONSchema converts a kaptinlin/jsonschema Schema to a GoZod schema.
@@ -130,7 +133,7 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 }
 
 // attachMeta extracts metadata fields from a JSON Schema node and attaches them
-// to the GoZod schema via the global registry (Zod v4: 456af1ea).
+// to the GoZod schema via the selected registry (Zod v4: 456af1ea).
 // Captures: $id, title, description, examples.
 func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchema) {
 	if schema == nil {
@@ -152,7 +155,11 @@ func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchem
 	}
 
 	if meta.ID != "" || meta.Title != "" || meta.Description != "" || len(meta.Examples) > 0 {
-		core.GlobalRegistry.Add(schema, meta)
+		registry := ctx.options.Metadata
+		if registry == nil {
+			registry = core.GlobalRegistry
+		}
+		registry.Add(schema, meta)
 	}
 }
 

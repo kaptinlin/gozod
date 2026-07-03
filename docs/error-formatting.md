@@ -299,10 +299,10 @@ All formatting functions work with localized error messages:
 import "github.com/kaptinlin/gozod/locales"
 
 // Set global locale to Chinese
-gozod.Config(locales.ZhCN())
+gozod.SetConfig(locales.ZhCN())
 
 // Format errors using Chinese formatter function
-chineseFormatter := locales.GetLocaleFormatter("zh-CN")
+chineseFormatter := locales.LocaleFormatter("zh-CN")
 chineseTree := gozod.TreeifyErrorWithMapper(zodErr, chineseFormatter)
 chineseFlat := gozod.FlattenErrorWithMapper(zodErr, chineseFormatter) 
 chinesePretty := gozod.PrettifyErrorWithMapper(zodErr, chineseFormatter)

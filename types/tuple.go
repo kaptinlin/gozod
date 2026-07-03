@@ -526,12 +526,6 @@ func newZodTupleFromDef[T any, R any](def *ZodTupleDef, requiredCount int) *ZodT
 		internals.Checks = append(internals.Checks, def.Checks...)
 	}
 
-	// Ensure validator is called when item schemas exist.
-	if len(def.Items) > 0 || def.Rest != nil {
-		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		internals.AddCheck(alwaysPassCheck)
-	}
-
 	return schema
 }
 

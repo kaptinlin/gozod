@@ -159,7 +159,7 @@ Stateless, allocation-conscious helpers independent of GoZod runtime:
 
 | Sub-dir | Role | Key Files |
 |---------|------|-----------|
-| `engine`   | Generic parser, coercion and check runner | `parser.go`, `checker.go`, `types.go`, `errors.go`, `params.go` |
+| `engine`   | Generic parser, coercion and check runner | `parser.go`, `checker.go`, `types.go`, `errors.go` |
 | `checks`   | Concrete check factories (length, numeric, format …) | `checks.go`, `custom.go`, `format.go`, `length.go`, `numeric.go`, `strings.go`, `file.go` |
 | `issues`   | Raw issue builders, finalisers & formatters | `creators.go`, `formatters.go`, `finalize.go`, `errors.go`, `types.go`, `raw.go`, `accessors.go` |
 | `utils`    | Low-level helpers used only by the engine | `utils.go` |

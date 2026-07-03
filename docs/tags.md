@@ -206,8 +206,6 @@ then validate. The same choice is available on hand-built schemas via
 | `max=N` | Maximum numeric value | `gozod:"max=120"` |
 | `positive` | Must be greater than 0 | `gozod:"positive"` |
 | `negative` | Must be less than 0 | `gozod:"negative"` |
-| `nonnegative` | Must be >= 0 | `gozod:"nonnegative"` |
-| `nonpositive` | Must be <= 0 | `gozod:"nonpositive"` |
 
 ### Array/Slice Validation
 
@@ -217,6 +215,16 @@ then validate. The same choice is available on hand-built schemas via
 | `max=N` | Maximum number of elements | `gozod:"max=10"` |
 | `length=N` | Exact number of elements | `gozod:"length=5"` |
 | `nonempty` | At least one element | `gozod:"nonempty"` |
+
+### Unsupported Tag Spellings
+
+These spellings are intentionally not part of the current tag language:
+
+| Tag | Use Instead |
+|-----|-------------|
+| `nonnegative` | `min=0` |
+| `nonpositive` | `max=0` |
+| `uuid:v4` | `uuid` |
 
 ---
 
@@ -520,7 +528,8 @@ _, err := schema.Parse(config3)  // ❌ Validation fails: Port < 1000
 
 ### Code Generation
 
-For maximum performance, use code generation to eliminate reflection:
+For tag-heavy paths, use code generation when you want an explicit pre-built
+schema method instead of deriving the schema through reflection at runtime:
 
 ```go
 //go:generate gozodgen
@@ -531,25 +540,26 @@ type User struct {
     Age   int    `gozod:"required,min=18"`
 }
 
-// Generated Schema() method in user_gen.go provides zero-reflection validation
+// Generated Schema() method in user_gen.go returns a pre-built schema.
 func main() {
-    schema := gozod.FromStruct[User]()  // Automatically uses generated code
+    schema := User{}.Schema()
 
     user := User{Name: "Alice", Email: "alice@example.com", Age: 25}
-    result, err := schema.Parse(user)   // 5-10x faster than reflection
+    result, err := schema.Parse(user)
 }
 ```
 
 `gozodgen` accepts flags that mirror the runtime options:
 
 ```bash
-gozodgen                       # default: json field names, Schema() method
+gozodgen                       # default: gozod rule tags, json field names, Schema() method
+gozodgen -tag-name=validate    # read validation rules from validate tags
 gozodgen -field-name-tag=yaml  # resolve field names from yaml tags
 gozodgen -method=Validate      # generate a Validate() method instead of Schema()
 ```
 
-`-field-name-tag` defaults to `json`; `-method` defaults to `Schema` and must
-be a valid exported Go identifier.
+`-tag-name` defaults to `gozod`; `-field-name-tag` defaults to `json`;
+`-method` defaults to `Schema` and must be a valid exported Go identifier.
 
 ### StrictParse for Known Types
 
@@ -622,7 +632,7 @@ type User struct {
 
 ```go
 type Money struct {
-    Amount   int    `gozod:"required,nonnegative"`  // Cents
+    Amount   int    `gozod:"required,min=0"`        // Cents
     Currency string `gozod:"required,length=3"`     // ISO currency code
 }
 
@@ -810,8 +820,6 @@ func setupFiberRoutes(app *fiber.App) {
 | | `max=N` | Maximum value | `gozod:"max=120"` |
 | | `positive` | Greater than 0 | `gozod:"positive"` |
 | | `negative` | Less than 0 | `gozod:"negative"` |
-| | `nonnegative` | Greater or equal to 0 | `gozod:"nonnegative"` |
-| | `nonpositive` | Less or equal to 0 | `gozod:"nonpositive"` |
 | **Arrays** | `min=N` | Minimum elements | `gozod:"min=1"` |
 | | `max=N` | Maximum elements | `gozod:"max=10"` |
 | | `length=N` | Exact elements | `gozod:"length=5"` |

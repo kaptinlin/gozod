@@ -93,11 +93,18 @@ func executeChecks(
 			continue
 		}
 
+		abort := ci.Def != nil && ci.Def.Abort
+		var errFn core.ZodErrorMap
 		if ci.Def != nil && ci.Def.Error != nil {
-			errFn := *ci.Def.Error
-			for j := range iss {
-				iss[j].Message = errFn(iss[j])
+			errFn = *ci.Def.Error
+		}
+		for j := range iss {
+			if iss[j].Inst == nil {
 				iss[j].Inst = ci
+			}
+			iss[j].Continue = !abort
+			if errFn != nil {
+				iss[j].Message = errFn(iss[j])
 			}
 		}
 

@@ -9,6 +9,10 @@ reaches runtime reflection or code generation.
 `cmd/gozodgen` may render different backends, but neither should independently
 decide what a tag means.
 
+Generated schemas are explicit artifacts. `gozodgen` emits methods such as
+`User{}.Schema()` for callers that want generated code. `gozod.FromStruct[T]()`
+uses runtime reflection and does not auto-detect generated methods.
+
 ## Field Plans
 
 `tagparser.CompileFieldPlan` is the semantic boundary for a struct field. A
@@ -23,6 +27,13 @@ field plan owns:
 
 Generated code may still render typed values, imports, and Go syntax, but it
 must consume the compiled plan instead of reinterpreting raw tags.
+
+String-format rules compile through `RuleStringCheck` and render through root
+constructors when the constructor is the schema identity: `Email`, `URL`,
+`UUID`, `IPv4`, `IPv6`, `CIDR`, `CUID`, `CUID2`, `JWT`, and ISO-family string
+constructors. A format tag that is not represented by GoZod should fail
+explicitly or remain an ordinary string rule; it must not render a guessed API
+call.
 
 Optional placement is semantic. A pointer field with a default or prefault must
 preserve whether `.Optional()` belongs before or after the default/prefault
@@ -44,6 +55,14 @@ Behavior tests should cover both reflection and generated schemas for:
 Source-shape tests may protect generated code only where shape is part of the
 contract, such as optional/default ordering or required imports.
 
+Runtime and generated paths both support custom validation tag names. Reflection
+uses `WithTagName`, and `gozodgen` uses `-tag-name`. Custom tag names change the
+source tag key only; they do not change rule meaning.
+
+Unsupported tags are explicit. Semantics that GoZod does not own, such as
+version-specific UUID tags or ambiguous sign aliases, should return a clear tag
+error instead of degrading into a weaker validation.
+
 ## Generated Artifacts
 
 Generated code should change only when inputs or generator logic change.
@@ -56,3 +75,16 @@ The generated file header is stable:
 
 Generation timestamps do not belong in generated files. Golden tests compare the
 real generated output and should not normalize away unstable timestamp lines.
+
+## Acceptance Criteria
+
+- Runtime and generated parity tests prove required, optional, pointer, default,
+  prefault, enum, regex, literal, string-format, numeric, and length rules share
+  one compiled field plan.
+- Generator tests prove string-format tags render real root constructors where
+  those constructors are the schema identity.
+- Custom tag tests prove `WithTagName` and `gozodgen -tag-name` read the same
+  rule language from a non-default tag key.
+- Unsupported tag tests prove unsupported or ambiguous tags fail with clear
+  errors in both reflection and generated-code analysis.
+- Golden tests compare stable generated output without timestamp normalization.

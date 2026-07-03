@@ -188,14 +188,12 @@ func TestFieldInfoHelpers(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"strings",
 		"regexp",
-		"net/url",
-		"net",
 		"github.com/kaptinlin/gozod/core",
 	}, info.RequiredImports())
 	assert.True(t, info.NeedsStringsImport())
 	assert.True(t, info.NeedsRegexpImport())
-	assert.True(t, info.NeedsNetURLImport())
-	assert.True(t, info.NeedsNetImport())
+	assert.False(t, info.NeedsNetURLImport())
+	assert.False(t, info.NeedsNetImport())
 	assert.True(t, info.NeedsCoreImport())
 	assert.True(t, info.IsUUIDStringField())
 	assert.True(t, info.IsEnumStringField())

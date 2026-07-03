@@ -15,12 +15,15 @@ task test:race                      # Run race tests for core and lightweight ut
 task lint                           # Run golangci-lint and tidy-lint
 task golangci-lint                  # Run golangci-lint v2 only
 task tidy-lint                      # Verify go.mod and go.sum stay tidy
+task contractcheck                  # Run go test -tags=contractcheck ./types
+task docs:integrity                 # Run public documentation stale-claim checks
+task bench:smoke                    # Compile and smoke-run benchmarks with tiny benchtime
 task fmt                            # Run golangci-lint fmt ./...
 task vet                            # Run go vet ./...
 task vuln                           # Run govulncheck ./...
-task verify                         # Run deps, fmt, vet, lint, test, and vuln
+task verify:ci                      # Run lint, contractcheck, docs, race tests, benchmark smoke, and vuln
+task verify                         # Run deps, fmt, vet, lint, contracts, docs, tests, benchmark smoke, and vuln
 go build ./...                      # Verify all packages compile
-go test -tags=contractcheck ./types # Audit compile-time schema contracts
 ```
 
 ## Architecture
@@ -61,10 +64,19 @@ gozod/
 ## Agent Workflow
 
 - Read the relevant guide in [`.agents/rules/`](.agents/rules/) before changing schema internals, checks, struct tags, naming, tests, performance-sensitive paths, or package boundaries.
+- Read the relevant durable contract in [SPECS/](SPECS/) before changing core validation semantics, JSON Schema conversion, or struct-tag/codegen behavior.
 - Use [`.reference/zod/`](.reference/zod/) for parity work only after the submodule is initialized and the relevant TypeScript Zod v4 behavior is inspected.
 - Keep `README.md` user-facing, `CLAUDE.md` development-facing, and `.agents/rules/` contract-facing.
 - When public APIs or docs change, update examples and docs-integrity expectations together.
 - Work with the current dirty tree; never revert unrelated user changes.
+
+## SPECS Index
+
+| Spec | Use When |
+|------|----------|
+| [SPECS/001-core-validation-language.md](SPECS/001-core-validation-language.md) | Changing root API language, strict parsing, object output, modifiers, checks, or internal ownership rules |
+| [SPECS/002-json-schema-contract.md](SPECS/002-json-schema-contract.md) | Changing JSON Schema import/export modes, fail-closed import, metadata registries, or parity tests |
+| [SPECS/003-struct-tags-and-generation.md](SPECS/003-struct-tags-and-generation.md) | Changing `gozod` tags, `pkg/tagparser`, `FromStruct`, `gozodgen`, generated fixtures, or codegen docs |
 
 ## Rules Index
 
@@ -103,11 +115,13 @@ gozod/
 - Follow Google Go Best Practices: <https://google.github.io/go-style/best-practices>
 - Follow Google Go Style Decisions: <https://google.github.io/go-style/decisions>
 - Preserve the two parsing modes: `Parse(any)` for dynamic inputs and `StrictParse(T)` for compile-time constrained inputs.
+- Preserve schema-described structural output: object fields and catchall entries return parsed child values, including defaults, prefaults, transforms, overwrites, and coercion when explicitly selected.
 - Keep modifier methods copy-on-write. `Optional`, `Nilable`, `Default`, `Prefault`, `Describe`, `Meta`, and similar fluent modifiers must return a new configured schema.
 - Route parsing through `internal/engine` helpers. Do not reimplement parsing pipelines in root facade files.
 - Build validations through `internal/checks` and shared helpers; do not duplicate validation logic in schema methods.
 - Keep first-party check definitions semantic by recording meaningful `core.ZodCheckDef.Params`.
 - Keep struct-tag behavior shared between runtime reflection and `gozodgen` through `pkg/tagparser`.
+- Keep JSON Schema protocol modes typed and fail loud: invalid option values return errors, unsupported targets do not silently emit Draft 2020-12, and imported metadata can be isolated in caller-owned registries.
 - Keep dependency direction one-way. Schema files in `types/` do not import each other; shared behavior belongs in `internal/`, `pkg/`, `core/`, or `coerce/`.
 - Update [types/constraints_verify.go](types/constraints_verify.go) when changing schema interfaces or adding new schema families.
 - Keep docs, examples, generated fixtures, and task commands aligned with real exports and real files.
@@ -142,6 +156,8 @@ gozod/
 - Test copy-on-write modifiers by proving the original schema remains unchanged.
 - Write benchmarks with `b.Loop()`.
 - Run `go test -tags=contractcheck ./types` when auditing compile-time schema coverage.
+- Run `task docs:integrity` whenever README, docs, examples, `CLAUDE.md`, or public API names change.
+- Run `task bench:smoke` to prove benchmark entry points compile without turning benchmark numbers into release criteria.
 
 ## Dependency Issue Reporting
 

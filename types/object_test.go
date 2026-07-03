@@ -153,6 +153,68 @@ func TestObject_ParseStructJSONTags(t *testing.T) {
 	assert.NotContains(t, result, "hidden")
 }
 
+func TestObject_ParsedChildOutput(t *testing.T) {
+	t.Run("field parser output is returned", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().Trim(),
+		})
+
+		result, err := schema.Parse(map[string]any{"name": "  Alice  "})
+		require.NoError(t, err)
+		assert.Equal(t, "Alice", result["name"])
+	})
+
+	t.Run("field transform output is returned", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name_length": String().Transform(func(value string, _ *core.RefinementContext) (any, error) {
+				return len(value), nil
+			}),
+		})
+
+		result, err := schema.Parse(map[string]any{"name_length": "Alice"})
+		require.NoError(t, err)
+		assert.Equal(t, 5, result["name_length"])
+	})
+
+	t.Run("field coerced output is returned", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"age": CoercedInt(),
+		})
+
+		result, err := schema.Parse(map[string]any{"age": "42"})
+		require.NoError(t, err)
+		assert.Equal(t, 42, result["age"])
+	})
+
+	t.Run("missing field default is returned", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().Default("Anonymous"),
+		})
+
+		result, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+		assert.Equal(t, "Anonymous", result["name"])
+	})
+
+	t.Run("missing field prefault is parsed", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().Trim().Min(3).Prefault("  Bob  "),
+		})
+
+		result, err := schema.Parse(map[string]any{})
+		require.NoError(t, err)
+		assert.Equal(t, "Bob", result["name"])
+	})
+
+	t.Run("catchall parser output is returned", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{}).Passthrough().WithCatchall(String().Trim())
+
+		result, err := schema.Parse(map[string]any{"extra": "  value  "})
+		require.NoError(t, err)
+		assert.Equal(t, "value", result["extra"])
+	})
+}
+
 func TestObject_TypeSafety(t *testing.T) {
 	t.Run("Object returns map[string]any type", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{

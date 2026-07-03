@@ -137,10 +137,6 @@ func TestCreationHelpersWithOptions(t *testing.T) {
 		format, _ := issue.Properties["format"].(string)
 		assert.Equal(t, "email", format)
 	})
-
-	// Note: Low-level issue creation functions have been removed
-	// in favor of high-level error creation functions
-	t.Skip("Low-level issue creation functions have been removed")
 }
 
 func TestComplexCreationScenarios(t *testing.T) {
@@ -198,22 +194,6 @@ func TestComplexCreationScenarios(t *testing.T) {
 		assert.Equal(t, instance, issue.Inst)
 		assert.False(t, issue.Continue)
 	})
-
-	// Note: Low-level issue creation functions have been removed
-	// in favor of high-level error creation functions
-	t.Skip("Low-level issue creation functions have been removed")
-}
-
-func TestCreationEdgeCases(t *testing.T) {
-	// Note: Low-level issue creation functions have been removed
-	// in favor of high-level error creation functions
-	t.Skip("Low-level issue creation functions have been removed")
-}
-
-func TestCreationPerformance(t *testing.T) {
-	// Note: Low-level issue creation functions have been removed
-	// in favor of high-level error creation functions
-	t.Skip("Low-level issue creation functions have been removed")
 }
 
 func TestHighLevelErrorAPI(t *testing.T) {

@@ -10,6 +10,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 - **Strict type semantics**: Value schemas and pointer schemas accept exact input types unless coercion is explicit.
 - **Dual parsing modes**: Use `Parse(any)` for dynamic data and `StrictParse(T)` for known Go values.
 - **Fluent schema API**: Compose primitives, collections, structs, unions, intersections, transforms, refinements, defaults, and metadata.
+- **Schema-described output**: Object fields, catchall values, defaults, prefaults, transforms, and overwrites return the parsed child output.
 - **Struct tags**: Build schemas from Go structs with `gozod:"..."` tags, json/yaml/toml field names, custom tag keys, and circular-reference support.
 - **Generated schemas**: Use `gozodgen` for tag-heavy paths where generated helpers are preferable to reflection.
 - **Localized errors**: Inspect `*gozod.ZodError`, prettify or flatten failures, and switch message bundles through `locales/`.
@@ -141,6 +142,10 @@ if err != nil {
 fmt.Println(parsedUser, parsedContact)
 ```
 
+Object parsing returns schema-described output. If a child schema trims,
+overwrites, transforms, supplies a default, or validates catchall values, the
+returned map contains that parsed child value.
+
 For conversion-first flows, import [coerce/](coerce/) and choose coercion explicitly.
 
 ```go
@@ -189,6 +194,7 @@ See [docs/metadata.md](docs/metadata.md) for registries and JSON Schema metadata
 ## JSON Schema
 
 `gozod.ToJSONSchema` returns a `*jsonschema.Schema` from `github.com/kaptinlin/jsonschema`.
+Use the exported `JSONSchema*` mode constants instead of raw strings when setting conversion options.
 
 ```go
 schema := gozod.Object(gozod.ObjectSchema{
@@ -286,6 +292,7 @@ GoZod includes benchmarks for parsing, checks, tags, transforms, and configurati
 
 ```bash
 go test -bench=. ./...
+task bench:smoke
 ```
 
 ## Development
@@ -296,8 +303,11 @@ task test:race                      # Run race tests for core and lightweight ut
 task lint                           # Run golangci-lint and tidy-lint
 task golangci-lint                  # Run golangci-lint v2 only
 task tidy-lint                      # Verify go.mod and go.sum stay tidy
-task verify                         # Run deps, fmt, vet, lint, test, and vuln
-go test -tags=contractcheck ./types # Audit compile-time schema contracts
+task contractcheck                  # Run compile-time schema contract checks
+task docs:integrity                 # Run public documentation stale-claim checks
+task bench:smoke                    # Compile and smoke-run benchmarks without enforcing numbers
+task verify:ci                      # Run the CI-equivalent quality gate
+task verify                         # Run deps, fmt, vet, lint, contracts, docs, tests, benchmark smoke, and vuln
 ```
 
 For development guidelines and repository conventions, see [AGENTS.md](AGENTS.md).

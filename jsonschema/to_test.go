@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-json-experiment/json"
+	lib "github.com/kaptinlin/jsonschema"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,6 +50,68 @@ func TestToJSONSchema_DoesNotMutateInternalsBag(t *testing.T) {
 	_, err = ToJSONSchema(schema)
 	require.NoError(t, err)
 	assert.Equal(t, before, schema.Internals().Bag)
+}
+
+func TestToJSONSchema_OptionValidation(t *testing.T) {
+	t.Run("valid explicit constants", func(t *testing.T) {
+		got, err := ToJSONSchema(types.String(), Options{
+			Unrepresentable: UnrepresentableThrow,
+			Cycles:          CyclesRef,
+			Reused:          ReusedInline,
+			Target:          TargetDraft202012,
+			IO:              IOOutput,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Len(t, got.Type, 1)
+		assert.Equal(t, "string", got.Type[0])
+	})
+
+	tests := []struct {
+		name     string
+		options  Options
+		wantErr  error
+		contains string
+	}{
+		{
+			name:     "invalid unrepresentable",
+			options:  Options{Unrepresentable: "anything"},
+			wantErr:  ErrInvalidJSONSchemaOption,
+			contains: "Unrepresentable",
+		},
+		{
+			name:     "invalid cycles",
+			options:  Options{Cycles: "inline"},
+			wantErr:  ErrInvalidJSONSchemaOption,
+			contains: "Cycles",
+		},
+		{
+			name:     "invalid reused",
+			options:  Options{Reused: "throw"},
+			wantErr:  ErrInvalidJSONSchemaOption,
+			contains: "Reused",
+		},
+		{
+			name:     "unsupported target",
+			options:  Options{Target: "draft-07"},
+			wantErr:  ErrUnsupportedJSONSchemaTarget,
+			contains: "draft-07",
+		},
+		{
+			name:     "invalid io",
+			options:  Options{IO: "wire"},
+			wantErr:  ErrInvalidJSONSchemaOption,
+			contains: "IO",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ToJSONSchema(types.String(), tt.options)
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.ErrorContains(t, err, tt.contains)
+		})
+	}
 }
 
 func TestToJSONSchema_LengthProjectionUsesCheckParams(t *testing.T) {
@@ -115,6 +178,102 @@ func TestToJSONSchema_LengthProjectionUsesCheckParams(t *testing.T) {
 		assert.Equal(t, 2.0, *got.MinItems)
 		assert.Equal(t, 3.0, *got.MaxItems)
 	})
+}
+
+func TestToJSONSchema_ExternalValidatorParity(t *testing.T) {
+	emailPattern := regexp.MustCompile(`^[^@]+@example\.com$`)
+	tests := []struct {
+		name    string
+		schema  core.ZodSchema
+		valid   []any
+		invalid []any
+	}{
+		{
+			name: "strict object required and additional properties",
+			schema: types.StrictObject(core.ObjectSchema{
+				"name":  types.String().Min(2),
+				"email": types.Email(),
+				"age":   types.Int().Min(18),
+			}),
+			valid: []any{
+				map[string]any{"name": "Ada", "email": "ada@example.com", "age": 37},
+			},
+			invalid: []any{
+				map[string]any{"email": "ada@example.com", "age": 37},
+				map[string]any{"name": "Ada", "email": "ada@example.com", "age": 37, "extra": true},
+			},
+		},
+		{
+			name:   "string format and pattern",
+			schema: types.String().Email().Regex(emailPattern),
+			valid: []any{
+				"ada@example.com",
+			},
+			invalid: []any{
+				"ada@example.org",
+				"not-an-email",
+			},
+		},
+		{
+			name:   "number bounds",
+			schema: types.Float64().Gt(0).Lt(10),
+			valid: []any{
+				5.5,
+			},
+			invalid: []any{
+				0.0,
+				10.0,
+			},
+		},
+		{
+			name:   "slice length and items",
+			schema: types.Slice[any](types.String().Min(2)).Min(1).Max(2),
+			valid: []any{
+				[]any{"go", "zod"},
+			},
+			invalid: []any{
+				[]any{},
+				[]any{"g"},
+				[]any{"go", "zo", "d"},
+			},
+		},
+		{
+			name:   "tuple prefix items",
+			schema: types.Tuple(types.String(), types.Int()),
+			valid: []any{
+				[]any{"gozod", 1},
+			},
+			invalid: []any{
+				[]any{"gozod"},
+				[]any{"gozod", "1"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, err := ToJSONSchema(tt.schema)
+			require.NoError(t, err)
+
+			for _, sample := range tt.valid {
+				assertZodAndJSONSchemaAgree(t, tt.schema, exported, sample, true)
+			}
+			for _, sample := range tt.invalid {
+				assertZodAndJSONSchemaAgree(t, tt.schema, exported, sample, false)
+			}
+		})
+	}
+}
+
+func assertZodAndJSONSchemaAgree(t *testing.T, zod core.ZodSchema, exported *lib.Schema, sample any, want bool) {
+	t.Helper()
+
+	_, zodErr := zod.ParseAny(sample)
+	zodOK := zodErr == nil
+	jsonOK := exported.Validate(sample).IsValid()
+
+	assert.Equal(t, want, zodOK, "GoZod result for %#v", sample)
+	assert.Equal(t, zodOK, jsonOK, "JSON Schema result for %#v", sample)
 }
 
 func checkDefParams(t *testing.T, checks []core.ZodCheck, name string) map[string]any {

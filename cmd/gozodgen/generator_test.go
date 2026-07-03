@@ -161,6 +161,35 @@ type User struct {
 	}
 }
 
+func TestCodeGenerator_RuleTagName(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("user.go", `package main
+type User struct {
+	Name string `+"`json:\"name\" validate:\"required,min=2\" gozod:\"max=99\"`"+`
+}`)
+
+	config := &GeneratorConfig{
+		OutputSuffix: "_gen.go",
+		PackageName:  "main",
+		RuleTagName:  "validate",
+		DryRun:       false,
+	}
+	generator, err := NewCodeGenerator(config)
+	require.NoError(t, err)
+
+	writer, err := NewFileWriter(helper.GetTempDir(), config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)
+	require.NoError(t, err)
+	generator.writer = writer
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.NoError(t, err)
+
+	content := helper.ReadGeneratedFile("user_gen.go")
+	helper.AssertValidGoCode(content)
+	helper.AssertCodeContains(content, `"name": gozod.String().Min(2)`)
+	helper.AssertCodeNotContains(content, ".Max(99)")
+}
+
 func TestCodeGenerator_CircularReferences(t *testing.T) {
 	helper := NewTestHelper(t)
 

@@ -98,6 +98,7 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 	t.Run("validation errors propagate through circular references", func(t *testing.T) {
 		// KNOWN LIMITATION: Validation doesn't fully propagate through lazy schemas in slices.
 		// Circular references work correctly (no stack overflow), but nested validation needs improvement.
+		// Classified in improves/06-tests-tooling.md so this skip is not the only record.
 		t.Skip("Known limitation: validation propagation through lazy schemas in slices needs improvement")
 		schema := FromStruct[CircularUser]()
 

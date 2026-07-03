@@ -739,6 +739,15 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 		val, exists := value[name]
 
 		if !exists {
+			if z.missingFieldUsesFallback(schema) {
+				parsed, err := z.validateField(nil, schema, ctx)
+				if err != nil {
+					collectFieldErrors(err, name, &errs, nil)
+					continue
+				}
+				result[name] = parsed
+				continue
+			}
 			if !z.isFieldOptional(schema, name) {
 				raw := issues.CreateIssue(
 					core.InvalidType,
@@ -770,11 +779,12 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 			continue
 		}
 
-		if err := z.validateField(val, schema, ctx); err != nil {
+		parsed, err := z.validateField(val, schema, ctx)
+		if err != nil {
 			collectFieldErrors(err, name, &errs, val)
 			continue
 		}
-		result[name] = val
+		result[name] = z.normalizeFieldOutput(val, parsed, schema)
 	}
 
 	var unknown []string
@@ -792,11 +802,12 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 				result[key] = val
 				continue
 			}
-			if err := z.validateField(val, z.internals.Catchall, ctx); err != nil {
+			parsed, err := z.validateField(val, z.internals.Catchall, ctx)
+			if err != nil {
 				collectFieldErrors(err, key, &errs, val)
 				continue
 			}
-			result[key] = val
+			result[key] = z.normalizeFieldOutput(val, parsed, z.internals.Catchall)
 		}
 	}
 
@@ -830,12 +841,55 @@ func (z *ZodObject[T, R]) validateObject(value map[string]any, chks []core.ZodCh
 }
 
 // validateField validates a single field value against its schema.
-func (z *ZodObject[T, R]) validateField(value any, schema core.ZodSchema, ctx *core.ParseContext) error {
+func (z *ZodObject[T, R]) validateField(value any, schema core.ZodSchema, ctx *core.ParseContext) (any, error) {
 	if schema == nil {
-		return nil
+		return value, nil
 	}
-	_, err := schema.ParseAny(value, ctx)
-	return err
+	return schema.ParseAny(value, ctx)
+}
+
+func (z *ZodObject[T, R]) missingFieldUsesFallback(schema core.ZodSchema) bool {
+	if schema == nil {
+		return false
+	}
+	internals := schema.Internals()
+	if internals == nil {
+		return false
+	}
+	for i := len(internals.Modifiers) - 1; i >= 0; i-- {
+		switch internals.Modifiers[i].Kind {
+		case core.ZodModifierDefault, core.ZodModifierPrefault:
+			return true
+		case core.ZodModifierOptional, core.ZodModifierNilable, core.ZodModifierNonOptional:
+			return false
+		}
+	}
+	return internals.DefaultValue != nil ||
+		internals.DefaultFunc != nil ||
+		internals.PrefaultValue != nil ||
+		internals.PrefaultFunc != nil
+}
+
+func (z *ZodObject[T, R]) normalizeFieldOutput(input, parsed any, schema core.ZodSchema) any {
+	if input == nil || parsed == nil || schema == nil {
+		return parsed
+	}
+	internals := schema.Internals()
+	if internals == nil || (!internals.Optional && !internals.ExactOptional) {
+		return parsed
+	}
+	parsedValue := reflect.ValueOf(parsed)
+	if parsedValue.Kind() != reflect.Pointer || parsedValue.IsNil() {
+		return parsed
+	}
+	inputType := reflect.TypeOf(input)
+	if inputType == nil || inputType.Kind() == reflect.Pointer {
+		return parsed
+	}
+	if parsedValue.Type().Elem() != inputType {
+		return parsed
+	}
+	return parsedValue.Elem().Interface()
 }
 
 // isFieldOptional reports whether a field is optional based on schema or partial state.
@@ -911,11 +965,7 @@ func ObjectTyped[T any, R any](shape core.ObjectSchema, params ...any) *ZodObjec
 		utils.ApplySchemaParams(&def.ZodTypeDef, schemaParams)
 	}
 
-	objectSchema := newZodObjectFromDef[T, R](def)
-	objectSchema.internals.AddCheck(
-		checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}),
-	)
-	return objectSchema
+	return newZodObjectFromDef[T, R](def)
 }
 
 // Object creates an object schema with default types.

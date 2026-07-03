@@ -22,6 +22,7 @@ type StructAnalyzer struct {
 	packages     map[string]*types.Package
 	imports      map[string]string
 	info         *types.Info
+	ruleTagName  string // struct tag used for validation rules (default "gozod")
 	fieldNameTag string // struct tag used for field names (default "json")
 }
 
@@ -48,6 +49,7 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 		packages:     make(map[string]*types.Package),
 		imports:      make(map[string]string),
 		info:         info,
+		ruleTagName:  defaultRuleTag,
 		fieldNameTag: defaultFieldNameTag,
 	}, nil
 }
@@ -368,11 +370,12 @@ func (a *StructAnalyzer) applyGoZodTag(info *tagparser.FieldInfo, field *ast.Fie
 	}
 
 	tagValue := strings.Trim(field.Tag.Value, "`")
-	if !strings.Contains(tagValue, "gozod:") {
+	ruleTag, ok := lookupTagValue(tagValue, a.ruleTagName)
+	if !ok {
 		return false, nil
 	}
 
-	info.GoZodTag = extractTagValue(tagValue, "gozod")
+	info.GoZodTag = ruleTag
 	if info.GoZodTag == "" {
 		return true, nil
 	}
@@ -414,7 +417,11 @@ func extractTagValue(tagString, tagName string) string {
 	return reflect.StructTag(tagString).Get(tagName)
 }
 
-// parseTagRules parses gozod tag rules with proper handling of complex JSON values.
+func lookupTagValue(tagString, tagName string) (string, bool) {
+	return reflect.StructTag(tagString).Lookup(tagName)
+}
+
+// parseTagRules parses validation tag rules with proper handling of complex JSON values.
 func (a *StructAnalyzer) parseTagRules(tagValue string) ([]tagparser.TagRule, error) {
 	return tagparser.New().ParseTagString(tagValue)
 }

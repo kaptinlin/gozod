@@ -58,6 +58,27 @@ func TestFileWriter_GenerateImports(t *testing.T) {
 			unexpectedImports: []string{"github.com/kaptinlin/gozod/core"},
 		},
 		{
+			name: "string formats use gozod constructors only",
+			fields: []tagparser.FieldInfo{
+				{
+					Name: "Website",
+					Type: reflect.TypeFor[string](),
+					Rules: []tagparser.TagRule{
+						{Name: "url"},
+					},
+				},
+				{
+					Name: "Address",
+					Type: reflect.TypeFor[string](),
+					Rules: []tagparser.TagRule{
+						{Name: "ipv4"},
+					},
+				},
+			},
+			expectedImports:   []string{"github.com/kaptinlin/gozod"},
+			unexpectedImports: []string{"net/url", "net"},
+		},
+		{
 			name: "time fields require time import",
 			fields: []tagparser.FieldInfo{
 				{
@@ -147,7 +168,22 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 				},
 			},
 			structName:     "User",
-			expectedSchema: "gozod.String().Email()",
+			expectedSchema: "gozod.Email()",
+			expectError:    false,
+		},
+		{
+			name: "cidrv4 format field",
+			field: tagparser.FieldInfo{
+				Name: "Network",
+				Type: reflect.TypeFor[string](),
+				Rules: []tagparser.TagRule{
+					{Name: "required"},
+					{Name: "cidrv4"},
+					{Name: "min", Params: []string{"9"}},
+				},
+			},
+			structName:     "NetworkConfig",
+			expectedSchema: "gozod.CIDRv4().Min(9)",
 			expectError:    false,
 		},
 		{
@@ -239,6 +275,50 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 					assert.Equal(t, tt.expectedSchema, schema, "Expected schema to contain %s, got %s", tt.expectedSchema, schema)
 				}
 			}
+		})
+	}
+}
+
+func TestFileWriter_StringFormatRulesUseRootConstructors(t *testing.T) {
+	tests := []struct {
+		rule        string
+		constructor string
+	}{
+		{rule: "email", constructor: "Email"},
+		{rule: "url", constructor: "URL"},
+		{rule: "uuid", constructor: "UUID"},
+		{rule: "ipv4", constructor: "IPv4"},
+		{rule: "ipv6", constructor: "IPv6"},
+		{rule: "cidrv4", constructor: "CIDRv4"},
+		{rule: "cidrv6", constructor: "CIDRv6"},
+		{rule: "cuid", constructor: "CUID"},
+		{rule: "cuid2", constructor: "CUID2"},
+		{rule: "jwt", constructor: "JWT"},
+		{rule: "iso_datetime", constructor: "IsoDateTime"},
+		{rule: "iso_date", constructor: "IsoDate"},
+		{rule: "iso_time", constructor: "IsoTime"},
+		{rule: "iso_duration", constructor: "IsoDuration"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.rule, func(t *testing.T) {
+			writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+			require.NoError(t, err)
+
+			field := tagparser.FieldInfo{
+				Name: "Token",
+				Type: reflect.TypeFor[string](),
+				Rules: []tagparser.TagRule{
+					{Name: "required"},
+					{Name: tt.rule},
+					{Name: "min", Params: []string{"3"}},
+				},
+			}
+
+			got, err := writer.generateFieldSchemaCode(&field, "Credentials")
+			require.NoError(t, err)
+			assert.Contains(t, got, "gozod."+tt.constructor+"().Min(3)")
+			assert.NotContains(t, got, "gozod.String()."+tt.constructor+"()")
 		})
 	}
 }
@@ -559,9 +639,11 @@ func TestGenerateValidatorChain(t *testing.T) {
 		{name: "lowercase", rule: tagparser.TagRule{Name: "lowercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToLowerCase()"},
 		{name: "uppercase", rule: tagparser.TagRule{Name: "uppercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToUpperCase()"},
 		{name: "nilable", rule: tagparser.TagRule{Name: "nilable"}, fieldType: reflect.TypeFor[string](), expected: ".Nilable()"},
-		{name: "url", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeFor[string](), expected: ".URL()"},
-		{name: "ipv4", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ".IPv4()"},
-		{name: "ipv6", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ".IPv6()"},
+		{name: "email constructor-owned", rule: tagparser.TagRule{Name: "email"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "url constructor-owned", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "ipv4 constructor-owned", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "ipv6 constructor-owned", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "cidrv4 constructor-owned", rule: tagparser.TagRule{Name: "cidrv4"}, fieldType: reflect.TypeFor[string](), expected: ""},
 		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
 		{name: "regex with quotes", rule: tagparser.TagRule{Name: "regex", Params: []string{"^\"[A-Z]+\"$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^\"[A-Z]+\"$"))`},
 		{name: "includes", rule: tagparser.TagRule{Name: "includes", Params: []string{"PROD"}}, fieldType: reflect.TypeFor[string](), expected: `.Includes("PROD")`},

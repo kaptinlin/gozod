@@ -599,13 +599,5 @@ func SliceTyped[T any, R any](elementSchema any, args ...any) *ZodSlice[T, R] {
 		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
-	schema := newZodSliceFromDef[T, R](def)
-
-	// Add a minimal check to trigger element validation.
-	if elementSchema != nil {
-		alwaysTrue := func(any) bool { return true }
-		schema.internals.AddCheck(checks.NewCustom[any](alwaysTrue, core.SchemaParams{}))
-	}
-
-	return schema
+	return newZodSliceFromDef[T, R](def)
 }

@@ -160,14 +160,40 @@ func CompileRule(rule TagRule) RulePlan {
 		plan.Method = "URL"
 	case "uuid":
 		plan.Op = RuleStringCheck
+		plan.Method = "UUID"
 	case "ipv4":
 		plan.Op = RuleStringCheck
 		plan.Method = "IPv4"
 	case "ipv6":
 		plan.Op = RuleStringCheck
 		plan.Method = "IPv6"
-	case "cidrv4", "cidrv6", "cuid", "cuid2", "jwt", "iso_datetime", "iso_date", "iso_time", "iso_duration":
+	case "cidrv4":
 		plan.Op = RuleStringCheck
+		plan.Method = "CIDRv4"
+	case "cidrv6":
+		plan.Op = RuleStringCheck
+		plan.Method = "CIDRv6"
+	case "cuid":
+		plan.Op = RuleStringCheck
+		plan.Method = "CUID"
+	case "cuid2":
+		plan.Op = RuleStringCheck
+		plan.Method = "CUID2"
+	case "jwt":
+		plan.Op = RuleStringCheck
+		plan.Method = "JWT"
+	case "iso_datetime":
+		plan.Op = RuleStringCheck
+		plan.Method = "IsoDateTime"
+	case "iso_date":
+		plan.Op = RuleStringCheck
+		plan.Method = "IsoDate"
+	case "iso_time":
+		plan.Op = RuleStringCheck
+		plan.Method = "IsoTime"
+	case "iso_duration":
+		plan.Op = RuleStringCheck
+		plan.Method = "IsoDuration"
 	case "time":
 		plan.Op = RuleTime
 	case "positive":

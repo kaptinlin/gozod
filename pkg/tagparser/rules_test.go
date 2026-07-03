@@ -39,7 +39,7 @@ func TestCompileRule(t *testing.T) {
 			name:       "uuid constructor special",
 			rule:       tagparser.TagRule{Name: "uuid"},
 			wantOp:     tagparser.RuleStringCheck,
-			wantMethod: "",
+			wantMethod: "UUID",
 		},
 		{
 			name:       "default",
@@ -61,6 +61,54 @@ func TestCompileRule(t *testing.T) {
 			got := tagparser.CompileRule(tt.rule)
 			assert.Equal(t, tt.wantOp, got.Op)
 			assert.Equal(t, tt.wantMethod, got.Method)
+		})
+	}
+}
+
+func TestCompileRule_StringFormatSupportMatrix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		rule       string
+		wantMethod string
+	}{
+		{rule: "email", wantMethod: "Email"},
+		{rule: "url", wantMethod: "URL"},
+		{rule: "uuid", wantMethod: "UUID"},
+		{rule: "ipv4", wantMethod: "IPv4"},
+		{rule: "ipv6", wantMethod: "IPv6"},
+		{rule: "cidrv4", wantMethod: "CIDRv4"},
+		{rule: "cidrv6", wantMethod: "CIDRv6"},
+		{rule: "cuid", wantMethod: "CUID"},
+		{rule: "cuid2", wantMethod: "CUID2"},
+		{rule: "jwt", wantMethod: "JWT"},
+		{rule: "iso_datetime", wantMethod: "IsoDateTime"},
+		{rule: "iso_date", wantMethod: "IsoDate"},
+		{rule: "iso_time", wantMethod: "IsoTime"},
+		{rule: "iso_duration", wantMethod: "IsoDuration"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.rule, func(t *testing.T) {
+			t.Parallel()
+
+			got := tagparser.CompileRule(tagparser.TagRule{Name: tt.rule})
+			assert.Equal(t, tagparser.RuleStringCheck, got.Op)
+			assert.Equal(t, tt.wantMethod, got.Method)
+		})
+	}
+}
+
+func TestCompileRule_UnsupportedRuleMatrix(t *testing.T) {
+	t.Parallel()
+
+	for _, rule := range []string{"nonnegative", "nonpositive", "uuid:v4"} {
+		t.Run(rule, func(t *testing.T) {
+			t.Parallel()
+
+			got := tagparser.CompileRule(tagparser.TagRule{Name: rule})
+			assert.Equal(t, tagparser.RuleUnsupported, got.Op)
+			assert.Empty(t, got.Method)
 		})
 	}
 }

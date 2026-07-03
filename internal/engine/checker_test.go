@@ -245,6 +245,75 @@ func TestExecuteChecks(t *testing.T) {
 		assert.Len(t, result.Issues(), 2, "Expected 2 issues (non-abort should not skip When-gated check)")
 	})
 
+	t.Run("raw check issue owns check and remains continuable", func(t *testing.T) {
+		minLength := checks.MinLength(3)
+		payload := core.NewParsePayload("x")
+
+		result := executeChecks("x", []core.ZodCheck{minLength}, payload, nil)
+
+		require.NotNil(t, result)
+		require.Len(t, result.Issues(), 1)
+		issue := result.Issues()[0]
+		gotCheck, _ := issue.Inst.(*core.ZodCheckInternals)
+		assert.Same(t, minLength.Zod(), gotCheck)
+		assert.True(t, issue.Continue)
+
+		whenRan := false
+		whenGated := checks.NewCustom[string](func(v any) bool {
+			return false
+		}, core.CustomParams{
+			When: func(_ *core.ParsePayload) bool {
+				whenRan = true
+				return true
+			},
+		})
+		payload = core.NewParsePayload("x")
+
+		result = executeChecks("x", []core.ZodCheck{minLength, whenGated}, payload, nil)
+
+		require.NotNil(t, result)
+		assert.True(t, whenRan)
+		assert.Len(t, result.Issues(), 2, "raw non-abort check issue should not skip When-gated checks")
+	})
+
+	t.Run("custom raw check issue follows abort flag", func(t *testing.T) {
+		rawCheck := checks.NewCustom[any](func(payload *core.ParsePayload) {
+			payload.AddIssue(issues.NewRawIssue(core.Custom, payload.Value()))
+		}, core.CustomParams{})
+
+		result := executeChecks("x", []core.ZodCheck{rawCheck}, core.NewParsePayload("x"), nil)
+
+		require.NotNil(t, result)
+		require.Len(t, result.Issues(), 1)
+		issue := result.Issues()[0]
+		gotCheck, _ := issue.Inst.(*core.ZodCheckInternals)
+		assert.Same(t, rawCheck.Zod(), gotCheck)
+		assert.True(t, issue.Continue)
+
+		abortCheck := checks.NewCustom[any](func(payload *core.ParsePayload) {
+			payload.AddIssue(issues.NewRawIssue(core.Custom, payload.Value()))
+		}, core.CustomParams{Abort: true})
+		whenRan := false
+		whenGated := checks.NewCustom[any](func(v any) bool {
+			return false
+		}, core.CustomParams{
+			When: func(_ *core.ParsePayload) bool {
+				whenRan = true
+				return true
+			},
+		})
+
+		result = executeChecks("x", []core.ZodCheck{abortCheck, whenGated}, core.NewParsePayload("x"), nil)
+
+		require.NotNil(t, result)
+		require.Len(t, result.Issues(), 1)
+		issue = result.Issues()[0]
+		gotCheck, _ = issue.Inst.(*core.ZodCheckInternals)
+		assert.Same(t, abortCheck.Zod(), gotCheck)
+		assert.False(t, issue.Continue)
+		assert.False(t, whenRan)
+	})
+
 	t.Run("memory optimization with sufficient capacity", func(t *testing.T) {
 		payload := core.NewParsePayload("test")
 

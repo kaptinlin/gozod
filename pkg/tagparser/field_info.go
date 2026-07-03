@@ -128,13 +128,15 @@ func (f FieldInfo) NeedsRegexpImport() bool {
 }
 
 // NeedsNetURLImport reports whether codegen should import net/url.
+// URL tags generate root GoZod constructors and do not need net/url.
 func (f FieldInfo) NeedsNetURLImport() bool {
-	return f.HasRule("url")
+	return false
 }
 
 // NeedsNetImport reports whether codegen should import net.
+// IP tags generate root GoZod constructors and do not need net.
 func (f FieldInfo) NeedsNetImport() bool {
-	return f.HasRule("ipv4") || f.HasRule("ipv6")
+	return false
 }
 
 // NeedsCoreImport reports whether codegen should import core.

@@ -465,10 +465,5 @@ func XorTyped[T any, R any](options []any, args ...any) *ZodXor[T, R] {
 		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
-	schema := newZodXorFromDef[T, R](def)
-
-	// Trigger the validation pipeline even when no user-defined checks exist.
-	schema.internals.AddCheck(checks.NewCustom[any](func(any) bool { return true }, core.SchemaParams{}))
-
-	return schema
+	return newZodXorFromDef[T, R](def)
 }

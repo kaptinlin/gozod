@@ -5,6 +5,23 @@ import "github.com/kaptinlin/gozod/jsonschema"
 type JSONSchemaOptions = jsonschema.Options
 type OverrideContext = jsonschema.OverrideContext
 type FromJSONSchemaOptions = jsonschema.FromJSONSchemaOptions
+type JSONSchemaUnrepresentableMode = jsonschema.UnrepresentableMode
+type JSONSchemaCyclesMode = jsonschema.CyclesMode
+type JSONSchemaReusedMode = jsonschema.ReusedMode
+type JSONSchemaTargetMode = jsonschema.TargetMode
+type JSONSchemaIOMode = jsonschema.IOMode
+
+const (
+	JSONSchemaUnrepresentableThrow = jsonschema.UnrepresentableThrow
+	JSONSchemaUnrepresentableAny   = jsonschema.UnrepresentableAny
+	JSONSchemaCyclesRef            = jsonschema.CyclesRef
+	JSONSchemaCyclesThrow          = jsonschema.CyclesThrow
+	JSONSchemaReusedInline         = jsonschema.ReusedInline
+	JSONSchemaReusedRef            = jsonschema.ReusedRef
+	JSONSchemaTargetDraft202012    = jsonschema.TargetDraft202012
+	JSONSchemaIOOutput             = jsonschema.IOOutput
+	JSONSchemaIOInput              = jsonschema.IOInput
+)
 
 var (
 	ToJSONSchema                     = jsonschema.ToJSONSchema
@@ -29,6 +46,8 @@ var (
 	ErrMapNoMethods                  = jsonschema.ErrMapNoMethods
 	ErrMapKeyNotSchema               = jsonschema.ErrMapKeyNotSchema
 	ErrMapValueNotSchema             = jsonschema.ErrMapValueNotSchema
+	ErrInvalidJSONSchemaOption       = jsonschema.ErrInvalidJSONSchemaOption
+	ErrUnsupportedJSONSchemaTarget   = jsonschema.ErrUnsupportedJSONSchemaTarget
 	ErrUnsupportedJSONSchemaType     = jsonschema.ErrUnsupportedJSONSchemaType
 	ErrUnsupportedJSONSchemaKeyword  = jsonschema.ErrUnsupportedJSONSchemaKeyword
 	ErrInvalidJSONSchema             = jsonschema.ErrInvalidJSONSchema

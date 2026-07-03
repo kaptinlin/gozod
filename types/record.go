@@ -1132,15 +1132,7 @@ func RecordTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *Zo
 		utils.ApplySchemaParams(&def.ZodTypeDef, normalizedParams)
 	}
 
-	recordSchema := newZodRecordFromDef[T, R](def)
-
-	// Ensure validator is called when key or value schema exists
-	if keySchema != nil || valueSchema != nil {
-		alwaysPassCheck := checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{})
-		recordSchema.internals.AddCheck(alwaysPassCheck)
-	}
-
-	return recordSchema
+	return newZodRecordFromDef[T, R](def)
 }
 
 // Check adds a custom validation function that can report multiple issues.

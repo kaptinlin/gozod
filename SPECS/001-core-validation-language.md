@@ -7,9 +7,32 @@ the root `gozod` package, fluent schema methods, and the `Parse(any)` /
 `StrictParse(T)` pair. Subpackages exist for focused work, but user code should
 start from root constructors until it needs a lower-level contract.
 
+The root facade also exposes the shared schema contract as `gozod.ZodSchema`.
+User code should be able to name the schema abstraction without importing
+`core` unless it needs lower-level internals.
+
 Go type identity is strict by default. Coercion belongs behind explicit
 constructors such as `coerce` or `Coerced*`. Lossy conversion and compatibility
 surface should be explicit, not accidental.
+
+## Structural Output
+
+Successful parse output must match the schema-described output, not merely the
+original input shape. Object fields and catchall entries write parsed child
+values into returned maps. This includes child defaults, prefaults, overwrites,
+transforms, and explicit coercion.
+
+Missing object fields with child defaults or prefaults run the child schema
+instead of being silently omitted. Optional and exact optional modifiers still
+decide absent key acceptance; explicit nil remains distinct from absence for
+exact optional fields.
+
+> **Why**: a schema is a data constructor as much as a validator. Once child
+> schemas can transform, overwrite, coerce, or synthesize defaults, returning
+> raw input values makes object parsing lie about the output type.
+>
+> **Rejected**: object parsing that only validates child schemas and then
+> returns original field values.
 
 Canonical public constructor spelling follows the current root facade:
 `UUID`, `UUIDv4`, `UUIDv6`, `UUIDv7`, `CUID`, `CUID2`, `ULID`, `KSUID`,
@@ -57,6 +80,11 @@ Schema bags may cache projection hints, but they are not the semantic owner of a
 check. JSON Schema conversion must be able to project first-party checks from
 check definitions even when bag state is absent.
 
+The check runner owns runtime issue production. It stamps issue instances,
+honors per-check `Abort` and `When` behavior, applies custom error functions,
+and returns accumulated issues through one path. Structural checks should not
+hide in documentation-only assertions or converter-only metadata.
+
 ## Transforms And Pipes
 
 `core.ZodTransform` and `core.ZodPipe` stay structural. Modifier ordering should
@@ -76,3 +104,15 @@ semantic owner:
 
 Package topology should not be created for appearance. New internal packages or
 public interfaces need a real caller and a behavior contract.
+
+## Acceptance Criteria
+
+- Object parsing tests prove parsed child output for fields and catchall values,
+  including defaults, prefaults, overwrites, transforms, and explicit coercion.
+- Modifier-order tests prove optional, nilable, nonoptional, default, and
+  prefault chains follow call order and preserve copy-on-write behavior.
+- Check runner tests prove first-party checks produce the expected issue
+  instance, continue, abort, and custom-error behavior.
+- Composite constructor tests prove root constructor spelling and `gozod.ZodSchema`
+  are real exported API, not only documentation claims.
+- `task contractcheck` passes after schema interface or family changes.

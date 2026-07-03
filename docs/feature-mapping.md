@@ -355,7 +355,7 @@ result, err = schema.StrictParse(str)       // ✅ Compile-time guarantee
 | Feature | Description | Benefit |
 |---------|-------------|---------|
 | **StrictParse** | Compile-time type checking | Eliminates runtime type assertions |
-| **Code Generation** | Zero-reflection validation | 5-10x performance improvement |
+| **Code Generation** | Explicit pre-built schemas | Avoids runtime tag reflection during schema construction |
 | **Pointer Identity** | Preserves original pointers | Minimizes memory allocations |
 | **Pre-compiled Regex** | Regex patterns cached | Faster validation execution |
 
@@ -503,20 +503,20 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 
 ### Parse vs StrictParse Performance
 
-| Method | Input Type | Performance | Use Case |
-|--------|------------|-------------|----------|
-| `Parse()` | `any` | Standard | Unknown input types, API validation |
-| `StrictParse()` | `T` | 3-5x faster | Known types, internal validation |
-| `MustParse()` | `any` | Standard + panic overhead | Critical failures |
-| `MustStrictParse()` | `T` | 3-5x faster + panic overhead | Type-safe critical failures |
+| Method | Input Type | Performance Shape | Use Case |
+|--------|------------|-------------------|----------|
+| `Parse()` | `any` | Runtime type checks | Unknown input types, API validation |
+| `StrictParse()` | `T` | Compile-time input type | Known types, internal validation |
+| `MustParse()` | `any` | Runtime type checks plus panic on error | Critical failures |
+| `MustStrictParse()` | `T` | Compile-time input type plus panic on error | Type-safe critical failures |
 
 ### Code Generation Benefits
 
-| Feature | Reflection-based | Generated | Improvement |
-|---------|------------------|-----------|-------------|
-| **Performance** | Baseline | 5-10x faster | Eliminates reflection overhead |
-| **Memory usage** | Baseline | 50-70% reduction | Pre-compiled validation |
-| **Type safety** | Runtime | Compile-time | Earlier error detection |
+| Feature | Reflection-based | Generated |
+|---------|------------------|-----------|
+| **Schema construction** | Derives schema from tags at runtime | Uses explicit generated schema methods |
+| **Validation API** | `FromStruct[T]().Parse(...)` | `T{}.Schema().Parse(...)` |
+| **Type safety** | Runtime validation | Runtime validation from generated schema |
 
 ---
 

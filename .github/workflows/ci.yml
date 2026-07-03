@@ -36,6 +36,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: "**/go.sum"
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -45,6 +46,15 @@ jobs:
 
       - name: Run tests
         run: task test
+
+      - name: Run contract checks
+        run: task contractcheck
+
+      - name: Run documentation integrity checks
+        run: task docs:integrity
+
+      - name: Run benchmark smoke
+        run: task bench:smoke
 
   lint:
     name: Lint
@@ -63,6 +73,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: "**/go.sum"
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -96,8 +107,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: "**/go.sum"
 
-      - name: Run govulncheck
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+
+      - name: Run vulnerability scan
+        run: task vuln

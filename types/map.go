@@ -62,13 +62,7 @@ func MapTyped[T any, R any](keySchema, valueSchema any, paramArgs ...any) *ZodMa
 		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
-	schema := newZodMapFromDef[T, R](def)
-
-	// Register a pass-through check so the engine invokes validateMap for key/value validation.
-	if keySchema != nil || valueSchema != nil {
-		schema.internals.AddCheck(checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}))
-	}
-	return schema
+	return newZodMapFromDef[T, R](def)
 }
 
 // Internals returns the internal state of the schema.

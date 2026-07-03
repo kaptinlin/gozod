@@ -36,6 +36,8 @@ var (
 	ErrMapNoMethods                  = errors.New("schema does not implement KeyType() and ValueType() methods for map conversion")
 	ErrMapKeyNotSchema               = errors.New("map key type is not a valid schema")
 	ErrMapValueNotSchema             = errors.New("map value type is not a valid schema")
+	ErrInvalidJSONSchemaOption       = errors.New("invalid JSON Schema option")
+	ErrUnsupportedJSONSchemaTarget   = errors.New("unsupported JSON Schema target")
 )
 
 // OverrideContext provides context for the Override function.
@@ -43,6 +45,38 @@ type OverrideContext struct {
 	ZodSchema  core.ZodSchema
 	JSONSchema *lib.Schema
 }
+
+// UnrepresentableMode controls how export handles schemas with no faithful JSON Schema representation.
+type UnrepresentableMode string
+
+// CyclesMode controls how export handles cyclic schema graphs.
+type CyclesMode string
+
+// ReusedMode controls how export handles reused schema instances.
+type ReusedMode string
+
+// TargetMode identifies the JSON Schema dialect emitted by export.
+type TargetMode string
+
+// IOMode selects whether export represents schema input or output shape.
+type IOMode string
+
+// Supported JSON Schema export option values.
+const (
+	UnrepresentableThrow UnrepresentableMode = "throw"
+	UnrepresentableAny   UnrepresentableMode = "any"
+
+	CyclesRef   CyclesMode = "ref"
+	CyclesThrow CyclesMode = "throw"
+
+	ReusedInline ReusedMode = "inline"
+	ReusedRef    ReusedMode = "ref"
+
+	TargetDraft202012 TargetMode = "draft-2020-12"
+
+	IOOutput IOMode = "output"
+	IOInput  IOMode = "input"
+)
 
 // Options defines the configuration options for JSON schema conversion.
 type Options struct {
@@ -53,31 +87,31 @@ type Options struct {
 	// How to handle unrepresentable types:
 	// "throw" (default) - Unrepresentable types throw an error.
 	// "any" - Unrepresentable types become {}.
-	Unrepresentable string
+	Unrepresentable UnrepresentableMode
 
 	// How to handle cycles:
 	// "ref" (default) - Cycles will be broken using $defs.
 	// "throw" - Cycles will throw an error if encountered.
-	Cycles string
+	Cycles CyclesMode
 
 	// How to handle reused schemas:
 	// "inline" (default) - Reused schemas will be inlined.
 	// "ref" - Reused schemas will be extracted as $defs.
-	Reused string
+	Reused ReusedMode
 
 	// A function used to convert ID values to URIs for external $refs.
 	URI func(id string) string
 
 	// Target specifies the JSON Schema version.
-	// "draft-2020-12" (default) or "draft-07".
-	Target string
+	// "draft-2020-12" (default).
+	Target TargetMode
 
 	// Override is a custom logic to modify the schema after generation.
 	Override func(ctx OverrideContext)
 
 	// IO specifies whether to convert the "input" or "output" schema.
 	// "output" (default) or "input".
-	IO string
+	IO IOMode
 }
 
 // ToJSONSchema converts a GoZod schema or registry into a JSON Schema instance.
@@ -85,6 +119,11 @@ func ToJSONSchema(input any, opts ...Options) (*lib.Schema, error) {
 	var options Options
 	if len(opts) > 0 {
 		options = opts[0]
+	}
+	var err error
+	options, err = normalizeOptions(options)
+	if err != nil {
+		return nil, err
 	}
 
 	switch v := input.(type) {
@@ -95,6 +134,45 @@ func ToJSONSchema(input any, opts ...Options) (*lib.Schema, error) {
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedInputType, v)
 	}
+}
+
+func normalizeOptions(opts Options) (Options, error) {
+	if opts.Unrepresentable == "" {
+		opts.Unrepresentable = UnrepresentableThrow
+	}
+	if opts.Unrepresentable != UnrepresentableThrow && opts.Unrepresentable != UnrepresentableAny {
+		return opts, fmt.Errorf("%w: Unrepresentable=%q", ErrInvalidJSONSchemaOption, opts.Unrepresentable)
+	}
+
+	if opts.Cycles == "" {
+		opts.Cycles = CyclesRef
+	}
+	if opts.Cycles != CyclesRef && opts.Cycles != CyclesThrow {
+		return opts, fmt.Errorf("%w: Cycles=%q", ErrInvalidJSONSchemaOption, opts.Cycles)
+	}
+
+	if opts.Reused == "" {
+		opts.Reused = ReusedInline
+	}
+	if opts.Reused != ReusedInline && opts.Reused != ReusedRef {
+		return opts, fmt.Errorf("%w: Reused=%q", ErrInvalidJSONSchemaOption, opts.Reused)
+	}
+
+	if opts.Target == "" {
+		opts.Target = TargetDraft202012
+	}
+	if opts.Target != TargetDraft202012 {
+		return opts, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaTarget, opts.Target)
+	}
+
+	if opts.IO == "" {
+		opts.IO = IOOutput
+	}
+	if opts.IO != IOOutput && opts.IO != IOInput {
+		return opts, fmt.Errorf("%w: IO=%q", ErrInvalidJSONSchemaOption, opts.IO)
+	}
+
+	return opts, nil
 }
 
 // toJSONSchemaSingle handles the conversion of a single ZodSchema.

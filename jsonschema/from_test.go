@@ -1,7 +1,9 @@
 package jsonschema
 
 import (
+	"os"
 	"regexp/syntax"
+	"strings"
 	"testing"
 
 	lib "github.com/kaptinlin/jsonschema"
@@ -804,6 +806,28 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 		assert.Equal(t, "The user's full name", meta.Description)
 	})
 
+	t.Run("explicit registry isolates imported metadata", func(t *testing.T) {
+		title := "User Name"
+		desc := "The user's full name"
+		schema := &lib.Schema{
+			Title:       &title,
+			Description: &desc,
+		}
+		schema.Type = []string{"string"}
+		registry := core.NewRegistry[core.GlobalMeta]()
+
+		zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{Metadata: registry})
+		require.NoError(t, err)
+
+		meta, ok := registry.Get(zodSchema)
+		require.True(t, ok, "Expected metadata to be registered in caller registry")
+		assert.Equal(t, "User Name", meta.Title)
+		assert.Equal(t, "The user's full name", meta.Description)
+
+		_, ok = core.GlobalRegistry.Get(zodSchema)
+		assert.False(t, ok, "Expected explicit registry mode not to write global metadata")
+	})
+
 	t.Run("extracts $id and examples", func(t *testing.T) {
 		schema := &lib.Schema{
 			ID:       "https://example.com/schemas/name",
@@ -929,6 +953,26 @@ func TestFromJSONSchema_DefaultUnsupportedKeywords(t *testing.T) {
 
 			_, err := FromJSONSchema(tt.schema())
 			require.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+func TestFromJSONSchema_UnsupportedKeywordDocsMatchCode(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile("../docs/json-schema.md")
+	require.NoError(t, err)
+	doc := string(content)
+
+	for _, keyword := range unsupportedImportKeywords {
+		t.Run(keyword.keyword, func(t *testing.T) {
+			t.Parallel()
+
+			for _, token := range strings.Split(keyword.keyword, "/") {
+				token = strings.TrimSpace(token)
+				require.NotEmpty(t, token)
+				assert.Contains(t, doc, token)
+			}
 		})
 	}
 }

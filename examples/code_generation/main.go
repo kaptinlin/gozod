@@ -5,7 +5,7 @@
 //  2. Define structs with gozod struct tags
 //  3. Run: go generate ./...
 //  4. Generated *_gen.go files contain optimized Schema() methods
-//  5. FromStruct automatically detects and uses generated methods
+//  5. Use generated methods explicitly, for example User{}.Schema()
 package main
 
 import (
@@ -53,7 +53,8 @@ func main() {
 		CreatedAt: time.Now(),
 	}
 
-	// In real usage after running go generate, this would use generated Schema() method
+	// This example stays runnable before code generation. After running
+	// go generate, use User{}.Schema() to call the generated schema explicitly.
 	schema := gozod.FromStruct[User]()
 	result, err := schema.Parse(user)
 
@@ -87,13 +88,13 @@ func main() {
 	}
 
 	fmt.Println("\n💡 Code Generation Benefits:")
-	fmt.Println("   • 5-10x faster validation (zero reflection)")
-	fmt.Println("   • 50-70% reduction in memory allocations")
+	fmt.Println("   • Explicit pre-built Schema() methods in generated files")
+	fmt.Println("   • No runtime tag reflection in generated schema construction")
 	fmt.Println("   • Generated Schema() methods in *_gen.go files")
-	fmt.Println("   • Automatic detection by FromStruct")
+	fmt.Println("   • Call generated schemas directly, for example User{}.Schema()")
 
 	fmt.Println("\n📚 Next Steps:")
 	fmt.Println("   1. Run: go generate ./...")
 	fmt.Println("   2. Check generated *_gen.go files")
-	fmt.Println("   3. Use gozod.FromStruct[T]() for validation")
+	fmt.Println("   3. Call the generated Schema() method where you want generated validation")
 }

@@ -11,6 +11,7 @@
 //	-suffix string     Output file suffix (default: "_gen.go")
 //	-package string    Specify package name (default: auto-detect)
 //	-tags string       Build tags
+//	-tag-name string   Struct tag used for validation rules (default: "gozod")
 //	-field-name-tag string
 //	                   Struct tag used for field names (default: "json")
 //	-method string     Name of the generated method (default: "Schema")
@@ -30,8 +31,9 @@ import (
 
 var errConfigNil = errors.New("config cannot be nil")
 
-// Defaults for the field-name tag and the generated method name.
+// Defaults for the rule tag, field-name tag, and generated method name.
 const (
+	defaultRuleTag      = "gozod"
 	defaultFieldNameTag = "json"
 	defaultMethodName   = "Schema"
 )
@@ -41,6 +43,7 @@ var (
 	outputSuffix     = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
 	packageName      = flag.String("package", "", "Specify package name (default: auto-detect)")
 	buildTags        = flag.String("tags", "", "Build tags")
+	ruleTagFlag      = flag.String("tag-name", defaultRuleTag, "Struct tag used for validation rules (e.g. gozod, validate)")
 	fieldNameTagFlag = flag.String("field-name-tag", defaultFieldNameTag, "Struct tag used for field names (e.g. json, yaml, toml)")
 	method           = flag.String("method", defaultMethodName, "Name of the generated method")
 	verbose          = flag.Bool("verbose", false, "Verbose output")
@@ -82,6 +85,7 @@ func main() {
 		OutputSuffix: *outputSuffix,
 		PackageName:  *packageName,
 		BuildTags:    parseBuildTags(*buildTags),
+		RuleTagName:  *ruleTagFlag,
 		FieldNameTag: *fieldNameTagFlag,
 		MethodName:   *method,
 		Verbose:      *verbose,
@@ -147,11 +151,14 @@ EXAMPLES:
     # Use custom output suffix
     gozodgen -suffix="_schema.go"
 
-    # Resolve field names from yaml tags
-    gozodgen -field-name-tag=yaml
+	    # Resolve field names from yaml tags
+	    gozodgen -field-name-tag=yaml
 
-    # Generate a method named Validate instead of Schema
-    gozodgen -method=Validate
+	    # Read validation rules from validate tags
+	    gozodgen -tag-name=validate
+
+	    # Generate a method named Validate instead of Schema
+	    gozodgen -method=Validate
 
     # Force regeneration with custom suffix
     gozodgen -force -suffix="_validators.go"
@@ -195,6 +202,7 @@ type GeneratorConfig struct {
 	OutputSuffix string   // File suffix for generated files
 	PackageName  string   // Override package name
 	BuildTags    []string // Build tags to include
+	RuleTagName  string   // Struct tag used for validation rules (default "gozod")
 	FieldNameTag string   // Struct tag used for field names (default "json")
 	MethodName   string   // Generated method name (default "Schema")
 	Verbose      bool     // Enable verbose logging
@@ -241,6 +249,9 @@ func NewCodeGenerator(config *GeneratorConfig) (*CodeGenerator, error) {
 	}
 	if config.FieldNameTag != "" {
 		analyzer.fieldNameTag = config.FieldNameTag
+	}
+	if config.RuleTagName != "" {
+		analyzer.ruleTagName = config.RuleTagName
 	}
 
 	writer, err := NewFileWriter("", config.PackageName, config.OutputSuffix, config.DryRun, config.Verbose)

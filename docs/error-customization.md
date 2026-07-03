@@ -93,11 +93,11 @@ This has lower precedence than schema-level custom messages.
 
 ## Global Error Configuration
 
-Set global error customization using `gozod.Config()`:
+Set global error customization using `gozod.SetConfig()`:
 
 ```go
 // Set global custom error map
-gozod.Config(&gozod.ZodConfig{
+gozod.SetConfig(&gozod.ZodConfig{
     CustomError: func(issue gozod.ZodRawIssue) string {
         switch issue.Code {
         case "invalid_type":
@@ -122,7 +122,7 @@ GoZod provides built-in locale support for error messages:
 import "github.com/kaptinlin/gozod/locales"
 
 // Set global locale to Chinese
-gozod.Config(locales.ZhCN())
+gozod.SetConfig(locales.ZhCN())
 
 // All subsequent validation errors will be in Chinese
 _, err := gozod.String().Email().Parse("invalid-email")

@@ -102,7 +102,7 @@ tasks:
     cmds:
       - echo "Running all tests..."
       - |
-        go test -race ./... &
+        go test -race -count=1 ./... &
         pid=$!
         (
           while kill -0 "$pid" 2>/dev/null; do
@@ -125,7 +125,7 @@ tasks:
     cmds:
       - echo "Running race tests for lightweight packages..."
       - |
-        go test -race ./core ./pkg/cloneutil ./pkg/regex ./pkg/slicex ./pkg/structx &
+        go test -race -count=1 ./core ./pkg/cloneutil ./pkg/regex ./pkg/slicex ./pkg/structx &
         pid=$!
         (
           while kill -0 "$pid" 2>/dev/null; do
@@ -148,6 +148,21 @@ tasks:
     deps:
       - golangci-lint
       - tidy-lint
+
+  contractcheck:
+    desc: Run compile-time schema contract checks
+    cmds:
+      - go test -tags=contractcheck ./types
+
+  docs:integrity:
+    desc: Run documentation integrity checks
+    cmds:
+      - go test . -run 'TestDocumentationDoesNotUseStalePublicLanguage|TestDocumentationJSONSchemaRegistryExampleCompiles'
+
+  bench:smoke:
+    desc: Compile and smoke-run benchmarks without enforcing performance numbers
+    cmds:
+      - go test -run '^$' -bench=. -benchtime=1x ./...
 
   install-golangci-lint:
     desc: Install golangci-lint with the required version
@@ -176,8 +191,31 @@ tasks:
     desc: Check if go.mod and go.sum are tidy
     cmds:
       - echo "Checking go.mod and go.sum are tidy..."
-      - go mod tidy
-      - git diff --exit-code -- go.mod go.sum
+      - |
+        tmpdir="$(mktemp -d)"
+        trap 'rm -rf "$tmpdir"' EXIT
+        cp go.mod "$tmpdir/go.mod"
+        if [ -f go.sum ]; then
+          cp go.sum "$tmpdir/go.sum"
+        else
+          : > "$tmpdir/go.sum"
+        fi
+        go mod tidy
+        status=0
+        cmp -s go.mod "$tmpdir/go.mod" || status=1
+        if [ -f go.sum ]; then
+          cmp -s go.sum "$tmpdir/go.sum" || status=1
+        else
+          [ ! -s "$tmpdir/go.sum" ] || status=1
+        fi
+        if [ "$status" -ne 0 ]; then
+          echo "go mod tidy changed go.mod or go.sum"
+          diff -u "$tmpdir/go.mod" go.mod || true
+          if [ -f go.sum ] || [ -s "$tmpdir/go.sum" ]; then
+            diff -u "$tmpdir/go.sum" go.sum || true
+          fi
+          exit 1
+        fi
 
   yamllint:
     desc: Run yamllint
@@ -238,12 +276,25 @@ tasks:
         exit "$status"
 
   verify:
-    desc: Run all verification steps (deps, format, vet, lint, test, vuln)
+    desc: Run all verification steps (deps, format, vet, lint, contracts, docs, tests, benchmark smoke, vuln)
     cmds:
       - task: deps
       - task: fmt
       - task: vet
       - task: lint
+      - task: contractcheck
+      - task: docs:integrity
       - task: test
+      - task: bench:smoke
       - task: vuln
       - echo "All verification steps completed successfully ✅"
+
+  verify:ci:
+    desc: Run the same quality gates expected by CI
+    cmds:
+      - task: lint
+      - task: contractcheck
+      - task: docs:integrity
+      - task: test
+      - task: bench:smoke
+      - task: vuln

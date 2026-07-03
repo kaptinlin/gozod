@@ -41,6 +41,32 @@ func TestStructAnalyzer_ExtractFieldKey_FieldNameTag(t *testing.T) {
 	assert.True(t, skip)
 }
 
+func TestStructAnalyzer_ApplyRuleTagName(t *testing.T) {
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+	analyzer.ruleTagName = "validate"
+
+	astField := &ast.Field{
+		Names: []*ast.Ident{{Name: "Name"}},
+		Tag:   &ast.BasicLit{Value: "`json:\"name\" validate:\"required,min=2\" gozod:\"max=99\"`"},
+	}
+	info := tagparser.FieldInfo{
+		Name:     "Name",
+		Type:     reflect.TypeFor[string](),
+		FieldKey: "name",
+	}
+
+	hasTag, err := analyzer.applyGoZodTag(&info, astField)
+	require.NoError(t, err)
+	require.True(t, hasTag)
+	assert.Equal(t, "required,min=2", info.GoZodTag)
+	assert.True(t, info.Required)
+	require.Len(t, info.Rules, 2)
+	assert.Equal(t, "required", info.Rules[0].Name)
+	assert.Equal(t, "min", info.Rules[1].Name)
+	assert.Equal(t, []string{"2"}, info.Rules[1].Params)
+}
+
 func TestFileWriter_MethodName(t *testing.T) {
 	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
 	require.NoError(t, err)

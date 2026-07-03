@@ -1047,8 +1047,8 @@ type User struct {
     Email string `gozod:"required,email"`
 }
 
-// Generated Schema() method provides zero-reflection validation
-schema := gozod.FromStruct[User]()  // Uses generated code automatically
+// After running go generate, use the generated Schema() method explicitly.
+schema := User{}.Schema()
 ```
 
 ### Type Coercion

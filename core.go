@@ -5,6 +5,9 @@ import "github.com/kaptinlin/gozod/core"
 // ZodType is a generic alias for core.ZodType for ergonomic use.
 type ZodType[T any] = core.ZodType[T]
 
+// ZodSchema is the non-generic runtime schema interface.
+type ZodSchema = core.ZodSchema
+
 // Unwrapper allows wrapper types to expose their underlying value for validation.
 type Unwrapper = core.Unwrapper
 

@@ -160,7 +160,7 @@ func ParseComplexStrict[T any, R any](
 
 	// Fast path: no modifiers, return input directly.
 	// Struct types always need field validation.
-	if !isNilInput(input) && len(internals.Checks) == 0 &&
+	if validator == nil && !isNilInput(input) && len(internals.Checks) == 0 &&
 		internals.Transform == nil && internals.DefaultValue == nil &&
 		internals.PrefaultValue == nil && !internals.Optional &&
 		!internals.Nilable && !internals.NonOptional &&
@@ -970,13 +970,17 @@ func convertComplexResultToConstraint[T any, R any](
 	expectedType core.ZodTypeCode,
 	ctx *core.ParseContext,
 ) (R, error) {
-	if r, ok := result.(R); ok {
-		return r, nil
-	}
-
 	if result == nil {
 		var zero R
 		return zero, nil
+	}
+
+	if ptr, ok := result.(*T); ok {
+		return convertExtractedComplexResult[T, R](ptr, expectedType, ctx)
+	}
+
+	if r, ok := result.(R); ok {
+		return r, nil
 	}
 
 	if ptr, ok := ptrExtractor(result); ok {
@@ -996,24 +1000,29 @@ func convertExtractedComplexResult[T any, R any](
 	expectedType core.ZodTypeCode,
 	ctx *core.ParseContext,
 ) (R, error) {
-	if r, ok := result.(R); ok {
-		return r, nil
-	}
-
 	rType := reflect.TypeFor[R]()
-	if rType.Kind() == reflect.Pointer {
-		if value, ok := result.(T); ok {
-			return any(&value).(R), nil
-		}
-	}
-
 	if ptr, ok := result.(*T); ok {
 		if ptr == nil {
 			var zero R
 			return zero, nil
 		}
+		if rType.Kind() == reflect.Pointer {
+			if r, ok := any(ptr).(R); ok {
+				return r, nil
+			}
+		}
 		if r, ok := any(*ptr).(R); ok {
 			return r, nil
+		}
+	}
+
+	if r, ok := result.(R); ok {
+		return r, nil
+	}
+
+	if rType.Kind() == reflect.Pointer {
+		if value, ok := result.(T); ok {
+			return any(&value).(R), nil
 		}
 	}
 
@@ -1036,7 +1045,7 @@ func validateValue[T any](
 	if expectedType == core.ZodTypeLazy {
 		return value, nil
 	}
-	if validator != nil && len(checks) > 0 {
+	if validator != nil {
 		v, err := validator(value, checks, ctx)
 		if err != nil {
 			return nil, err

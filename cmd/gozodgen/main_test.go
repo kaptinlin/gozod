@@ -252,7 +252,7 @@ type TestProduct struct {
 	helper.AssertCodeContains(userContent,
 		"func (tu TestUser) Schema() *gozod.ZodStruct[TestUser, TestUser]",
 		`"id":    gozod.UUID()`,
-		`"email": gozod.String().Email()`,
+		`"email": gozod.Email()`,
 	)
 
 	helper.AssertCodeContains(productContent,

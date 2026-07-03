@@ -574,14 +574,7 @@ func SetTyped[T comparable, R any](valueSchema any, paramArgs ...any) *ZodSet[T,
 		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
 
-	schema := newZodSetFromDef[T, R](def)
-
-	// Register a pass-through check so the engine invokes validateForEngine
-	// for element validation.
-	if valueSchema != nil {
-		schema.internals.AddCheck(checks.NewCustom[any](func(v any) bool { return true }, core.SchemaParams{}))
-	}
-	return schema
+	return newZodSetFromDef[T, R](def)
 }
 
 // Check adds a custom validation function that can report multiple issues.

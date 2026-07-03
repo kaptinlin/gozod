@@ -17,6 +17,13 @@ import (
 // =============================================================================
 
 func TestPrimitiveTypeExports(t *testing.T) {
+	t.Run("schema interface alias", func(t *testing.T) {
+		var schema ZodSchema = String()
+		result, err := schema.ParseAny("hello")
+		require.NoError(t, err)
+		assert.Equal(t, "hello", result)
+	})
+
 	t.Run("string types", func(t *testing.T) {
 		_ = String()
 		_ = StringPtr()

@@ -253,27 +253,27 @@ type JSONSchemaOptions struct {
     // Any schema with an ID property will be extracted as a $def
     Metadata *gozod.Registry[gozod.GlobalMeta]
     
-    // How to handle unrepresentable types
-    // "throw" (default) - Unrepresentable types throw an error
-    // "any" - Unrepresentable types become {}
-    Unrepresentable string
+    // How to handle unrepresentable types.
+    // JSONSchemaUnrepresentableThrow is the default.
+    Unrepresentable gozod.JSONSchemaUnrepresentableMode
     
-    // How to handle cycles
-    // "ref" (default) - Cycles will be broken using $defs
-    // "throw" - Cycles will throw an error if encountered
-    Cycles string
+    // How to handle cycles.
+    // JSONSchemaCyclesRef is the default.
+    Cycles gozod.JSONSchemaCyclesMode
     
-    // How to handle reused schemas
-    // "inline" (default) - Reused schemas will be inlined
-    // "ref" - Reused schemas will be extracted as $defs
-    Reused string
+    // How to handle reused schemas.
+    // JSONSchemaReusedInline is the default.
+    Reused gozod.JSONSchemaReusedMode
     
     // A function used to convert ID values to URIs for external $refs
     URI func(id string) string
 
+    // Target JSON Schema version. Only Draft 2020-12 is currently supported.
+    Target gozod.JSONSchemaTargetMode
+
     // IO specifies whether to convert the "input" or "output" schema.
-    // "output" (default) or "input". Affects handling of default values.
-    IO string
+    // JSONSchemaIOOutput is the default.
+    IO gozod.JSONSchemaIOMode
 
     // Override is a custom logic to modify the schema after generation.
     Override func(ctx gozod.OverrideContext)
@@ -332,7 +332,7 @@ schema := gozod.String().Transform(func(s string) string {
 })
 
 jsonSchema, _ := gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{
-    Unrepresentable: "any",
+    Unrepresentable: gozod.JSONSchemaUnrepresentableAny,
 })
 // => returns a *jsonschema.Schema representing {} (accepts any value)
 ```
@@ -355,11 +355,12 @@ jsonSchema, _ := gozod.ToJSONSchema(UserSchema)
 // Returns *jsonschema.Schema with proper $ref handling for cycles
 ```
 
-If instead you want to throw an error, set the `Cycles` option to `"throw"`:
+If instead you want to throw an error, set the `Cycles` option to
+`gozod.JSONSchemaCyclesThrow`:
 
 ```go
 _, err := gozod.ToJSONSchema(UserSchema, gozod.JSONSchemaOptions{
-    Cycles: "throw",
+    Cycles: gozod.JSONSchemaCyclesThrow,
 })
 // => returns error if cycles are detected
 ```
@@ -379,11 +380,12 @@ jsonSchema, _ := gozod.ToJSONSchema(userSchema)
 // Both firstName and lastName will have inlined string schemas
 ```
 
-Instead you can set the `Reused` option to `"ref"` to extract these schemas into `$defs`:
+Instead you can set the `Reused` option to `gozod.JSONSchemaReusedRef` to
+extract these schemas into `$defs`:
 
 ```go
 jsonSchema, _ := gozod.ToJSONSchema(userSchema, gozod.JSONSchemaOptions{
-    Reused: "ref",
+    Reused: gozod.JSONSchemaReusedRef,
 })
 // Common schemas will be extracted to $defs and referenced
 ```
@@ -401,12 +403,15 @@ schema := gozod.Object(gozod.ObjectSchema{
 
 // In "input" mode, 'c' is optional because it has a default.
 // "required" will be ["a"]
-gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: "input"})
+gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: gozod.JSONSchemaIOInput})
 
 // In "output" mode, 'c' is required.
 // "required" will be ["a", "c"]
-gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: "output"})
+gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: gozod.JSONSchemaIOOutput})
 ```
+
+`Target` currently supports only `gozod.JSONSchemaTargetDraft202012`. Other
+values, including `"draft-07"`, return `gozod.ErrUnsupportedJSONSchemaTarget`.
 
 ### Override
 
@@ -435,25 +440,25 @@ For complex applications with multiple schemas, you can use a registry to manage
 // Create a registry for related schemas
 registry := gozod.NewRegistry[gozod.GlobalMeta]()
 
-// Define schemas with IDs
+// Define schemas, then register the metadata that names their `$defs` entries.
 var userSchema, postSchema gozod.ZodSchema
 
 userSchema = gozod.Object(gozod.ObjectSchema{
     "id":   gozod.UUID(),
     "name": gozod.String(),
     "posts": gozod.Lazy(func() gozod.ZodSchema {
-        return gozod.Slice(postSchema)
+        return gozod.Slice[any](postSchema)
     }),
-}).Meta(gozod.GlobalMeta{ID: "User"})
+})
 
 postSchema = gozod.Object(gozod.ObjectSchema{
     "id":      gozod.UUID(),
     "title":   gozod.String(),
     "author":  gozod.Lazy(func() gozod.ZodSchema { return userSchema }),
-}).Meta(gozod.GlobalMeta{ID: "Post"})
+})
 
-registry.Add(userSchema)
-registry.Add(postSchema)
+registry.Add(userSchema, gozod.GlobalMeta{ID: "User"})
+registry.Add(postSchema, gozod.GlobalMeta{ID: "Post"})
 
 // Convert the entire registry to a single root JSON Schema.
 // Schemas with IDs will be defined in `$defs` and can be referenced.
@@ -549,6 +554,17 @@ var ignored []string
 zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
     AllowLossy:    true,
     LossyKeywords: &ignored,
+})
+```
+
+Imported metadata (`$id`, `title`, `description`, and `examples`) goes to
+`gozod.GlobalRegistry` by default. Pass a registry when the imported schema
+should keep metadata isolated:
+
+```go
+metadata := gozod.NewRegistry[gozod.GlobalMeta]()
+zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
+    Metadata: metadata,
 })
 ```
 

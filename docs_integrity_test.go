@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/kaptinlin/gozod"
 )
 
 func TestDocumentationDoesNotUseStalePublicLanguage(t *testing.T) {
-	stale := regexp.MustCompile(`Uuid\(|Uuidv|FromGoZod|gozod\.Schema|Struct\(gozod\.ObjectSchema|New Feature|Maximum Performance`)
+	stale := regexp.MustCompile(`Uuid\(|Uuidv|FromGoZod|gozod\.Schema|Struct\(gozod\.ObjectSchema|New Feature|Maximum Performance|registry\.Add\(\s*(?:schema|[[:alpha:]_][[:alnum:]_]*Schema)\s*\)|FromStruct.*auto|auto.*FromStruct|automatically detects and uses generated|Uses generated code automatically|Automatic detection by FromStruct|gozod\.Config\([^)]|GetLocaleFormatter|5-10x faster|50-70%|3-5x`)
 	for _, path := range documentationFiles(t) {
 		file, err := os.Open(path)
 		if err != nil {
@@ -30,15 +32,45 @@ func TestDocumentationDoesNotUseStalePublicLanguage(t *testing.T) {
 	}
 }
 
+func TestDocumentationJSONSchemaRegistryExampleCompiles(t *testing.T) {
+	registry := gozod.NewRegistry[gozod.GlobalMeta]()
+
+	var userSchema, postSchema gozod.ZodSchema
+	userSchema = gozod.Object(gozod.ObjectSchema{
+		"id":   gozod.UUID(),
+		"name": gozod.String(),
+		"posts": gozod.Lazy(func() gozod.ZodSchema {
+			return gozod.Slice[any](postSchema)
+		}),
+	})
+	postSchema = gozod.Object(gozod.ObjectSchema{
+		"id":     gozod.UUID(),
+		"title":  gozod.String(),
+		"author": gozod.Lazy(func() gozod.ZodSchema { return userSchema }),
+	})
+
+	registry.Add(userSchema, gozod.GlobalMeta{ID: "User"})
+	registry.Add(postSchema, gozod.GlobalMeta{ID: "Post"})
+
+	if _, err := gozod.ToJSONSchema(registry); err != nil {
+		t.Fatalf("ToJSONSchema registry example: %v", err)
+	}
+}
+
 func documentationFiles(t *testing.T) []string {
 	t.Helper()
-	files := []string{"README.md"}
-	for _, dir := range []string{"docs", "SPECS"} {
+	files := existingDocumentationFiles("README.md", "AGENTS.md", "CLAUDE.md")
+	for _, dir := range []string{"docs", "SPECS", "examples"} {
 		err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if entry.IsDir() || filepath.Ext(path) != ".md" {
+			if entry.IsDir() {
+				return nil
+			}
+			switch filepath.Ext(path) {
+			case ".md", ".go":
+			default:
 				return nil
 			}
 			files = append(files, path)
@@ -46,6 +78,16 @@ func documentationFiles(t *testing.T) []string {
 		})
 		if err != nil {
 			t.Fatalf("walk %s: %v", dir, err)
+		}
+	}
+	return files
+}
+
+func existingDocumentationFiles(paths ...string) []string {
+	files := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			files = append(files, path)
 		}
 	}
 	return files
