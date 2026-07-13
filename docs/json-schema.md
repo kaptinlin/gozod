@@ -2,7 +2,7 @@
 
 GoZod provides built-in support for converting schemas to [JSON Schema](https://json-schema.org/) for validation libraries, API contracts, and structured data exchange.
 
-GoZod emits Draft 2020-12-compatible schemas for the GoZod constructs it supports. JSON Schema import is intentionally fail-closed: unsupported keywords return an error unless `AllowLossy` is set, and lossy imports can record every ignored keyword through `LossyKeywords`.
+GoZod emits Draft 2020-12-compatible schemas for the GoZod constructs it supports. JSON Schema import is intentionally fail-closed: `FromJSONSchema` rejects unsupported semantics, while `FromJSONSchemaLossy` returns every intentionally omitted keyword with its JSON Pointer and cause.
 
 To convert a GoZod schema to JSON Schema, use the `gozod.ToJSONSchema()` function:
 
@@ -249,8 +249,8 @@ Below is a quick reference for each supported parameter:
 
 ```go
 type JSONSchemaOptions struct {
-    // A registry used to look up metadata for each schema
-    // Any schema with an ID property will be extracted as a $def
+    // Whole-record metadata overrides for schemas present in this registry.
+    // Missing entries fall back to schema-owned metadata.
     Metadata *gozod.Registry[gozod.GlobalMeta]
     
     // How to handle unrepresentable types.
@@ -282,7 +282,7 @@ type JSONSchemaOptions struct {
 
 ### Metadata
 
-GoZod supports metadata storage that will be included in the generated JSON Schema:
+GoZod includes schema-owned metadata in generated JSON Schema by default:
 
 ```go
 // Add metadata to a schema
@@ -295,6 +295,10 @@ emailSchema := gozod.String().Meta(gozod.GlobalMeta{
 jsonSchema, _ := gozod.ToJSONSchema(emailSchema)
 // The returned JSON schema string will include all metadata
 ```
+
+An explicit registry entry replaces the complete schema-owned metadata record
+for that conversion. A missing entry falls back to the schema value; fields are
+not implicitly merged across the two records.
 
 ### Unrepresentable Types
 
@@ -546,20 +550,22 @@ if err != nil {
 }
 ```
 
-Use `AllowLossy: true` only when partial import is intentional. Pass
-`LossyKeywords` to receive the ignored keywords:
+Use `FromJSONSchemaLossy` only when partial import is intentional. It returns a
+caller-owned, location-aware loss snapshot alongside the imported schema:
 
 ```go
-var ignored []string
-zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
-    AllowLossy:    true,
-    LossyKeywords: &ignored,
-})
+zodSchema, losses, err := gozod.FromJSONSchemaLossy(schema)
+if err != nil {
+    // Fatal conversion errors still stop the import.
+}
+for _, loss := range losses {
+    fmt.Printf("%s at %s: %v\n", loss.Keyword, loss.Pointer, loss.Err)
+}
 ```
 
-Imported metadata (`$id`, `title`, `description`, and `examples`) goes to
-`gozod.GlobalRegistry` by default. Pass a registry when the imported schema
-should keep metadata isolated:
+Imported metadata (`$id`, `title`, `description`, and `examples`) belongs to the
+returned schema by default. Pass a registry to make it the sole metadata
+destination; import never writes `gozod.GlobalRegistry` implicitly:
 
 ```go
 metadata := gozod.NewRegistry[gozod.GlobalMeta]()
@@ -568,20 +574,33 @@ zodSchema, err := gozod.FromJSONSchema(schema, gozod.FromJSONSchemaOptions{
 })
 ```
 
+Both destinations receive a snapshot. Nested examples no longer alias the
+input JSON Schema document.
+
 Import does not claim the whole JSON Schema language. The current fail-closed
 keywords are:
+
+Type-specific validation keywords such as `minLength`, `minimum`, `items`, and
+`properties` also fail closed when no `type` or resolved reference anchors
+their instance family. Inferring a narrow type would reject values that JSON
+Schema intentionally leaves unaffected, while importing `{}` would drop the
+validation.
 
 | Keyword | Reason |
 |---------|--------|
 | `if` / `then` / `else` | Conditional validation has no direct GoZod schema shape. |
-| `patternProperties` | Pattern-keyed object validation is not imported as object shape semantics. |
+| `patternProperties` | Only the pure one-pattern shape exported by a regex `LooseRecord` is imported; combined or multi-pattern shapes fail closed. |
 | `$dynamicRef` | Dynamic reference resolution is outside GoZod's schema graph. |
 | `unevaluatedProperties` | Evaluation bookkeeping is a JSON Schema runtime concept. |
 | `unevaluatedItems` | Evaluation bookkeeping is a JSON Schema runtime concept. |
 | `not` | Negated schemas are not imported as a general validation form. |
 | `uniqueItems: true` | Slice uniqueness is not a first-class GoZod array contract. |
 | `dependentSchemas` | Cross-field schema dependency evaluation is not imported. |
-| `propertyNames` | Property-name schemas are not imported as object shape semantics. |
+| `dependentRequired` | Conditional cross-field requirements are not imported without a path-preserving typed check. |
+| `contentEncoding` | Encoded-content validation is not imported because existing string checks do not match the dependency decoder exactly. |
+| `contentMediaType` | Media handlers other than raw `application/json` have no equivalent GoZod string check. |
+| `contentSchema` | Validation after content decoding and unmarshaling has no GoZod schema boundary. |
+| `propertyNames` | Only pure non-exhaustive string-key records with `additionalProperties` are imported; discrete or combined object shapes fail closed. |
 | `contains` / `minContains` / `maxContains` | Positional search constraints are not imported. |
 
 Round-trip expectations apply only to the overlap GoZod owns: primitive types,
@@ -599,6 +618,8 @@ records, enums, literals, and `allOf` / `anyOf` / `oneOf` composition.
 | `type: "null"` | `gozod.Nil()` |
 | `type: "array"` | `gozod.Slice()` |
 | `type: "object"` | `gozod.Object()` |
+| `propertyNames` + `additionalProperties` pure record | `gozod.Record()` |
+| one `patternProperties` pure record | `gozod.LooseRecord()` |
 | `prefixItems` | `gozod.Tuple()` |
 | `anyOf` | `gozod.Union()` |
 | `oneOf` | `gozod.Xor()` |
@@ -613,3 +634,4 @@ records, enums, literals, and `allOf` / `anyOf` / `oneOf` composition.
 | `format: "time"` | `gozod.IsoTime()` |
 | `format: "ipv4"` | `gozod.IPv4()` |
 | `format: "ipv6"` | `gozod.IPv6()` |
+| `type: "string"`, `contentMediaType: "application/json"` | `gozod.String().JSON()` |

@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for User
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for User.
+// Package-local generated dependencies call their generated schema methods.
 func (u User) Schema() *gozod.ZodStruct[User, User] {
 	return gozod.Struct[User](gozod.StructSchema{
 		"id":         gozod.UUID(),

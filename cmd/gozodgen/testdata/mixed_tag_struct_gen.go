@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for MixedTagStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for MixedTagStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (mts MixedTagStruct) Schema() *gozod.ZodStruct[MixedTagStruct, MixedTagStruct] {
 	return gozod.Struct[MixedTagStruct](gozod.StructSchema{
 		"id":     gozod.UUID(),

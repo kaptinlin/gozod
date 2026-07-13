@@ -45,14 +45,14 @@ func TestBasicIntValidation(t *testing.T) {
 
 	t.Run("valid value", func(t *testing.T) {
 		config := Config{Port: 3000}
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		_, err := schema.Parse(config)
 		require.NoError(t, err)
 	})
 
 	t.Run("invalid value - too small", func(t *testing.T) {
 		config := Config{Port: 100}
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		_, err := schema.Parse(config)
 		require.Error(t, err, "expected validation error")
 	})
@@ -64,7 +64,7 @@ func TestFromStructWithOptional(t *testing.T) {
 		Port Optional[int] `gozod:"min=1000,max=9999"`
 	}
 
-	schema := gozod.FromStruct[Config]()
+	schema := gozod.MustFromStruct[Config]()
 	shape := schema.Shape()
 
 	_, ok := shape["Port"]
@@ -84,7 +84,7 @@ func TestStructWithOptionalFields(t *testing.T) {
 			Port: EmptyOptional[int](),
 		}
 
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		result, err := schema.Parse(config)
 		require.NoError(t, err)
 		assert.Equal(t, "localhost", result.Host)
@@ -96,7 +96,7 @@ func TestStructWithOptionalFields(t *testing.T) {
 			Port: NewOptional(3000),
 		}
 
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		result, err := schema.Parse(config)
 		require.NoError(t, err)
 		assert.Equal(t, 3000, result.Port.Value)
@@ -108,7 +108,7 @@ func TestStructWithOptionalFields(t *testing.T) {
 			Port: NewOptional(100), // < 1000
 		}
 
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		_, err := schema.Parse(config)
 		require.Error(t, err, "expected validation error")
 	})
@@ -119,7 +119,7 @@ func TestStructWithOptionalFields(t *testing.T) {
 			Port: NewOptional(0),
 		}
 
-		schema := gozod.FromStruct[Config]()
+		schema := gozod.MustFromStruct[Config]()
 		_, err := schema.Parse(config)
 		require.Error(t, err, "expected validation error for zero value")
 	})

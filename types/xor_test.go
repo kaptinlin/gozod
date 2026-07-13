@@ -142,8 +142,7 @@ func TestZodXor_OuterDefaultOverInnerPrefault(t *testing.T) {
 func TestZodXor_Describe(t *testing.T) {
 	schema := XorOf(String(), Int()).Describe("a string or int")
 
-	meta, ok := core.GlobalRegistry.Get(schema)
-	require.True(t, ok)
+	meta := schema.Internals().Metadata()
 	assert.Equal(t, "a string or int", meta.Description)
 }
 
@@ -154,8 +153,7 @@ func TestZodXor_Meta(t *testing.T) {
 		Description: "exclusive union",
 	})
 
-	meta, ok := core.GlobalRegistry.Get(schema)
-	require.True(t, ok)
+	meta := schema.Internals().Metadata()
 	assert.Equal(t, "xor-test", meta.ID)
 	assert.Equal(t, "XOR Schema", meta.Title)
 	assert.Equal(t, "exclusive union", meta.Description)
@@ -210,6 +208,60 @@ func TestZodXor_RefineAny(t *testing.T) {
 
 	_, err = schema.Parse(false)
 	assert.Error(t, err)
+}
+
+func TestZodXor_ParentRefinementDoesNotChangeCardinality(t *testing.T) {
+	parse := func(t *testing.T, strict bool) {
+		t.Helper()
+
+		calls := 0
+		schema := XorOf(
+			Any().Overwrite(func(any) any { return "first" }),
+			Any().Overwrite(func(any) any { return "second" }),
+		).RefineAny(func(value any) bool {
+			calls++
+			return value == "first"
+		})
+
+		var err error
+		if strict {
+			_, err = schema.StrictParse("input")
+		} else {
+			_, err = schema.Parse("input")
+		}
+
+		require.Error(t, err)
+		assert.Equal(t, 0, calls)
+	}
+
+	t.Run("Parse", func(t *testing.T) { parse(t, false) })
+	t.Run("StrictParse", func(t *testing.T) { parse(t, true) })
+}
+
+func TestZodXor_ParentRefinementRunsOnceForSelectedOutput(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		name := "Parse"
+		if strict {
+			name = "StrictParse"
+		}
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			schema := XorOf(String(), Int()).RefineAny(func(any) bool {
+				calls++
+				return true
+			})
+
+			var err error
+			if strict {
+				_, err = schema.StrictParse("input")
+			} else {
+				_, err = schema.Parse("input")
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, 1, calls)
+		})
+	}
 }
 
 // =============================================================================

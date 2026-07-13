@@ -1,9 +1,12 @@
 package jsonschema
 
 import (
+	"errors"
 	"os"
+	"regexp"
 	"regexp/syntax"
 	"strings"
+	"sync"
 	"testing"
 
 	lib "github.com/kaptinlin/jsonschema"
@@ -11,7 +14,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/types"
 )
+
+func compileImportSchema(t *testing.T, source string) *lib.Schema {
+	t.Helper()
+	compiler := lib.NewCompiler()
+	schema, err := compiler.Compile([]byte(source))
+	require.NoError(t, err)
+	return schema
+}
+
+func importLossKeywords(losses []ImportLossError) []string {
+	keywords := make([]string, len(losses))
+	for i, loss := range losses {
+		keywords[i] = loss.Keyword
+	}
+	return keywords
+}
 
 func TestFromJSONSchema_String(t *testing.T) {
 	t.Run("basic string", func(t *testing.T) {
@@ -94,6 +114,397 @@ func TestFromJSONSchema_String(t *testing.T) {
 		assert.Equal(t, syntax.ErrMissingBracket, syntaxErr.Code)
 		assert.Equal(t, "[", syntaxErr.Expr)
 	})
+}
+
+func TestFromJSONSchema_ContentMediaTypeJSON(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "string",
+		"contentMediaType": "application/json"
+	}`)
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	for _, input := range []any{
+		`{"name":"Ada"}`,
+		`[1,true,null]`,
+		`{"name":`,
+		`plain text`,
+		42,
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		result, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+		if parseErr == nil {
+			assert.Equal(t, input, result)
+		}
+	}
+}
+
+func TestFromJSONSchema_ContentMediaTypeComposesWithFormat(t *testing.T) {
+	compiler := lib.NewCompiler().SetAssertFormat(true)
+	schema, err := compiler.Compile([]byte(`{
+		"type": "string",
+		"format": "email",
+		"contentMediaType": "application/json"
+	}`))
+	require.NoError(t, err)
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	for _, input := range []any{
+		`test@example.com`,
+		`"test@example.com"`,
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RejectsContentEncodingWithoutExactCheck(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "string",
+		"contentEncoding": "base64"
+	}`)
+	candidate := types.Base64()
+	tests := []struct {
+		name            string
+		input           any
+		dependencyValid bool
+		candidateValid  bool
+	}{
+		{name: "canonical", input: "aGVsbG8=", dependencyValid: true, candidateValid: true},
+		{name: "folded", input: "aG\nVsbG8=", dependencyValid: true, candidateValid: false},
+		{name: "invalid", input: "%%%", dependencyValid: false, candidateValid: false},
+		{name: "non-string", input: 42, dependencyValid: false, candidateValid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.dependencyValid, schema.Validate(test.input).IsValid())
+			_, parseErr := candidate.ParseAny(test.input)
+			assert.Equal(t, test.candidateValid, parseErr == nil)
+		})
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "contentEncoding", importErr.Keyword)
+	assert.Equal(t, "/contentEncoding", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsCombinedContentPipeline(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "string",
+		"contentEncoding": "base64",
+		"contentMediaType": "application/json"
+	}`)
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "contentEncoding", importErr.Keyword)
+	assert.Equal(t, "/contentEncoding", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsUnsupportedContentMediaType(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "string",
+		"contentMediaType": "image/png"
+	}`)
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "contentMediaType", importErr.Keyword)
+	assert.Equal(t, "/contentMediaType", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsContentSchema(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "string",
+		"contentMediaType": "application/json",
+		"contentSchema": {
+			"type": "object",
+			"properties": {"name": {"type": "string"}},
+			"required": ["name"]
+		}
+	}`)
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "contentSchema", importErr.Keyword)
+	assert.Equal(t, "/contentSchema", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsUnanchoredContentMediaType(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"contentMediaType": "application/json"
+	}`)
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "contentMediaType", importErr.Keyword)
+	assert.Equal(t, "/contentMediaType", importErr.Pointer)
+}
+
+func TestFromJSONSchema_ContentAssertionsDoNotApplyToExplicitNonStringType(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": "number",
+		"contentEncoding": "custom",
+		"contentMediaType": "image/png",
+		"contentSchema": false
+	}`)
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	for _, input := range []any{42.5, "plain text", true} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_ContentMediaTypeJSONWithMultipleTypes(t *testing.T) {
+	schema := compileImportSchema(t, `{
+		"type": ["string", "number"],
+		"contentMediaType": "application/json"
+	}`)
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+
+	for _, input := range []any{`{"name":"Ada"}`, `plain text`, 42.5, true} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RejectsUnanchoredStringAssertion(t *testing.T) {
+	schema := compileImportSchema(t, `{"minLength": 2}`)
+	require.False(t, schema.Validate("a").IsValid())
+	require.True(t, schema.Validate("ab").IsValid())
+	require.True(t, schema.Validate(42).IsValid())
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "minLength", importErr.Keyword)
+	assert.Equal(t, "/minLength", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsEveryUnanchoredStringAssertion(t *testing.T) {
+	tests := []struct {
+		keyword string
+		schema  *lib.Schema
+	}{
+		{keyword: "maxLength", schema: &lib.Schema{MaxLength: new(float64(2))}},
+		{keyword: "pattern", schema: &lib.Schema{Pattern: new("^x")}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.keyword, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, test.keyword, importErr.Keyword)
+			assert.Equal(t, "/"+test.keyword, importErr.Pointer)
+		})
+	}
+}
+
+func TestFromJSONSchema_RejectsUnanchoredNumericAssertion(t *testing.T) {
+	schema := compileImportSchema(t, `{"minimum": 1}`)
+	require.False(t, schema.Validate(0).IsValid())
+	require.True(t, schema.Validate(1).IsValid())
+	require.True(t, schema.Validate("zero").IsValid())
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "minimum", importErr.Keyword)
+	assert.Equal(t, "/minimum", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsEveryUnanchoredNumericAssertion(t *testing.T) {
+	tests := []struct {
+		keyword string
+		schema  *lib.Schema
+	}{
+		{keyword: "maximum", schema: &lib.Schema{Maximum: lib.NewRat(1)}},
+		{keyword: "exclusiveMinimum", schema: &lib.Schema{ExclusiveMinimum: lib.NewRat(1)}},
+		{keyword: "exclusiveMaximum", schema: &lib.Schema{ExclusiveMaximum: lib.NewRat(1)}},
+		{keyword: "multipleOf", schema: &lib.Schema{MultipleOf: lib.NewRat(2)}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.keyword, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, test.keyword, importErr.Keyword)
+			assert.Equal(t, "/"+test.keyword, importErr.Pointer)
+		})
+	}
+}
+
+func TestFromJSONSchema_RejectsUnanchoredArrayAssertion(t *testing.T) {
+	schema := compileImportSchema(t, `{"minItems": 2}`)
+	require.False(t, schema.Validate([]any{1}).IsValid())
+	require.True(t, schema.Validate([]any{1, 2}).IsValid())
+	require.True(t, schema.Validate("item").IsValid())
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "minItems", importErr.Keyword)
+	assert.Equal(t, "/minItems", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsEveryUnanchoredArrayAssertion(t *testing.T) {
+	tests := []struct {
+		keyword string
+		schema  *lib.Schema
+	}{
+		{keyword: "maxItems", schema: &lib.Schema{MaxItems: new(float64(2))}},
+		{keyword: "prefixItems", schema: &lib.Schema{PrefixItems: []*lib.Schema{{Boolean: new(true)}}}},
+		{keyword: "items", schema: &lib.Schema{Items: &lib.Schema{Boolean: new(false)}}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.keyword, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, test.keyword, importErr.Keyword)
+			assert.Equal(t, "/"+test.keyword, importErr.Pointer)
+		})
+	}
+}
+
+func TestFromJSONSchema_RejectsUnanchoredObjectAssertion(t *testing.T) {
+	schema := compileImportSchema(t, `{"required": ["name"]}`)
+	require.False(t, schema.Validate(map[string]any{}).IsValid())
+	require.True(t, schema.Validate(map[string]any{"name": "Ada"}).IsValid())
+	require.True(t, schema.Validate("Ada").IsValid())
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "required", importErr.Keyword)
+	assert.Equal(t, "/required", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsEveryUnanchoredObjectAssertion(t *testing.T) {
+	tests := []struct {
+		keyword string
+		schema  *lib.Schema
+	}{
+		{
+			keyword: "properties",
+			schema:  &lib.Schema{Properties: &lib.SchemaMap{"name": {Type: []string{"string"}}}},
+		},
+		{
+			keyword: "additionalProperties",
+			schema:  &lib.Schema{AdditionalProperties: &lib.Schema{Boolean: new(false)}},
+		},
+		{keyword: "minProperties", schema: &lib.Schema{MinProperties: new(float64(1))}},
+		{keyword: "maxProperties", schema: &lib.Schema{MaxProperties: new(float64(1))}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.keyword, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, test.keyword, importErr.Keyword)
+			assert.Equal(t, "/"+test.keyword, importErr.Pointer)
+		})
+	}
+}
+
+func TestFromJSONSchema_UnanchoredAssertionErrorCarriesNestedPointer(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"value": {MinLength: new(float64(2))},
+		},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "minLength", importErr.Keyword)
+	assert.Equal(t, "/properties/value/minLength", importErr.Pointer)
+}
+
+func TestFromJSONSchema_LossyRecordsEveryUnanchoredAssertion(t *testing.T) {
+	schema := &lib.Schema{
+		MinLength:     new(float64(1)),
+		Minimum:       lib.NewRat(1),
+		MinItems:      new(float64(1)),
+		MinProperties: new(float64(1)),
+	}
+	imported, losses, err := FromJSONSchemaLossy(schema)
+	require.NoError(t, err)
+	require.NotNil(t, imported)
+	assert.Equal(t, []string{"minItems", "minLength", "minProperties", "minimum"}, importLossKeywords(losses))
+}
+
+func TestFromJSONSchema_AllowsAnnotationOnlyAndExistingAssertionBases(t *testing.T) {
+	metadata := core.NewRegistry[core.GlobalMeta]()
+	tests := []struct {
+		name   string
+		schema *lib.Schema
+	}{
+		{
+			name: "annotations only",
+			schema: &lib.Schema{
+				Title:       new("Value"),
+				Description: new("Any annotated value"),
+				Examples:    []any{"example"},
+			},
+		},
+		{name: "const", schema: lib.Const("fixed")},
+		{name: "enum", schema: &lib.Schema{Enum: []any{"a", "b"}}},
+		{name: "composition", schema: &lib.Schema{AllOf: []*lib.Schema{{Type: []string{"string"}}}}},
+		{
+			name: "resolved ref",
+			schema: &lib.Schema{
+				Ref:         "#/$defs/value",
+				ResolvedRef: &lib.Schema{Type: []string{"string"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema, FromJSONSchemaOptions{Metadata: metadata})
+			require.NoError(t, err)
+			require.NotNil(t, imported)
+		})
+	}
 }
 
 func TestFromJSONSchema_StringFormats(t *testing.T) {
@@ -399,6 +810,281 @@ func TestFromJSONSchema_ObjectOptionalEnumProperty(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFromJSONSchema_ObjectPropertyCountAssertions(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"a": {Type: []string{"string"}},
+			"b": {Type: []string{"string"}},
+			"c": {Type: []string{"string"}},
+		},
+		MinProperties: new(float64(1)),
+		MaxProperties: new(float64(2)),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{
+		map[string]any{},
+		map[string]any{"a": "a"},
+		map[string]any{"a": "a", "b": "b"},
+		map[string]any{"a": "a", "b": "b", "c": "c"},
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RejectsDependentRequired(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"account": {
+				Type: []string{"object"},
+				Properties: &lib.SchemaMap{
+					"credit_card":     {Type: []string{"string"}},
+					"billing_address": {Type: []string{"string"}},
+				},
+				DependentRequired: map[string][]string{"credit_card": {"billing_address"}},
+			},
+		},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "dependentRequired", importErr.Keyword)
+	assert.Equal(t, "/properties/account/dependentRequired", importErr.Pointer)
+}
+
+func TestFromJSONSchema_NestedObjectPropertyCountIssuePath(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"profile": {
+				Type: []string{"object"},
+				Properties: &lib.SchemaMap{
+					"name": {Type: []string{"string"}},
+				},
+				MinProperties: new(float64(1)),
+			},
+		},
+		Required: []string{"profile"},
+	}
+	input := map[string]any{"profile": map[string]any{}}
+
+	require.False(t, schema.Validate(input).IsValid())
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	_, err = imported.ParseAny(input)
+	assert.ErrorContains(t, err, "profile")
+}
+
+func TestFromJSONSchema_RecordLikePropertyCountAssertions(t *testing.T) {
+	schema := &lib.Schema{
+		Type:                 []string{"object"},
+		AdditionalProperties: &lib.Schema{Type: []string{"string"}},
+		MinProperties:        new(float64(1)),
+		MaxProperties:        new(float64(2)),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{
+		map[string]any{},
+		map[string]any{"a": "a"},
+		map[string]any{"a": "a", "b": "b", "c": "c"},
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RoundTripsExportedRecord(t *testing.T) {
+	original := types.Record(types.String(), types.Int())
+	exported, err := ToJSONSchema(original)
+	require.NoError(t, err)
+	require.NotNil(t, exported.PropertyNames)
+	require.NotNil(t, exported.AdditionalProperties)
+
+	inputs := []any{
+		map[string]any{"a": 1, "b": 2},
+		map[string]any{},
+		map[string]any{"a": "one"},
+		"not an object",
+	}
+	for _, input := range inputs {
+		dependencyValid := exported.Validate(input).IsValid()
+		_, originalErr := original.ParseAny(input)
+		assert.Equal(t, dependencyValid, originalErr == nil, "original input %#v", input)
+	}
+
+	imported, err := FromJSONSchema(exported)
+	require.NoError(t, err)
+	for _, input := range inputs {
+		dependencyValid := exported.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "imported input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RoundTripsExportedRegexRecord(t *testing.T) {
+	original := types.Record(
+		types.String().Regex(regexp.MustCompile("^[a-z]+$")),
+		types.Int(),
+	)
+	exported, err := ToJSONSchema(original)
+	require.NoError(t, err)
+	imported, err := FromJSONSchema(exported)
+	require.NoError(t, err)
+
+	for _, input := range []any{
+		map[string]any{"valid": 1},
+		map[string]any{"INVALID": 1},
+		map[string]any{"valid": "one"},
+	} {
+		dependencyValid := exported.Validate(input).IsValid()
+		_, originalErr := original.ParseAny(input)
+		_, importedErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, originalErr == nil, "original input %#v", input)
+		assert.Equal(t, dependencyValid, importedErr == nil, "imported input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RoundTripsExportedLooseRecord(t *testing.T) {
+	original := types.LooseRecord(
+		types.String().Regex(regexp.MustCompile("^[a-z]+$")),
+		types.Int(),
+	)
+	exported, err := ToJSONSchema(original)
+	require.NoError(t, err)
+	require.NotNil(t, exported.PatternProperties)
+	require.Len(t, *exported.PatternProperties, 1)
+
+	inputs := []any{
+		map[string]any{"valid": 1},
+		map[string]any{"valid": "one"},
+		map[string]any{"UNMATCHED": "one"},
+		map[string]any{"valid": 1, "UNMATCHED": "one"},
+		"not an object",
+	}
+	for _, input := range inputs {
+		dependencyValid := exported.Validate(input).IsValid()
+		_, originalErr := original.ParseAny(input)
+		assert.Equal(t, dependencyValid, originalErr == nil, "original input %#v", input)
+	}
+
+	imported, err := FromJSONSchema(exported)
+	require.NoError(t, err)
+	for _, input := range inputs {
+		dependencyValid := exported.Validate(input).IsValid()
+		result, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "imported input %#v", input)
+		if parseErr == nil {
+			assert.Equal(t, input, result)
+		}
+	}
+}
+
+func TestFromJSONSchema_InvalidPatternPropertyReportsKeywordAndPointer(t *testing.T) {
+	patterns := lib.SchemaMap{"[": {Type: []string{"string"}}}
+	schema := &lib.Schema{
+		Type:              []string{"object"},
+		PatternProperties: &patterns,
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "patternProperties", importErr.Keyword)
+	assert.Equal(t, "/patternProperties/[", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsExhaustivePropertyNamesRecord(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		PropertyNames: &lib.Schema{
+			Type: []string{"string"},
+			Enum: []any{"a", "b"},
+		},
+		AdditionalProperties: &lib.Schema{Type: []string{"integer"}},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrJSONSchemaPropertyNames)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "propertyNames", importErr.Keyword)
+	assert.Equal(t, "/propertyNames", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsConflictingRecordShapes(t *testing.T) {
+	stringNames := func() *lib.Schema { return &lib.Schema{Type: []string{"string"}} }
+	valueSchema := func() *lib.Schema { return &lib.Schema{Type: []string{"integer"}} }
+	tests := []struct {
+		name    string
+		schema  *lib.Schema
+		keyword string
+	}{
+		{
+			name: "propertyNames with named properties",
+			schema: &lib.Schema{
+				Type:                 []string{"object"},
+				Properties:           &lib.SchemaMap{"name": {Type: []string{"string"}}},
+				PropertyNames:        stringNames(),
+				AdditionalProperties: valueSchema(),
+			},
+			keyword: "propertyNames",
+		},
+		{
+			name: "non-string propertyNames",
+			schema: &lib.Schema{
+				Type:                 []string{"object"},
+				PropertyNames:        &lib.Schema{Type: []string{"number"}},
+				AdditionalProperties: valueSchema(),
+			},
+			keyword: "propertyNames",
+		},
+		{
+			name: "multiple patterns",
+			schema: &lib.Schema{
+				Type: []string{"object"},
+				PatternProperties: &lib.SchemaMap{
+					"^a": valueSchema(),
+					"^b": valueSchema(),
+				},
+			},
+			keyword: "patternProperties",
+		},
+		{
+			name: "pattern with additionalProperties",
+			schema: &lib.Schema{
+				Type:                 []string{"object"},
+				PatternProperties:    &lib.SchemaMap{"^a": valueSchema()},
+				AdditionalProperties: &lib.Schema{Boolean: new(false)},
+			},
+			keyword: "patternProperties",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, test.keyword, importErr.Keyword)
+		})
+	}
+}
+
 func TestFromJSONSchema_ObjectPropertyConversionError(t *testing.T) {
 	t.Parallel()
 
@@ -413,6 +1099,100 @@ func TestFromJSONSchema_ObjectPropertyConversionError(t *testing.T) {
 
 	_, err := FromJSONSchema(schema)
 	require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "pattern", importErr.Keyword)
+	assert.Equal(t, "/properties/code/pattern", importErr.Pointer)
+	var syntaxErr *syntax.Error
+	assert.ErrorAs(t, err, &syntaxErr)
+}
+
+func TestFromJSONSchema_NestedImportErrorCarriesJSONPointer(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"a/b~c": {Not: &lib.Schema{Boolean: new(true)}},
+		},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
+	var importErr *ImportError
+	require.True(t, errors.As(err, &importErr))
+	assert.Equal(t, "not", importErr.Keyword)
+	assert.Equal(t, "/properties/a~1b~0c/not", importErr.Pointer)
+}
+
+func TestFromJSONSchema_TypeErrorCarriesJSONPointer(t *testing.T) {
+	schema := &lib.Schema{Type: []string{"imaginary"}}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaType)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "type", importErr.Keyword)
+	assert.Equal(t, "/type", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RecursiveImportErrorPointers(t *testing.T) {
+	unsupported := func() *lib.Schema {
+		return &lib.Schema{Not: &lib.Schema{Boolean: new(true)}}
+	}
+	tests := []struct {
+		name    string
+		schema  *lib.Schema
+		pointer string
+	}{
+		{
+			name:    "items",
+			schema:  &lib.Schema{Type: []string{"array"}, Items: unsupported()},
+			pointer: "/items/not",
+		},
+		{
+			name: "prefixItems",
+			schema: &lib.Schema{
+				Type:        []string{"array"},
+				PrefixItems: []*lib.Schema{{Type: []string{"string"}}, unsupported()},
+			},
+			pointer: "/prefixItems/1/not",
+		},
+		{
+			name:    "allOf",
+			schema:  &lib.Schema{AllOf: []*lib.Schema{unsupported()}},
+			pointer: "/allOf/0/not",
+		},
+		{
+			name:    "anyOf",
+			schema:  &lib.Schema{AnyOf: []*lib.Schema{unsupported()}},
+			pointer: "/anyOf/0/not",
+		},
+		{
+			name:    "oneOf",
+			schema:  &lib.Schema{OneOf: []*lib.Schema{unsupported()}},
+			pointer: "/oneOf/0/not",
+		},
+		{
+			name: "$ref",
+			schema: &lib.Schema{
+				Ref:         "#/$defs/value",
+				ResolvedRef: unsupported(),
+			},
+			pointer: "/$ref/not",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			assert.Nil(t, imported)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, "not", importErr.Keyword)
+			assert.Equal(t, test.pointer, importErr.Pointer)
+		})
+	}
 }
 
 func TestFromJSONSchema_ResolvedRef(t *testing.T) {
@@ -431,6 +1211,131 @@ func TestFromJSONSchema_ResolvedRef(t *testing.T) {
 
 	_, err = zodSchema.ParseAny("Al")
 	require.Error(t, err)
+}
+
+func TestFromJSONSchema_ConjoinsResolvedRefAndStringSibling(t *testing.T) {
+	target := &lib.Schema{Type: []string{"string"}}
+	schema := &lib.Schema{
+		Ref:         "#/$defs/name",
+		ResolvedRef: target,
+		MinLength:   new(float64(3)),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{"Ada", "Al", 1} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_RecursiveResolvedRefUsesCompletedSchema(t *testing.T) {
+	node := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"value": {Type: []string{"string"}, MinLength: new(float64(2))},
+		},
+		Required: []string{"value"},
+	}
+	(*node.Properties)["next"] = &lib.Schema{Ref: "#", ResolvedRef: node}
+
+	imported, err := FromJSONSchema(node)
+	require.NoError(t, err)
+	input := map[string]any{
+		"value": "root",
+		"next":  map[string]any{"value": "x"},
+	}
+	require.False(t, node.Validate(input).IsValid())
+	_, err = imported.ParseAny(input)
+	assert.Error(t, err)
+}
+
+func TestFromJSONSchema_RejectsDirectSelfReference(t *testing.T) {
+	schema := &lib.Schema{Ref: "#"}
+	schema.ResolvedRef = schema
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	assert.ErrorIs(t, err, ErrJSONSchemaCircularRef)
+}
+
+func TestFromJSONSchema_ConjoinsResolvedRefObjectSibling(t *testing.T) {
+	target := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"id": {Type: []string{"string"}},
+		},
+		Required: []string{"id"},
+	}
+	schema := &lib.Schema{
+		Ref:         "#/$defs/base",
+		ResolvedRef: target,
+		Properties: &lib.SchemaMap{
+			"name": {Type: []string{"string"}, MinLength: new(float64(2))},
+		},
+		Required: []string{"name"},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{
+		map[string]any{"id": "1", "name": "Ada"},
+		map[string]any{"id": "1"},
+		map[string]any{"name": "Ada"},
+		map[string]any{"id": "1", "name": "A"},
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_ConjoinsResolvedRefAndAllOfSibling(t *testing.T) {
+	target := &lib.Schema{Type: []string{"string"}}
+	schema := &lib.Schema{
+		Ref:         "#/$defs/base",
+		ResolvedRef: target,
+		AllOf: []*lib.Schema{{
+			Type:      []string{"string"},
+			MinLength: new(float64(3)),
+		}},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{"Ada", "Al", 1} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_SharedResolvedRef(t *testing.T) {
+	target := &lib.Schema{Type: []string{"string"}, MinLength: new(float64(2))}
+	ref := func() *lib.Schema {
+		return &lib.Schema{Ref: "#/$defs/name", ResolvedRef: target}
+	}
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"first": ref(),
+			"last":  ref(),
+		},
+		Required: []string{"first", "last"},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{
+		map[string]any{"first": "Ada", "last": "Li"},
+		map[string]any{"first": "A", "last": "Li"},
+		map[string]any{"first": "Ada", "last": "L"},
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
 }
 
 func TestFromJSONSchema_Enum(t *testing.T) {
@@ -464,6 +1369,104 @@ func TestFromJSONSchema_Const(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestFromJSONSchema_ConjoinsIncompatibleTypeAndConst(t *testing.T) {
+	schema := lib.Const(1)
+	schema.Type = []string{"string"}
+
+	require.False(t, schema.Validate(1).IsValid())
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	_, err = imported.ParseAny(1)
+	assert.Error(t, err)
+}
+
+func TestFromJSONSchema_ConjoinsBasicAssertionSiblings(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema func() *lib.Schema
+		inputs []any
+		valid  []bool
+	}{
+		{
+			name: "compatible type and const",
+			schema: func() *lib.Schema {
+				schema := lib.Const("fixed")
+				schema.Type = []string{"string"}
+				return schema
+			},
+			inputs: []any{"fixed", "other", 1},
+			valid:  []bool{true, false, false},
+		},
+		{
+			name: "type filters mixed enum",
+			schema: func() *lib.Schema {
+				return &lib.Schema{Type: []string{"string"}, Enum: []any{"fixed", 1}}
+			},
+			inputs: []any{"fixed", 1, "other"},
+			valid:  []bool{true, false, false},
+		},
+		{
+			name: "compatible const and enum",
+			schema: func() *lib.Schema {
+				schema := lib.Const("fixed")
+				schema.Enum = []any{"fixed", "other"}
+				return schema
+			},
+			inputs: []any{"fixed", "other"},
+			valid:  []bool{true, false},
+		},
+		{
+			name: "incompatible const and enum",
+			schema: func() *lib.Schema {
+				schema := lib.Const("fixed")
+				schema.Enum = []any{"other"}
+				return schema
+			},
+			inputs: []any{"fixed", "other"},
+			valid:  []bool{false, false},
+		},
+		{
+			name: "all three compatible",
+			schema: func() *lib.Schema {
+				schema := lib.Const("fixed")
+				schema.Type = []string{"string"}
+				schema.Enum = []any{"fixed", "other"}
+				return schema
+			},
+			inputs: []any{"fixed", "other", 1},
+			valid:  []bool{true, false, false},
+		},
+		{
+			name: "all three incompatible",
+			schema: func() *lib.Schema {
+				schema := lib.Const(1)
+				schema.Type = []string{"string"}
+				schema.Enum = []any{1, "other"}
+				return schema
+			},
+			inputs: []any{1, "other"},
+			valid:  []bool{false, false},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			schema := test.schema()
+			imported, err := FromJSONSchema(schema)
+			require.NoError(t, err)
+
+			for i, input := range test.inputs {
+				dependencyValid := schema.Validate(input).IsValid()
+				assert.Equal(t, test.valid[i], dependencyValid, "dependency result for %#v", input)
+
+				_, parseErr := imported.ParseAny(input)
+				assert.Equal(t, dependencyValid, parseErr == nil, "imported result for %#v", input)
+			}
+		})
+	}
+}
+
 func TestFromJSONSchema_AnyOf(t *testing.T) {
 	stringSchema := &lib.Schema{}
 	stringSchema.Type = []string{"string"}
@@ -484,6 +1487,93 @@ func TestFromJSONSchema_AnyOf(t *testing.T) {
 	result, err = zodSchema.ParseAny(42)
 	require.NoError(t, err)
 	assert.Equal(t, 42, result)
+}
+
+func TestFromJSONSchema_ConjoinsBaseAndAnyOf(t *testing.T) {
+	schema := &lib.Schema{
+		Type:      []string{"string"},
+		MinLength: new(float64(3)),
+		AnyOf: []*lib.Schema{
+			lib.Const("ab"),
+			lib.Const("valid"),
+			lib.Const(1),
+		},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{"valid", "ab", 1, "other"} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
+}
+
+func TestFromJSONSchema_ConjoinsCompositionSiblings(t *testing.T) {
+	allOf := []*lib.Schema{{Enum: []any{"a", "b"}}}
+	anyOf := []*lib.Schema{lib.Const("a"), lib.Const("c")}
+	oneOf := []*lib.Schema{{Enum: []any{"a", "b"}}, lib.Const("b")}
+	tests := []struct {
+		name   string
+		allOf  []*lib.Schema
+		anyOf  []*lib.Schema
+		oneOf  []*lib.Schema
+		inputs []any
+	}{
+		{name: "allOf and anyOf", allOf: allOf, anyOf: anyOf, inputs: []any{"a", "b", "c", 1}},
+		{name: "allOf and oneOf", allOf: allOf, oneOf: oneOf, inputs: []any{"a", "b", "c", 1}},
+		{name: "anyOf and oneOf", anyOf: anyOf, oneOf: oneOf, inputs: []any{"a", "b", "c", 1}},
+		{name: "all three", allOf: allOf, anyOf: anyOf, oneOf: oneOf, inputs: []any{"a", "b", "c", 1}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			schema := &lib.Schema{
+				Type:  []string{"string"},
+				AllOf: test.allOf,
+				AnyOf: test.anyOf,
+				OneOf: test.oneOf,
+			}
+			imported, err := FromJSONSchema(schema)
+			require.NoError(t, err)
+
+			for _, input := range test.inputs {
+				dependencyValid := schema.Validate(input).IsValid()
+				_, parseErr := imported.ParseAny(input)
+				assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+			}
+		})
+	}
+}
+
+func TestFromJSONSchema_ConjoinsObjectPropertiesAndAllOf(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"name": {Type: []string{"string"}},
+		},
+		Required: []string{"name"},
+		AllOf: []*lib.Schema{{
+			Type: []string{"object"},
+			Properties: &lib.SchemaMap{
+				"active": {Type: []string{"boolean"}},
+			},
+			Required: []string{"active"},
+		}},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	require.NoError(t, err)
+	for _, input := range []any{
+		map[string]any{"name": "Ada", "active": true},
+		map[string]any{"name": "Ada"},
+		map[string]any{"active": true},
+		map[string]any{"name": 1, "active": true},
+	} {
+		dependencyValid := schema.Validate(input).IsValid()
+		_, parseErr := imported.ParseAny(input)
+		assert.Equal(t, dependencyValid, parseErr == nil, "input %#v", input)
+	}
 }
 
 func TestFromJSONSchema_AllOf(t *testing.T) {
@@ -633,14 +1723,11 @@ func TestFromJSONSchema_UnsupportedDefaultsToError(t *testing.T) {
 		schema := &lib.Schema{}
 		schema.If = ifSchema
 
-		var keywords []string
-		zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
-			AllowLossy:    true,
-			LossyKeywords: &keywords,
-		})
+		zodSchema, losses, err := FromJSONSchemaLossy(schema)
 		require.NoError(t, err)
 		require.NotNil(t, zodSchema)
-		assert.Equal(t, []string{"if/then/else"}, keywords)
+		require.Len(t, losses, 1)
+		assert.Equal(t, "if/then/else", losses[0].Keyword)
 	})
 }
 
@@ -670,6 +1757,18 @@ func TestFromJSONSchema_UnsupportedImportKeywordContract(t *testing.T) {
 		"dependentSchemas": func() *lib.Schema {
 			return &lib.Schema{DependentSchemas: map[string]*lib.Schema{"card": {Boolean: new(true)}}}
 		},
+		"dependentRequired": func() *lib.Schema {
+			return &lib.Schema{DependentRequired: map[string][]string{"card": {"billing"}}}
+		},
+		"contentEncoding": func() *lib.Schema {
+			return &lib.Schema{Type: []string{"string"}, ContentEncoding: new("base64")}
+		},
+		"contentMediaType": func() *lib.Schema {
+			return &lib.Schema{Type: []string{"string"}, ContentMediaType: new("image/png")}
+		},
+		"contentSchema": func() *lib.Schema {
+			return &lib.Schema{Type: []string{"string"}, ContentSchema: &lib.Schema{Boolean: new(true)}}
+		},
 		"propertyNames": func() *lib.Schema {
 			return &lib.Schema{PropertyNames: &lib.Schema{Boolean: new(true)}}
 		},
@@ -698,14 +1797,12 @@ func TestFromJSONSchema_UnsupportedImportKeywordContract(t *testing.T) {
 			_, err := FromJSONSchema(schema)
 			require.ErrorIs(t, err, keyword.err)
 
-			var lossyKeywords []string
-			zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
-				AllowLossy:    true,
-				LossyKeywords: &lossyKeywords,
-			})
+			zodSchema, losses, err := FromJSONSchemaLossy(schema)
 			require.NoError(t, err)
 			require.NotNil(t, zodSchema)
-			assert.Equal(t, []string{keyword.keyword}, lossyKeywords)
+			require.Len(t, losses, 1)
+			assert.Equal(t, keyword.keyword, losses[0].Keyword)
+			assert.ErrorIs(t, losses[0], keyword.err)
 		})
 	}
 }
@@ -718,14 +1815,143 @@ func TestFromJSONSchema_LossyRecordsEveryUnsupportedKeyword(t *testing.T) {
 		UniqueItems: new(true),
 	}
 
-	var keywords []string
-	zodSchema, err := FromJSONSchema(schema, FromJSONSchemaOptions{
-		AllowLossy:    true,
-		LossyKeywords: &keywords,
-	})
+	zodSchema, losses, err := FromJSONSchemaLossy(schema)
 	require.NoError(t, err)
 	require.NotNil(t, zodSchema)
-	assert.Equal(t, []string{"if/then/else", "$dynamicRef", "not", "uniqueItems"}, keywords)
+	assert.Equal(t, []string{"$dynamicRef", "if/then/else", "not", "uniqueItems"}, importLossKeywords(losses))
+}
+
+func TestFromJSONSchemaLossy_ReturnsTypedLoss(t *testing.T) {
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"value": {Not: &lib.Schema{Boolean: new(true)}},
+		},
+	}
+
+	imported, losses, err := FromJSONSchemaLossy(schema)
+	require.NoError(t, err)
+	require.NotNil(t, imported)
+	require.Len(t, losses, 1)
+	assert.Equal(t, "not", losses[0].Keyword)
+	assert.Equal(t, "/properties/value/not", losses[0].Pointer)
+	assert.ErrorIs(t, losses[0], ErrUnsupportedJSONSchemaKeyword)
+}
+
+func TestFromJSONSchemaLossy_PreservesTheSameKeywordAtDifferentLocations(t *testing.T) {
+	document := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"first":  {Not: &lib.Schema{Boolean: new(true)}},
+			"second": {Not: &lib.Schema{Boolean: new(true)}},
+		},
+	}
+
+	imported, losses, err := FromJSONSchemaLossy(document)
+	require.NoError(t, err)
+	require.NotNil(t, imported)
+	require.Len(t, losses, 2)
+	assert.Equal(t, []string{
+		"/properties/first/not",
+		"/properties/second/not",
+	}, []string{losses[0].Pointer, losses[1].Pointer})
+}
+
+func TestFromJSONSchemaLossy_SortsLossesByLocation(t *testing.T) {
+	schema := &lib.Schema{
+		Not:       &lib.Schema{Boolean: new(true)},
+		MinLength: new(float64(1)),
+		Maximum:   lib.NewRat(1),
+		Items:     &lib.Schema{Boolean: new(false)},
+	}
+
+	_, losses, err := FromJSONSchemaLossy(schema)
+	require.NoError(t, err)
+	require.Len(t, losses, 4)
+	assert.Equal(t, []string{
+		"/items",
+		"/maximum",
+		"/minLength",
+		"/not",
+	}, []string{losses[0].Pointer, losses[1].Pointer, losses[2].Pointer, losses[3].Pointer})
+}
+
+func TestFromJSONSchemaLossy_NoLossReturnsEmptySnapshot(t *testing.T) {
+	document := &lib.Schema{Type: []string{"string"}}
+
+	imported, losses, err := FromJSONSchemaLossy(document)
+	require.NoError(t, err)
+	require.NotNil(t, imported)
+	assert.Empty(t, losses)
+}
+
+func TestFromJSONSchemaLossy_ReturnedSnapshotsAreIndependent(t *testing.T) {
+	document := &lib.Schema{Not: &lib.Schema{Boolean: new(true)}}
+
+	_, first, err := FromJSONSchemaLossy(document)
+	require.NoError(t, err)
+	_, second, err := FromJSONSchemaLossy(document)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	require.Len(t, second, 1)
+
+	first[0].Keyword = "caller-mutated"
+	assert.Equal(t, "not", second[0].Keyword)
+}
+
+func TestFromJSONSchemaLossy_ConcurrentCallsReturnIdenticalSnapshots(t *testing.T) {
+	document := &lib.Schema{
+		Not:       &lib.Schema{Boolean: new(true)},
+		MinLength: new(float64(1)),
+		Maximum:   lib.NewRat(1),
+	}
+	_, want, err := FromJSONSchemaLossy(document)
+	require.NoError(t, err)
+
+	type result struct {
+		losses []ImportLossError
+		err    error
+	}
+	const callers = 16
+	results := make(chan result, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Go(func() {
+			_, losses, err := FromJSONSchemaLossy(document)
+			results <- result{losses: losses, err: err}
+		})
+	}
+	wg.Wait()
+	close(results)
+
+	for got := range results {
+		require.NoError(t, got.err)
+		assert.Equal(t, want, got.losses)
+	}
+}
+
+func TestFromJSONSchemaLossy_FatalErrorPreservesEarlierLosses(t *testing.T) {
+	document := &lib.Schema{
+		Type: []string{"object"},
+		Not:  &lib.Schema{Boolean: new(true)},
+		Properties: &lib.SchemaMap{
+			"value": {
+				Type:    []string{"string"},
+				Pattern: new("["),
+			},
+		},
+	}
+
+	imported, losses, err := FromJSONSchemaLossy(document)
+	require.Nil(t, imported)
+	require.ErrorIs(t, err, ErrJSONSchemaPatternCompile)
+	require.Len(t, losses, 1)
+	assert.Equal(t, "not", losses[0].Keyword)
+	assert.Equal(t, "/not", losses[0].Pointer)
+
+	strict, err := FromJSONSchema(document)
+	require.Nil(t, strict)
+	assert.ErrorIs(t, err, ErrUnsupportedJSONSchemaKeyword)
 }
 
 func TestFromJSONSchema_NilSchema(t *testing.T) {
@@ -799,11 +2025,12 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
+		t.Cleanup(func() { core.GlobalRegistry.Remove(zodSchema) })
 
-		meta, ok := core.GlobalRegistry.Get(zodSchema)
-		require.True(t, ok, "Expected metadata to be registered")
+		meta := zodSchema.Internals().Metadata()
 		assert.Equal(t, "User Name", meta.Title)
 		assert.Equal(t, "The user's full name", meta.Description)
+		assert.False(t, core.GlobalRegistry.Has(zodSchema))
 	})
 
 	t.Run("explicit registry isolates imported metadata", func(t *testing.T) {
@@ -824,8 +2051,8 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 		assert.Equal(t, "User Name", meta.Title)
 		assert.Equal(t, "The user's full name", meta.Description)
 
-		_, ok = core.GlobalRegistry.Get(zodSchema)
-		assert.False(t, ok, "Expected explicit registry mode not to write global metadata")
+		assert.Equal(t, core.GlobalMeta{}, zodSchema.Internals().Metadata())
+		assert.False(t, core.GlobalRegistry.Has(zodSchema))
 	})
 
 	t.Run("extracts $id and examples", func(t *testing.T) {
@@ -837,11 +2064,12 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
+		t.Cleanup(func() { core.GlobalRegistry.Remove(zodSchema) })
 
-		meta, ok := core.GlobalRegistry.Get(zodSchema)
-		require.True(t, ok, "Expected metadata to be registered")
+		meta := zodSchema.Internals().Metadata()
 		assert.Equal(t, "https://example.com/schemas/name", meta.ID)
 		assert.Equal(t, []any{"John", "Jane"}, meta.Examples)
+		assert.False(t, core.GlobalRegistry.Has(zodSchema))
 	})
 
 	t.Run("no metadata when fields are empty", func(t *testing.T) {
@@ -851,9 +2079,148 @@ func TestFromJSONSchema_Metadata(t *testing.T) {
 		zodSchema, err := FromJSONSchema(schema)
 		require.NoError(t, err)
 
-		_, ok := core.GlobalRegistry.Get(zodSchema)
-		assert.False(t, ok, "Expected no metadata when all fields are empty")
+		assert.Equal(t, core.GlobalMeta{}, zodSchema.Internals().Metadata())
+		assert.False(t, core.GlobalRegistry.Has(zodSchema))
 	})
+}
+
+func TestFromJSONSchema_ExplicitRegistrySnapshotsImportedExamples(t *testing.T) {
+	nested := []any{"before"}
+	example := map[string]any{"names": nested}
+	document := &lib.Schema{
+		Type:     []string{"string"},
+		Examples: []any{example},
+	}
+	registry := core.NewRegistry[core.GlobalMeta]()
+
+	imported, err := FromJSONSchema(document, FromJSONSchemaOptions{Metadata: registry})
+	require.NoError(t, err)
+	nested[0] = "after"
+	document.Examples[0] = "replaced"
+
+	meta, ok := registry.Get(imported)
+	require.True(t, ok)
+	require.Len(t, meta.Examples, 1)
+	assert.Equal(t, []any{"before"}, meta.Examples[0].(map[string]any)["names"])
+}
+
+func TestFromJSONSchema_DefaultMetadataSnapshotsImportedExamples(t *testing.T) {
+	nested := []any{"before"}
+	document := &lib.Schema{
+		Type:     []string{"string"},
+		Examples: []any{map[string]any{"names": nested}},
+	}
+
+	imported, err := FromJSONSchema(document)
+	require.NoError(t, err)
+	nested[0] = "after"
+	document.Examples[0] = "replaced"
+
+	meta := imported.Internals().Metadata()
+	require.Len(t, meta.Examples, 1)
+	assert.Equal(t, []any{"before"}, meta.Examples[0].(map[string]any)["names"])
+}
+
+func TestFromJSONSchema_MetadataMutationDoesNotChangeSourceDocument(t *testing.T) {
+	tests := []struct {
+		name string
+		load func(*lib.Schema) (core.ZodSchema, core.GlobalMeta, error)
+	}{
+		{
+			name: "schema-owned metadata",
+			load: func(document *lib.Schema) (core.ZodSchema, core.GlobalMeta, error) {
+				imported, err := FromJSONSchema(document)
+				if err != nil {
+					return nil, core.GlobalMeta{}, err
+				}
+				return imported, imported.Internals().Metadata(), nil
+			},
+		},
+		{
+			name: "explicit registry",
+			load: func(document *lib.Schema) (core.ZodSchema, core.GlobalMeta, error) {
+				registry := core.NewRegistry[core.GlobalMeta]()
+				imported, err := FromJSONSchema(document, FromJSONSchemaOptions{Metadata: registry})
+				if err != nil {
+					return nil, core.GlobalMeta{}, err
+				}
+				meta, ok := registry.Get(imported)
+				if !ok {
+					return nil, core.GlobalMeta{}, errors.New("imported metadata missing from explicit registry")
+				}
+				return imported, meta, nil
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourceNested := []any{"source"}
+			document := &lib.Schema{
+				Type:     []string{"string"},
+				Examples: []any{map[string]any{"names": sourceNested}},
+			}
+
+			_, meta, err := tt.load(document)
+			require.NoError(t, err)
+			meta.Examples[0].(map[string]any)["names"].([]any)[0] = "destination"
+
+			assert.Equal(t, "source", sourceNested[0])
+			assert.Equal(t, "source", document.Examples[0].(map[string]any)["names"].([]any)[0])
+		})
+	}
+}
+
+func TestFromJSONSchema_MetadataRoundTripsThroughOwningDestination(t *testing.T) {
+	tests := []struct {
+		name      string
+		roundTrip func(*lib.Schema) (*lib.Schema, error)
+	}{
+		{
+			name: "schema-owned metadata",
+			roundTrip: func(document *lib.Schema) (*lib.Schema, error) {
+				imported, err := FromJSONSchema(document)
+				if err != nil {
+					return nil, err
+				}
+				return ToJSONSchema(imported)
+			},
+		},
+		{
+			name: "explicit registry",
+			roundTrip: func(document *lib.Schema) (*lib.Schema, error) {
+				registry := core.NewRegistry[core.GlobalMeta]()
+				imported, err := FromJSONSchema(document, FromJSONSchemaOptions{Metadata: registry})
+				if err != nil {
+					return nil, err
+				}
+				return ToJSONSchema(imported, Options{Metadata: registry})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			document := &lib.Schema{
+				ID:          "https://example.com/schemas/name",
+				Title:       new("Name"),
+				Description: new("A display name"),
+				Type:        []string{"string"},
+				Examples:    []any{map[string]any{"value": "Ada"}},
+			}
+
+			exported, err := tt.roundTrip(document)
+			require.NoError(t, err)
+			assert.Equal(t, "#/$defs/"+document.ID, exported.Ref)
+			definition, ok := exported.Defs[document.ID]
+			require.True(t, ok)
+			require.NotNil(t, definition.Title)
+			assert.Equal(t, *document.Title, *definition.Title)
+			require.NotNil(t, exported.Description)
+			assert.Equal(t, *document.Description, *exported.Description)
+			assert.Equal(t, document.Examples, definition.Examples)
+		})
+	}
 }
 
 func TestFromJSONSchema_DefaultUnsupportedKeywords(t *testing.T) {

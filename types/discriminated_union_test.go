@@ -1,14 +1,38 @@
 package types_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 	. "github.com/kaptinlin/gozod/types"
 )
+
+type countingDiscriminatorSchema struct {
+	internals core.ZodTypeInternals
+	calls     int
+}
+
+func newCountingDiscriminatorSchema(value any) *countingDiscriminatorSchema {
+	return &countingDiscriminatorSchema{
+		internals: core.ZodTypeInternals{
+			Values: map[any]struct{}{value: {}},
+		},
+	}
+}
+
+func (s *countingDiscriminatorSchema) ParseAny(input any, _ ...*core.ParseContext) (any, error) {
+	s.calls++
+	return input, nil
+}
+
+func (s *countingDiscriminatorSchema) Internals() *core.ZodTypeInternals { return &s.internals }
+func (s *countingDiscriminatorSchema) IsOptional() bool                  { return false }
+func (s *countingDiscriminatorSchema) IsNilable() bool                   { return false }
 
 // =============================================================================
 // Basic functionality tests
@@ -27,7 +51,7 @@ func TestDiscriminatedUnion_BasicFunctionality(t *testing.T) {
 			"role": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema, adminSchema})
 
 		// Test user type
 		result, err := discriminatedUnion.Parse(map[string]any{
@@ -67,7 +91,7 @@ func TestDiscriminatedUnion_BasicFunctionality(t *testing.T) {
 			"role": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema, adminSchema})
 
 		// Test invalid discriminator value
 		_, err := discriminatedUnion.Parse(map[string]any{
@@ -97,7 +121,7 @@ func TestDiscriminatedUnion_BasicFunctionality(t *testing.T) {
 			"error":  String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("status", []any{successSchema, errorSchema})
+		discriminatedUnion := MustDiscriminatedUnion("status", []core.ZodSchema{successSchema, errorSchema})
 
 		// Test Parse method
 		result, err := discriminatedUnion.Parse(map[string]any{
@@ -135,7 +159,7 @@ func TestDiscriminatedUnion_BasicFunctionality(t *testing.T) {
 			"name": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema}, core.SchemaParams{Error: customError})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema}, core.SchemaParams{Error: customError})
 
 		require.NotNil(t, discriminatedUnion)
 
@@ -162,7 +186,7 @@ func TestDiscriminatedUnion_TypeSafety(t *testing.T) {
 			"title": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, postSchema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema, postSchema})
 		require.NotNil(t, discriminatedUnion)
 
 		result, err := discriminatedUnion.Parse(map[string]any{
@@ -187,7 +211,7 @@ func TestDiscriminatedUnion_TypeSafety(t *testing.T) {
 			"val":  Int(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("kind", []any{schema1, schema2})
+		discriminatedUnion := MustDiscriminatedUnion("kind", []core.ZodSchema{schema1, schema2})
 
 		// Test discriminator accessor
 		assert.Equal(t, "kind", discriminatedUnion.Discriminator())
@@ -205,7 +229,7 @@ func TestDiscriminatedUnion_TypeSafety(t *testing.T) {
 			"data": Bool(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		result := discriminatedUnion.MustParse(map[string]any{
 			"type": "test",
@@ -230,7 +254,7 @@ func TestDiscriminatedUnion_Modifiers(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 		optionalDiscriminatedUnion := discriminatedUnion.Optional()
 
 		// Test non-nil value - should return pointer
@@ -258,7 +282,7 @@ func TestDiscriminatedUnion_Modifiers(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 		nilableDiscriminatedUnion := discriminatedUnion.Nilable()
 
 		// Test nil handling
@@ -286,7 +310,7 @@ func TestDiscriminatedUnion_Modifiers(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 		defaultValue := map[string]any{
 			"type": "test",
 			"data": "default",
@@ -312,7 +336,7 @@ func TestDiscriminatedUnion_Modifiers(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 		prefaultValue := map[string]any{
 			"type": "test",
 			"data": "prefault",
@@ -349,7 +373,7 @@ func TestDiscriminatedUnion_Chaining(t *testing.T) {
 			"data": "default",
 		}
 
-		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+		chainedSchema := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
 			Default(defaultValue).
 			Optional()
 
@@ -373,7 +397,7 @@ func TestDiscriminatedUnion_Chaining(t *testing.T) {
 			"flag": Bool(),
 		})
 
-		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+		chainedSchema := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
 			Nilable().
 			Default(map[string]any{
 				"type": "test",
@@ -399,7 +423,7 @@ func TestDiscriminatedUnion_Chaining(t *testing.T) {
 			"data": String(),
 		})
 
-		chainedSchema := DiscriminatedUnion("type", []any{schema}).
+		chainedSchema := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
 			Default(map[string]any{
 				"type": "test",
 				"data": "default",
@@ -427,6 +451,58 @@ func TestDiscriminatedUnion_Chaining(t *testing.T) {
 // =============================================================================
 
 func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
+	t.Run("outer Default over Optional follows modifier order", func(t *testing.T) {
+		option := Object(core.ObjectSchema{
+			"type": Literal("test"),
+		})
+		defaultValue := map[string]any{"type": "test"}
+
+		parse := func(t *testing.T, strict bool) {
+			t.Helper()
+			schema := MustDiscriminatedUnion("type", []core.ZodSchema{option}).
+				Optional().
+				Default(defaultValue)
+
+			var (
+				got *any
+				err error
+			)
+			if strict {
+				got, err = schema.StrictParse(nil)
+			} else {
+				got, err = schema.Parse(nil)
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			assert.Equal(t, defaultValue, (*got).(map[string]any))
+		}
+
+		t.Run("Parse", func(t *testing.T) { parse(t, false) })
+		t.Run("StrictParse", func(t *testing.T) { parse(t, true) })
+	})
+
+	t.Run("outer Optional over Default follows modifier order", func(t *testing.T) {
+		option := Object(core.ObjectSchema{
+			"type": Literal("test"),
+		})
+		defaultValue := map[string]any{"type": "test"}
+		schema := MustDiscriminatedUnion("type", []core.ZodSchema{option}).
+			Default(defaultValue).
+			Optional()
+
+		t.Run("Parse", func(t *testing.T) {
+			got, err := schema.Parse(nil)
+			require.NoError(t, err)
+			assert.Nil(t, got)
+		})
+		t.Run("StrictParse", func(t *testing.T) {
+			got, err := schema.StrictParse(nil)
+			require.NoError(t, err)
+			assert.Nil(t, got)
+		})
+	})
+
 	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		// When both Default and Prefault are set, the outer Default should handle nil first.
 		schema := Object(core.ObjectSchema{
@@ -443,38 +519,73 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 			"data": "prefault",
 		}
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue).Default(defaultValue)
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
+			Prefault(prefaultValue).
+			Default(defaultValue)
 
-		result, err := discriminatedUnion.Parse(nil)
-		require.NoError(t, err)
-		expected := map[string]any{
+		t.Run("Parse", func(t *testing.T) {
+			result, err := discriminatedUnion.Parse(nil)
+			require.NoError(t, err)
+			assert.Equal(t, defaultValue, result)
+		})
+		t.Run("StrictParse", func(t *testing.T) {
+			result, err := discriminatedUnion.StrictParse(nil)
+			require.NoError(t, err)
+			assert.Equal(t, defaultValue, result)
+		})
+	})
+
+	t.Run("outer Prefault over inner Default", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String().Min(5),
+		})
+		defaultValue := map[string]any{
 			"type": "test",
 			"data": "default",
 		}
-		assert.Equal(t, expected, result) // Should be default, not prefault
-	})
+		prefaultValue := map[string]any{
+			"type": "test",
+			"data": "prefault",
+		}
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
+			Default(defaultValue).
+			Prefault(prefaultValue)
 
-	// DISABLED: Test for Zod v4 default short-circuit behavior. Enable when default short-circuiting is implemented.
-	/*
-		t.Run("Default short-circuits validation", func(t *testing.T) {
-			// Default value should bypass discriminated union validation constraints
-			schema := Object(core.ObjectSchema{
-				"type": LiteralOf([]string{"test"}),
-				"data": String().Min(10), // Require at least 10 characters
-			})
-
-			defaultValue := map[string]any{
-				"type": "test",
-				"data": "short", // Only 5 characters, would fail validation
-			}
-
-			discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Default(defaultValue)
-
+		t.Run("Parse", func(t *testing.T) {
 			result, err := discriminatedUnion.Parse(nil)
 			require.NoError(t, err)
-			assert.Equal(t, defaultValue, result) // Default bypasses validation
+			assert.Equal(t, prefaultValue, result)
 		})
-	*/
+		t.Run("StrictParse", func(t *testing.T) {
+			result, err := discriminatedUnion.StrictParse(nil)
+			require.NoError(t, err)
+			assert.Equal(t, prefaultValue, result)
+		})
+	})
+
+	t.Run("Default short-circuits validation", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"type": LiteralOf([]string{"test"}),
+			"data": String().Min(10),
+		})
+		defaultValue := map[string]any{
+			"type": "test",
+			"data": "short",
+		}
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Default(defaultValue)
+
+		t.Run("Parse", func(t *testing.T) {
+			result, err := discriminatedUnion.Parse(nil)
+			require.NoError(t, err)
+			assert.Equal(t, defaultValue, result)
+		})
+		t.Run("StrictParse", func(t *testing.T) {
+			result, err := discriminatedUnion.StrictParse(nil)
+			require.NoError(t, err)
+			assert.Equal(t, defaultValue, result)
+		})
+	})
 
 	t.Run("Prefault goes through full validation", func(t *testing.T) {
 		// Prefault value must pass all discriminated union validation
@@ -488,7 +599,7 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 			"data": "valid", // 5 characters, meets requirement
 		}
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue)
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Prefault(prefaultValue)
 
 		// Nil input triggers prefault, goes through validation and succeeds
 		result, err := discriminatedUnion.Parse(nil)
@@ -515,29 +626,44 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 			"type": "test",
 			"data": "prefault",
 		}
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue)
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Prefault(prefaultValue)
 
-		// Invalid discriminated union should fail without triggering Prefault
-		_, err := discriminatedUnion.Parse("invalid-union")
-		if err != nil {
-			assert.Contains(t, err.Error(), "Invalid input")
-		} else {
-			// If no error, it means the input was accepted, which is also valid behavior
-			// depending on the current implementation
-			t.Log("Input was accepted by discriminated union")
-		}
-
-		// Valid discriminated union should pass normally
-		result, err := discriminatedUnion.Parse(map[string]any{
-			"type": "test",
-			"data": "custom",
-		})
-		require.NoError(t, err)
-		expected := map[string]any{
+		valid := map[string]any{
 			"type": "test",
 			"data": "custom",
 		}
-		assert.Equal(t, expected, result)
+		for _, strict := range []bool{false, true} {
+			name := "Parse"
+			if strict {
+				name = "StrictParse"
+			}
+			t.Run(name, func(t *testing.T) {
+				var (
+					result any
+					err    error
+				)
+				if strict {
+					result, err = discriminatedUnion.StrictParse("invalid-union")
+				} else {
+					result, err = discriminatedUnion.Parse("invalid-union")
+				}
+				require.Error(t, err)
+				assert.Nil(t, result)
+				var zodErr *issues.ZodError
+				require.True(t, issues.IsZodError(err, &zodErr))
+				require.Len(t, zodErr.Issues, 1)
+				assert.Equal(t, core.InvalidType, zodErr.Issues[0].Code)
+				assert.Equal(t, core.ZodTypeObject, zodErr.Issues[0].Expected)
+
+				if strict {
+					result, err = discriminatedUnion.StrictParse(valid)
+				} else {
+					result, err = discriminatedUnion.Parse(valid)
+				}
+				require.NoError(t, err)
+				assert.Equal(t, valid, result)
+			})
+		}
 	})
 
 	t.Run("DefaultFunc and PrefaultFunc behavior", func(t *testing.T) {
@@ -550,19 +676,19 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 		defaultCalled := false
 		prefaultCalled := false
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).
-			DefaultFunc(func() any {
-				defaultCalled = true
-				return map[string]any{
-					"type": "test",
-					"data": "default",
-				}
-			}).
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).
 			PrefaultFunc(func() any {
 				prefaultCalled = true
 				return map[string]any{
 					"type": "test",
 					"data": "prefault",
+				}
+			}).
+			DefaultFunc(func() any {
+				defaultCalled = true
+				return map[string]any{
+					"type": "test",
+					"data": "default",
 				}
 			})
 
@@ -589,7 +715,7 @@ func TestDiscriminatedUnion_DefaultAndPrefault(t *testing.T) {
 			"data": "short", // Only 5 characters, fails validation
 		}
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Prefault(prefaultValue)
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Prefault(prefaultValue)
 
 		_, err := discriminatedUnion.Parse(nil)
 		require.Error(t, err)
@@ -614,7 +740,7 @@ func TestDiscriminatedUnion_Refine(t *testing.T) {
 		})
 
 		// Only accept entries where name is not empty
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema}).Refine(func(v any) bool {
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema, adminSchema}).Refine(func(v any) bool {
 			if obj, ok := v.(map[string]any); ok {
 				if name, exists := obj["name"]; exists {
 					if nameStr, ok := name.(string); ok {
@@ -650,7 +776,7 @@ func TestDiscriminatedUnion_Refine(t *testing.T) {
 		})
 
 		errorMessage := "Must be a valid discriminated union"
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Refine(func(v any) bool {
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Refine(func(v any) bool {
 			if obj, ok := v.(map[string]any); ok {
 				if data, exists := obj["data"]; exists {
 					if dataStr, ok := data.(string); ok {
@@ -690,7 +816,7 @@ func TestDiscriminatedUnion_Refine(t *testing.T) {
 			"role": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{userSchema, adminSchema}).Refine(func(v any) bool {
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{userSchema, adminSchema}).Refine(func(v any) bool {
 			if obj, ok := v.(map[string]any); ok {
 				if objType, exists := obj["type"]; exists {
 					return objType != "forbidden"
@@ -734,7 +860,7 @@ func TestDiscriminatedUnion_RefineAny(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).RefineAny(func(v any) bool {
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).RefineAny(func(v any) bool {
 			obj, ok := v.(map[string]any)
 			if !ok {
 				return false
@@ -773,7 +899,7 @@ func TestDiscriminatedUnion_RefineAny(t *testing.T) {
 			"num":  Int(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).RefineAny(func(v any) bool {
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).RefineAny(func(v any) bool {
 			obj, ok := v.(map[string]any)
 			if !ok {
 				return false
@@ -805,6 +931,42 @@ func TestDiscriminatedUnion_RefineAny(t *testing.T) {
 	})
 }
 
+func TestDiscriminatedUnion_ParentRefinementRunsOnceOnSelectedOutput(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		name := "Parse"
+		if strict {
+			name = "StrictParse"
+		}
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			option := Object(core.ObjectSchema{
+				"type": Literal("test"),
+				"data": String().Default("parsed"),
+			})
+			schema := MustDiscriminatedUnion("type", []core.ZodSchema{option}).RefineAny(func(value any) bool {
+				calls++
+				object, ok := value.(map[string]any)
+				return ok && object["data"] == "parsed"
+			})
+			input := map[string]any{"type": "test"}
+
+			var (
+				result any
+				err    error
+			)
+			if strict {
+				result, err = schema.StrictParse(input)
+			} else {
+				result, err = schema.Parse(input)
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, map[string]any{"type": "test", "data": "parsed"}, result)
+			assert.Equal(t, 1, calls)
+		})
+	}
+}
+
 // =============================================================================
 // Type-specific methods tests
 // =============================================================================
@@ -820,7 +982,7 @@ func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
 			"error":  String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("status", []any{schema1, schema2})
+		discriminatedUnion := MustDiscriminatedUnion("status", []core.ZodSchema{schema1, schema2})
 
 		assert.Equal(t, "status", discriminatedUnion.Discriminator())
 	})
@@ -835,7 +997,7 @@ func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
 			"val":  Int(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema1, schema2})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema1, schema2})
 
 		options := discriminatedUnion.Options()
 		assert.Len(t, options, 2)
@@ -856,7 +1018,7 @@ func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
 			"data": Int(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("kind", []any{schema1, schema2})
+		discriminatedUnion := MustDiscriminatedUnion("kind", []core.ZodSchema{schema1, schema2})
 
 		discMap := discriminatedUnion.DiscriminatorMap()
 		assert.Len(t, discMap, 2)
@@ -872,13 +1034,74 @@ func TestDiscriminatedUnion_TypeSpecificMethods(t *testing.T) {
 // =============================================================================
 
 func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
+	t.Run("nil option fails construction", func(t *testing.T) {
+		valid := Object(core.ObjectSchema{
+			"type": Literal("valid"),
+		})
+
+		schema, err := DiscriminatedUnion("type", []core.ZodSchema{valid, nil})
+
+		assert.Nil(t, schema)
+		require.ErrorIs(t, err, ErrOptionIsNil)
+	})
+
+	t.Run("duplicate discriminator returns structured construction error", func(t *testing.T) {
+		first := Object(core.ObjectSchema{"type": Literal("duplicate")})
+		second := Object(core.ObjectSchema{"type": Literal("duplicate")})
+
+		schema, err := DiscriminatedUnion("type", []core.ZodSchema{first, second})
+
+		assert.Nil(t, schema)
+		require.ErrorIs(t, err, ErrDuplicateDiscriminator)
+		detail, ok := errors.AsType[*DiscriminatorError](err)
+		require.True(t, ok)
+		assert.Equal(t, 1, detail.Option)
+		assert.Equal(t, "type", detail.Field)
+		assert.Equal(t, "duplicate", detail.Value)
+	})
+
+	t.Run("missing discriminator capability fails construction", func(t *testing.T) {
+		option := Object(core.ObjectSchema{"type": String()})
+
+		schema, err := DiscriminatedUnion("type", []core.ZodSchema{option})
+
+		assert.Nil(t, schema)
+		require.ErrorIs(t, err, ErrNoDiscriminatorValues)
+		detail, ok := errors.AsType[*DiscriminatorError](err)
+		require.True(t, ok)
+		assert.Equal(t, 0, detail.Option)
+		assert.Equal(t, "type", detail.Field)
+	})
+
+	t.Run("empty discriminator values fail construction", func(t *testing.T) {
+		option := Object(core.ObjectSchema{"type": LiteralOf([]string{})})
+
+		schema, err := DiscriminatedUnion("type", []core.ZodSchema{option})
+
+		assert.Nil(t, schema)
+		require.ErrorIs(t, err, ErrNoDiscriminatorValues)
+	})
+
+	t.Run("empty options fail construction", func(t *testing.T) {
+		schema, err := DiscriminatedUnion("type", nil)
+
+		assert.Nil(t, schema)
+		require.ErrorIs(t, err, ErrNoValidDiscriminators)
+	})
+
+	t.Run("Must constructor panics on invalid definition", func(t *testing.T) {
+		assert.Panics(t, func() {
+			MustDiscriminatedUnion("type", nil)
+		})
+	})
+
 	t.Run("missing discriminator field", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"type": LiteralOf([]string{"test"}),
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		_, err := discriminatedUnion.Parse(map[string]any{
 			"data": "hello",
@@ -892,7 +1115,7 @@ func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		_, err := discriminatedUnion.Parse(map[string]any{
 			"type": "invalid",
@@ -907,7 +1130,7 @@ func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
 			"data": String().Min(10),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		_, err := discriminatedUnion.Parse(map[string]any{
 			"type": "test",
@@ -922,7 +1145,7 @@ func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		// This should fail for non-object input
 		_, err := discriminatedUnion.Parse("not an object")
@@ -941,7 +1164,7 @@ func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}, core.SchemaParams{Error: "Expected discriminated union match"})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}, core.SchemaParams{Error: "Expected discriminated union match"})
 
 		_, err := discriminatedUnion.Parse(map[string]any{
 			"type": "invalid",
@@ -949,6 +1172,55 @@ func TestDiscriminatedUnion_ErrorHandling(t *testing.T) {
 		})
 		assert.Error(t, err)
 	})
+}
+
+func TestDiscriminatedUnion_UnknownDiscriminatorDoesNotRunOptions(t *testing.T) {
+	first := newCountingDiscriminatorSchema("first")
+	second := newCountingDiscriminatorSchema("second")
+	schema := MustDiscriminatedUnion("type", []core.ZodSchema{first, second})
+
+	_, err := schema.Parse(map[string]any{"type": "unknown"})
+
+	require.Error(t, err)
+	assert.Equal(t, 0, first.calls)
+	assert.Equal(t, 0, second.calls)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	assert.Equal(t, core.InvalidUnion, zodErr.Issues[0].Code)
+	assert.Equal(t, []any{"type"}, zodErr.Issues[0].Path)
+	assert.Equal(t, []any{"first", "second"}, zodErr.Issues[0].Values)
+}
+
+func TestDiscriminatedUnion_KnownDiscriminatorRunsOnlyIndexedOption(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		name := "Parse"
+		if strict {
+			name = "StrictParse"
+		}
+		t.Run(name, func(t *testing.T) {
+			first := newCountingDiscriminatorSchema("first")
+			second := newCountingDiscriminatorSchema("second")
+			schema := MustDiscriminatedUnion("type", []core.ZodSchema{first, second})
+			input := map[string]any{"type": "second"}
+
+			var (
+				result any
+				err    error
+			)
+			if strict {
+				result, err = schema.StrictParse(input)
+			} else {
+				result, err = schema.Parse(input)
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, input, result)
+			assert.Equal(t, 0, first.calls)
+			assert.Equal(t, 1, second.calls)
+		})
+	}
 }
 
 // =============================================================================
@@ -962,7 +1234,7 @@ func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema}).Nilable()
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema}).Nilable()
 
 		// Test nil input
 		result, err := discriminatedUnion.Parse(nil)
@@ -989,7 +1261,7 @@ func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		result, err := discriminatedUnion.Parse(map[string]any{
 			"type": "only",
@@ -1020,7 +1292,7 @@ func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
 		})
 
 		// Create discriminated union
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema1, schema2})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema1, schema2})
 
 		// Test normal discriminated union behavior
 		result, err := discriminatedUnion.Parse(map[string]any{
@@ -1048,7 +1320,7 @@ func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
 			"data": String(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{schema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{schema})
 
 		// Parse with empty context slice
 		result, err := discriminatedUnion.Parse(map[string]any{
@@ -1078,7 +1350,7 @@ func TestDiscriminatedUnion_EdgeCases(t *testing.T) {
 			"data": Bool(),
 		})
 
-		discriminatedUnion := DiscriminatedUnion("type", []any{stringSchema, intSchema, boolSchema})
+		discriminatedUnion := MustDiscriminatedUnion("type", []core.ZodSchema{stringSchema, intSchema, boolSchema})
 
 		// Test string discriminator
 		result, err := discriminatedUnion.Parse(map[string]any{

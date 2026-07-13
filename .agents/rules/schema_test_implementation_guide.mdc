@@ -13,7 +13,6 @@ A concise and practical guide for building GoZod Schema test files, updated with
 - **Comprehensive & Organized**: Follow the unified section structure for clarity. Test boundaries and edge cases thoroughly.
 - **Real-World Patterns**: Tests should reflect actual API usage, including modifier chaining and error handling.
 - **Default vs Prefault**: Verify Default short-circuits validation while Prefault goes through full parsing pipeline.
-- **Custom Validator Integration**: Test custom validator registry and struct tag integration where applicable.
 
 ---
 
@@ -457,7 +456,6 @@ This checklist is simplified to match the new 7-section structure.
 - [ ] Test edge cases: `nil` handling, special values (NaN, Infinity for numbers).
 - [ ] Test pointer identity preservation where applicable.
 - [ ] Test very large/small values, Unicode strings, complex data structures.
-- [ ] Test custom validator error messages and integration.
 - [ ] Test struct tag validation error paths where applicable.
 
 #### Overwrite (Transform/Pipe operations)

@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for InvalidTagStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for InvalidTagStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (its InvalidTagStruct) Schema() *gozod.ZodStruct[InvalidTagStruct, InvalidTagStruct] {
 	return gozod.Struct[InvalidTagStruct](gozod.StructSchema{
 		"Name": gozod.String().Optional(),

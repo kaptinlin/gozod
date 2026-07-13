@@ -2,6 +2,7 @@ package core
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,29 +58,75 @@ func TestRegistry_CRUDAndEarlyRangeStop(t *testing.T) {
 	assert.False(t, registry.Has(first))
 }
 
-func TestCopyGlobalMeta_CopiesRegisteredMetadata(t *testing.T) {
-	// GlobalRegistry is process-wide, so this test runs serially.
-	from := newRegistrySchema()
-	to := newRegistrySchema()
-	GlobalRegistry.Remove(from).Remove(to)
-	t.Cleanup(func() {
-		GlobalRegistry.Remove(from).Remove(to)
+func TestRegistry_RangeCallbackCanMutateRegistry(t *testing.T) {
+	t.Parallel()
+
+	first := newRegistrySchema()
+	added := newRegistrySchema()
+	registry := NewRegistry[string]().Add(first, "first")
+	done := make(chan struct{})
+	var gotAdded, nestedRange bool
+
+	go func() {
+		defer close(done)
+		registry.Range(func(schema ZodSchema, _ string) bool {
+			registry.Remove(schema).Add(added, "added")
+			_, gotAdded = registry.Get(added)
+			registry.Range(func(ZodSchema, string) bool {
+				nestedRange = true
+				return false
+			})
+			return false
+		})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Range callback deadlocked while mutating the registry")
+	}
+
+	assert.False(t, registry.Has(first))
+	assert.True(t, registry.Has(added))
+	assert.True(t, gotAdded)
+	assert.True(t, nestedRange)
+}
+
+func TestRegistry_RangeUsesEntrySnapshot(t *testing.T) {
+	t.Parallel()
+
+	first := newRegistrySchema()
+	second := newRegistrySchema()
+	added := newRegistrySchema()
+	registry := NewRegistry[string]().
+		Add(first, "first").
+		Add(second, "second")
+	seen := make(map[ZodSchema]string)
+	mutated := false
+
+	registry.Range(func(schema ZodSchema, meta string) bool {
+		seen[schema] = meta
+		if !mutated {
+			mutated = true
+			registry.Add(first, "changed-first").
+				Add(second, "changed-second").
+				Add(added, "added")
+		}
+		return true
 	})
 
-	meta := GlobalMeta{ID: "schema-id", Title: "User", Examples: []any{"alice"}}
-	GlobalRegistry.Add(from, meta)
+	assert.Equal(t, map[ZodSchema]string{
+		first:  "first",
+		second: "second",
+	}, seen)
+}
 
-	CopyGlobalMeta(from, to)
+func TestRegistry_MetadataRemainsCallerOwned(t *testing.T) {
+	schema := newRegistrySchema()
+	registry := NewRegistry[GlobalMeta]().Add(schema, GlobalMeta{Title: "Caller metadata"})
 
-	got, ok := GlobalRegistry.Get(to)
+	meta, ok := registry.Get(schema)
 	require.True(t, ok)
-	assert.Equal(t, meta.ID, got.ID)
-	assert.Equal(t, meta.Title, got.Title)
-	assert.Len(t, got.Examples, 1)
-
-	missing := newRegistrySchema()
-	GlobalRegistry.Remove(missing)
-	CopyGlobalMeta(nil, missing)
-	assert.False(t, GlobalRegistry.Has(missing))
-	CopyGlobalMeta(from, nil)
+	assert.Equal(t, "Caller metadata", meta.Title)
+	assert.Equal(t, GlobalMeta{}, schema.Internals().Metadata())
 }

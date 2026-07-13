@@ -167,30 +167,11 @@ func MergeInternalsState(dst, src *core.ZodTypeInternals) {
 		return
 	}
 
-	// Merge flags.
-	if src.IsOptional() {
-		dst.SetOptional(true)
-	}
-	if src.IsNilable() {
-		dst.SetNilable(true)
-	}
 	if src.IsCoerce() {
 		dst.SetCoerce(true)
 	}
 
 	// Merge modifiers.
-	if src.DefaultValue != nil {
-		dst.SetDefaultValue(src.DefaultValue)
-	}
-	if src.DefaultFunc != nil {
-		dst.SetDefaultFunc(src.DefaultFunc)
-	}
-	if src.PrefaultValue != nil {
-		dst.SetPrefaultValue(src.PrefaultValue)
-	}
-	if src.PrefaultFunc != nil {
-		dst.SetPrefaultFunc(src.PrefaultFunc)
-	}
 	if len(src.Modifiers) > 0 {
 		dst.Modifiers = cloneModifiers(src.Modifiers)
 	}

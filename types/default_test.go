@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kaptinlin/gozod/core"
 )
 
 // =============================================================================
@@ -208,8 +210,14 @@ func TestDefaultValueCloning(t *testing.T) {
 		source := Any().Default(defaultValue)
 		clone := source.Optional().NonOptional()
 
-		clonedDefault, ok := clone.internals.DefaultValue.(map[string]any)
-		require.True(t, ok, "Expected cloned default map")
+		var clonedDefault map[string]any
+		for _, modifier := range clone.internals.Modifiers {
+			if modifier.Kind == core.ZodModifierDefault {
+				clonedDefault, _ = modifier.Value.(map[string]any)
+				break
+			}
+		}
+		require.NotNil(t, clonedDefault, "Expected cloned default map")
 
 		clonedItems, ok := clonedDefault["items"].([]any)
 		require.True(t, ok, "Expected cloned items slice")

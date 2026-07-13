@@ -7,8 +7,8 @@ import (
 	"regexp"
 )
 
-// Schema returns a pre-built gozod schema for Product
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for Product.
+// Package-local generated dependencies call their generated schema methods.
 func (p Product) Schema() *gozod.ZodStruct[Product, Product] {
 	return gozod.Struct[Product](gozod.StructSchema{
 		"id":       gozod.UUID(),

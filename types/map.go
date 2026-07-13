@@ -250,21 +250,13 @@ func (z *ZodMap[T, R]) PrefaultFunc(fn func() T) *ZodMap[T, R] {
 // Meta stores metadata for this map schema.
 func (z *ZodMap[T, R]) Meta(meta core.GlobalMeta) *ZodMap[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodMap[T, R]) Describe(description string) *ZodMap[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Min sets the minimum number of entries.
@@ -383,13 +375,13 @@ func (z *ZodMap[T, R]) withCheck(c core.ZodCheck) *ZodMap[T, R] {
 
 func (z *ZodMap[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodMap[T, *T] {
 	clone := &ZodMap[T, *T]{internals: z.newMapInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
 func (z *ZodMap[T, R]) withInternals(in *core.ZodTypeInternals) *ZodMap[T, R] {
 	clone := &ZodMap[T, R]{internals: z.newMapInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

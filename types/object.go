@@ -252,24 +252,16 @@ func (z *ZodObject[T, R]) PrefaultFunc(fn func() T) *ZodObject[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta attaches GlobalMeta to this object schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodObject[T, R]) Meta(meta core.GlobalMeta) *ZodObject[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodObject[T, R]) Describe(description string) *ZodObject[T, R] {
-	newInternals := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Min sets the minimum number of fields.
@@ -565,14 +557,14 @@ func (z *ZodObject[T, R]) newObjectInternals(in *core.ZodTypeInternals) *ZodObje
 // withPtrInternals creates a new instance with pointer constraint type.
 func (z *ZodObject[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodObject[T, *T] {
 	clone := &ZodObject[T, *T]{internals: z.newObjectInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
 // withInternals creates a new instance preserving the constraint type.
 func (z *ZodObject[T, R]) withInternals(in *core.ZodTypeInternals) *ZodObject[T, R] {
 	clone := &ZodObject[T, R]{internals: z.newObjectInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -856,18 +848,7 @@ func (z *ZodObject[T, R]) missingFieldUsesFallback(schema core.ZodSchema) bool {
 	if internals == nil {
 		return false
 	}
-	for i := len(internals.Modifiers) - 1; i >= 0; i-- {
-		switch internals.Modifiers[i].Kind {
-		case core.ZodModifierDefault, core.ZodModifierPrefault:
-			return true
-		case core.ZodModifierOptional, core.ZodModifierNilable, core.ZodModifierNonOptional:
-			return false
-		}
-	}
-	return internals.DefaultValue != nil ||
-		internals.DefaultFunc != nil ||
-		internals.PrefaultValue != nil ||
-		internals.PrefaultFunc != nil
+	return internals.NilInputUsesFallback()
 }
 
 func (z *ZodObject[T, R]) normalizeFieldOutput(input, parsed any, schema core.ZodSchema) any {
@@ -875,7 +856,7 @@ func (z *ZodObject[T, R]) normalizeFieldOutput(input, parsed any, schema core.Zo
 		return parsed
 	}
 	internals := schema.Internals()
-	if internals == nil || (!internals.Optional && !internals.ExactOptional) {
+	if internals == nil || !internals.IsOptional() {
 		return parsed
 	}
 	parsedValue := reflect.ValueOf(parsed)
@@ -905,7 +886,7 @@ func (z *ZodObject[T, R]) isFieldOptional(schema core.ZodSchema, field string) b
 			return true
 		}
 	}
-	return schema.Internals().Optional
+	return schema.Internals().IsOptional()
 }
 
 // isFieldExactOptional reports whether a field has ExactOptional set.
@@ -913,7 +894,7 @@ func (z *ZodObject[T, R]) isFieldExactOptional(schema core.ZodSchema) bool {
 	if schema == nil {
 		return false
 	}
-	return schema.Internals().ExactOptional
+	return schema.Internals().IsExactOptional()
 }
 
 // newZodObjectFromDef constructs a new ZodObject from a definition.

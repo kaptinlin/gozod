@@ -195,27 +195,16 @@ func (z *ZodSlice[T, R]) PrefaultFunc(fn func() []T) *ZodSlice[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this slice schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodSlice[T, R]) Meta(meta core.GlobalMeta) *ZodSlice[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe sets a description for this schema in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodSlice[T, R]) Describe(description string) *ZodSlice[T, R] {
-	in := z.internals.Clone()
-
-	meta, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		meta = core.GlobalMeta{}
-	}
-	meta.Description = description
-
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, meta)
-
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Min adds a minimum element count constraint.
@@ -355,7 +344,7 @@ func (z *ZodSlice[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSlice[T, R
 	clone := &ZodSlice[T, R]{
 		internals: z.newSliceInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -364,7 +353,7 @@ func (z *ZodSlice[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSlice[T
 	clone := &ZodSlice[T, *[]T]{
 		internals: z.newSliceInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

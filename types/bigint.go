@@ -221,24 +221,16 @@ func (z *ZodBigInt[T]) PrefaultFunc(fn func() *big.Int) *ZodBigInt[T] {
 
 // Metadata methods
 
-// Meta stores metadata for this schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodBigInt[T]) Meta(meta core.GlobalMeta) *ZodBigInt[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodBigInt[T]) Describe(desc string) *ZodBigInt[T] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Validation methods
@@ -387,7 +379,7 @@ func (z *ZodBigInt[T]) withCheck(c core.ZodCheck) *ZodBigInt[T] {
 	return z.withInternals(in)
 }
 
-// parseNilInput handles nil input by checking modifiers in priority order.
+// parseNilInput handles nil input through the shared ordered modifier plan.
 // Returns (result, _, true, err) when final, or (_, substitute, false, nil) for prefault.
 func (z *ZodBigInt[T]) parseNilInput(
 	ctx ...*core.ParseContext,
@@ -399,46 +391,21 @@ func (z *ZodBigInt[T]) parseNilInput(
 	}
 
 	ti := &z.internals.ZodTypeInternals
-
-	if ti.NonOptional {
-		return zero, nil, true, issues.CreateNonOptionalError(pctx)
+	if len(ti.Modifiers) == 0 {
+		if _, valueConstraint := any(zero).(*big.Int); valueConstraint {
+			return zero, nil, true, issues.CreateInvalidTypeError(core.ZodTypeBigInt, nil, pctx)
+		}
 	}
-	if ti.DefaultValue != nil {
-		v, err := engine.ConvertToConstraintType[*big.Int, T](
-			ti.DefaultValue,
-			pctx,
-			core.ZodTypeBigInt,
-		)
-		return v, nil, true, err
+	r, handled, err := engine.ProcessNilModifiers[*big.Int](nil, ti, core.ZodTypeBigInt, pctx)
+	if err != nil {
+		return zero, nil, true, err
 	}
-	if ti.DefaultFunc != nil {
-		v, err := engine.ConvertToConstraintType[*big.Int, T](
-			ti.DefaultFunc(),
-			pctx,
-			core.ZodTypeBigInt,
-		)
-		return v, nil, true, err
+	if !handled {
+		return zero, r, false, nil
 	}
 
-	switch {
-	case ti.PrefaultValue != nil:
-		return zero, ti.PrefaultValue, false, nil
-	case ti.PrefaultFunc != nil:
-		return zero, ti.PrefaultFunc(), false, nil
-	case ti.Optional || ti.Nilable:
-		v, err := engine.ConvertToConstraintType[*big.Int, T](
-			nil,
-			pctx,
-			core.ZodTypeBigInt,
-		)
-		return v, nil, true, err
-	default:
-		return zero, nil, true, issues.CreateInvalidTypeError(
-			core.ZodTypeBigInt,
-			nil,
-			pctx,
-		)
-	}
+	v, err := engine.ConvertToConstraintType[*big.Int, T](r, pctx, core.ZodTypeBigInt)
+	return v, nil, true, err
 }
 
 // withPtrInternals creates a **big.Int schema from cloned internals.
@@ -451,7 +418,7 @@ func (z *ZodBigInt[T]) withPtrInternals(
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -463,7 +430,7 @@ func (z *ZodBigInt[T]) withInternals(in *core.ZodTypeInternals) *ZodBigInt[T] {
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

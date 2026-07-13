@@ -197,24 +197,16 @@ func (z *ZodTime[T]) PrefaultFunc(fn func() time.Time) *ZodTime[T] {
 // Metadata Methods
 // =============================================================================
 
-// Meta stores metadata for this time schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodTime[T]) Meta(meta core.GlobalMeta) *ZodTime[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodTime[T]) Describe(desc string) *ZodTime[T] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // =============================================================================
@@ -407,7 +399,7 @@ func (z *ZodTime[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodTime[*time.
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -419,7 +411,7 @@ func (z *ZodTime[T]) withInternals(in *core.ZodTypeInternals) *ZodTime[T] {
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

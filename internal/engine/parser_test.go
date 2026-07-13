@@ -105,12 +105,13 @@ func TestMergeInternalsState_ClonesMutableValues(t *testing.T) {
 	src.Bag["patterns"] = []string{"^[a-z]+$"}
 
 	MergeInternalsState(dst, src)
-	src.DefaultValue.(map[string]any)["name"] = "changed"
-	src.PrefaultValue.(map[string]any)["name"] = "changed"
+	src.Modifiers[0].Value.(map[string]any)["name"] = "changed"
+	src.Modifiers[1].Value.(map[string]any)["name"] = "changed"
 	src.Bag["patterns"].([]string)[0] = "changed"
 
-	assert.Equal(t, map[string]any{"name": "default"}, dst.DefaultValue)
-	assert.Equal(t, map[string]any{"name": "prefault"}, dst.PrefaultValue)
+	require.Len(t, dst.Modifiers, 2)
+	assert.Equal(t, map[string]any{"name": "default"}, dst.Modifiers[0].Value)
+	assert.Equal(t, map[string]any{"name": "prefault"}, dst.Modifiers[1].Value)
 	assert.Equal(t, []string{"^[a-z]+$"}, dst.Bag["patterns"])
 }
 
@@ -561,6 +562,29 @@ func TestParseComplexStrictNilModifiers(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, map[string]any{"name": "prefault"}, *result)
 	})
+
+	t.Run("plan-only prefault is parsed for nil input", func(t *testing.T) {
+		internals := createMockInternals()
+		internals.Modifiers = []core.ZodModifier{{
+			Kind:     core.ZodModifierPrefault,
+			Value:    map[string]any{"name": "prefault"},
+			HasValue: true,
+		}}
+
+		var input *map[string]any
+		result, err := ParseComplexStrict[map[string]any, *map[string]any](
+			input,
+			internals,
+			"object",
+			typeExtractor,
+			ptrExtractor,
+			validator,
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, map[string]any{"name": "prefault"}, *result)
+	})
 }
 
 // =============================================================================
@@ -765,9 +789,8 @@ func BenchmarkParseStrict(b *testing.B) {
 
 	b.Run("WithNilInput", func(b *testing.B) {
 		// Test nil handling
-		internals := &core.ZodTypeInternals{
-			Nilable: true,
-		}
+		internals := &core.ZodTypeInternals{}
+		internals.SetNilable(true)
 		var input *string
 		b.ResetTimer()
 		for b.Loop() {
@@ -779,9 +802,8 @@ func BenchmarkParseStrict(b *testing.B) {
 // BenchmarkProcessModifiers tests the performance of the processModifiers function with nil input
 func BenchmarkProcessModifiers(b *testing.B) {
 	b.Run("NonOptional", func(b *testing.B) {
-		internals := &core.ZodTypeInternals{
-			NonOptional: true,
-		}
+		internals := &core.ZodTypeInternals{}
+		internals.SetNonOptional(true)
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()
@@ -791,9 +813,8 @@ func BenchmarkProcessModifiers(b *testing.B) {
 	})
 
 	b.Run("WithDefault", func(b *testing.B) {
-		internals := &core.ZodTypeInternals{
-			DefaultValue: "default",
-		}
+		internals := &core.ZodTypeInternals{}
+		internals.SetDefaultValue("default")
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()
@@ -803,9 +824,8 @@ func BenchmarkProcessModifiers(b *testing.B) {
 	})
 
 	b.Run("Nilable", func(b *testing.B) {
-		internals := &core.ZodTypeInternals{
-			Nilable: true,
-		}
+		internals := &core.ZodTypeInternals{}
+		internals.SetNilable(true)
 		ctx := &core.ParseContext{}
 		parseCore := func(any) (any, error) { return "parsed", nil }
 		b.ResetTimer()

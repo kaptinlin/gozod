@@ -405,8 +405,8 @@ passwordSchema2 := gozod.String().Min(8, "Password too short").Refine(func(s str
 // Union types (OR logic)
 stringOrNumber := gozod.Union(gozod.String(), gozod.Int())
 
-// Discriminated union for better performance
-apiResponse := gozod.DiscriminatedUnion("status",
+// Discriminated union with construction-time definition validation
+apiResponse, err := gozod.DiscriminatedUnion("status", []gozod.ZodSchema{
     gozod.Object(gozod.ObjectSchema{
         "status": gozod.Literal("success"),
         "data":   gozod.String(),
@@ -415,7 +415,10 @@ apiResponse := gozod.DiscriminatedUnion("status",
         "status": gozod.Literal("error"),
         "error":  gozod.String(),
     }),
-)
+})
+if err != nil {
+    return err
+}
 ```
 
 ## Working with JSON APIs

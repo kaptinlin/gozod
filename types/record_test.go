@@ -101,6 +101,29 @@ func TestRecord_BasicFunctionality(t *testing.T) {
 	})
 }
 
+func TestRecordTyped_OptionalAcceptsTypedNilMap(t *testing.T) {
+	type node struct {
+		Value string `json:"value"`
+	}
+
+	valueSchema := LazyTyped[*node](func() any {
+		return Struct[node](core.StructSchema{
+			"value": String(),
+		})
+	})
+	schema := RecordTyped[map[string]*node, map[string]*node](String(), valueSchema).Optional()
+
+	var input map[string]*node
+	got, err := schema.Parse(input)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	got, err = schema.Parse(map[string]*node{"child": {Value: "ok"}})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, map[string]*node{"child": {Value: "ok"}}, *got)
+}
+
 // =============================================================================
 // Type safety tests
 // =============================================================================

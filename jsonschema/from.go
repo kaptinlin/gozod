@@ -2,16 +2,22 @@
 package jsonschema
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"maps"
+	"math"
 	"math/big"
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 
 	lib "github.com/kaptinlin/jsonschema"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 	"github.com/kaptinlin/gozod/types"
 )
 
@@ -32,15 +38,46 @@ var (
 	ErrJSONSchemaContains           = errors.New("contains/minContains/maxContains is not supported")
 )
 
+// ImportError identifies the JSON Schema keyword and RFC 6901 location that failed to import.
+type ImportError struct {
+	Keyword string
+	Pointer string
+	Err     error
+}
+
+func (e *ImportError) Error() string {
+	pointer := e.Pointer
+	if pointer == "" {
+		pointer = "<root>"
+	}
+	return fmt.Sprintf("import JSON Schema keyword %q at %s: %v", e.Keyword, pointer, e.Err)
+}
+
+// Unwrap preserves sentinel and dependency error inspection.
+func (e *ImportError) Unwrap() error { return e.Err }
+
+// ImportLossError describes validation semantics intentionally omitted by a lossy import.
+type ImportLossError struct {
+	Keyword string
+	Pointer string
+	Err     error
+}
+
+func (l ImportLossError) Error() string {
+	pointer := l.Pointer
+	if pointer == "" {
+		pointer = "<root>"
+	}
+	return fmt.Sprintf("lossy JSON Schema import omitted keyword %q at %s: %v", l.Keyword, pointer, l.Err)
+}
+
+// Unwrap preserves sentinel and typed cause inspection.
+func (l ImportLossError) Unwrap() error { return l.Err }
+
 // FromJSONSchemaOptions configures the JSON Schema to GoZod conversion.
 type FromJSONSchemaOptions struct {
-	// AllowLossy permits conversion to ignore unsupported JSON Schema keywords.
-	// The default is fail-closed: unsupported keywords return an error.
-	AllowLossy bool
-	// LossyKeywords receives unsupported keywords ignored when AllowLossy is true.
-	LossyKeywords *[]string
-	// Metadata receives imported JSON Schema metadata. Nil keeps the historical
-	// behavior of writing metadata to core.GlobalRegistry.
+	// Metadata receives imported JSON Schema metadata. Nil stores metadata on
+	// the returned schema.
 	Metadata *core.Registry[core.GlobalMeta]
 }
 
@@ -53,17 +90,94 @@ func FromJSONSchema(schema *lib.Schema, opts ...FromJSONSchemaOptions) (core.Zod
 	}
 
 	ctx := &fromJSONSchemaContext{
-		seen:    make(map[*lib.Schema]core.ZodSchema),
+		seen:    make(map[*lib.Schema]*fromSchemaCell),
 		options: options,
 	}
 
 	return ctx.convert(schema)
 }
 
+// FromJSONSchemaLossy converts a JSON Schema while reporting omitted validation semantics.
+func FromJSONSchemaLossy(
+	schema *lib.Schema,
+	opts ...FromJSONSchemaOptions,
+) (core.ZodSchema, []ImportLossError, error) {
+	var options FromJSONSchemaOptions
+	if len(opts) > 0 {
+		options = opts[0]
+	}
+	losses := make([]ImportLossError, 0)
+	ctx := &fromJSONSchemaContext{
+		seen:    make(map[*lib.Schema]*fromSchemaCell),
+		options: options,
+		lossy:   true,
+		losses:  &losses,
+	}
+	imported, err := ctx.convert(schema)
+	return imported, normalizeImportLosses(losses), err
+}
+
+func normalizeImportLosses(losses []ImportLossError) []ImportLossError {
+	slices.SortStableFunc(losses, func(a, b ImportLossError) int {
+		return cmp.Or(cmp.Compare(a.Pointer, b.Pointer), cmp.Compare(a.Keyword, b.Keyword))
+	})
+	unique := losses[:0]
+	for _, loss := range losses {
+		if len(unique) > 0 {
+			previous := unique[len(unique)-1]
+			if previous.Pointer == loss.Pointer && previous.Keyword == loss.Keyword {
+				continue
+			}
+		}
+		unique = append(unique, loss)
+	}
+	return unique
+}
+
 // fromJSONSchemaContext holds conversion state.
 type fromJSONSchemaContext struct {
-	seen    map[*lib.Schema]core.ZodSchema
+	seen    map[*lib.Schema]*fromSchemaCell
 	options FromJSONSchemaOptions
+	path    []string
+	lossy   bool
+	losses  *[]ImportLossError
+}
+
+type fromSchemaCell struct {
+	schema core.ZodSchema
+	lazy   core.ZodSchema
+}
+
+func (c *fromSchemaCell) reference() core.ZodSchema {
+	if c.schema != nil {
+		return c.schema
+	}
+	if c.lazy == nil {
+		c.lazy = types.LazyAny(func() any { return c.schema })
+	}
+	return c.lazy
+}
+
+func (ctx *fromJSONSchemaContext) at(tokens ...string) *fromJSONSchemaContext {
+	derived := *ctx
+	derived.path = append(slices.Clone(ctx.path), tokens...)
+	return &derived
+}
+
+func (ctx *fromJSONSchemaContext) importError(keyword string, err error) error {
+	return ctx.importErrorAt(keyword, err, keyword)
+}
+
+func (ctx *fromJSONSchemaContext) importErrorAt(keyword string, err error, path ...string) error {
+	tokens := append(slices.Clone(ctx.path), path...)
+	for i := range tokens {
+		tokens[i] = strings.ReplaceAll(strings.ReplaceAll(tokens[i], "~", "~0"), "/", "~1")
+	}
+	pointer := ""
+	if len(tokens) > 0 {
+		pointer = "/" + strings.Join(tokens, "/")
+	}
+	return &ImportError{Keyword: keyword, Pointer: pointer, Err: err}
 }
 
 // convert dispatches to the appropriate converter based on schema type.
@@ -72,11 +186,22 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 		return types.Unknown(), nil
 	}
 
-	// Handle circular references
-	if existing, ok := ctx.seen[s]; ok {
-		return existing, nil
+	if cell, ok := ctx.seen[s]; ok {
+		return cell.reference(), nil
 	}
+	cell := &fromSchemaCell{}
+	ctx.seen[s] = cell
 
+	result, err := ctx.convertUnseen(s)
+	if err != nil {
+		delete(ctx.seen, s)
+		return nil, err
+	}
+	cell.schema = result
+	return result, nil
+}
+
+func (ctx *fromJSONSchemaContext) convertUnseen(s *lib.Schema) (core.ZodSchema, error) {
 	// Handle boolean schema
 	if s.Boolean != nil {
 		if *s.Boolean {
@@ -88,40 +213,24 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 	// Handle $ref (already pre-resolved by kaptinlin/jsonschema).
 	if s.Ref != "" {
 		if s.ResolvedRef == nil {
-			return nil, fmt.Errorf("%w: unresolved $ref %q", ErrInvalidJSONSchema, s.Ref)
+			return nil, ctx.importError("$ref", fmt.Errorf("%w: unresolved $ref %q", ErrInvalidJSONSchema, s.Ref))
 		}
-		return ctx.convert(s.ResolvedRef)
+		return ctx.convertResolvedRef(s)
 	}
 	if s.ResolvedRef != nil {
-		return ctx.convert(s.ResolvedRef)
+		return ctx.convertResolvedRef(s)
 	}
 
 	unsupported := ctx.unsupportedFeatures(s)
+	unsupported = append(unsupported, unanchoredValidationFeatures(s)...)
 	if len(unsupported) > 0 {
-		if !ctx.options.AllowLossy {
-			return nil, unsupported[0].err
+		if !ctx.lossy {
+			return nil, ctx.importError(unsupported[0].keyword, unsupported[0].err)
 		}
-		ctx.recordLossyKeywords(unsupported)
+		ctx.recordLosses(unsupported)
 	}
 
-	// Handle composition keywords first
-	var result core.ZodSchema
-	var convErr error
-
-	switch {
-	case len(s.AllOf) > 0:
-		result, convErr = ctx.convertAllOf(s)
-	case len(s.AnyOf) > 0:
-		result, convErr = ctx.convertAnyOf(s)
-	case len(s.OneOf) > 0:
-		result, convErr = ctx.convertOneOf(s)
-	case s.Const != nil:
-		result, convErr = ctx.convertConst(s)
-	case len(s.Enum) > 0:
-		result, convErr = ctx.convertEnum(s)
-	default:
-		result, convErr = ctx.convertByType(s)
-	}
+	result, convErr := ctx.convertAssertions(s)
 
 	if convErr != nil {
 		return nil, convErr
@@ -132,8 +241,105 @@ func (ctx *fromJSONSchemaContext) convert(s *lib.Schema) (core.ZodSchema, error)
 	return result, nil
 }
 
+func (ctx *fromJSONSchemaContext) convertResolvedRef(s *lib.Schema) (core.ZodSchema, error) {
+	if s.ResolvedRef == s {
+		return nil, ctx.importError("$ref", fmt.Errorf("%w: %s", ErrJSONSchemaCircularRef, s.Ref))
+	}
+	target, err := ctx.at("$ref").convert(s.ResolvedRef)
+	if err != nil {
+		return nil, err
+	}
+
+	siblings := *s
+	siblings.Ref = ""
+	siblings.ResolvedRef = nil
+	if len(siblings.Type) == 0 && len(s.ResolvedRef.Type) > 0 {
+		siblings.Type = slices.Clone(s.ResolvedRef.Type)
+	}
+	local, err := ctx.convert(&siblings)
+	if err != nil {
+		return nil, err
+	}
+	return types.Intersection(target, local), nil
+}
+
+func (ctx *fromJSONSchemaContext) convertAssertions(s *lib.Schema) (core.ZodSchema, error) {
+	assertions := make([]core.ZodSchema, 0, 4)
+	if len(s.Type) > 0 || s.Const != nil || len(s.Enum) > 0 {
+		basic, err := ctx.convertBasicAssertions(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, basic)
+	}
+	if len(s.AllOf) > 0 {
+		allOf, err := ctx.convertAllOf(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, allOf)
+	}
+	if len(s.AnyOf) > 0 {
+		anyOf, err := ctx.convertAnyOf(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, anyOf)
+	}
+	if len(s.OneOf) > 0 {
+		oneOf, err := ctx.convertOneOf(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, oneOf)
+	}
+
+	if len(assertions) == 0 {
+		return ctx.convertBasicAssertions(s)
+	}
+	return conjoinSchemas(assertions), nil
+}
+
+func conjoinSchemas(schemas []core.ZodSchema) core.ZodSchema {
+	result := schemas[0]
+	for _, schema := range schemas[1:] {
+		result = types.Intersection(result, schema)
+	}
+	return result
+}
+
+func (ctx *fromJSONSchemaContext) convertBasicAssertions(s *lib.Schema) (core.ZodSchema, error) {
+	assertions := make([]core.ZodSchema, 0, 3)
+	if len(s.Type) > 0 {
+		base, err := ctx.convertByType(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, base)
+	}
+	if s.Const != nil {
+		constant, err := ctx.convertConst(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, constant)
+	}
+	if len(s.Enum) > 0 {
+		enum, err := ctx.convertEnum(s)
+		if err != nil {
+			return nil, err
+		}
+		assertions = append(assertions, enum)
+	}
+
+	if len(assertions) == 0 {
+		return ctx.convertByType(s)
+	}
+	return conjoinSchemas(assertions), nil
+}
+
 // attachMeta extracts metadata fields from a JSON Schema node and attaches them
-// to the GoZod schema via the selected registry (Zod v4: 456af1ea).
+// to the returned schema or the caller-selected registry.
 // Captures: $id, title, description, examples.
 func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchema) {
 	if schema == nil {
@@ -155,11 +361,12 @@ func (ctx *fromJSONSchemaContext) attachMeta(s *lib.Schema, schema core.ZodSchem
 	}
 
 	if meta.ID != "" || meta.Title != "" || meta.Description != "" || len(meta.Examples) > 0 {
-		registry := ctx.options.Metadata
-		if registry == nil {
-			registry = core.GlobalRegistry
+		meta = cloneutil.Clone(meta).(core.GlobalMeta)
+		if ctx.options.Metadata != nil {
+			ctx.options.Metadata.Add(schema, meta)
+			return
 		}
-		registry.Add(schema, meta)
+		schema.Internals().SetMetadata(meta)
 	}
 }
 
@@ -186,7 +393,8 @@ var unsupportedImportKeywords = []unsupportedImportKeyword{
 		keyword: "patternProperties",
 		err:     ErrJSONSchemaPatternProperties,
 		present: func(s *lib.Schema) bool {
-			return s.PatternProperties != nil && len(*s.PatternProperties) > 0
+			return s.PatternProperties != nil && len(*s.PatternProperties) > 0 &&
+				!isImportablePatternRecord(s)
 		},
 	},
 	{
@@ -232,10 +440,41 @@ var unsupportedImportKeywords = []unsupportedImportKeyword{
 		},
 	},
 	{
+		keyword: "dependentRequired",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			return len(s.DependentRequired) > 0
+		},
+	},
+	{
+		keyword: "contentEncoding",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			return s.ContentEncoding != nil && contentMayApply(s)
+		},
+	},
+	{
+		keyword: "contentMediaType",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			if s.ContentMediaType == nil || !contentMayApply(s) {
+				return false
+			}
+			return *s.ContentMediaType != "application/json" || len(s.Type) == 0
+		},
+	},
+	{
+		keyword: "contentSchema",
+		err:     ErrUnsupportedJSONSchemaKeyword,
+		present: func(s *lib.Schema) bool {
+			return s.ContentSchema != nil && contentMayApply(s)
+		},
+	},
+	{
 		keyword: "propertyNames",
 		err:     ErrJSONSchemaPropertyNames,
 		present: func(s *lib.Schema) bool {
-			return s.PropertyNames != nil
+			return s.PropertyNames != nil && !isImportablePropertyNamesRecord(s)
 		},
 	},
 	{
@@ -245,6 +484,93 @@ var unsupportedImportKeywords = []unsupportedImportKeyword{
 			return s.Contains != nil || s.MinContains != nil || s.MaxContains != nil
 		},
 	},
+}
+
+func contentMayApply(s *lib.Schema) bool {
+	return len(s.Type) == 0 || slices.Contains(s.Type, "string")
+}
+
+func isImportablePropertyNamesRecord(s *lib.Schema) bool {
+	return len(s.Type) == 1 && s.Type[0] == "object" &&
+		(s.Properties == nil || len(*s.Properties) == 0) &&
+		(s.PatternProperties == nil || len(*s.PatternProperties) == 0) &&
+		isImportableRecordKeySchema(s.PropertyNames) &&
+		s.AdditionalProperties != nil && len(s.Required) == 0
+}
+
+func isImportableRecordKeySchema(s *lib.Schema) bool {
+	return s != nil && s.Boolean == nil &&
+		len(s.Type) == 1 && s.Type[0] == "string" &&
+		s.Const == nil && len(s.Enum) == 0 &&
+		len(s.AllOf) == 0 && len(s.AnyOf) == 0 && len(s.OneOf) == 0 &&
+		s.Ref == "" && s.ResolvedRef == nil
+}
+
+func isImportablePatternRecord(s *lib.Schema) bool {
+	return len(s.Type) == 1 && s.Type[0] == "object" &&
+		(s.Properties == nil || len(*s.Properties) == 0) &&
+		s.PropertyNames == nil &&
+		s.PatternProperties != nil && len(*s.PatternProperties) == 1 &&
+		s.AdditionalProperties == nil && len(s.Required) == 0
+}
+
+func unanchoredValidationFeatures(s *lib.Schema) []unsupportedFeature {
+	if len(s.Type) > 0 {
+		return nil
+	}
+	var features []unsupportedFeature
+	if s.MinLength != nil {
+		features = append(features, unsupportedFeature{keyword: "minLength", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MaxLength != nil {
+		features = append(features, unsupportedFeature{keyword: "maxLength", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.Pattern != nil {
+		features = append(features, unsupportedFeature{keyword: "pattern", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.Minimum != nil {
+		features = append(features, unsupportedFeature{keyword: "minimum", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.Maximum != nil {
+		features = append(features, unsupportedFeature{keyword: "maximum", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.ExclusiveMinimum != nil {
+		features = append(features, unsupportedFeature{keyword: "exclusiveMinimum", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.ExclusiveMaximum != nil {
+		features = append(features, unsupportedFeature{keyword: "exclusiveMaximum", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MultipleOf != nil {
+		features = append(features, unsupportedFeature{keyword: "multipleOf", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MinItems != nil {
+		features = append(features, unsupportedFeature{keyword: "minItems", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MaxItems != nil {
+		features = append(features, unsupportedFeature{keyword: "maxItems", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if len(s.PrefixItems) > 0 {
+		features = append(features, unsupportedFeature{keyword: "prefixItems", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.Items != nil {
+		features = append(features, unsupportedFeature{keyword: "items", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.Properties != nil && len(*s.Properties) > 0 {
+		features = append(features, unsupportedFeature{keyword: "properties", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.AdditionalProperties != nil {
+		features = append(features, unsupportedFeature{keyword: "additionalProperties", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if len(s.Required) > 0 {
+		features = append(features, unsupportedFeature{keyword: "required", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MinProperties != nil {
+		features = append(features, unsupportedFeature{keyword: "minProperties", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	if s.MaxProperties != nil {
+		features = append(features, unsupportedFeature{keyword: "maxProperties", err: ErrUnsupportedJSONSchemaKeyword})
+	}
+	return features
 }
 
 // unsupportedFeatures returns unsupported keywords present on the schema.
@@ -261,12 +587,19 @@ func (ctx *fromJSONSchemaContext) unsupportedFeatures(s *lib.Schema) []unsupport
 	return unsupported
 }
 
-func (ctx *fromJSONSchemaContext) recordLossyKeywords(features []unsupportedFeature) {
-	if ctx.options.LossyKeywords == nil {
-		return
-	}
+func (ctx *fromJSONSchemaContext) recordLosses(features []unsupportedFeature) {
 	for _, feature := range features {
-		*ctx.options.LossyKeywords = append(*ctx.options.LossyKeywords, feature.keyword)
+		if ctx.losses != nil {
+			var importErr *ImportError
+			if !errors.As(ctx.importError(feature.keyword, feature.err), &importErr) {
+				continue
+			}
+			*ctx.losses = append(*ctx.losses, ImportLossError{
+				Keyword: importErr.Keyword,
+				Pointer: importErr.Pointer,
+				Err:     importErr.Err,
+			})
+		}
 	}
 }
 
@@ -295,7 +628,10 @@ func (ctx *fromJSONSchemaContext) convertByType(s *lib.Schema) (core.ZodSchema, 
 		case "object":
 			return ctx.convertObject(s)
 		default:
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, s.Type[0])
+			return nil, ctx.importError(
+				"type",
+				fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, s.Type[0]),
+			)
 		}
 	}
 
@@ -316,7 +652,10 @@ func isSupportedJSONSchemaType(typeName string) bool {
 func (ctx *fromJSONSchemaContext) convertMultiType(s *lib.Schema) (core.ZodSchema, error) {
 	for _, typeName := range s.Type {
 		if !isSupportedJSONSchemaType(typeName) {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, typeName)
+			return nil, ctx.importError(
+				"type",
+				fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaType, typeName),
+			)
 		}
 	}
 
@@ -363,6 +702,9 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 			schema = formatSchema
 		}
 	}
+	if s.ContentMediaType != nil && *s.ContentMediaType == "application/json" {
+		schema = schema.JSON()
+	}
 
 	// Apply constraints
 	if s.MinLength != nil {
@@ -374,7 +716,10 @@ func (ctx *fromJSONSchemaContext) convertString(s *lib.Schema) (core.ZodSchema, 
 	if s.Pattern != nil {
 		re, err := regexp.Compile(*s.Pattern)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %q: %w", ErrJSONSchemaPatternCompile, *s.Pattern, err)
+			return nil, ctx.importError(
+				"pattern",
+				fmt.Errorf("%w: %q: %w", ErrJSONSchemaPatternCompile, *s.Pattern, err),
+			)
 		}
 		schema = schema.Regex(re)
 	}
@@ -492,7 +837,7 @@ func (ctx *fromJSONSchemaContext) convertArray(s *lib.Schema) (core.ZodSchema, e
 	// Handle items schema
 	if s.Items != nil {
 		var err error
-		itemSchema, err = ctx.convert(s.Items)
+		itemSchema, err = ctx.at("items").convert(s.Items)
 		if err != nil {
 			return nil, err
 		}
@@ -516,7 +861,7 @@ func (ctx *fromJSONSchemaContext) convertArray(s *lib.Schema) (core.ZodSchema, e
 func (ctx *fromJSONSchemaContext) convertTuple(s *lib.Schema) (core.ZodSchema, error) {
 	items := make([]core.ZodSchema, len(s.PrefixItems))
 	for i, itemSchema := range s.PrefixItems {
-		converted, err := ctx.convert(itemSchema)
+		converted, err := ctx.at("prefixItems", strconv.Itoa(i)).convert(itemSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -527,7 +872,7 @@ func (ctx *fromJSONSchemaContext) convertTuple(s *lib.Schema) (core.ZodSchema, e
 	var rest core.ZodSchema
 	if s.Items != nil {
 		var err error
-		rest, err = ctx.convert(s.Items)
+		rest, err = ctx.at("items").convert(s.Items)
 		if err != nil {
 			return nil, err
 		}
@@ -541,17 +886,48 @@ func (ctx *fromJSONSchemaContext) convertTuple(s *lib.Schema) (core.ZodSchema, e
 
 // convertObject converts an object type schema.
 func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, error) {
+	if isImportablePatternRecord(s) {
+		pattern := slices.Sorted(maps.Keys(*s.PatternProperties))[0]
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, ctx.importErrorAt(
+				"patternProperties",
+				fmt.Errorf("%w: %q: %w", ErrJSONSchemaPatternCompile, pattern, err),
+				"patternProperties",
+				pattern,
+			)
+		}
+		valueSchema, err := ctx.at("patternProperties", pattern).convert((*s.PatternProperties)[pattern])
+		if err != nil {
+			return nil, err
+		}
+		keySchema := types.String().Regex(compiled)
+		return ctx.applyRecordPropertyBounds(s, types.LooseRecord(keySchema, valueSchema))
+	}
+
+	if isImportablePropertyNamesRecord(s) {
+		keySchema, err := ctx.at("propertyNames").convert(s.PropertyNames)
+		if err != nil {
+			return nil, err
+		}
+		valueSchema, err := ctx.at("additionalProperties").convert(s.AdditionalProperties)
+		if err != nil {
+			return nil, err
+		}
+		return ctx.applyRecordPropertyBounds(s, types.Record(keySchema, valueSchema))
+	}
+
 	// Handle record-like objects (additionalProperties without properties)
 	if s.Properties == nil || len(*s.Properties) == 0 {
 		if s.AdditionalProperties != nil {
-			valueSchema, err := ctx.convert(s.AdditionalProperties)
+			valueSchema, err := ctx.at("additionalProperties").convert(s.AdditionalProperties)
 			if err != nil {
 				return nil, err
 			}
-			return types.Record(types.String(), valueSchema), nil
+			return ctx.applyRecordPropertyBounds(s, types.Record(types.String(), valueSchema))
 		}
 		// Empty object with no constraints
-		return types.Object(core.ObjectSchema{}), nil
+		return ctx.applyObjectPropertyBounds(s, types.Object(core.ObjectSchema{}))
 	}
 
 	// Build object shape
@@ -561,13 +937,10 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 		requiredSet[req] = true
 	}
 
-	// Mark schema for circular reference detection
-	placeholder := types.Object(core.ObjectSchema{})
-	ctx.seen[s] = placeholder
-
 	// Convert each property
-	for key, propSchema := range *s.Properties {
-		propZodSchema, err := ctx.convert(propSchema)
+	for _, key := range slices.Sorted(maps.Keys(*s.Properties)) {
+		propSchema := (*s.Properties)[key]
+		propZodSchema, err := ctx.at("properties", key).convert(propSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -592,7 +965,7 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 			}
 		} else {
 			// It's a schema - use catchall
-			catchallSchema, err := ctx.convert(s.AdditionalProperties)
+			catchallSchema, err := ctx.at("additionalProperties").convert(s.AdditionalProperties)
 			if err != nil {
 				return nil, err
 			}
@@ -600,10 +973,59 @@ func (ctx *fromJSONSchemaContext) convertObject(s *lib.Schema) (core.ZodSchema, 
 		}
 	}
 
-	// Update the placeholder reference
-	ctx.seen[s] = result
+	return ctx.applyObjectPropertyBounds(s, result)
+}
 
-	return result, nil
+func (ctx *fromJSONSchemaContext) applyObjectPropertyBounds(
+	s *lib.Schema,
+	schema *types.ZodObject[map[string]any, map[string]any],
+) (*types.ZodObject[map[string]any, map[string]any], error) {
+	if s.MinProperties != nil {
+		minimum, err := ctx.propertyBound("minProperties", *s.MinProperties)
+		if err != nil {
+			return nil, err
+		}
+		schema = schema.Min(minimum)
+	}
+	if s.MaxProperties != nil {
+		maximum, err := ctx.propertyBound("maxProperties", *s.MaxProperties)
+		if err != nil {
+			return nil, err
+		}
+		schema = schema.Max(maximum)
+	}
+	return schema, nil
+}
+
+func (ctx *fromJSONSchemaContext) applyRecordPropertyBounds(
+	s *lib.Schema,
+	schema *types.ZodRecord[map[string]any, map[string]any],
+) (*types.ZodRecord[map[string]any, map[string]any], error) {
+	if s.MinProperties != nil {
+		minimum, err := ctx.propertyBound("minProperties", *s.MinProperties)
+		if err != nil {
+			return nil, err
+		}
+		schema = schema.Min(minimum)
+	}
+	if s.MaxProperties != nil {
+		maximum, err := ctx.propertyBound("maxProperties", *s.MaxProperties)
+		if err != nil {
+			return nil, err
+		}
+		schema = schema.Max(maximum)
+	}
+	return schema, nil
+}
+
+func (ctx *fromJSONSchemaContext) propertyBound(keyword string, value float64) (int, error) {
+	if value < 0 || value != math.Trunc(value) || value > float64(math.MaxInt) {
+		return 0, ctx.importError(
+			keyword,
+			fmt.Errorf("%w: %s must be a non-negative integer", ErrInvalidJSONSchema, keyword),
+		)
+	}
+	return int(value), nil
 }
 
 // makeOptional wraps a schema in Optional if it supports it.
@@ -664,7 +1086,7 @@ func (ctx *fromJSONSchemaContext) convertEnum(s *lib.Schema) (core.ZodSchema, er
 
 // convertAllOf converts allOf (intersection).
 func (ctx *fromJSONSchemaContext) convertAllOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas, err := ctx.convertSchemaList(s.AllOf)
+	schemas, err := ctx.convertSchemaList("allOf", s.AllOf)
 	if err != nil {
 		return nil, err
 	}
@@ -686,7 +1108,7 @@ func (ctx *fromJSONSchemaContext) convertAllOf(s *lib.Schema) (core.ZodSchema, e
 
 // convertAnyOf converts anyOf (union).
 func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas, err := ctx.convertSchemaList(s.AnyOf)
+	schemas, err := ctx.convertSchemaList("anyOf", s.AnyOf)
 	if err != nil {
 		return nil, err
 	}
@@ -704,7 +1126,7 @@ func (ctx *fromJSONSchemaContext) convertAnyOf(s *lib.Schema) (core.ZodSchema, e
 // convertOneOf converts oneOf (exclusive union).
 // Uses Xor for proper exclusive union semantics (exactly one must match).
 func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, error) {
-	schemas, err := ctx.convertSchemaList(s.OneOf)
+	schemas, err := ctx.convertSchemaList("oneOf", s.OneOf)
 	if err != nil {
 		return nil, err
 	}
@@ -720,10 +1142,10 @@ func (ctx *fromJSONSchemaContext) convertOneOf(s *lib.Schema) (core.ZodSchema, e
 }
 
 // convertSchemaList converts a slice of JSON Schemas to GoZod schemas.
-func (ctx *fromJSONSchemaContext) convertSchemaList(schemas []*lib.Schema) ([]core.ZodSchema, error) {
+func (ctx *fromJSONSchemaContext) convertSchemaList(keyword string, schemas []*lib.Schema) ([]core.ZodSchema, error) {
 	result := make([]core.ZodSchema, 0, len(schemas))
-	for _, subSchema := range schemas {
-		converted, err := ctx.convert(subSchema)
+	for i, subSchema := range schemas {
+		converted, err := ctx.at(keyword, strconv.Itoa(i)).convert(subSchema)
 		if err != nil {
 			return nil, err
 		}

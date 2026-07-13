@@ -1,15 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/format"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
-
-	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
@@ -48,6 +49,7 @@ type FileWriter struct {
 	outputSuffix string
 	methodName   string
 	fieldNameTag string
+	providers    *generatedProviderPlan
 	templates    *template.Template
 	dryRun       bool
 	verbose      bool
@@ -93,7 +95,7 @@ func (w *FileWriter) WriteGeneratedCode(info *GenerationInfo) error {
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}
-	if err := os.WriteFile(outputPath, []byte(content), 0600); err != nil {
+	if err := writeFileAtomic(outputPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write file %s: %w", outputPath, err)
 	}
 
@@ -101,6 +103,30 @@ func (w *FileWriter) WriteGeneratedCode(info *GenerationInfo) error {
 		fmt.Printf("Generated %s\n", outputPath)
 	}
 	return nil
+}
+
+func writeFileAtomic(path string, content []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+
+	if err := temp.Chmod(mode); err != nil {
+		return errors.Join(err, temp.Close())
+	}
+	if _, err := temp.Write(content); err != nil {
+		return errors.Join(err, temp.Close())
+	}
+	if err := temp.Sync(); err != nil {
+		return errors.Join(err, temp.Close())
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
 }
 
 // generateCode generates the Go code for a struct.
@@ -144,6 +170,9 @@ func (w *FileWriter) generateImports(info *GenerationInfo) []string {
 	imports["github.com/kaptinlin/gozod"] = true
 
 	for _, field := range info.Fields {
+		if field.HasCoerceRule() {
+			imports["github.com/kaptinlin/gozod/coerce"] = true
+		}
 		for _, imp := range field.RequiredImports() {
 			imports[imp] = true
 		}
@@ -177,21 +206,34 @@ func (w *FileWriter) generateFieldSchemas(fields []tagparser.FieldInfo, structNa
 
 // generateFieldSchemaCode generates GoZod schema code for a single field.
 func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structName string) (string, error) {
+	if field == nil || field.Type == nil {
+		name, typeName := "<nil>", "<nil>"
+		if field != nil {
+			name, typeName = field.Name, field.EffectiveTypeName()
+		}
+		return "", fmt.Errorf("field %s has unknown type %q", name, typeName)
+	}
 	typeName := field.EffectiveTypeName()
-	fieldPlan := tagparser.CompileFieldPlan(field)
+	fieldPlan, err := tagparser.CompileFieldPlan(field)
+	if err != nil {
+		return "", err
+	}
 
 	// String-format constructors mirror runtime tag application: the first
 	// format rule replaces the base string schema, then later modifiers apply.
-	if constructor, consumedRule := stringFormatConstructor(field, fieldPlan); constructor != "" {
+	_, coerces := compiledOperand(fieldPlan, tagparser.RuleCoerce)
+	if constructor, consumedRule := stringFormatConstructor(field, fieldPlan); constructor != "" && !coerces {
 		var b strings.Builder
 		b.WriteString(constructor)
 		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
 			b.WriteString(".Optional()")
 		}
 		for _, operation := range fieldPlan.OperationsExcept(consumedRule) {
-			if code := generateValidatorChain(operation, field.Type); code != "" {
-				b.WriteString(code)
+			code, err := renderValidatorChain(operation, field.Type)
+			if err != nil {
+				return "", fmt.Errorf("render %s for field %s: %w", operation.Name, field.Name, err)
 			}
+			b.WriteString(code)
 		}
 		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
 			b.WriteString(".Optional()")
@@ -200,9 +242,17 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	}
 
 	// Enum special case
-	if rule := field.EnumRule(); rule != nil && field.IsEnumStringField() {
-		values := make([]string, 0, len(rule.Params))
-		for _, param := range rule.Params {
+	if operand, ok := compiledOperand(fieldPlan, tagparser.RuleEnum); ok && isStringFieldType(field.Type) {
+		typed, ok := operand.([]any)
+		if !ok {
+			return "", fmt.Errorf("render enum operand for field %s", field.Name)
+		}
+		values := make([]string, 0, len(typed))
+		for _, value := range typed {
+			param, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("render enum operand for field %s", field.Name)
+			}
 			values = append(values, fmt.Sprintf("%q", param))
 		}
 		var b strings.Builder
@@ -213,9 +263,11 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 			b.WriteString(".Optional()")
 		}
 		for _, operation := range fieldPlan.OperationsExcept("enum") {
-			if code := generateValidatorChain(operation, field.Type); code != "" {
-				b.WriteString(code)
+			code, err := renderValidatorChain(operation, field.Type)
+			if err != nil {
+				return "", fmt.Errorf("render %s for field %s: %w", operation.Name, field.Name, err)
 			}
+			b.WriteString(code)
 		}
 		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
 			b.WriteString(".Optional()")
@@ -225,14 +277,25 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 
 	// General case
 	var b strings.Builder
-	b.WriteString(baseConstructor(typeName, structName, w.fieldNameTag))
+	var base string
+	if _, coerce := compiledOperand(fieldPlan, tagparser.RuleCoerce); coerce {
+		base, err = coercionConstructor(typeName)
+	} else {
+		base, err = w.baseConstructor(typeName, structName)
+	}
+	if err != nil {
+		return "", fmt.Errorf("render type %s for field %s: %w", typeName, field.Name, err)
+	}
+	b.WriteString(base)
 	if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
 		b.WriteString(".Optional()")
 	}
 	for _, operation := range fieldPlan.Operations {
-		if code := generateValidatorChain(operation, field.Type); code != "" {
-			b.WriteString(code)
+		code, err := renderValidatorChain(operation, field.Type)
+		if err != nil {
+			return "", fmt.Errorf("render %s for field %s: %w", operation.Name, field.Name, err)
 		}
+		b.WriteString(code)
 	}
 	if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
 		b.WriteString(".Optional()")
@@ -240,13 +303,22 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	return b.String(), nil
 }
 
+func compiledOperand(plan tagparser.FieldPlan, op tagparser.RuleOp) (any, bool) {
+	for _, operation := range plan.Operations {
+		if operation.Op == op {
+			return operation.Operand, true
+		}
+	}
+	return nil, false
+}
+
 func stringFormatConstructor(field *tagparser.FieldInfo, fieldPlan tagparser.FieldPlan) (string, string) {
 	if field == nil || !isStringFieldType(field.Type) {
 		return "", ""
 	}
 	for _, operation := range fieldPlan.Operations {
-		if operation.Op == tagparser.RuleStringCheck && operation.Method != "" {
-			return fmt.Sprintf("gozod.%s()", operation.Method), operation.Rule.Name
+		if constructor := stringFormatConstructorName(operation.Op); constructor != "" {
+			return fmt.Sprintf("gozod.%s()", constructor), operation.Name
 		}
 	}
 	return "", ""
@@ -262,113 +334,207 @@ func isStringFieldType(fieldType reflect.Type) bool {
 	return fieldType.Kind() == reflect.String
 }
 
-// generateValidatorChain returns the validator method chain for a rule.
-func generateValidatorChain(plan tagparser.RulePlan, fieldType reflect.Type) string {
-	if plan.Method == "" {
-		return ""
-	}
-
+// renderValidatorChain returns the validator method chain for a rule.
+func renderValidatorChain(plan tagparser.RulePlan, fieldType reflect.Type) (string, error) {
 	switch plan.Op {
 	case tagparser.RuleDefault, tagparser.RulePrefault:
-		value, ok := plan.JoinedValue()
+		method := "Default"
+		if plan.Op == tagparser.RulePrefault {
+			method = "Prefault"
+		}
+		return generateCompiledValue(method, plan.Operand, fieldType), nil
+	case tagparser.RuleRegex:
+		if pattern, ok := plan.Operand.(*regexp.Regexp); ok {
+			return fmt.Sprintf(".Regex(regexp.MustCompile(%q))", pattern.String()), nil
+		}
+		return "", fmt.Errorf("regex operand has type %T", plan.Operand)
+	case tagparser.RuleMin, tagparser.RuleMax, tagparser.RuleLength,
+		tagparser.RuleGT, tagparser.RuleGTE, tagparser.RuleLT, tagparser.RuleLTE,
+		tagparser.RuleMultipleOf:
+		if !isNumericOperand(plan.Operand) {
+			return "", fmt.Errorf("%s operand has type %T", plan.Name, plan.Operand)
+		}
+		return fmt.Sprintf(".%s(%s)", methodForOperation(plan.Op), formatCompiledOperand(plan.Operand)), nil
+	case tagparser.RuleIncludes, tagparser.RuleStartsWith, tagparser.RuleEndsWith:
+		value, ok := plan.Operand.(string)
 		if !ok {
-			return ""
+			return "", fmt.Errorf("%s operand has type %T", plan.Name, plan.Operand)
 		}
-		return generateTypedValue(plan.Method, value, fieldType)
-	case tagparser.RuleMethod:
-		if plan.Method == "Regex" {
-			if value, ok := plan.FirstParam(); ok {
-				return fmt.Sprintf(".Regex(regexp.MustCompile(%q))", value)
-			}
-			return ""
-		}
-		if value, ok := plan.FirstParam(); ok && requiresMethodArg(plan.Method) {
-			if requiresStringArg(plan.Method) {
-				return fmt.Sprintf(".%s(%q)", plan.Method, value)
-			}
-			return fmt.Sprintf(".%s(%s)", plan.Method, value)
-		}
-		if requiresMethodArg(plan.Method) {
-			return ""
-		}
-		return fmt.Sprintf(".%s()", plan.Method)
-	case tagparser.RuleStringCheck:
-		return ""
+		return fmt.Sprintf(".%s(%q)", methodForOperation(plan.Op), value), nil
+	case tagparser.RuleNilable, tagparser.RuleTrim, tagparser.RuleLowercase,
+		tagparser.RuleUppercase, tagparser.RulePositive, tagparser.RuleNegative,
+		tagparser.RuleFinite, tagparser.RuleNonEmpty:
+		return fmt.Sprintf(".%s()", methodForOperation(plan.Op)), nil
+	case tagparser.RuleEmail, tagparser.RuleURL, tagparser.RuleUUID,
+		tagparser.RuleIPv4, tagparser.RuleIPv6, tagparser.RuleCIDRv4,
+		tagparser.RuleCIDRv6, tagparser.RuleCUID, tagparser.RuleCUID2,
+		tagparser.RuleJWT, tagparser.RuleISODateTime, tagparser.RuleISODate,
+		tagparser.RuleISOTime, tagparser.RuleISODuration:
+		return fmt.Sprintf(".%s()", stringFormatConstructorName(plan.Op)), nil
+	case tagparser.RuleRequired, tagparser.RuleOptional, tagparser.RuleCoerce, tagparser.RuleTime,
+		tagparser.RuleEnum, tagparser.RuleLiteral:
+		return "", nil
 	default:
-		return ""
+		return "", fmt.Errorf("unsupported operation %q", plan.Op)
 	}
 }
 
-func requiresStringArg(method string) bool {
-	switch method {
-	case "Includes", "StartsWith", "EndsWith":
+func isNumericOperand(value any) bool {
+	switch value.(type) {
+	case int, int64, uint64, float64:
 		return true
 	default:
 		return false
 	}
 }
 
-func requiresMethodArg(method string) bool {
-	switch method {
-	case "Min", "Max", "Length", "Gt", "Gte", "Lt", "Lte", "Includes", "StartsWith", "EndsWith", "MultipleOf", "Refine", "Check":
-		return true
-	default:
-		return false
+func formatCompiledOperand(value any) string {
+	if value, ok := value.(float64); ok {
+		literal := strconv.FormatFloat(value, 'f', -1, 64)
+		if !strings.ContainsAny(literal, ".eE") {
+			literal += ".0"
+		}
+		return literal
 	}
+	return fmt.Sprint(value)
+}
+
+func methodForOperation(op tagparser.RuleOp) string {
+	return map[tagparser.RuleOp]string{
+		tagparser.RuleNilable: "Nilable", tagparser.RuleMin: "Min", tagparser.RuleMax: "Max",
+		tagparser.RuleLength: "Length", tagparser.RuleGT: "Gt", tagparser.RuleGTE: "Gte",
+		tagparser.RuleLT: "Lt", tagparser.RuleLTE: "Lte", tagparser.RuleIncludes: "Includes",
+		tagparser.RuleStartsWith: "StartsWith", tagparser.RuleEndsWith: "EndsWith",
+		tagparser.RuleMultipleOf: "MultipleOf", tagparser.RuleTrim: "Trim",
+		tagparser.RuleLowercase: "ToLowerCase", tagparser.RuleUppercase: "ToUpperCase",
+		tagparser.RulePositive: "Positive", tagparser.RuleNegative: "Negative",
+		tagparser.RuleFinite: "Finite", tagparser.RuleNonEmpty: "NonEmpty",
+	}[op]
+}
+
+func stringFormatConstructorName(op tagparser.RuleOp) string {
+	return map[tagparser.RuleOp]string{
+		tagparser.RuleEmail: "Email", tagparser.RuleURL: "URL", tagparser.RuleUUID: "UUID",
+		tagparser.RuleIPv4: "IPv4", tagparser.RuleIPv6: "IPv6", tagparser.RuleCIDRv4: "CIDRv4",
+		tagparser.RuleCIDRv6: "CIDRv6", tagparser.RuleCUID: "CUID", tagparser.RuleCUID2: "CUID2",
+		tagparser.RuleJWT: "JWT", tagparser.RuleISODateTime: "IsoDateTime",
+		tagparser.RuleISODate: "IsoDate", tagparser.RuleISOTime: "IsoTime",
+		tagparser.RuleISODuration: "IsoDuration",
+	}[op]
+}
+
+func generateCompiledValue(method string, value any, _ reflect.Type) string {
+	if value == nil {
+		return fmt.Sprintf(".%s(nil)", method)
+	}
+	return fmt.Sprintf(".%s(%#v)", method, value)
 }
 
 // baseConstructor returns the GoZod constructor for a type name with circular reference detection.
-func baseConstructor(typeName, structName, fieldNameTag string) string {
+func baseConstructor(typeName, structName, fieldNameTag string) (string, error) {
+	return baseConstructorWithProviders(typeName, structName, fieldNameTag, defaultMethodName, nil)
+}
+
+func (w *FileWriter) baseConstructor(typeName, structName string) (string, error) {
+	return baseConstructorWithProviders(typeName, structName, w.fieldNameTag, w.methodName, w.providers)
+}
+
+func baseConstructorWithProviders(
+	typeName string,
+	structName string,
+	fieldNameTag string,
+	methodName string,
+	providers *generatedProviderPlan,
+) (string, error) {
 	if base, ok := strings.CutPrefix(typeName, "*"); ok {
 		if basicTypes[base] {
-			return basicTypeConstructor(base)
+			return basicTypeConstructor(base), nil
 		}
-		if structName != "" && base == structName {
-			return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return %s })", fromStructConstructor(base, fieldNameTag))
-		}
-		return fromStructConstructor(base, fieldNameTag)
+		return namedTypeConstructor(base, structName, fieldNameTag, methodName, providers), nil
 	}
 
 	if elem, ok := strings.CutPrefix(typeName, "[]"); ok {
-		clean := strings.TrimPrefix(elem, "*")
-		if structName != "" && clean == structName {
-			return fmt.Sprintf("gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return %s }))", fromStructConstructor(clean, fieldNameTag))
+		inner, err := baseConstructorWithProviders(elem, structName, fieldNameTag, methodName, providers)
+		if err != nil {
+			return "", err
 		}
-		return fmt.Sprintf("gozod.Slice(%s)", baseConstructor(elem, structName, fieldNameTag))
+		return fmt.Sprintf("gozod.Slice[%s](%s)", elem, inner), nil
 	}
 
 	if strings.HasPrefix(typeName, "map[") {
 		if idx := strings.LastIndex(typeName, "]"); idx != -1 && idx < len(typeName)-1 {
+			keyType := typeName[len("map["):idx]
 			valType := typeName[idx+1:]
-			clean := strings.TrimPrefix(valType, "*")
-			if structName != "" && clean == structName {
-				return fmt.Sprintf("gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return %s }))", fromStructConstructor(clean, fieldNameTag))
+			inner, err := baseConstructorWithProviders(valType, structName, fieldNameTag, methodName, providers)
+			if err != nil {
+				return "", err
 			}
-			return fmt.Sprintf("gozod.Record(%s)", baseConstructor(valType, structName, fieldNameTag))
+			return fmt.Sprintf("gozod.Record[%s, %s](gozod.String(), %s)", keyType, valType, inner), nil
 		}
-		return "gozod.Record(gozod.Any())"
+		return "", fmt.Errorf("malformed map type %q", typeName)
 	}
 
 	if basicTypes[typeName] {
-		return basicTypeConstructor(typeName)
+		return basicTypeConstructor(typeName), nil
 	}
 	if typeName == "time.Time" {
-		return "gozod.Time()"
+		return "gozod.Time()", nil
 	}
+	if typeName == "unknown" || typeName == "any" || typeName == "interface{}" || typeName == "interface {}" {
+		return "gozod.Any()", nil
+	}
+	if typeName == "" {
+		return "", fmt.Errorf("unknown type %q", typeName)
+	}
+	return namedTypeConstructor(typeName, structName, fieldNameTag, methodName, providers), nil
+}
+
+func namedTypeConstructor(typeName, structName, fieldNameTag, methodName string, providers *generatedProviderPlan) string {
+	if providers.has(typeName) {
+		provider := fmt.Sprintf("%s{}.%s()", typeName, methodName)
+		if providers.isCyclic(structName, typeName) {
+			return lazyStructConstructor(typeName, provider)
+		}
+		return provider
+	}
+	fallback := fromStructConstructor(typeName, fieldNameTag)
 	if structName != "" && typeName == structName {
-		return fmt.Sprintf("gozod.Lazy(func() gozod.ZodType[any] { return %s })", fromStructConstructor(typeName, fieldNameTag))
+		return lazyStructConstructor(typeName, fallback)
 	}
-	if typeName != "unknown" {
-		return fromStructConstructor(typeName, fieldNameTag)
-	}
-	return "gozod.Any()"
+	return fallback
+}
+
+func lazyStructConstructor(typeName, provider string) string {
+	return fmt.Sprintf(
+		"gozod.LazyTyped[*%[1]s](func() any { return %[2]s })",
+		typeName,
+		provider,
+	)
 }
 
 func fromStructConstructor(typeName, fieldNameTag string) string {
 	if fieldNameTag == "" || fieldNameTag == defaultFieldNameTag {
-		return fmt.Sprintf("gozod.FromStruct[%s]()", typeName)
+		return fmt.Sprintf("gozod.MustFromStruct[%s]()", typeName)
 	}
-	return fmt.Sprintf("gozod.FromStruct[%s](gozod.WithFieldNameTag(%q))", typeName, fieldNameTag)
+	return fmt.Sprintf("gozod.MustFromStruct[%s](gozod.WithFieldNameTag(%q))", typeName, fieldNameTag)
+}
+
+func coercionConstructor(typeName string) (string, error) {
+	pointer := strings.HasPrefix(typeName, "*")
+	base := strings.TrimPrefix(typeName, "*")
+	constructor, ok := map[string]string{
+		"string": "String", "bool": "Bool",
+		"int": "Int", "int8": "Int8", "int16": "Int16", "int32": "Int32", "int64": "Int64",
+		"uint": "Uint", "uint8": "Uint8", "uint16": "Uint16", "uint32": "Uint32", "uint64": "Uint64",
+		"float32": "Float32", "float64": "Float64", "time.Time": "Time",
+	}[base]
+	if !ok {
+		return "", fmt.Errorf("coercion is not supported for %q", typeName)
+	}
+	if pointer {
+		constructor += "Ptr"
+	}
+	return "coerce." + constructor + "()", nil
 }
 
 func (w *FileWriter) fieldNameTagCall() string {
@@ -383,126 +549,10 @@ func basicTypeConstructor(typeName string) string {
 	if c, ok := basicTypeConstructors[typeName]; ok {
 		return c
 	}
-	return "gozod.Any()"
-}
-
-// generateDefaultValue returns a .Default(...) call formatted for the field type.
-func generateDefaultValue(value string, fieldType reflect.Type) string {
-	return generateTypedValue("Default", value, fieldType)
-}
-
-// generatePrefaultValue returns a .Prefault(...) call formatted for the field type.
-func generatePrefaultValue(value string, fieldType reflect.Type) string {
-	return generateTypedValue("Prefault", value, fieldType)
-}
-
-// generateTypedValue returns a method call (.Default or .Prefault) with
-// the value formatted according to the field's Go type.
-func generateTypedValue(method, value string, fieldType reflect.Type) string {
-	switch fieldType.Kind() {
-	case reflect.String:
-		return fmt.Sprintf(".%s(%q)", method, value)
-	case reflect.Slice, reflect.Array:
-		return generateSliceValue(method, value, fieldType)
-	case reflect.Map:
-		return generateMapValue(method, value, fieldType)
-	case reflect.Pointer:
-		return generateTypedValue(method, value, fieldType.Elem())
-	default:
-		return fmt.Sprintf(".%s(%s)", method, value)
+	if typeName == "unknown" || typeName == "any" || typeName == "interface{}" || typeName == "interface {}" {
+		return "gozod.Any()"
 	}
-}
-
-// generateSliceValue generates a Go slice literal for .Default() or .Prefault() calls.
-func generateSliceValue(method, value string, fieldType reflect.Type) string {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
-		return fmt.Sprintf(".%s(%s)", method, value)
-	}
-
-	var jsonResult []any
-	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		elemType := fieldType.Elem()
-		switch elemType.Kind() {
-		case reflect.String:
-			items := make([]string, 0, len(jsonResult))
-			for _, item := range jsonResult {
-				if str, ok := item.(string); ok {
-					items = append(items, fmt.Sprintf("%q", str))
-				}
-			}
-			return fmt.Sprintf(".%s([]string{%s})", method, strings.Join(items, ", "))
-		case reflect.Int:
-			items := make([]string, 0, len(jsonResult))
-			for _, item := range jsonResult {
-				if num, ok := item.(float64); ok {
-					items = append(items, fmt.Sprintf("%d", int(num)))
-				}
-			}
-			return fmt.Sprintf(".%s([]int{%s})", method, strings.Join(items, ", "))
-		case reflect.Float64:
-			items := make([]string, 0, len(jsonResult))
-			for _, item := range jsonResult {
-				if num, ok := item.(float64); ok {
-					items = append(items, fmt.Sprintf("%g", num))
-				}
-			}
-			return fmt.Sprintf(".%s([]float64{%s})", method, strings.Join(items, ", "))
-		case reflect.Bool:
-			items := make([]string, 0, len(jsonResult))
-			for _, item := range jsonResult {
-				if b, ok := item.(bool); ok {
-					items = append(items, fmt.Sprintf("%t", b))
-				}
-			}
-			return fmt.Sprintf(".%s([]bool{%s})", method, strings.Join(items, ", "))
-		default:
-			// Fall through to fallback
-		}
-	}
-
-	return fmt.Sprintf(".%s(%s)", method, value)
-}
-
-// generateMapValue generates a Go map literal for .Default() or .Prefault() calls.
-func generateMapValue(method, value string, fieldType reflect.Type) string {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-		return fmt.Sprintf(".%s(%s)", method, value)
-	}
-
-	var jsonResult map[string]any
-	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		switch fieldType.Elem().Kind() {
-		case reflect.String:
-			items := make([]string, 0, len(jsonResult))
-			for k, v := range jsonResult {
-				if str, ok := v.(string); ok {
-					items = append(items, fmt.Sprintf("%q: %q", k, str))
-				}
-			}
-			return fmt.Sprintf(".%s(map[string]string{%s})", method, strings.Join(items, ", "))
-		case reflect.Interface:
-			items := make([]string, 0, len(jsonResult))
-			for k, v := range jsonResult {
-				switch val := v.(type) {
-				case string:
-					items = append(items, fmt.Sprintf("%q: %q", k, val))
-				case float64:
-					items = append(items, fmt.Sprintf("%q: %g", k, val))
-				case bool:
-					items = append(items, fmt.Sprintf("%q: %t", k, val))
-				default:
-					items = append(items, fmt.Sprintf("%q: %v", k, val))
-				}
-			}
-			return fmt.Sprintf(".%s(map[string]any{%s})", method, strings.Join(items, ", "))
-		default:
-			// Fall through to fallback
-		}
-	}
-
-	return fmt.Sprintf(".%s(%s)", method, value)
+	return ""
 }
 
 // outputPath generates the output file path based on source file location.
@@ -535,8 +585,8 @@ import (
 {{- end}}
 )
 
-// {{.MethodName}} returns a pre-built gozod schema for {{.StructName}}
-// This generated function provides zero-reflection validation with optimal performance
+// {{.MethodName}} returns a generated gozod schema for {{.StructName}}.
+// Package-local generated dependencies call their generated schema methods.
 func ({{.StructName | receiverName}} {{.StructName}}) {{.MethodName}}() *gozod.ZodStruct[{{.StructName}}, {{.StructName}}] {
 	return gozod.Struct[{{.StructName}}](gozod.StructSchema{
 {{- range .FieldSchemas}}

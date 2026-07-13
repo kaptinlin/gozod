@@ -262,8 +262,8 @@ func TestCompositeTypeExports(t *testing.T) {
 		_ = UnionPtr([]any{String(), Int()})
 		_ = Intersection(String(), Int())
 		_ = IntersectionPtr(String(), Int())
-		_ = DiscriminatedUnion("type", []any{String(), Int()})
-		_ = DiscriminatedUnionPtr("type", []any{String(), Int()})
+		_, _ = DiscriminatedUnion("type", []ZodSchema{String(), Int()})
+		_, _ = DiscriminatedUnionPtr("type", []ZodSchema{String(), Int()})
 	})
 }
 

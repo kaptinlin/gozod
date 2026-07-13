@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math/big"
+	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,24 @@ var (
 	ErrCannotAssignToField = errors.New("cannot assign value to field of type")
 	// ErrValueMustBeStruct is returned when a value is not a struct or pointer to struct.
 	ErrValueMustBeStruct = errors.New("value must be a struct or pointer to struct")
+	// ErrUnsupportedFieldType indicates that FromStruct cannot represent a Go field type faithfully.
+	ErrUnsupportedFieldType = errors.New("unsupported struct field type")
 )
+
+// StructConstructionError reports a field that cannot be represented by FromStruct.
+type StructConstructionError struct {
+	Path string
+	Type reflect.Type
+	Err  error
+}
+
+func (e *StructConstructionError) Error() string {
+	return fmt.Sprintf("construct struct schema: field %s (%v): %v", e.Path, e.Type, e.Err)
+}
+
+func (e *StructConstructionError) Unwrap() error {
+	return e.Err
+}
 
 // anyType is the reflect.Type for interface{}/any, cached to avoid repeated allocation.
 var anyType = reflect.TypeFor[any]()
@@ -157,22 +175,16 @@ func (z *ZodStruct[T, R]) Parse(input any, ctx ...*core.ParseContext) (R, error)
 		parseCtx = ctx[0]
 	}
 
-	isPointerConstraint := reflect.TypeFor[R]().Kind() == reflect.Pointer
-
-	originalInternals := &z.internals.ZodTypeInternals
-	if isPointerConstraint &&
-		!originalInternals.Optional &&
-		!originalInternals.Nilable &&
-		originalInternals.PrefaultValue == nil &&
-		originalInternals.PrefaultFunc == nil {
-		modifiedInternals := *originalInternals
-		modifiedInternals.Optional = true
-		originalInternals = &modifiedInternals
+	parseInternals := &z.internals.ZodTypeInternals
+	if reflect.TypeFor[R]().Kind() == reflect.Pointer && len(parseInternals.Modifiers) == 0 {
+		modified := *parseInternals
+		modified.Modifiers = []core.ZodModifier{{Kind: core.ZodModifierOptional}}
+		parseInternals = &modified
 	}
 
 	result, err := engine.ParseComplex[T](
 		input,
-		originalInternals,
+		parseInternals,
 		core.ZodTypeStruct,
 		z.extractStructForEngine,
 		z.extractStructPtrForEngine,
@@ -339,24 +351,13 @@ func (z *ZodStruct[T, R]) PrefaultFunc(fn func() T) *ZodStruct[T, R] {
 // Meta stores metadata.
 func (z *ZodStruct[T, R]) Meta(meta core.GlobalMeta) *ZodStruct[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodStruct[T, R]) Describe(description string) *ZodStruct[T, R] {
-	newInternals := z.internals.Clone()
-
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Transform applies a transformation to the parsed struct value.
@@ -495,13 +496,13 @@ func (z *ZodStruct[T, R]) Required(fields ...[]string) *ZodStruct[T, R] {
 
 func (z *ZodStruct[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodStruct[T, *T] {
 	clone := &ZodStruct[T, *T]{internals: z.newStructInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
 func (z *ZodStruct[T, R]) withInternals(in *core.ZodTypeInternals) *ZodStruct[T, R] {
 	clone := &ZodStruct[T, R]{internals: z.newStructInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -961,8 +962,21 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 	}
 
 	valueVal := reflect.ValueOf(value)
+	for valueVal.Kind() == reflect.Pointer && valueVal.Type().Elem().Kind() == reflect.Interface {
+		if valueVal.IsNil() {
+			fieldVal.Set(reflect.Zero(fieldVal.Type()))
+			return nil
+		}
+		value = valueVal.Elem().Interface()
+		valueVal = reflect.ValueOf(value)
+	}
 	if valueVal.Type().AssignableTo(fieldVal.Type()) {
 		fieldVal.Set(valueVal)
+		return nil
+	}
+	if valueVal.Kind() == reflect.Pointer && valueVal.IsNil() &&
+		(fieldVal.Kind() == reflect.Slice || fieldVal.Kind() == reflect.Map) {
+		fieldVal.Set(reflect.Zero(fieldVal.Type()))
 		return nil
 	}
 
@@ -1322,7 +1336,7 @@ func (z *ZodStruct[T, R]) isFieldOptional(schema any, fieldName string) bool {
 		results := internalsMethod.Call(nil)
 		if len(results) > 0 {
 			if internals, ok := results[0].Interface().(*core.ZodTypeInternals); ok {
-				return internals.Optional
+				return internals.IsOptional()
 			}
 		}
 	}
@@ -1539,7 +1553,7 @@ func WithFieldNameTag(name string) FromStructOption {
 // ValidateStruct validates a struct using tags and returns the parsed result.
 // Returns the struct with defaults applied, coercions performed, and all validation issues.
 //
-// This is the runtime equivalent of FromStruct[T]().Parse(value).
+// This is the runtime equivalent of constructing with FromStruct[T] and parsing value.
 //
 // Example:
 //
@@ -1571,6 +1585,9 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	parsedFields, err := parser.ParseStructTags(structType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse struct tags: %w", err)
+	}
+	if err := validateStructTagGraph(structType, cfg.tagName, cfg.fieldNameTag); err != nil {
+		return nil, err
 	}
 
 	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.fieldNameTag)
@@ -1622,34 +1639,165 @@ func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
 	return result.Interface(), nil
 }
 
+func validateStructTagGraph(structType reflect.Type, tagName, fieldNameTag string) error {
+	for structType.Kind() == reflect.Pointer {
+		structType = structType.Elem()
+	}
+	return validateStructTagGraphAt(structType, structType.Name(), tagName, fieldNameTag, make(map[reflect.Type]bool))
+}
+
+func validateStructTagGraphAt(
+	structType reflect.Type,
+	path string,
+	tagName string,
+	fieldNameTag string,
+	visiting map[reflect.Type]bool,
+) error {
+	if visiting[structType] {
+		return nil
+	}
+	visiting[structType] = true
+	defer delete(visiting, structType)
+
+	fields, err := tagparser.NewWithTags(tagName, fieldNameTag).ParseStructTagsStrict(structType)
+	if err != nil {
+		return err
+	}
+	for i := range fields {
+		field := fields[i]
+		field.Name = path + "." + field.Name
+		field.Type = effectiveStructFieldType(field.Type)
+		if err := validateSupportedFieldType(field.Type, field.Name); err != nil {
+			return err
+		}
+		if _, err := tagparser.CompileFieldPlan(&field); err != nil {
+			return err
+		}
+		if nested, ok := nestedStructType(field.Type); ok {
+			if err := validateStructTagGraphAt(nested, field.Name, tagName, fieldNameTag, visiting); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateSupportedFieldType(fieldType reflect.Type, path string) error {
+	original := fieldType
+	for fieldType.Kind() == reflect.Pointer {
+		fieldType = fieldType.Elem()
+	}
+	switch fieldType.Kind() {
+	case reflect.String, reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return nil
+	case reflect.Interface:
+		if fieldType.NumMethod() == 0 {
+			return nil
+		}
+	case reflect.Slice, reflect.Array:
+		return validateSupportedFieldType(fieldType.Elem(), path+"[]")
+	case reflect.Map:
+		if fieldType.Key().Kind() == reflect.String {
+			return validateSupportedFieldType(fieldType.Elem(), path+"{}")
+		}
+	case reflect.Struct:
+		return nil
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
+		reflect.Chan, reflect.Func, reflect.Pointer, reflect.UnsafePointer:
+	}
+	return &StructConstructionError{Path: path, Type: original, Err: ErrUnsupportedFieldType}
+}
+
+func nestedStructType(fieldType reflect.Type) (reflect.Type, bool) {
+	for {
+		switch fieldType.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Array:
+			fieldType = fieldType.Elem()
+		case reflect.Map:
+			fieldType = fieldType.Elem()
+		default:
+			if fieldType.Kind() == reflect.Struct && fieldType != reflect.TypeFor[time.Time]() {
+				return fieldType, true
+			}
+			return nil, false
+		}
+	}
+}
+
 // FromStruct builds a struct schema from tags on T.
-func FromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
+func FromStruct[T any](opts ...FromStructOption) (*ZodStruct[T, T], error) {
 	cfg := newFromStructConfig(opts)
-	structType := reflect.TypeOf(*new(T))
+	structType, ok := fromStructType[T]()
+	if !ok {
+		return nil, tagparser.ErrTypeMustBeStruct
+	}
+	fieldSchemas, err := fromStructFieldSchemas(structType, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	var s *ZodStruct[T, T]
-	if fieldSchemas := fromStructFieldSchemas(structType, cfg); len(fieldSchemas) == 0 {
+	if len(fieldSchemas) == 0 {
 		s = Struct[T]()
 	} else {
 		s = Struct[T](fieldSchemas)
 	}
 	s.internals.FieldNameTag = cfg.fieldNameTag
-	return s
+	return s, nil
 }
 
 // FromStructPtr builds a struct schema for *T from tags on T.
-func FromStructPtr[T any](opts ...FromStructOption) *ZodStruct[T, *T] {
+func FromStructPtr[T any](opts ...FromStructOption) (*ZodStruct[T, *T], error) {
 	cfg := newFromStructConfig(opts)
-	structType := reflect.TypeOf(*new(T))
+	structType, ok := fromStructType[T]()
+	if !ok {
+		return nil, tagparser.ErrTypeMustBeStruct
+	}
+	fieldSchemas, err := fromStructFieldSchemas(structType, cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	var s *ZodStruct[T, *T]
-	if fieldSchemas := fromStructFieldSchemas(structType, cfg); len(fieldSchemas) == 0 {
+	if len(fieldSchemas) == 0 {
 		s = StructPtr[T]()
 	} else {
 		s = StructPtr[T](fieldSchemas)
 	}
 	s.internals.FieldNameTag = cfg.fieldNameTag
-	return s
+	return s, nil
+}
+
+func fromStructType[T any]() (reflect.Type, bool) {
+	structType := reflect.TypeOf(*new(T))
+	if structType == nil {
+		return nil, false
+	}
+	if structType.Kind() == reflect.Pointer {
+		structType = structType.Elem()
+	}
+	return structType, structType.Kind() == reflect.Struct
+}
+
+// MustFromStruct builds a struct schema and panics when its tags cannot compile.
+func MustFromStruct[T any](opts ...FromStructOption) *ZodStruct[T, T] {
+	schema, err := FromStruct[T](opts...)
+	if err != nil {
+		panic(err)
+	}
+	return schema
+}
+
+// MustFromStructPtr builds a pointer struct schema and panics when its tags cannot compile.
+func MustFromStructPtr[T any](opts ...FromStructOption) *ZodStruct[T, *T] {
+	schema, err := FromStructPtr[T](opts...)
+	if err != nil {
+		panic(err)
+	}
+	return schema
 }
 
 // newFromStructConfig builds a config with defaults applied and options merged.
@@ -1663,11 +1811,14 @@ func newFromStructConfig(opts []FromStructOption) *fromStructConfig {
 
 // fromStructFieldSchemas derives field schemas from a struct type, or returns
 // nil when the type carries no rule tags.
-func fromStructFieldSchemas(structType reflect.Type, cfg *fromStructConfig) core.StructSchema {
+func fromStructFieldSchemas(structType reflect.Type, cfg *fromStructConfig) (core.StructSchema, error) {
 	if !hasTagsWithName(structType, cfg.tagName) {
-		return nil
+		return nil, nil
 	}
-	return parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.fieldNameTag)
+	if err := validateStructTagGraph(structType, cfg.tagName, cfg.fieldNameTag); err != nil {
+		return nil, err
+	}
+	return parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.fieldNameTag), nil
 }
 
 // hasTagsWithName checks if a struct type has any tags with the given name
@@ -1818,8 +1969,7 @@ func createSchemaFromTypeWithCycleDetection(fieldType reflect.Type, fieldInfo ta
 			}
 		}
 
-		// Apply parsed tag rules
-		return applyParsedTagRules(schema, fieldInfo)
+		return schema
 	}
 
 	// Otherwise, create schema normally for non-struct types
@@ -1849,7 +1999,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 		}
 
 		// Create lazy schema for the element
-		lazyElementSchema := Lazy(func() core.ZodSchema {
+		lazyElementSchema := LazyAny(func() any {
 			// Create the nested struct schema
 			// The cache in parseStructTagsToSchemas will prevent infinite recursion
 			var schema core.ZodSchema
@@ -1878,12 +2028,11 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 		// Create slice of lazy elements
 		sliceSchema := Slice[any](lazyElementSchema)
 
-		// Apply parsed tag rules
-		return applyParsedTagRules(sliceSchema, capturedInfo)
+		return sliceSchema
 	}
 
 	// For non-slice types, create a single lazy schema
-	lazySchema := Lazy(func() core.ZodSchema {
+	lazySchema := LazyAny(func() any {
 		// Create the nested struct schema
 		// The cache in parseStructTagsToSchemas will prevent infinite recursion
 		var schema core.ZodSchema
@@ -1906,8 +2055,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 			}
 		}
 
-		// Apply parsed tag rules
-		return applyParsedTagRules(schema, capturedInfo)
+		return schema
 	})
 
 	return lazySchema
@@ -1915,17 +2063,7 @@ func createLazySchemaForType(fieldType reflect.Type, fieldInfo tagparser.FieldIn
 
 // createSchemaFromTypeWithInfo creates a basic schema based on Go type with field info
 func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.FieldInfo) core.ZodSchema {
-	// Check if this type implements Unwrapper interface
-	if fieldType.Kind() == reflect.Struct {
-		zeroVal := reflect.Zero(fieldType)
-		if _, ok := zeroVal.Interface().(core.Unwrapper); ok {
-			// This type implements Unwrapper, look for Value field
-			if valueField, found := fieldType.FieldByName("Value"); found {
-				// Use the Value field's type for schema creation
-				fieldType = valueField.Type
-			}
-		}
-	}
+	fieldType = effectiveStructFieldType(fieldType)
 
 	// Check if coercion is enabled
 	hasCoerce := fieldInfo.HasCoerceRule()
@@ -2227,19 +2365,26 @@ func createSchemaFromType(fieldType reflect.Type) core.ZodSchema {
 
 // applyParsedTagRules applies validation rules from parsed tagparser.FieldInfo
 func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) core.ZodSchema {
-	fieldPlan := tagparser.CompileFieldPlan(&fieldInfo)
+	fieldInfo.Type = effectiveStructFieldType(fieldInfo.Type)
+	fieldPlan, err := tagparser.CompileFieldPlan(&fieldInfo)
+	if err != nil {
+		panic(fmt.Sprintf("materialize unvalidated tag plan for field %s: %v", fieldInfo.Name, err))
+	}
 	if fieldPlan.RuntimePointerOptional == tagparser.OptionalPlacementBeforeOperations {
 		schema = applyOptionalToSchema(schema)
 	}
 
 	// Apply tag-driven validation rules; structural flags are handled elsewhere.
 	for _, operation := range fieldPlan.Operations {
-		rule := operation.Rule
 		switch operation.Op {
-		case tagparser.RuleStructural:
+		case tagparser.RuleRequired, tagparser.RuleOptional, tagparser.RuleCoerce:
 			continue
-		case tagparser.RuleStringCheck:
-			schema = applyStringCheckRule(schema, rule.Name)
+		case tagparser.RuleEmail, tagparser.RuleURL, tagparser.RuleUUID,
+			tagparser.RuleIPv4, tagparser.RuleIPv6, tagparser.RuleCIDRv4,
+			tagparser.RuleCIDRv6, tagparser.RuleCUID, tagparser.RuleCUID2,
+			tagparser.RuleJWT, tagparser.RuleISODateTime, tagparser.RuleISODate,
+			tagparser.RuleISOTime, tagparser.RuleISODuration:
+			schema = applyStringCheckRule(schema, operation.Name)
 		case tagparser.RuleTime:
 			schema = Time()
 		case tagparser.RulePositive:
@@ -2251,25 +2396,15 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 		case tagparser.RuleNonEmpty:
 			schema = applyNonEmptyModifier(schema)
 		case tagparser.RuleEnum:
-			if len(rule.Params) > 0 {
-				schema = applyEnumConstraint(schema, rule.Params)
-			}
+			schema = applyCompiledEnumConstraint(schema, operation.Operand)
 		case tagparser.RuleLiteral:
-			if value, ok := operation.FirstParam(); ok {
-				schema = applyLiteralConstraint(schema, value)
-			}
+			schema = applyCompiledLiteralConstraint(schema, operation.Operand)
 		case tagparser.RuleDefault:
-			if value, ok := operation.JoinedValue(); ok {
-				schema = applyDefaultValue(schema, value)
-			}
+			schema = applyCompiledFallback(schema, operation.Operand, false)
 		case tagparser.RulePrefault:
-			if value, ok := operation.JoinedValue(); ok {
-				schema = applyPrefaultValue(schema, value)
-			}
-		case tagparser.RuleMethod:
-			schema = applyMethodRule(schema, operation)
-		case tagparser.RuleUnsupported:
-			continue
+			schema = applyCompiledFallback(schema, operation.Operand, true)
+		default:
+			schema = applyCompiledRule(schema, operation)
 		}
 	}
 
@@ -2280,22 +2415,205 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 	return schema
 }
 
-func applyMethodRule(schema core.ZodSchema, plan tagparser.RulePlan) core.ZodSchema {
-	switch plan.Method {
-	case "Nilable":
+func effectiveStructFieldType(fieldType reflect.Type) reflect.Type {
+	if fieldType == nil || fieldType.Kind() != reflect.Struct {
+		return fieldType
+	}
+	if _, ok := reflect.Zero(fieldType).Interface().(core.Unwrapper); !ok {
+		return fieldType
+	}
+	valueField, ok := fieldType.FieldByName("Value")
+	if !ok {
+		return fieldType
+	}
+	return valueField.Type
+}
+
+func applyCompiledRule(schema core.ZodSchema, plan tagparser.RulePlan) core.ZodSchema {
+	switch plan.Op {
+	case tagparser.RuleNilable:
 		return applyNilableModifier(schema)
-	case "Trim":
+	case tagparser.RuleTrim:
 		return applyStringTransformRule(schema, "trim")
-	case "ToLowerCase":
+	case tagparser.RuleLowercase:
 		return applyStringTransformRule(schema, "lowercase")
-	case "ToUpperCase":
+	case tagparser.RuleUppercase:
 		return applyStringTransformRule(schema, "uppercase")
-	default:
-		if value, ok := plan.FirstParam(); ok {
-			return applyParameterizedRule(schema, plan.Rule.Name, value)
+	case tagparser.RuleMin:
+		if value, ok := intOperand(plan.Operand); ok {
+			return applyMinConstraint(schema, value)
 		}
+	case tagparser.RuleMax:
+		if value, ok := intOperand(plan.Operand); ok {
+			return applyMaxConstraint(schema, value)
+		}
+	case tagparser.RuleLength:
+		if value, ok := intOperand(plan.Operand); ok {
+			return applyLengthConstraint(schema, value)
+		}
+	case tagparser.RuleGT:
+		if value, ok := floatOperand(plan.Operand); ok {
+			return applyGtConstraint(schema, value)
+		}
+	case tagparser.RuleGTE:
+		if value, ok := floatOperand(plan.Operand); ok {
+			return applyGteConstraint(schema, value)
+		}
+	case tagparser.RuleLT:
+		if value, ok := floatOperand(plan.Operand); ok {
+			return applyLtConstraint(schema, value)
+		}
+	case tagparser.RuleLTE:
+		if value, ok := floatOperand(plan.Operand); ok {
+			return applyLteConstraint(schema, value)
+		}
+	case tagparser.RuleMultipleOf:
+		if value, ok := floatOperand(plan.Operand); ok {
+			return applyMultipleOfConstraint(schema, value)
+		}
+	case tagparser.RuleRegex:
+		if pattern, ok := plan.Operand.(*regexp.Regexp); ok {
+			switch s := schema.(type) {
+			case *ZodString[string]:
+				return s.Regex(pattern)
+			case *ZodString[*string]:
+				return s.Regex(pattern)
+			}
+		}
+	case tagparser.RuleIncludes, tagparser.RuleStartsWith, tagparser.RuleEndsWith:
+		if value, ok := plan.Operand.(string); ok {
+			return applyParameterizedRule(schema, plan.Name, value)
+		}
+	default:
 		return schema
 	}
+	return schema
+}
+
+func intOperand(value any) (int, bool) {
+	switch value := value.(type) {
+	case int:
+		return value, true
+	case int64:
+		return int(value), int64(int(value)) == value
+	case uint64:
+		if value > uint64(math.MaxInt) {
+			return 0, false
+		}
+		return int(value), true
+	case float64:
+		return int(value), float64(int(value)) == value
+	default:
+		return 0, false
+	}
+}
+
+func floatOperand(value any) (float64, bool) {
+	switch value := value.(type) {
+	case int:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case uint64:
+		return float64(value), true
+	case float64:
+		return value, true
+	default:
+		return 0, false
+	}
+}
+
+func applyLengthConstraint(schema core.ZodSchema, value int) core.ZodSchema {
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return s.Length(value)
+	case *ZodSlice[string, []string]:
+		return s.Length(value)
+	case *ZodSlice[int, []int]:
+		return s.Length(value)
+	case *ZodSlice[any, []any]:
+		return s.Length(value)
+	}
+	return schema
+}
+
+func applyCompiledFallback(schema core.ZodSchema, value any, prefault bool) core.ZodSchema {
+	methodName := "Default"
+	if prefault {
+		methodName = "Prefault"
+	}
+	method := reflect.ValueOf(schema).MethodByName(methodName)
+	if !method.IsValid() || method.Type().NumIn() != 1 {
+		return schema
+	}
+	parameterType := method.Type().In(0)
+	var argument reflect.Value
+	if value == nil {
+		argument = reflect.Zero(parameterType)
+	} else {
+		argument = reflect.ValueOf(value)
+		if !argument.Type().AssignableTo(parameterType) {
+			if !argument.Type().ConvertibleTo(parameterType) {
+				return schema
+			}
+			argument = argument.Convert(parameterType)
+		}
+	}
+	result := method.Call([]reflect.Value{argument})
+	if len(result) == 1 {
+		if compiled, ok := result[0].Interface().(core.ZodSchema); ok {
+			return compiled
+		}
+	}
+	return schema
+}
+
+func applyCompiledEnumConstraint(schema core.ZodSchema, operand any) core.ZodSchema {
+	values, ok := operand.([]any)
+	if !ok || len(values) == 0 {
+		return schema
+	}
+	switch schema.(type) {
+	case *ZodString[string]:
+		typed := make([]string, len(values))
+		for i, value := range values {
+			var ok bool
+			typed[i], ok = value.(string)
+			if !ok {
+				return schema
+			}
+		}
+		return EnumSlice(typed)
+	case *ZodIntegerTyped[int, int]:
+		typed := make([]int, len(values))
+		for i, value := range values {
+			n, ok := intOperand(value)
+			if !ok {
+				return schema
+			}
+			typed[i] = n
+		}
+		return EnumSlice(typed)
+	}
+	return schema
+}
+
+func applyCompiledLiteralConstraint(schema core.ZodSchema, value any) core.ZodSchema {
+	switch schema.(type) {
+	case *ZodString[string]:
+		if typed, ok := value.(string); ok {
+			return Literal(typed)
+		}
+	case *ZodIntegerTyped[int, int]:
+		if typed, ok := intOperand(value); ok {
+			return Literal(typed)
+		}
+	case *ZodBool[bool]:
+		if typed, ok := value.(bool); ok {
+			return Literal(typed)
+		}
+	}
+	return schema
 }
 
 func applyStringTransformRule(schema core.ZodSchema, ruleName string) core.ZodSchema {
@@ -2323,131 +2641,53 @@ func applyStringTransformRule(schema core.ZodSchema, ruleName string) core.ZodSc
 }
 
 func applyStringCheckRule(schema core.ZodSchema, ruleName string) core.ZodSchema {
-	switch ruleName {
-	case "email":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return Email()
-		case *ZodString[*string]:
-			return EmailPtr()
-		}
-	case "url":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return URL()
-		case *ZodString[*string]:
-			return URLPtr()
-		}
-	case "uuid":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return UUID()
-		case *ZodString[*string]:
-			return UUIDPtr()
-		}
-	case "ipv4":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IPv4()
-		case *ZodString[*string]:
-			return IPv4Ptr()
-		}
-	case "ipv6":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IPv6()
-		case *ZodString[*string]:
-			return IPv6Ptr()
-		}
-	case "cidrv4":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return CIDRv4()
-		case *ZodString[*string]:
-			return CIDRv4Ptr()
-		}
-	case "cidrv6":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return CIDRv6()
-		case *ZodString[*string]:
-			return CIDRv6Ptr()
-		}
-	case "cuid":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return CUID()
-		case *ZodString[*string]:
-			return CUIDPtr()
-		}
-	case "cuid2":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return CUID2()
-		case *ZodString[*string]:
-			return CUID2Ptr()
-		}
-	case "jwt":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return JWT()
-		case *ZodString[*string]:
-			return JWTPtr()
-		}
-	case "iso_datetime":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IsoDateTime()
-		case *ZodString[*string]:
-			return IsoDateTimePtr()
-		}
-	case "iso_date":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IsoDate()
-		case *ZodString[*string]:
-			return IsoDatePtr()
-		}
-	case "iso_time":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IsoTime()
-		case *ZodString[*string]:
-			return IsoTimePtr()
-		}
-	case "iso_duration":
-		switch schema.(type) {
-		case *ZodString[string]:
-			return IsoDuration()
-		case *ZodString[*string]:
-			return IsoDurationPtr()
-		}
+	switch s := schema.(type) {
+	case *ZodString[string]:
+		return applyStringCheck(s, ruleName)
+	case *ZodString[*string]:
+		return applyStringCheck(s, ruleName)
 	}
 	return schema
 }
 
-// applyNilableModifier applies nilable modifier to compatible schema types
-func applyNilableModifier(schema core.ZodSchema) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Nilable()
-	case *ZodIntegerTyped[int, int]:
-		return s.Nilable()
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Nilable()
-	case *ZodFloatTyped[float64, float64]:
-		return s.Nilable()
-	case *ZodFloatTyped[float32, float32]:
-		return s.Nilable()
-	case *ZodBool[bool]:
-		return s.Nilable()
+func applyStringCheck[T StringConstraint](schema *ZodString[T], ruleName string) core.ZodSchema {
+	switch ruleName {
+	case "email":
+		return schema.Email()
+	case "url":
+		return schema.withCheck(checks.URL())
+	case "uuid":
+		return schema.withCheck(checks.UUID())
+	case "ipv4":
+		return schema.withCheck(checks.IPv4())
+	case "ipv6":
+		return schema.withCheck(checks.IPv6())
+	case "cidrv4":
+		return schema.withCheck(checks.CIDRv4())
+	case "cidrv6":
+		return schema.withCheck(checks.CIDRv6())
+	case "cuid":
+		return schema.withCheck(checks.CUID())
+	case "cuid2":
+		return schema.withCheck(checks.CUID2())
+	case "jwt":
+		return schema.JWT()
+	case "iso_datetime":
+		return schema.withCheck(checks.ISODateTime())
+	case "iso_date":
+		return schema.withCheck(checks.ISODate())
+	case "iso_time":
+		return schema.withCheck(checks.ISOTime())
+	case "iso_duration":
+		return schema.withCheck(checks.ISODuration())
 	default:
-		// Try generic interface approach
-		if nilableSchema, ok := schema.(interface{ Nilable() core.ZodSchema }); ok {
-			return nilableSchema.Nilable()
-		}
+		return schema
 	}
-	return schema
+}
+
+// applyNilableModifier applies Nilable behind the runtime FromStruct boundary.
+func applyNilableModifier(schema core.ZodSchema) core.ZodSchema {
+	return applySchemaModifier(schema, "Nilable")
 }
 
 // applyPositiveModifier applies positive constraint to numeric types
@@ -2692,43 +2932,6 @@ func applyLteConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
 		return s.Lte(value)
 	case *ZodFloatTyped[float32, float32]:
 		return s.Lte(value)
-	}
-	return schema
-}
-
-func applyEnumConstraint(schema core.ZodSchema, values []string) core.ZodSchema {
-	// For enums, we need to replace the schema with an enum schema
-	switch schema.(type) {
-	case *ZodString[string]:
-		return EnumSlice(values)
-	case *ZodIntegerTyped[int, int]:
-		// Try to parse as integers
-		intValues := make([]int, 0, len(values))
-		for _, v := range values {
-			if intVal, err := strconv.Atoi(v); err == nil {
-				intValues = append(intValues, intVal)
-			}
-		}
-		if len(intValues) > 0 {
-			return EnumSlice(intValues)
-		}
-	}
-	return schema
-}
-
-func applyLiteralConstraint(schema core.ZodSchema, value string) core.ZodSchema {
-	// For literals, replace with a literal schema
-	switch schema.(type) {
-	case *ZodString[string]:
-		return Literal(value)
-	case *ZodIntegerTyped[int, int]:
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return Literal(intVal)
-		}
-	case *ZodBool[bool]:
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return Literal(boolVal)
-		}
 	}
 	return schema
 }
@@ -3233,208 +3436,24 @@ func createNestedStructSchema(structType reflect.Type) core.ZodSchema {
 	return Any()
 }
 
-// applyOptionalToSchema applies the Optional() method to the schema using a type switch
-// This handles the type compatibility issue where each schema's Optional() method returns its specific type
-// Optional() makes schemas accept nil values - it doesn't change the output type for pointer schemas
+// applyOptionalToSchema applies Optional while preserving the concrete generic
+// return type behind the runtime FromStruct boundary.
 func applyOptionalToSchema(schema core.ZodSchema) core.ZodSchema {
-	switch s := schema.(type) {
-	// String types
-	case *ZodString[string]:
-		return s.Optional()
-	case *ZodString[*string]:
-		return s.Optional()
-	case *ZodEmail[string]:
-		return s.Optional()
-	case *ZodEmail[*string]:
-		return s.Optional()
-	case *ZodURL[string]:
-		return s.Optional()
-	case *ZodURL[*string]:
-		return s.Optional()
-	case *ZodIPv4[string]:
-		return s.Optional()
-	case *ZodIPv4[*string]:
-		return s.Optional()
-	case *ZodIPv6[string]:
-		return s.Optional()
-	case *ZodIPv6[*string]:
-		return s.Optional()
-	case *ZodCIDRv4[string]:
-		return s.Optional()
-	case *ZodCIDRv4[*string]:
-		return s.Optional()
-	case *ZodCIDRv6[string]:
-		return s.Optional()
-	case *ZodCIDRv6[*string]:
-		return s.Optional()
-	case *ZodIso[string]:
-		return s.Optional()
-	case *ZodIso[*string]:
-		return s.Optional()
+	return applySchemaModifier(schema, "Optional")
+}
 
-	// Numeric types
-	case *ZodIntegerTyped[int, int]:
-		return s.Optional()
-	case *ZodIntegerTyped[int, *int]:
-		return s.Optional()
-	case *ZodIntegerTyped[int8, int8]:
-		return s.Optional()
-	case *ZodIntegerTyped[int8, *int8]:
-		return s.Optional()
-	case *ZodIntegerTyped[int16, int16]:
-		return s.Optional()
-	case *ZodIntegerTyped[int16, *int16]:
-		return s.Optional()
-	case *ZodIntegerTyped[int32, int32]:
-		return s.Optional()
-	case *ZodIntegerTyped[int32, *int32]:
-		return s.Optional()
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Optional()
-	case *ZodIntegerTyped[int64, *int64]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint, uint]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint, *uint]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint8, uint8]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint8, *uint8]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint16, uint16]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint16, *uint16]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint32, uint32]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint32, *uint32]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint64, uint64]:
-		return s.Optional()
-	case *ZodIntegerTyped[uint64, *uint64]:
-		return s.Optional()
-
-	// Float types
-	case *ZodFloatTyped[float32, float32]:
-		return s.Optional()
-	case *ZodFloatTyped[float32, *float32]:
-		return s.Optional()
-	case *ZodFloatTyped[float64, float64]:
-		return s.Optional()
-	case *ZodFloatTyped[float64, *float64]:
-		return s.Optional()
-
-	// Other primitive types
-	case *ZodBool[bool]:
-		return s.Optional()
-	case *ZodBool[*bool]:
-		return s.Optional()
-	case *ZodTime[time.Time]:
-		return s.Optional()
-	case *ZodTime[*time.Time]:
-		return s.Optional()
-	case *ZodBigInt[*big.Int]:
-		return s.Optional()
-	case *ZodBigInt[**big.Int]:
-		return s.Optional()
-	case *ZodComplex[complex64]:
-		return s.Optional()
-	case *ZodComplex[complex128]:
-		return s.Optional()
-	case *ZodComplex[*complex64]:
-		return s.Optional()
-	case *ZodComplex[*complex128]:
-		return s.Optional()
-	case *ZodStringBool[bool]:
-		return s.Optional()
-	case *ZodStringBool[*bool]:
-		return s.Optional()
-
-	// Collection types
-	case *ZodSlice[any, []any]:
-		return s.Optional()
-	case *ZodSlice[any, *[]any]:
-		return s.Optional()
-	case *ZodArray[any, any]:
-		return s.Optional()
-	case *ZodArray[any, *any]:
-		return s.Optional()
-	case *ZodMap[any, any]:
-		return s.Optional()
-	case *ZodMap[any, *any]:
-		return s.Optional()
-	case *ZodRecord[any, any]:
-		return s.Optional()
-	case *ZodRecord[any, *any]:
-		return s.Optional()
-
-	// Object/Struct types
-	case *ZodObject[any, any]:
-		return s.Optional()
-	case *ZodObject[any, *any]:
-		return s.Optional()
-	case *ZodStruct[any, any]:
-		return s.Optional()
-	case *ZodStruct[any, *any]:
-		return s.Optional()
-
-	// Composite types
-	case *ZodUnion[any, any]:
-		return s.Optional()
-	case *ZodUnion[any, *any]:
-		return s.Optional()
-	case *ZodIntersection[any, any]:
-		return s.Optional()
-	case *ZodIntersection[any, *any]:
-		return s.Optional()
-	case *ZodDiscriminatedUnion[any, any]:
-		return s.Optional()
-	case *ZodDiscriminatedUnion[any, *any]:
-		return s.Optional()
-
-	// Other types
-	case *ZodEnum[any, any]:
-		return s.Optional()
-	case *ZodEnum[any, *any]:
-		return s.Optional()
-	case *ZodLiteral[any, any]:
-		return s.Optional()
-	case *ZodLiteral[any, *any]:
-		return s.Optional()
-	case *ZodAny[any, any]:
-		return s.Optional()
-	case *ZodAny[any, *any]:
-		return s.Optional()
-	case *ZodUnknown[any, any]:
-		return s.Optional()
-	case *ZodUnknown[any, *any]:
-		return s.Optional()
-	case *ZodNever[any, any]:
-		return s.Optional()
-	case *ZodNever[any, *any]:
-		return s.Optional()
-	case *ZodNil[any, any]:
-		return s.Optional()
-	case *ZodNil[any, *any]:
-		return s.Optional()
-	case *ZodLazy[any]:
-		return s.Optional()
-	case *ZodLazy[*any]:
-		return s.Optional()
-	case *ZodFunction[any]:
-		return s.Optional()
-	case *ZodFunction[*any]:
-		return s.Optional()
-	case *ZodFile[any, any]:
-		return s.Optional()
-	case *ZodFile[any, *any]:
-		return s.Optional()
-
-	default:
-		// For any unknown types, return as-is
-		// This ensures we don't break on custom schemas
-		return s
+func applySchemaModifier(schema core.ZodSchema, methodName string) core.ZodSchema {
+	if schema == nil {
+		return nil
 	}
+	method := reflect.ValueOf(schema).MethodByName(methodName)
+	if method.IsValid() && method.Type().NumIn() == 0 && method.Type().NumOut() == 1 {
+		result := method.Call(nil)
+		if modified, ok := result[0].Interface().(core.ZodSchema); ok {
+			return modified
+		}
+	}
+	return schema
 }
 
 // applyPrefaultValue applies prefault values to schema types (pre-parse default with full validation)

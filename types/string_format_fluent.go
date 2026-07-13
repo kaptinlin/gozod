@@ -4,13 +4,13 @@ import "github.com/kaptinlin/gozod/core"
 
 func wrapStringFluent[T StringConstraint, W core.ZodSchema](source core.ZodSchema, base *ZodString[T], wrap func(*ZodString[T]) W) W {
 	wrapped := wrap(base)
-	finalizeClone(source, wrapped)
+	finalizeClone(wrapped)
 	return wrapped
 }
 
 func withStringWrapperMeta[T StringConstraint, W core.ZodSchema](source core.ZodSchema, base *ZodString[T], wrap func(*ZodString[T]) W, meta core.GlobalMeta) W {
 	clone := wrap(base.withInternals(base.Internals().Clone()))
-	core.ApplyGlobalMeta(source, clone, meta)
+	core.ApplySchemaMeta(source, clone, meta)
 	return clone
 }
 
@@ -34,12 +34,12 @@ func (z *ZodEmail[T]) PrefaultFunc(fn func() string) *ZodEmail[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newEmail[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodEmail[T]) Meta(meta core.GlobalMeta) *ZodEmail[T] {
 	return withStringWrapperMeta(z, z.ZodString, newEmail[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodEmail[T]) Describe(description string) *ZodEmail[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -69,12 +69,12 @@ func (z *ZodGUID[T]) PrefaultFunc(fn func() string) *ZodGUID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newGUID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodGUID[T]) Meta(meta core.GlobalMeta) *ZodGUID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newGUID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodGUID[T]) Describe(description string) *ZodGUID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -104,12 +104,12 @@ func (z *ZodCUID[T]) PrefaultFunc(fn func() string) *ZodCUID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newCUID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodCUID[T]) Meta(meta core.GlobalMeta) *ZodCUID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newCUID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodCUID[T]) Describe(description string) *ZodCUID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -139,12 +139,12 @@ func (z *ZodCUID2[T]) PrefaultFunc(fn func() string) *ZodCUID2[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newCUID2[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodCUID2[T]) Meta(meta core.GlobalMeta) *ZodCUID2[T] {
 	return withStringWrapperMeta(z, z.ZodString, newCUID2[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodCUID2[T]) Describe(description string) *ZodCUID2[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -174,12 +174,12 @@ func (z *ZodULID[T]) PrefaultFunc(fn func() string) *ZodULID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newULID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodULID[T]) Meta(meta core.GlobalMeta) *ZodULID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newULID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodULID[T]) Describe(description string) *ZodULID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -209,12 +209,12 @@ func (z *ZodXID[T]) PrefaultFunc(fn func() string) *ZodXID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newXID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodXID[T]) Meta(meta core.GlobalMeta) *ZodXID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newXID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodXID[T]) Describe(description string) *ZodXID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -244,12 +244,12 @@ func (z *ZodKSUID[T]) PrefaultFunc(fn func() string) *ZodKSUID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newKSUID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodKSUID[T]) Meta(meta core.GlobalMeta) *ZodKSUID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newKSUID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodKSUID[T]) Describe(description string) *ZodKSUID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -279,12 +279,12 @@ func (z *ZodNanoID[T]) PrefaultFunc(fn func() string) *ZodNanoID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newNanoID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodNanoID[T]) Meta(meta core.GlobalMeta) *ZodNanoID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newNanoID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodNanoID[T]) Describe(description string) *ZodNanoID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -314,12 +314,12 @@ func (z *ZodUUID[T]) PrefaultFunc(fn func() string) *ZodUUID[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newUUID[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodUUID[T]) Meta(meta core.GlobalMeta) *ZodUUID[T] {
 	return withStringWrapperMeta(z, z.ZodString, newUUID[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodUUID[T]) Describe(description string) *ZodUUID[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -349,12 +349,12 @@ func (z *ZodIPv4[T]) PrefaultFunc(fn func() string) *ZodIPv4[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newIPv4[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodIPv4[T]) Meta(meta core.GlobalMeta) *ZodIPv4[T] {
 	return withStringWrapperMeta(z, z.ZodString, newIPv4[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodIPv4[T]) Describe(description string) *ZodIPv4[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -384,12 +384,12 @@ func (z *ZodIPv6[T]) PrefaultFunc(fn func() string) *ZodIPv6[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newIPv6[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodIPv6[T]) Meta(meta core.GlobalMeta) *ZodIPv6[T] {
 	return withStringWrapperMeta(z, z.ZodString, newIPv6[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodIPv6[T]) Describe(description string) *ZodIPv6[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -419,12 +419,12 @@ func (z *ZodCIDRv4[T]) PrefaultFunc(fn func() string) *ZodCIDRv4[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newCIDRv4[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodCIDRv4[T]) Meta(meta core.GlobalMeta) *ZodCIDRv4[T] {
 	return withStringWrapperMeta(z, z.ZodString, newCIDRv4[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodCIDRv4[T]) Describe(description string) *ZodCIDRv4[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -454,12 +454,12 @@ func (z *ZodCIDRv6[T]) PrefaultFunc(fn func() string) *ZodCIDRv6[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newCIDRv6[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodCIDRv6[T]) Meta(meta core.GlobalMeta) *ZodCIDRv6[T] {
 	return withStringWrapperMeta(z, z.ZodString, newCIDRv6[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodCIDRv6[T]) Describe(description string) *ZodCIDRv6[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -489,12 +489,12 @@ func (z *ZodURL[T]) PrefaultFunc(fn func() string) *ZodURL[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newURL[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodURL[T]) Meta(meta core.GlobalMeta) *ZodURL[T] {
 	return withStringWrapperMeta(z, z.ZodString, newURL[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodURL[T]) Describe(description string) *ZodURL[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -524,12 +524,12 @@ func (z *ZodHostname[T]) PrefaultFunc(fn func() string) *ZodHostname[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newHostname[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodHostname[T]) Meta(meta core.GlobalMeta) *ZodHostname[T] {
 	return withStringWrapperMeta(z, z.ZodString, newHostname[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodHostname[T]) Describe(description string) *ZodHostname[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -559,12 +559,12 @@ func (z *ZodMAC[T]) PrefaultFunc(fn func() string) *ZodMAC[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newMAC[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodMAC[T]) Meta(meta core.GlobalMeta) *ZodMAC[T] {
 	return withStringWrapperMeta(z, z.ZodString, newMAC[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodMAC[T]) Describe(description string) *ZodMAC[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -594,12 +594,12 @@ func (z *ZodE164[T]) PrefaultFunc(fn func() string) *ZodE164[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newE164[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodE164[T]) Meta(meta core.GlobalMeta) *ZodE164[T] {
 	return withStringWrapperMeta(z, z.ZodString, newE164[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodE164[T]) Describe(description string) *ZodE164[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -609,12 +609,12 @@ func (z *ZodE164[T]) RefineAny(fn func(any) bool, params ...any) *ZodE164[T] {
 	return wrapStringFluent(z, z.ZodString.RefineAny(fn, params...), newE164[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodIso[T]) Meta(meta core.GlobalMeta) *ZodIso[T] {
 	return withStringWrapperMeta(z, z.ZodString, newIso[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodIso[T]) Describe(description string) *ZodIso[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -644,12 +644,12 @@ func (z *ZodEmoji[T]) PrefaultFunc(fn func() string) *ZodEmoji[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newEmoji[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodEmoji[T]) Meta(meta core.GlobalMeta) *ZodEmoji[T] {
 	return withStringWrapperMeta(z, z.ZodString, newEmoji[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodEmoji[T]) Describe(description string) *ZodEmoji[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -679,12 +679,12 @@ func (z *ZodJWT[T]) PrefaultFunc(fn func() string) *ZodJWT[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newJWT[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodJWT[T]) Meta(meta core.GlobalMeta) *ZodJWT[T] {
 	return withStringWrapperMeta(z, z.ZodString, newJWT[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodJWT[T]) Describe(description string) *ZodJWT[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -714,12 +714,12 @@ func (z *ZodBase64[T]) PrefaultFunc(fn func() string) *ZodBase64[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newBase64[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodBase64[T]) Meta(meta core.GlobalMeta) *ZodBase64[T] {
 	return withStringWrapperMeta(z, z.ZodString, newBase64[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodBase64[T]) Describe(description string) *ZodBase64[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -749,12 +749,12 @@ func (z *ZodBase64URL[T]) PrefaultFunc(fn func() string) *ZodBase64URL[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newBase64URL[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodBase64URL[T]) Meta(meta core.GlobalMeta) *ZodBase64URL[T] {
 	return withStringWrapperMeta(z, z.ZodString, newBase64URL[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodBase64URL[T]) Describe(description string) *ZodBase64URL[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }
@@ -784,12 +784,12 @@ func (z *ZodHex[T]) PrefaultFunc(fn func() string) *ZodHex[T] {
 	return wrapStringFluent(z, z.ZodString.PrefaultFunc(fn), newHex[T])
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodHex[T]) Meta(meta core.GlobalMeta) *ZodHex[T] {
 	return withStringWrapperMeta(z, z.ZodString, newHex[T], meta)
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodHex[T]) Describe(description string) *ZodHex[T] {
 	return z.Meta(core.GlobalMeta{Description: description})
 }

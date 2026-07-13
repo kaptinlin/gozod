@@ -18,10 +18,13 @@ type (
 	ZodConfig    = core.ZodConfig
 )
 
-var (
-	SetConfig = core.SetConfig
-	Config    = core.Config
-)
+func SetConfig(config *ZodConfig) *ZodConfig {
+	return core.SetConfig(config)
+}
+
+func Config() *ZodConfig {
+	return core.Config()
+}
 
 type (
 	ZodCheck           = core.ZodCheck

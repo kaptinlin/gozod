@@ -210,24 +210,16 @@ func (z *ZodBool[T]) NonOptional() *ZodBool[bool] {
 	}
 }
 
-// Meta stores metadata in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodBool[T]) Meta(meta core.GlobalMeta) *ZodBool[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodBool[T]) Describe(desc string) *ZodBool[T] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Transform applies a transformation function to the parsed value.
@@ -361,7 +353,7 @@ func (z *ZodBool[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodBool[*bool]
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -371,7 +363,7 @@ func (z *ZodBool[T]) withInternals(in *core.ZodTypeInternals) *ZodBool[T] {
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

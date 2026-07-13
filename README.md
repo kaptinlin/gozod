@@ -1,6 +1,6 @@
 # GoZod
 
-[![Go Module](https://img.shields.io/badge/go-1.26.4%2B-blue.svg)](https://golang.org/)
+[![Go Module](https://img.shields.io/badge/go-1.26.5%2B-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A TypeScript Zod v4-inspired validation library for Go with strict type semantics, fluent schemas, struct tags, and JSON Schema Draft 2020-12 interoperability
@@ -23,7 +23,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 go get github.com/kaptinlin/gozod
 ```
 
-Requires **Go 1.26.4+**.
+Requires **Go 1.26.5+**.
 
 ## Quick Start
 
@@ -73,7 +73,8 @@ fmt.Println(fromJSON, knownValue)
 
 ## Struct Tags
 
-Use `FromStruct[T]()` when validation belongs next to a Go struct.
+Use `FromStruct[T]()` when validation belongs next to a Go struct. Construction
+errors report invalid tags or unsupported field types before parsing begins.
 
 ```go
 package main
@@ -92,7 +93,10 @@ type User struct {
 }
 
 func main() {
-	schema := gozod.FromStruct[User]()
+	schema, err := gozod.FromStruct[User]()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	user, err := schema.Parse(User{
 		Name:  "Ada Lovelace",
@@ -176,7 +180,7 @@ slug, _ := normalized.Parse(nil)
 fmt.Println(name, slug)
 ```
 
-Metadata modifiers are copy-on-write. The original schema is left unchanged and metadata is registered on the returned schema.
+Metadata modifiers are copy-on-write. The original schema is left unchanged and metadata is stored on the returned schema.
 
 ```go
 email := gozod.Email().Meta(gozod.GlobalMeta{
@@ -185,8 +189,8 @@ email := gozod.Email().Meta(gozod.GlobalMeta{
 	Examples:    []any{"user@example.com"},
 })
 
-meta, ok := gozod.GlobalRegistry.Get(email)
-fmt.Println(ok, meta.Title)
+meta := email.Internals().Metadata()
+fmt.Println(meta.Title)
 ```
 
 See [docs/metadata.md](docs/metadata.md) for registries and JSON Schema metadata merging.
@@ -215,20 +219,30 @@ result := jsonSchema.Validate(map[string]any{
 fmt.Println(result.IsValid())
 ```
 
-`gozod.FromJSONSchema` fails closed on unsupported JSON Schema keywords. Use `AllowLossy` only when dropping unsupported keywords is intentional.
+`gozod.FromJSONSchema` fails closed on unsupported JSON Schema keywords. Use
+`gozod.FromJSONSchemaLossy` only when dropping unsupported semantics is intentional.
 
 ```go
-var ignored []string
-zodSchema, err := gozod.FromJSONSchema(jsonSchema, gozod.FromJSONSchemaOptions{
-	AllowLossy:    true,
-	LossyKeywords: &ignored,
-})
+zodSchema, losses, err := gozod.FromJSONSchemaLossy(jsonSchema)
 if err != nil {
 	log.Fatal(err)
 }
 
 _, _ = zodSchema.ParseAny(map[string]any{"name": "Lin", "age": 30})
-fmt.Println(ignored)
+for _, loss := range losses {
+	fmt.Printf("%s at %s: %v\n", loss.Keyword, loss.Pointer, loss.Err)
+}
+```
+
+Imported `$id`, title, description, and examples belong to the returned schema
+by default. Pass a registry only when the caller needs a separate metadata
+destination; the importer snapshots nested examples in either mode.
+
+```go
+metadata := gozod.NewRegistry[gozod.GlobalMeta]()
+zodSchema, err := gozod.FromJSONSchema(jsonSchema, gozod.FromJSONSchemaOptions{
+	Metadata: metadata,
+})
 ```
 
 See [docs/json-schema.md](docs/json-schema.md) for conversion options, unsupported features, registries, and Draft 2020-12 notes.

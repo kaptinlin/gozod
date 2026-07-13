@@ -127,7 +127,7 @@ func main() {
 // =============================================================================
 
 func demonstrateBasicValidation() {
-	schema := gozod.FromStruct[User]()
+	schema := gozod.MustFromStruct[User]()
 
 	// Valid user
 	validUser := User{
@@ -159,7 +159,7 @@ func demonstrateBasicValidation() {
 }
 
 func demonstrateNestedValidation() {
-	schema := gozod.FromStruct[Profile]()
+	schema := gozod.MustFromStruct[Profile]()
 
 	// Create valid nested structure
 	profile := Profile{
@@ -188,7 +188,7 @@ func demonstrateNestedValidation() {
 }
 
 func demonstratePointerFields() {
-	schema := gozod.FromStruct[UpdateUserRequest]()
+	schema := gozod.MustFromStruct[UpdateUserRequest]()
 
 	// Partial update - only some fields provided
 	nameUpdate := "Charlie Brown"
@@ -218,7 +218,7 @@ func demonstratePointerFields() {
 }
 
 func demonstrateComprehensiveValidation() {
-	schema := gozod.FromStruct[ComprehensiveUser]()
+	schema := gozod.MustFromStruct[ComprehensiveUser]()
 
 	// Create comprehensive user with all features
 	user := ComprehensiveUser{
@@ -255,7 +255,7 @@ func demonstrateComprehensiveValidation() {
 }
 
 func demonstrateErrorHandling() {
-	schema := gozod.FromStruct[ComprehensiveUser]()
+	schema := gozod.MustFromStruct[ComprehensiveUser]()
 
 	// Create user with multiple validation errors
 	invalidUser := ComprehensiveUser{
@@ -306,7 +306,7 @@ func demonstrateErrorHandling() {
 }
 
 func demonstrateJSONIntegration() {
-	schema := gozod.FromStruct[ComprehensiveUser]()
+	schema := gozod.MustFromStruct[ComprehensiveUser]()
 
 	// Simulate JSON API request payload
 	jsonPayload := `{
@@ -352,7 +352,7 @@ func demonstrateJSONIntegration() {
 
 func demonstrateBusinessLogicIntegration() {
 	// Combine tag validation with custom business rules
-	schema := gozod.FromStruct[User]().
+	schema := gozod.MustFromStruct[User]().
 		Refine(func(u User) bool {
 			// Business rule: users named "admin" must be at least 25
 			return !strings.EqualFold(u.Name, "admin") || u.Age >= 25
@@ -387,7 +387,7 @@ func demonstrateBusinessLogicIntegration() {
 	}
 
 	// Demonstrate optional chaining
-	optionalSchema := gozod.FromStruct[User]().Optional()
+	optionalSchema := gozod.MustFromStruct[User]().Optional()
 
 	// Test with nil input
 	result2, err := optionalSchema.Parse(nil)

@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for DefaultStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for DefaultStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (ds DefaultStruct) Schema() *gozod.ZodStruct[DefaultStruct, DefaultStruct] {
 	return gozod.Struct[DefaultStruct](gozod.StructSchema{
 		"str":       gozod.String().Optional().Default("hello"),

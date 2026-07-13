@@ -102,7 +102,7 @@ High-level coercion utilities that bridge between `pkg/coerce` and the schema sy
 |------|---------|
 | `api.md` | Complete API documentation with all methods and examples |
 | `basics.md` | Basic usage and getting started guide |
-| `tags.md` | Comprehensive struct tag syntax and custom validator integration |
+| `tags.md` | Struct tag syntax, compilation, and runtime/codegen parity |
 | `feature-mapping.md` | Complete TypeScript Zod v4 to GoZod mapping reference |
 | `error-customization.md` | Guide for customizing error messages |
 | `error-formatting.md` | Error formatting and localization |

@@ -197,9 +197,10 @@ func TestCodeGenerator_CircularReferences(t *testing.T) {
 	content := `package main
 
 type Node struct {
-	Value    int     ` + "`json:\"value\" gozod:\"required\"`" + `
-	Next     *Node   ` + "`json:\"next\" gozod:\"\"`" + `
-	Children []*Node ` + "`json:\"children\" gozod:\"\"`" + `
+	Value          int              ` + "`json:\"value\" gozod:\"required\"`" + `
+	Next           *Node            ` + "`json:\"next\" gozod:\"\"`" + `
+	Children       []*Node          ` + "`json:\"children\" gozod:\"\"`" + `
+	ChildrenByName map[string]*Node ` + "`json:\"children_by_name\" gozod:\"\"`" + `
 }
 
 type Department struct {
@@ -212,6 +213,11 @@ type Employee struct {
 	Name       string      ` + "`json:\"name\" gozod:\"required\"`" + `
 	Department *Department ` + "`json:\"department\" gozod:\"\"`" + `
 	Reports    []*Employee ` + "`json:\"reports\" gozod:\"\"`" + `
+}
+
+type Company struct {
+	Name  string    ` + "`json:\"name\" gozod:\"required\"`" + `
+	Owner *Employee ` + "`json:\"owner\" gozod:\"\"`" + `
 }`
 
 	helper.CreateGoFile("circular.go", content)
@@ -235,7 +241,7 @@ type Employee struct {
 	require.NoError(t, err, "Failed to process package")
 
 	// Check each generated file exists
-	expectedFiles := []string{"node_gen.go", "department_gen.go", "employee_gen.go"}
+	expectedFiles := []string{"node_gen.go", "department_gen.go", "employee_gen.go", "company_gen.go"}
 
 	for _, fileName := range expectedFiles {
 		helper.AssertFileExists(fileName)
@@ -251,23 +257,32 @@ type Employee struct {
 	// Check for self-references use Lazy (Node.Next and Employee.Reports)
 	nodeContent := helper.ReadGeneratedFile("node_gen.go")
 	helper.AssertCodeContains(nodeContent,
-		"gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() })",
+		"gozod.LazyTyped[*Node](func() any { return Node{}.Schema() })",
 	)
 
 	empContent := helper.ReadGeneratedFile("employee_gen.go")
 	helper.AssertCodeContains(empContent,
-		"gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Employee]() })",
+		"gozod.LazyTyped[*Employee](func() any { return Employee{}.Schema() })",
 	)
 
-	// Cross-references use direct FromStruct (for now)
+	// Mutual cycles use lazy generated providers.
 	deptContent := helper.ReadGeneratedFile("department_gen.go")
 	helper.AssertCodeContains(deptContent,
-		"gozod.FromStruct[Employee]()",
+		"gozod.LazyTyped[*Employee](func() any { return Employee{}.Schema() })",
 	)
 
 	helper.AssertCodeContains(empContent,
-		"gozod.FromStruct[Department]()",
+		"gozod.LazyTyped[*Department](func() any { return Department{}.Schema() })",
 	)
+
+	// An acyclic package-local edge calls the generated provider directly.
+	companyContent := helper.ReadGeneratedFile("company_gen.go")
+	helper.AssertCodeContains(companyContent, "Employee{}.Schema()")
+	helper.AssertCodeNotContains(companyContent, "gozod.Lazy(")
+
+	for _, content := range []string{nodeContent, deptContent, empContent, companyContent} {
+		helper.AssertCodeNotContains(content, "FromStruct")
+	}
 }
 
 func TestCodeGenerator_ComplexValidation(t *testing.T) {

@@ -47,14 +47,8 @@ func processModifiersCore[T any](
 		return nil, false, nil
 	}
 
-	if len(internals.Modifiers) > 0 {
-		if r, handled, err := processOrderedModifiers[T](internals, ctx); handled || err != nil || r != nil {
-			return r, handled, err
-		}
-	} else {
-		if r, handled, err := processLegacyModifiers[T](internals, ctx); handled || err != nil || r != nil {
-			return r, handled, err
-		}
+	if r, handled, err := processOrderedModifiers[T](internals, ctx); handled || err != nil || r != nil {
+		return r, handled, err
 	}
 
 	return processNilFallback[T](internals, expectedType, ctx)
@@ -73,24 +67,6 @@ func processOrderedModifiers[T any](
 	return nil, false, nil
 }
 
-func processLegacyModifiers[T any](
-	internals *core.ZodTypeInternals,
-	ctx *core.ParseContext,
-) (any, bool, error) {
-	for _, kind := range []core.ZodModifierKind{
-		core.ZodModifierDefault,
-		core.ZodModifierPrefault,
-		core.ZodModifierNonOptional,
-		core.ZodModifierOptional,
-	} {
-		r, handled, err := processLegacyModifier[T](kind, internals, ctx)
-		if handled || err != nil || r != nil {
-			return r, handled, err
-		}
-	}
-	return nil, false, nil
-}
-
 func processModifier[T any](
 	modifier core.ZodModifier,
 	internals *core.ZodTypeInternals,
@@ -102,39 +78,13 @@ func processModifier[T any](
 	case core.ZodModifierPrefault:
 		return processPrefaultModifier(modifier)
 	case core.ZodModifierNonOptional:
-		if !internals.NonOptional {
-			return nil, false, nil
-		}
-		if reflect.TypeFor[T]().Kind() != reflect.Pointer {
-			return nil, true, issues.CreateNonOptionalError(ctx)
-		}
-	case core.ZodModifierOptional:
-		if !internals.Optional && !internals.ExactOptional {
-			return nil, false, nil
-		}
+		return nil, true, issues.CreateNonOptionalError(ctx)
+	case core.ZodModifierOptional, core.ZodModifierNilable:
 		return processOptionalModifier(internals, ctx)
-	case core.ZodModifierNilable:
-		if !internals.Nilable {
-			return nil, false, nil
-		}
-		return processOptionalModifier(internals, ctx)
+	case core.ZodModifierExactOptional:
+		return nil, true, issues.CreateNonOptionalError(ctx)
 	}
 	return nil, false, nil
-}
-
-func processLegacyModifier[T any](
-	kind core.ZodModifierKind,
-	internals *core.ZodTypeInternals,
-	ctx *core.ParseContext,
-) (any, bool, error) {
-	switch kind {
-	case core.ZodModifierDefault:
-		return processLegacyDefaultModifier(internals, ctx)
-	case core.ZodModifierPrefault:
-		return processLegacyPrefaultModifier(internals)
-	default:
-		return processModifier[T](core.ZodModifier{Kind: kind}, internals, ctx)
-	}
 }
 
 func processNilFallback[T any](
@@ -176,28 +126,6 @@ func processPrefaultModifier(modifier core.ZodModifier) (any, bool, error) {
 	}
 	if modifier.HasValue {
 		return cloneutil.Clone(modifier.Value), false, nil
-	}
-	return nil, false, nil
-}
-
-func processLegacyDefaultModifier(internals *core.ZodTypeInternals, ctx *core.ParseContext) (any, bool, error) {
-	v := resolveDefault(internals)
-	if v == nil {
-		return nil, false, nil
-	}
-	if hasOverwriteCheck(internals.Checks) {
-		r, err := ApplyChecks(v, internals.Checks, ctx)
-		return r, true, err
-	}
-	return v, true, nil
-}
-
-func processLegacyPrefaultModifier(internals *core.ZodTypeInternals) (any, bool, error) {
-	if internals.PrefaultValue != nil {
-		return cloneutil.Clone(internals.PrefaultValue), false, nil
-	}
-	if internals.PrefaultFunc != nil {
-		return cloneutil.Clone(internals.PrefaultFunc()), false, nil
 	}
 	return nil, false, nil
 }
@@ -262,16 +190,4 @@ func filterNilChecks(checks []core.ZodCheck) []core.ZodCheck {
 		}
 	}
 	return out
-}
-
-// resolveDefault returns the default value for the schema, cloning it if
-// it is a DefaultValue, or invoking DefaultFunc. Returns nil when neither is set.
-func resolveDefault(internals *core.ZodTypeInternals) any {
-	if internals.DefaultValue != nil {
-		return cloneutil.Clone(internals.DefaultValue)
-	}
-	if internals.DefaultFunc != nil {
-		return cloneutil.Clone(internals.DefaultFunc())
-	}
-	return nil
 }

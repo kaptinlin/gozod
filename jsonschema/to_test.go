@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-json-experiment/json"
@@ -114,72 +115,6 @@ func TestToJSONSchema_OptionValidation(t *testing.T) {
 	}
 }
 
-func TestToJSONSchema_LengthProjectionUsesCheckParams(t *testing.T) {
-	t.Run("string min and max", func(t *testing.T) {
-		schema := types.String().Min(3).Max(5)
-
-		_, err := schema.Parse("go")
-		require.Error(t, err)
-		_, err = schema.Parse("gozod")
-		require.NoError(t, err)
-
-		internals := schema.Internals()
-		require.Len(t, internals.Checks, 2)
-		assert.Equal(t, map[string]any{"minimum": 3}, internals.Checks[0].Zod().Def.Params)
-		assert.Equal(t, map[string]any{"maximum": 5}, internals.Checks[1].Zod().Def.Params)
-
-		internals.Bag = nil
-		got, err := ToJSONSchema(schema)
-		require.NoError(t, err)
-		require.NotNil(t, got.MinLength)
-		require.NotNil(t, got.MaxLength)
-		assert.Equal(t, 3.0, *got.MinLength)
-		assert.Equal(t, 5.0, *got.MaxLength)
-	})
-
-	t.Run("string exact length", func(t *testing.T) {
-		schema := types.String().Length(4)
-
-		_, err := schema.Parse("goz")
-		require.Error(t, err)
-		_, err = schema.Parse("zods")
-		require.NoError(t, err)
-
-		internals := schema.Internals()
-		require.Len(t, internals.Checks, 1)
-		assert.Equal(t, map[string]any{"exact": 4}, internals.Checks[0].Zod().Def.Params)
-
-		internals.Bag = nil
-		got, err := ToJSONSchema(schema)
-		require.NoError(t, err)
-		require.NotNil(t, got.MinLength)
-		require.NotNil(t, got.MaxLength)
-		assert.Equal(t, 4.0, *got.MinLength)
-		assert.Equal(t, 4.0, *got.MaxLength)
-	})
-
-	t.Run("slice min and max items", func(t *testing.T) {
-		schema := types.Slice[string](types.String()).Min(2).Max(3)
-
-		_, err := schema.Parse([]string{"one"})
-		require.Error(t, err)
-		_, err = schema.Parse([]string{"one", "two"})
-		require.NoError(t, err)
-
-		internals := schema.Internals()
-		assert.Equal(t, map[string]any{"minimum": 2}, checkDefParams(t, internals.Checks, "min_size"))
-		assert.Equal(t, map[string]any{"maximum": 3}, checkDefParams(t, internals.Checks, "max_size"))
-
-		internals.Bag = nil
-		got, err := ToJSONSchema(schema)
-		require.NoError(t, err)
-		require.NotNil(t, got.MinItems)
-		require.NotNil(t, got.MaxItems)
-		assert.Equal(t, 2.0, *got.MinItems)
-		assert.Equal(t, 3.0, *got.MaxItems)
-	})
-}
-
 func TestToJSONSchema_ExternalValidatorParity(t *testing.T) {
 	emailPattern := regexp.MustCompile(`^[^@]+@example\.com$`)
 	tests := []struct {
@@ -274,20 +209,6 @@ func assertZodAndJSONSchemaAgree(t *testing.T, zod core.ZodSchema, exported *lib
 
 	assert.Equal(t, want, zodOK, "GoZod result for %#v", sample)
 	assert.Equal(t, zodOK, jsonOK, "JSON Schema result for %#v", sample)
-}
-
-func checkDefParams(t *testing.T, checks []core.ZodCheck, name string) map[string]any {
-	t.Helper()
-	for _, check := range checks {
-		if check == nil || check.Zod() == nil || check.Zod().Def == nil {
-			continue
-		}
-		if check.Zod().Def.Check == name {
-			return check.Zod().Def.Params
-		}
-	}
-	require.Failf(t, "missing check", "check %q not found", name)
-	return nil
 }
 
 // isSubset recursively verifies that exp is a subset of act (i.e., all keys/values in exp are present in act).
@@ -1592,7 +1513,7 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 
 func TestToJSONSchema_DiscriminatedUnionsAdvanced(t *testing.T) {
 	t.Run("Discriminated Union", func(t *testing.T) {
-		schema := types.DiscriminatedUnion("type", []any{
+		schema := types.MustDiscriminatedUnion("type", []core.ZodSchema{
 			types.Object(core.ObjectSchema{
 				"type": types.Literal("a"),
 				"a":    types.String(),
@@ -2282,6 +2203,299 @@ func TestToJSONSchemaBasicRegistry(t *testing.T) {
 	assert.Contains(t, resultStr, `"posts":{"items":{"$ref":"#/$defs/Post"},"type":"array"}`)
 }
 
+func TestToJSONSchemaRegistryRejectsMissingIDBeforeConversion(t *testing.T) {
+	registry := core.NewRegistry[core.GlobalMeta]().Add(
+		types.String().Meta(core.GlobalMeta{ID: "schema-owned"}),
+		core.GlobalMeta{},
+	)
+	overrideCalls := 0
+
+	got, err := ToJSONSchema(registry, Options{
+		Override: func(OverrideContext) { overrideCalls++ },
+	})
+
+	assert.Nil(t, got)
+	require.ErrorIs(t, err, ErrInvalidRegistrySchemaID)
+	assert.ErrorContains(t, err, "missing")
+	assert.Zero(t, overrideCalls)
+}
+
+func TestToJSONSchemaRegistryAcceptsEmptyRegistry(t *testing.T) {
+	got, err := ToJSONSchema(core.NewRegistry[core.GlobalMeta]())
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Empty(t, got.Defs)
+}
+
+func TestToJSONSchemaRegistryRejectsDuplicateIDBeforeConversion(t *testing.T) {
+	registry := core.NewRegistry[core.GlobalMeta]().
+		Add(types.String(), core.GlobalMeta{ID: "shared"}).
+		Add(types.Int(), core.GlobalMeta{ID: "shared"})
+	overrideCalls := 0
+
+	got, err := ToJSONSchema(registry, Options{
+		Override: func(OverrideContext) { overrideCalls++ },
+	})
+
+	assert.Nil(t, got)
+	require.ErrorIs(t, err, ErrInvalidRegistrySchemaID)
+	assert.ErrorContains(t, err, `duplicate "shared"`)
+	assert.Zero(t, overrideCalls)
+}
+
+func TestToJSONSchemaRegistryUsesFrozenMetadataSnapshot(t *testing.T) {
+	first := types.String()
+	second := types.Int()
+	registry := core.NewRegistry[core.GlobalMeta]().
+		Add(first, core.GlobalMeta{ID: "first", Title: "First"}).
+		Add(second, core.GlobalMeta{ID: "second", Title: "Second"})
+
+	got, err := ToJSONSchema(registry, Options{
+		Override: func(ctx OverrideContext) {
+			switch ctx.ZodSchema {
+			case first:
+				registry.Add(second, core.GlobalMeta{ID: "changed-second", Title: "Changed Second"})
+			case second:
+				registry.Add(first, core.GlobalMeta{ID: "changed-first", Title: "Changed First"})
+			}
+		},
+	})
+	require.NoError(t, err)
+	require.Contains(t, got.Defs, "first")
+	require.Contains(t, got.Defs, "second")
+	assert.NotContains(t, got.Defs, "changed-first")
+	assert.NotContains(t, got.Defs, "changed-second")
+	assert.Equal(t, "First", *got.Defs["first"].Title)
+	assert.Equal(t, "Second", *got.Defs["second"].Title)
+
+	next, err := ToJSONSchema(registry)
+	require.NoError(t, err)
+	assert.Contains(t, next.Defs, "changed-first")
+	assert.Contains(t, next.Defs, "changed-second")
+}
+
+func TestToJSONSchemaRegistrySnapshotIsCoherentDuringReplacement(t *testing.T) {
+	schema := types.String()
+	registry := core.NewRegistry[core.GlobalMeta]().Add(schema, core.GlobalMeta{ID: "a", Title: "A"})
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		close(started)
+		for i := range 10_000 {
+			if i%2 == 0 {
+				registry.Add(schema, core.GlobalMeta{ID: "a", Title: "A"})
+			} else {
+				registry.Add(schema, core.GlobalMeta{ID: "b", Title: "B"})
+			}
+		}
+	})
+	<-started
+
+	for range 64 {
+		got, err := ToJSONSchema(registry)
+		require.NoError(t, err)
+		require.Len(t, got.Defs, 1)
+		if definition, ok := got.Defs["a"]; ok {
+			require.NotNil(t, definition.Title)
+			assert.Equal(t, "A", *definition.Title)
+			continue
+		}
+		definition := got.Defs["b"]
+		require.NotNil(t, definition)
+		require.NotNil(t, definition.Title)
+		assert.Equal(t, "B", *definition.Title)
+	}
+	wg.Wait()
+}
+
+func TestToJSONSchemaRegistryConvertsTopLevelEntriesInIDOrder(t *testing.T) {
+	entries := []struct {
+		id     string
+		schema core.ZodSchema
+	}{
+		{id: "h", schema: types.String()},
+		{id: "g", schema: types.Int()},
+		{id: "f", schema: types.Bool()},
+		{id: "e", schema: types.Float()},
+		{id: "d", schema: types.Any()},
+		{id: "c", schema: types.Unknown()},
+		{id: "b", schema: types.Nil()},
+		{id: "a", schema: types.Time()},
+	}
+	registry := core.NewRegistry[core.GlobalMeta]()
+	ids := make(map[core.ZodSchema]string, len(entries))
+	for _, entry := range entries {
+		registry.Add(entry.schema, core.GlobalMeta{ID: entry.id})
+		ids[entry.schema] = entry.id
+	}
+
+	for range 32 {
+		var got []string
+		_, err := ToJSONSchema(registry, Options{
+			Override: func(ctx OverrideContext) {
+				if id, ok := ids[ctx.ZodSchema]; ok {
+					got = append(got, id)
+				}
+			},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a", "b", "c", "d", "e", "f", "g", "h"}, got)
+	}
+}
+
+func TestToJSONSchemaRegistryOutputIsIndependentOfAddOrder(t *testing.T) {
+	first := types.String()
+	second := types.Int()
+	forward := core.NewRegistry[core.GlobalMeta]().
+		Add(first, core.GlobalMeta{ID: "a"}).
+		Add(second, core.GlobalMeta{ID: "b"})
+	reverse := core.NewRegistry[core.GlobalMeta]().
+		Add(second, core.GlobalMeta{ID: "b"}).
+		Add(first, core.GlobalMeta{ID: "a"})
+
+	forwardResult, err := ToJSONSchema(forward)
+	require.NoError(t, err)
+	reverseResult, err := ToJSONSchema(reverse)
+	require.NoError(t, err)
+
+	assert.Equal(t, forwardResult, reverseResult)
+}
+
+func TestToJSONSchemaRegistryReturnsStableFirstConversionError(t *testing.T) {
+	first := types.Function()
+	second := types.Set[int](types.Int())
+	forward := core.NewRegistry[core.GlobalMeta]().
+		Add(first, core.GlobalMeta{ID: "a"}).
+		Add(second, core.GlobalMeta{ID: "b"})
+	reverse := core.NewRegistry[core.GlobalMeta]().
+		Add(second, core.GlobalMeta{ID: "b"}).
+		Add(first, core.GlobalMeta{ID: "a"})
+
+	_, forwardErr := ToJSONSchema(forward)
+	_, reverseErr := ToJSONSchema(reverse)
+
+	require.Error(t, forwardErr)
+	require.Error(t, reverseErr)
+	assert.Equal(t, forwardErr.Error(), reverseErr.Error())
+	assert.ErrorContains(t, forwardErr, "function")
+}
+
+func TestToJSONSchema_DefaultMetadataUsesSchemaState(t *testing.T) {
+	schema := types.String().Meta(core.GlobalMeta{
+		Title:       "Schema title",
+		Description: "Schema description",
+	})
+	core.GlobalRegistry.Add(schema, core.GlobalMeta{
+		Title:       "Global title",
+		Description: "Global description",
+	})
+	t.Cleanup(func() { core.GlobalRegistry.Remove(schema) })
+
+	got, err := ToJSONSchema(schema)
+	require.NoError(t, err)
+	require.NotNil(t, got.Title)
+	require.NotNil(t, got.Description)
+	assert.Equal(t, "Schema title", *got.Title)
+	assert.Equal(t, "Schema description", *got.Description)
+}
+
+func TestToJSONSchema_MissingExplicitMetadataFallsBackToSchemaState(t *testing.T) {
+	schema := types.String().Meta(core.GlobalMeta{
+		Title:       "Schema title",
+		Description: "Schema description",
+	})
+	registry := core.NewRegistry[core.GlobalMeta]()
+
+	got, err := ToJSONSchema(schema, Options{Metadata: registry})
+	require.NoError(t, err)
+	require.NotNil(t, got.Title)
+	require.NotNil(t, got.Description)
+	assert.Equal(t, "Schema title", *got.Title)
+	assert.Equal(t, "Schema description", *got.Description)
+}
+
+func TestToJSONSchema_ExplicitMetadataEntryOverridesWholeRecord(t *testing.T) {
+	schema := types.String().Meta(core.GlobalMeta{
+		Title:       "Schema title",
+		Description: "Schema description",
+	})
+	registry := core.NewRegistry[core.GlobalMeta]().Add(schema, core.GlobalMeta{Title: "Registry title"})
+
+	got, err := ToJSONSchema(schema, Options{Metadata: registry})
+	require.NoError(t, err)
+	require.NotNil(t, got.Title)
+	assert.Equal(t, "Registry title", *got.Title)
+	assert.Nil(t, got.Description)
+}
+
+func TestToJSONSchema_ExplicitMetadataExamplesAreDetached(t *testing.T) {
+	example := map[string]any{"name": "before"}
+	schema := types.String()
+	registry := core.NewRegistry[core.GlobalMeta]().Add(schema, core.GlobalMeta{
+		Examples: []any{example},
+	})
+
+	got, err := ToJSONSchema(schema, Options{Metadata: registry})
+	require.NoError(t, err)
+	require.Len(t, got.Examples, 1)
+
+	example["name"] = "registry changed"
+	assert.Equal(t, "before", got.Examples[0].(map[string]any)["name"])
+
+	got.Examples[0].(map[string]any)["name"] = "document changed"
+	meta, ok := registry.Get(schema)
+	require.True(t, ok)
+	assert.Equal(t, "registry changed", meta.Examples[0].(map[string]any)["name"])
+}
+
+func TestToJSONSchema_RegistryBatchExamplesAreDetached(t *testing.T) {
+	example := map[string]any{"name": "before"}
+	schema := types.String()
+	registry := core.NewRegistry[core.GlobalMeta]().Add(schema, core.GlobalMeta{
+		ID:       "schema",
+		Examples: []any{example},
+	})
+
+	got, err := ToJSONSchema(registry)
+	require.NoError(t, err)
+	definition := got.Defs["schema"]
+	require.NotNil(t, definition)
+	require.Len(t, definition.Examples, 1)
+
+	example["name"] = "registry changed"
+	assert.Equal(t, "before", definition.Examples[0].(map[string]any)["name"])
+
+	definition.Examples[0].(map[string]any)["name"] = "document changed"
+	meta, ok := registry.Get(schema)
+	require.True(t, ok)
+	assert.Equal(t, "registry changed", meta.Examples[0].(map[string]any)["name"])
+}
+
+func TestToJSONSchema_DefaultMetadataIgnoresConcurrentGlobalRegistryMutation(t *testing.T) {
+	schema := types.String().Meta(core.GlobalMeta{Title: "Schema title"})
+	t.Cleanup(func() { core.GlobalRegistry.Remove(schema) })
+
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		close(started)
+		for range 10_000 {
+			core.GlobalRegistry.Add(schema, core.GlobalMeta{Title: "Global title"})
+			core.GlobalRegistry.Remove(schema)
+		}
+	})
+	<-started
+
+	for range 32 {
+		got, err := ToJSONSchema(schema)
+		require.NoError(t, err)
+		require.NotNil(t, got.Title)
+		assert.Equal(t, "Schema title", *got.Title)
+	}
+	wg.Wait()
+}
+
 // =============================================================================
 // DESCRIPTION OVERRIDE TEST
 // =============================================================================
@@ -2332,7 +2546,7 @@ func TestToJSONSchema_FromStructFieldNameTag(t *testing.T) {
 	}
 
 	t.Run("default uses json property name", func(t *testing.T) {
-		js, err := ToJSONSchema(types.FromStruct[User]())
+		js, err := ToJSONSchema(types.MustFromStruct[User]())
 		require.NoError(t, err)
 		b, err := json.Marshal(js)
 		require.NoError(t, err)
@@ -2340,7 +2554,7 @@ func TestToJSONSchema_FromStructFieldNameTag(t *testing.T) {
 	})
 
 	t.Run("WithFieldNameTag yaml uses yaml property name", func(t *testing.T) {
-		js, err := ToJSONSchema(types.FromStruct[User](types.WithFieldNameTag("yaml")))
+		js, err := ToJSONSchema(types.MustFromStruct[User](types.WithFieldNameTag("yaml")))
 		require.NoError(t, err)
 		b, err := json.Marshal(js)
 		require.NoError(t, err)

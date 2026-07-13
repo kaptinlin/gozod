@@ -512,11 +512,16 @@ type User struct {
 }
 
 // Generate schema from tags
-schema := gozod.FromStruct[User]()
+schema, err := gozod.FromStruct[User]()
+if err != nil {
+    return err
+}
 result, err := schema.Parse(user)              // ✅ Tag-based validation
 ```
 
-`FromStruct[T]` / `FromStructPtr[T]` accept options:
+`FromStruct[T]` / `FromStructPtr[T]` return construction errors. Their `Must*`
+counterparts panic and are intended for statically known, tested tag declarations.
+All four constructors accept options:
 
 - `gozod.WithTagName("validate")` — read validation rules from a tag other than `gozod`.
 - `gozod.WithFieldNameTag("yaml")` — resolve field names (error paths and JSON Schema) from `yaml`/`toml`/custom tags instead of `json`.
@@ -530,7 +535,7 @@ type User struct {
 }
 
 // Automatically handles circular references with lazy evaluation
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 result, err := schema.Parse(user)              // ✅ No stack overflow
 ```
 
@@ -710,24 +715,26 @@ result, err = unionSchema.Parse(true)      // ❌ No union member matched
 ### Discriminated Unions
 
 ```go
-type Dog struct {
-    Type string `json:"type"`  // "dog"
-    Breed string `json:"breed"`
-}
-
-type Cat struct {
-    Type  string `json:"type"`  // "cat"
-    Lives int    `json:"lives"`
-}
-
-// Discriminated union based on "type" field
-animalSchema := gozod.DiscriminatedUnion("type", map[string]any{
-    "dog": gozod.Struct[Dog](),
-    "cat": gozod.Struct[Cat](),
+dog := gozod.Object(gozod.ObjectSchema{
+    "type":  gozod.Literal("dog"),
+    "breed": gozod.String(),
+})
+cat := gozod.Object(gozod.ObjectSchema{
+    "type":  gozod.Literal("cat"),
+    "lives": gozod.Int(),
 })
 
-dog := Dog{Type: "dog", Breed: "Golden Retriever"}
-result, err := animalSchema.Parse(dog)     // ✅ Matches dog schema
+animalSchema, err := gozod.DiscriminatedUnion(
+    "type",
+    []gozod.ZodSchema{dog, cat},
+)
+if err != nil {
+    return err
+}
+
+result, err := animalSchema.Parse(map[string]any{
+    "type": "dog", "breed": "Golden Retriever",
+})
 ```
 
 ### Xor (Exclusive Union)
@@ -913,7 +920,7 @@ type PasswordForm struct {
 }
 
 // Create schema with cross-field validation
-schema := gozod.FromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
+schema := gozod.MustFromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
     return form.Password == form.ConfirmPassword
 }, "Passwords must match")
 
@@ -941,11 +948,11 @@ type User struct {
     // Skip validation
     Internal string `gozod:"-"`
 
-    // Custom validators
-    Username string `gozod:"required,custom_username"`
-    Age      int    `gozod:"required,min_age=18"`
 }
 ```
+
+Unknown rule names fail schema construction. Use `.Refine(...)` or `.Check(...)`
+for custom validation after constructing the struct schema.
 
 ### Available Tag Rules
 
@@ -1002,7 +1009,7 @@ type CompleteExample struct {
 }
 
 // Generate schema from tags
-schema := gozod.FromStruct[CompleteExample]()
+schema := gozod.MustFromStruct[CompleteExample]()
 result, err := schema.Parse(example)
 ```
 
@@ -1089,7 +1096,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     // Validate with generated schema
-    schema := gozod.FromStruct[CreateUserRequest]()
+    schema := gozod.MustFromStruct[CreateUserRequest]()
     validatedReq, err := schema.Parse(req)
     if err != nil {
         if zodErr, ok := err.(*issues.ZodError); ok {
@@ -1144,7 +1151,7 @@ func loadConfig(filename string) (*AppConfig, error) {
     }
 
     // Validate configuration
-    schema := gozod.FromStruct[AppConfig]()
+    schema := gozod.MustFromStruct[AppConfig]()
     validatedConfig, err := schema.Parse(config)
     if err != nil {
         return nil, fmt.Errorf("configuration validation failed: %w", err)

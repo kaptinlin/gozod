@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,6 +103,15 @@ func TestModifierOrder_NilInputMatrix(t *testing.T) {
 		assert.Nil(t, got)
 	})
 
+	t.Run("bigint outer optional shadows inner default", func(t *testing.T) {
+		schema := BigInt().Default(big.NewInt(42)).Optional()
+
+		got, err := schema.Parse(nil)
+
+		require.NoError(t, err)
+		assert.Nil(t, got)
+	})
+
 	t.Run("exact optional only accepts absent object fields", func(t *testing.T) {
 		schema := Object(core.ObjectSchema{
 			"name": String().ExactOptional(),
@@ -113,5 +123,17 @@ func TestModifierOrder_NilInputMatrix(t *testing.T) {
 
 		_, err = schema.Parse(map[string]any{"name": nil})
 		require.Error(t, err)
+	})
+
+	t.Run("outer optional accepts explicit nil over inner exact optional", func(t *testing.T) {
+		schema := Object(core.ObjectSchema{
+			"name": String().ExactOptional().Optional(),
+		})
+
+		got, err := schema.Parse(map[string]any{"name": nil})
+
+		require.NoError(t, err)
+		assert.Contains(t, got, "name")
+		assert.Nil(t, got["name"])
 	})
 }

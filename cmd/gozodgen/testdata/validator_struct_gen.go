@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// Schema returns a pre-built gozod schema for ValidatorStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for ValidatorStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (vs ValidatorStruct) Schema() *gozod.ZodStruct[ValidatorStruct, ValidatorStruct] {
 	return gozod.Struct[ValidatorStruct](gozod.StructSchema{
 		"email":   gozod.String().Email().Optional(),

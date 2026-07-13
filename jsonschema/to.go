@@ -11,6 +11,7 @@ import (
 	lib "github.com/kaptinlin/jsonschema"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/pkg/cloneutil"
 	"github.com/kaptinlin/gozod/types"
 )
 
@@ -33,6 +34,7 @@ var (
 	ErrExpectedDiscriminatedUnion    = errors.New("expected a discriminated union schema")
 	ErrExpectedRecord                = errors.New("expected a record schema with ValueType()")
 	ErrRecordValueNotSchema          = errors.New("record value type is not a valid schema")
+	ErrInvalidRegistrySchemaID       = errors.New("invalid registry schema ID")
 	ErrMapNoMethods                  = errors.New("schema does not implement KeyType() and ValueType() methods for map conversion")
 	ErrMapKeyNotSchema               = errors.New("map key type is not a valid schema")
 	ErrMapValueNotSchema             = errors.New("map value type is not a valid schema")
@@ -80,8 +82,8 @@ const (
 
 // Options defines the configuration options for JSON schema conversion.
 type Options struct {
-	// A registry used to look up metadata for each schema.
-	// Any schema with an ID property will be extracted as a $def.
+	// Metadata provides whole-record overrides for schemas present in the registry.
+	// Schemas absent from the registry use their schema-owned metadata.
 	Metadata *core.Registry[core.GlobalMeta]
 
 	// How to handle unrepresentable types:
@@ -195,21 +197,41 @@ func toJSONSchemaSingle(schema core.ZodSchema, opts Options) (*lib.Schema, error
 	return s, nil
 }
 
+type registryEntry struct {
+	schema core.ZodSchema
+	meta   core.GlobalMeta
+}
+
 // toJSONSchemaRegistry handles the conversion of a schema Registry.
 func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*lib.Schema, error) {
-	// Ensure converter has access to registry metadata for ID extraction.
-	opts.Metadata = reg
-	c := newConverter(opts)
-
-	// First pass: process all schemas to populate seen map and defs.
-	var schemasInRegistry []core.ZodSchema
-	reg.Range(func(schema core.ZodSchema, _ core.GlobalMeta) bool {
-		schemasInRegistry = append(schemasInRegistry, schema)
+	var entries []registryEntry
+	reg.Range(func(schema core.ZodSchema, meta core.GlobalMeta) bool {
+		entries = append(entries, registryEntry{schema: schema, meta: meta})
 		return true
 	})
+	seenIDs := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if entry.meta.ID == "" {
+			return nil, fmt.Errorf("registry schema ID is missing: %w", ErrInvalidRegistrySchemaID)
+		}
+		if _, exists := seenIDs[entry.meta.ID]; exists {
+			return nil, fmt.Errorf("registry schema ID is duplicate %q: %w", entry.meta.ID, ErrInvalidRegistrySchemaID)
+		}
+		seenIDs[entry.meta.ID] = struct{}{}
+	}
+	slices.SortFunc(entries, func(a, b registryEntry) int {
+		return cmp.Compare(a.meta.ID, b.meta.ID)
+	})
 
-	for _, s := range schemasInRegistry {
-		if _, err := c.convert(s); err != nil {
+	c := newConverter(opts)
+	c.batchMetadata = make(map[core.ZodSchema]core.GlobalMeta, len(entries))
+	for _, entry := range entries {
+		c.batchMetadata[entry.schema] = entry.meta
+	}
+
+	// First pass: process all schemas to populate seen map and defs.
+	for _, entry := range entries {
+		if _, err := c.convert(entry.schema); err != nil {
 			return nil, err
 		}
 	}
@@ -228,16 +250,17 @@ func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*l
 
 // converter holds the state for a single conversion run.
 type converter struct {
-	opts        Options
-	seen        map[core.ZodSchema]*lib.Schema
-	counts      map[core.ZodSchema]int
-	refs        map[core.ZodSchema]string
-	auto        int
-	path        []string
-	defs        map[string]*lib.Schema
-	depth       int
-	idCache     map[core.ZodSchema]string         // cache for getID results
-	unwrapCache map[core.ZodSchema]core.ZodSchema // cache for unwrapSchema results
+	opts          Options
+	seen          map[core.ZodSchema]*lib.Schema
+	counts        map[core.ZodSchema]int
+	refs          map[core.ZodSchema]string
+	batchMetadata map[core.ZodSchema]core.GlobalMeta
+	auto          int
+	path          []string
+	defs          map[string]*lib.Schema
+	depth         int
+	idCache       map[core.ZodSchema]string         // cache for getID results
+	unwrapCache   map[core.ZodSchema]core.ZodSchema // cache for unwrapSchema results
 }
 
 func newConverter(opts Options) *converter {
@@ -583,7 +606,6 @@ func (c *converter) doConvert(schema core.ZodSchema) (*lib.Schema, error) {
 	if len(bag) > 0 {
 		c.applyBag(jsonSchema, bag)
 	}
-	c.applyCheckProjections(jsonSchema, internals)
 
 	return jsonSchema, nil
 }
@@ -660,7 +682,7 @@ func (c *converter) convertObjectFromShape(schema core.ZodSchema, shape core.Obj
 		// In "input" mode, fields with defaults are not required.
 		if c.opts.IO == "input" {
 			pInternals := propSchema.Internals()
-			if pInternals.DefaultValue != nil || pInternals.DefaultFunc != nil {
+			if pInternals.NilInputUsesDefault() {
 				isRequired = false
 			}
 		}
@@ -814,22 +836,13 @@ func (c *converter) convertTuple(schema core.ZodSchema) (*lib.Schema, error) {
 	return jsonSchema, nil
 }
 
-// applyMeta copies GlobalMeta fields from registry onto the generated JSON Schema node.
+// applyMeta copies the selected metadata onto the generated JSON Schema node.
 func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 	if jsonSchema == nil || schema == nil {
 		return
 	}
 
-	// Determine which registry to use. Explicit opts takes precedence, otherwise fallback to global.
-	reg := c.opts.Metadata
-	if reg == nil {
-		reg = core.GlobalRegistry
-	}
-	if reg == nil {
-		return
-	}
-
-	meta, ok := c.lookupMeta(reg, schema)
+	meta, ok := c.lookupMeta(schema)
 	if !ok {
 		return
 	}
@@ -841,23 +854,16 @@ func (c *converter) applyMeta(schema core.ZodSchema, jsonSchema *lib.Schema) {
 		jsonSchema.Description = new(meta.Description)
 	}
 	if len(meta.Examples) > 0 && len(jsonSchema.Examples) == 0 {
-		jsonSchema.Examples = meta.Examples
+		jsonSchema.Examples = cloneutil.Clone(meta.Examples).([]any)
 	}
 }
 
-// getID retrieves meta.ID for schema via opts.Metadata or global registry.
+// getID retrieves the selected metadata ID for schema.
 func (c *converter) getID(schema core.ZodSchema) string {
 	if id, ok := c.idCache[schema]; ok {
 		return id
 	}
-	reg := c.opts.Metadata
-	if reg == nil {
-		reg = core.GlobalRegistry
-	}
-	if reg == nil {
-		return ""
-	}
-	meta, ok := c.lookupMeta(reg, schema)
+	meta, ok := c.lookupMeta(schema)
 	if !ok {
 		return ""
 	}
@@ -865,15 +871,64 @@ func (c *converter) getID(schema core.ZodSchema) string {
 	return meta.ID
 }
 
-// lookupMeta retrieves metadata for a schema, falling back to inner schema for wrappers.
-func (c *converter) lookupMeta(reg *core.Registry[core.GlobalMeta], schema core.ZodSchema) (core.GlobalMeta, bool) {
-	if meta, ok := reg.Get(schema); ok {
-		return meta, true
+// lookupMeta selects an explicit registry entry or falls back to schema-owned metadata.
+func (c *converter) lookupMeta(schema core.ZodSchema) (core.GlobalMeta, bool) {
+	if c.batchMetadata != nil {
+		if meta, ok := lookupSnapshotMeta(c.batchMetadata, schema); ok {
+			return meta, true
+		}
+	} else if c.opts.Metadata != nil {
+		if meta, ok := lookupRegistryMeta(c.opts.Metadata, schema); ok {
+			return meta, true
+		}
 	}
-	if s, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
-		return reg.Get(s.Inner())
+	for schema != nil {
+		meta := schema.Internals().Metadata()
+		if hasMetadata(meta) {
+			return meta, true
+		}
+		inner, ok := schema.(interface{ Inner() core.ZodSchema })
+		if !ok {
+			break
+		}
+		next := inner.Inner()
+		if next == schema {
+			break
+		}
+		schema = next
 	}
 	return core.GlobalMeta{}, false
+}
+
+func lookupSnapshotMeta(
+	metadata map[core.ZodSchema]core.GlobalMeta,
+	schema core.ZodSchema,
+) (core.GlobalMeta, bool) {
+	if meta, ok := metadata[schema]; ok {
+		return meta, true
+	}
+	if inner, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+		meta, found := metadata[inner.Inner()]
+		return meta, found
+	}
+	return core.GlobalMeta{}, false
+}
+
+func lookupRegistryMeta(
+	registry *core.Registry[core.GlobalMeta],
+	schema core.ZodSchema,
+) (core.GlobalMeta, bool) {
+	if meta, ok := registry.Get(schema); ok {
+		return meta, true
+	}
+	if inner, ok := schema.(interface{ Inner() core.ZodSchema }); ok {
+		return registry.Get(inner.Inner())
+	}
+	return core.GlobalMeta{}, false
+}
+
+func hasMetadata(meta core.GlobalMeta) bool {
+	return meta.ID != "" || meta.Title != "" || meta.Description != "" || len(meta.Examples) > 0
 }
 
 // convertUnion handles ZodUnion -> JSON Schema anyOf

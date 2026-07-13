@@ -11,7 +11,7 @@ import (
 )
 
 func TestDocumentationDoesNotUseStalePublicLanguage(t *testing.T) {
-	stale := regexp.MustCompile(`Uuid\(|Uuidv|FromGoZod|gozod\.Schema|Struct\(gozod\.ObjectSchema|New Feature|Maximum Performance|registry\.Add\(\s*(?:schema|[[:alpha:]_][[:alnum:]_]*Schema)\s*\)|FromStruct.*auto|auto.*FromStruct|automatically detects and uses generated|Uses generated code automatically|Automatic detection by FromStruct|gozod\.Config\([^)]|GetLocaleFormatter|5-10x faster|50-70%|3-5x`)
+	stale := regexp.MustCompile(`Uuid\(|Uuidv|FromGoZod|gozod\.Schema|Struct\(gozod\.ObjectSchema|New Feature|Maximum Performance|registry\.Add\(\s*(?:schema|[[:alpha:]_][[:alnum:]_]*Schema)\s*\)|FromStruct.*auto|auto.*FromStruct|automatically detects and uses generated|Uses generated code automatically|Automatic detection by FromStruct|gozod\.Config\([^)]|GetLocaleFormatter|AllowLossy|LossyKeywords|nil.*global registry|default import.*GlobalRegistry|5-10x faster|50-70%|3-5x`)
 	for _, path := range documentationFiles(t) {
 		file, err := os.Open(path)
 		if err != nil {

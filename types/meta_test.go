@@ -10,6 +10,53 @@ import (
 	. "github.com/kaptinlin/gozod/types"
 )
 
+func TestMetaFollowsSchemaValue(t *testing.T) {
+	base := String()
+	example := map[string]any{"name": "before"}
+	named := base.Meta(core.GlobalMeta{
+		ID:       "username",
+		Title:    "Username",
+		Examples: []any{example},
+	})
+	t.Cleanup(func() {
+		core.GlobalRegistry.Remove(base).Remove(named)
+	})
+
+	example["name"] = "after"
+	got := named.Internals().Metadata()
+	require.Equal(t, "username", got.ID)
+	require.Equal(t, "Username", got.Title)
+	require.Len(t, got.Examples, 1)
+	assert.Equal(t, "before", got.Examples[0].(map[string]any)["name"])
+
+	got.Examples[0].(map[string]any)["name"] = "caller-mutated"
+	assert.Equal(t, "before", named.Internals().Metadata().Examples[0].(map[string]any)["name"])
+	assert.Equal(t, core.GlobalMeta{}, base.Internals().Metadata())
+	assert.False(t, core.GlobalRegistry.Has(named))
+}
+
+func TestDescribeMergesIntoSchemaMetadataAcrossFamilies(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema core.ZodSchema
+	}{
+		{"bool", Bool().Meta(core.GlobalMeta{Title: "Flag"}).Describe("Boolean flag")},
+		{"object", Object(core.ObjectSchema{}).Meta(core.GlobalMeta{Title: "Object"}).Describe("Object value")},
+		{"slice", Slice[string](String()).Meta(core.GlobalMeta{Title: "Names"}).Describe("Name list")},
+		{"email", Email().Meta(core.GlobalMeta{Title: "Email"}).Describe("Email address")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Cleanup(func() { core.GlobalRegistry.Remove(tt.schema) })
+			meta := tt.schema.Internals().Metadata()
+			assert.NotEmpty(t, meta.Title)
+			assert.NotEmpty(t, meta.Description)
+			assert.False(t, core.GlobalRegistry.Has(tt.schema))
+		})
+	}
+}
+
 // TestDescribe tests the Describe method on ZodString
 func TestDescribe(t *testing.T) {
 	desc := "A valid user ID"
@@ -23,8 +70,7 @@ func TestDescribe(t *testing.T) {
 	// We check if the schema instance is registered in the GlobalRegistry
 	// Note: schema returned by Describe is the one registered
 
-	meta, ok := core.GlobalRegistry.Get(schema)
-	require.True(t, ok, "Metadata not found in GlobalRegistry")
+	meta := schema.Internals().Metadata()
 
 	assert.Equal(t, desc, meta.Description)
 }
@@ -43,8 +89,7 @@ func TestMeta(t *testing.T) {
 	_, err := schema.Parse("valid")
 	require.NoError(t, err)
 
-	registered, ok := core.GlobalRegistry.Get(schema)
-	require.True(t, ok, "Metadata not found")
+	registered := schema.Internals().Metadata()
 
 	assert.Equal(t, metaData.ID, registered.ID)
 	assert.Equal(t, metaData.Title, registered.Title)

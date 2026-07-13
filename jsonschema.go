@@ -1,15 +1,39 @@
 package gozod
 
-import "github.com/kaptinlin/gozod/jsonschema"
+import (
+	lib "github.com/kaptinlin/jsonschema"
+
+	"github.com/kaptinlin/gozod/jsonschema"
+)
 
 type JSONSchemaOptions = jsonschema.Options
 type OverrideContext = jsonschema.OverrideContext
 type FromJSONSchemaOptions = jsonschema.FromJSONSchemaOptions
+type JSONSchemaImportError = jsonschema.ImportError
+type JSONSchemaImportLossError = jsonschema.ImportLossError
 type JSONSchemaUnrepresentableMode = jsonschema.UnrepresentableMode
 type JSONSchemaCyclesMode = jsonschema.CyclesMode
 type JSONSchemaReusedMode = jsonschema.ReusedMode
 type JSONSchemaTargetMode = jsonschema.TargetMode
 type JSONSchemaIOMode = jsonschema.IOMode
+
+// ToJSONSchema converts a GoZod schema or registry into JSON Schema.
+func ToJSONSchema(input any, opts ...JSONSchemaOptions) (*lib.Schema, error) {
+	return jsonschema.ToJSONSchema(input, opts...)
+}
+
+// FromJSONSchema converts JSON Schema into a GoZod schema.
+func FromJSONSchema(schema *lib.Schema, opts ...FromJSONSchemaOptions) (ZodSchema, error) {
+	return jsonschema.FromJSONSchema(schema, opts...)
+}
+
+// FromJSONSchemaLossy converts a JSON Schema and reports omitted validation semantics.
+func FromJSONSchemaLossy(
+	schema *lib.Schema,
+	opts ...FromJSONSchemaOptions,
+) (ZodSchema, []JSONSchemaImportLossError, error) {
+	return jsonschema.FromJSONSchemaLossy(schema, opts...)
+}
 
 const (
 	JSONSchemaUnrepresentableThrow = jsonschema.UnrepresentableThrow
@@ -24,8 +48,6 @@ const (
 )
 
 var (
-	ToJSONSchema                     = jsonschema.ToJSONSchema
-	FromJSONSchema                   = jsonschema.FromJSONSchema
 	ErrUnsupportedInputType          = jsonschema.ErrUnsupportedInputType
 	ErrCircularReference             = jsonschema.ErrCircularReference
 	ErrUnrepresentableType           = jsonschema.ErrUnrepresentableType
@@ -43,6 +65,7 @@ var (
 	ErrExpectedDiscriminatedUnion    = jsonschema.ErrExpectedDiscriminatedUnion
 	ErrExpectedRecord                = jsonschema.ErrExpectedRecord
 	ErrRecordValueNotSchema          = jsonschema.ErrRecordValueNotSchema
+	ErrInvalidRegistrySchemaID       = jsonschema.ErrInvalidRegistrySchemaID
 	ErrMapNoMethods                  = jsonschema.ErrMapNoMethods
 	ErrMapKeyNotSchema               = jsonschema.ErrMapKeyNotSchema
 	ErrMapValueNotSchema             = jsonschema.ErrMapValueNotSchema

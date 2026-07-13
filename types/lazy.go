@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/kaptinlin/gozod/core"
@@ -51,6 +53,11 @@ type ZodLazyTyped[S ZodSchemaType] struct {
 	getter func() S
 }
 
+// ZodLazyOutput is a lazy schema with an explicitly declared output type.
+type ZodLazyOutput[T LazyConstraint] struct {
+	*ZodLazy[T]
+}
+
 // =============================================================================
 // Core Interface Methods
 // =============================================================================
@@ -97,7 +104,7 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 
 	in := &z.internals.ZodTypeInternals
 
-	if input == nil {
+	if isNilLazyInput(input) {
 		r, handled, err := engine.ProcessNilModifiers[T](input, in, core.ZodTypeLazy, pc)
 		if err != nil {
 			var zero T
@@ -116,7 +123,20 @@ func (z *ZodLazy[T]) Parse(input any, ctx ...*core.ParseContext) (T, error) {
 		var zero T
 		return zero, err
 	}
-	return z.convertResult(result), nil
+	return z.convertResult(result)
+}
+
+func isNilLazyInput(input any) bool {
+	if input == nil {
+		return true
+	}
+	value := reflect.ValueOf(input)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 func lazyModifierValue[T LazyConstraint](value any) T {
@@ -160,7 +180,7 @@ func (z *ZodLazy[T]) StrictParse(input T, ctx ...*core.ParseContext) (T, error) 
 		var zero T
 		return zero, err
 	}
-	return z.convertResult(result), nil
+	return z.convertResult(result)
 }
 
 // MustStrictParse validates with strict type matching and panics on error.
@@ -245,21 +265,13 @@ func (z *ZodLazy[T]) PrefaultFunc(fn func() any) *ZodLazy[T] {
 // Meta stores metadata for this lazy schema.
 func (z *ZodLazy[T]) Meta(meta core.GlobalMeta) *ZodLazy[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodLazy[T]) Describe(description string) *ZodLazy[T] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // =============================================================================
@@ -317,17 +329,24 @@ func (z *ZodLazy[T]) withCheck(c core.ZodCheck) *ZodLazy[T] {
 	return z.withInternals(in)
 }
 
-func (z *ZodLazy[T]) convertResult(result any) T {
+func (z *ZodLazy[T]) convertResult(result any) (T, error) {
 	var zero T
 	if result == nil {
-		return zero
+		return zero, nil
 	}
-	switch any(zero).(type) {
-	case *any:
-		return any(new(result)).(T)
-	default:
-		return any(result).(T) //nolint:unconvert
+	if typed, ok := result.(T); ok {
+		return typed, nil
 	}
+
+	target := reflect.TypeFor[T]()
+	value := reflect.ValueOf(result)
+	if target.Kind() == reflect.Pointer && value.Type().AssignableTo(target.Elem()) {
+		pointer := reflect.New(target.Elem())
+		pointer.Elem().Set(value)
+		return pointer.Interface().(T), nil
+	}
+
+	return zero, fmt.Errorf("lazy schema output %T is not assignable to %v", result, target)
 }
 
 func (z *ZodLazy[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodLazy[*any] {
@@ -410,7 +429,7 @@ func (z *ZodLazy[T]) extractPtr(value any) (*any, bool) {
 func (z *ZodLazy[T]) validateLazy(value any, chks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	if value == nil {
 		in := z.Internals()
-		if in.Optional || in.Nilable {
+		if in.IsOptional() || in.IsNilable() {
 			return value, nil
 		}
 		return nil, newLazyTypeError(value, ctx)
@@ -452,42 +471,11 @@ func convertToAnyInterface(schema any) core.ZodType[any] {
 type schemaWrapper struct{ inner any }
 
 func (w *schemaWrapper) Parse(input any, ctx ...*core.ParseContext) (any, error) {
-	switch s := w.inner.(type) {
-	case interface {
-		Parse(any, ...*core.ParseContext) (any, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (string, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (bool, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (int, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (float64, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (int64, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (*string, error)
-	}:
-		return s.Parse(input, ctx...)
-	case interface {
-		Parse(any, ...*core.ParseContext) (*bool, error)
-	}:
-		return s.Parse(input, ctx...)
-	default:
-		return nil, newLazyTypeError(input, nil)
+	schema, ok := w.inner.(core.ZodSchema)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T", core.ErrSchemaNotZodSchema, w.inner)
 	}
+	return schema.ParseAny(input, ctx...)
 }
 
 func (w *schemaWrapper) MustParse(input any, ctx ...*core.ParseContext) any {
@@ -581,16 +569,16 @@ func Lazy[S ZodSchemaType](getter func() S, params ...any) *ZodLazyTyped[S] {
 
 // LazyAny creates a lazy schema that defers evaluation until needed.
 func LazyAny(getter func() any, params ...any) *ZodLazy[any] {
-	return LazyTyped[any](getter, params...)
+	return LazyTyped[any](getter, params...).ZodLazy
 }
 
 // LazyPtr creates a lazy schema for *any type.
 func LazyPtr(getter func() any, params ...any) *ZodLazy[*any] {
-	return LazyTyped[*any](getter, params...)
+	return LazyTyped[*any](getter, params...).ZodLazy
 }
 
 // LazyTyped is the underlying generic constructor for lazy schemas.
-func LazyTyped[T LazyConstraint](getter func() any, params ...any) *ZodLazy[T] {
+func LazyTyped[T LazyConstraint](getter func() any, params ...any) *ZodLazyOutput[T] {
 	sp := utils.NormalizeParams(params...)
 	def := &ZodLazyDef{
 		ZodTypeDef: core.ZodTypeDef{
@@ -602,7 +590,7 @@ func LazyTyped[T LazyConstraint](getter func() any, params ...any) *ZodLazy[T] {
 	if sp != nil {
 		utils.ApplySchemaParams(&def.ZodTypeDef, sp)
 	}
-	return newZodLazyFromDef[T](def)
+	return &ZodLazyOutput[T]{ZodLazy: newZodLazyFromDef[T](def)}
 }
 
 // =============================================================================
@@ -656,6 +644,36 @@ func newZodLazyTypedFromDef[S ZodSchemaType](def *ZodLazyDef, getter func() S) *
 		ZodLazy: newZodLazyFromDef[any](def),
 		getter:  getter,
 	}
+}
+
+// Optional returns a schema that accepts nil while preserving the declared output type.
+func (z *ZodLazyOutput[T]) Optional() *ZodLazyOutput[T] {
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	return &ZodLazyOutput[T]{ZodLazy: z.withInternals(in)}
+}
+
+// Nilable returns a schema that accepts nil while preserving the declared output type.
+func (z *ZodLazyOutput[T]) Nilable() *ZodLazyOutput[T] {
+	in := z.internals.Clone()
+	in.SetNilable(true)
+	return &ZodLazyOutput[T]{ZodLazy: z.withInternals(in)}
+}
+
+// Nullish combines optional and nilable while preserving the declared output type.
+func (z *ZodLazyOutput[T]) Nullish() *ZodLazyOutput[T] {
+	in := z.internals.Clone()
+	in.SetOptional(true)
+	in.SetNilable(true)
+	return &ZodLazyOutput[T]{ZodLazy: z.withInternals(in)}
+}
+
+// NonOptional rejects nil while preserving the declared output type.
+func (z *ZodLazyOutput[T]) NonOptional() *ZodLazyOutput[T] {
+	in := z.internals.Clone()
+	in.SetOptional(false)
+	in.SetNonOptional(true)
+	return &ZodLazyOutput[T]{ZodLazy: z.withInternals(in)}
 }
 
 // =============================================================================

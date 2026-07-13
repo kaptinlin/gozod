@@ -339,8 +339,7 @@ func TestTuple_ValidationMethods(t *testing.T) {
 func TestTuple_Metadata(t *testing.T) {
 	t.Run("describe adds description", func(t *testing.T) {
 		schema := Tuple(String()).Describe("A simple tuple")
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "A simple tuple", meta.Description)
 	})
 
@@ -349,8 +348,7 @@ func TestTuple_Metadata(t *testing.T) {
 			Title:       "Test Tuple",
 			Description: "A test tuple schema",
 		})
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "Test Tuple", meta.Title)
 		assert.Equal(t, "A test tuple schema", meta.Description)
 	})

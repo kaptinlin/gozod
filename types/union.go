@@ -99,17 +99,11 @@ func (z *ZodUnion[T, R]) validate(
 			continue
 		}
 
-		if len(chks) > 0 {
-			result, err = engine.ApplyChecks[any](result, chks, parseCtx)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("option %d: %w", i, err))
-				continue
-			}
-		}
-
 		// Prefer the schema whose result type matches the original input type.
 		if inputType != nil && reflect.TypeOf(result) == inputType {
-			return result, nil
+			match = result
+			matched = true
+			break
 		}
 
 		if !matched {
@@ -119,6 +113,9 @@ func (z *ZodUnion[T, R]) validate(
 	}
 
 	if matched {
+		if len(chks) > 0 {
+			return engine.ApplyChecks[any](match, chks, parseCtx)
+		}
 		return match, nil
 	}
 
@@ -247,23 +244,13 @@ func (z *ZodUnion[T, R]) PrefaultFunc(fn func() T) *ZodUnion[T, R] {
 // Meta attaches metadata to this schema.
 func (z *ZodUnion[T, R]) Meta(meta core.GlobalMeta) *ZodUnion[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
 // Describe sets a human-readable description for this schema.
 func (z *ZodUnion[T, R]) Describe(desc string) *ZodUnion[T, R] {
-	in := z.internals.Clone()
-
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Options returns a copy of all union member schemas.
@@ -340,7 +327,7 @@ func (z *ZodUnion[T, R]) withPtrInternals(
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -352,7 +339,7 @@ func (z *ZodUnion[T, R]) withInternals(
 		Def:              z.internals.Def,
 		Options:          z.internals.Options,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

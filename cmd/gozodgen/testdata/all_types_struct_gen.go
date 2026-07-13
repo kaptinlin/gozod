@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for AllTypesStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for AllTypesStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (ats AllTypesStruct) Schema() *gozod.ZodStruct[AllTypesStruct, AllTypesStruct] {
 	return gozod.Struct[AllTypesStruct](gozod.StructSchema{
 		"int":        gozod.Int(),

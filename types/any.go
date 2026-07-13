@@ -183,26 +183,16 @@ func (z *ZodAny[T, R]) PrefaultFunc(fn func() T) *ZodAny[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores the provided metadata in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodAny[T, R]) Meta(meta core.GlobalMeta) *ZodAny[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodAny[T, R]) Describe(desc string) *ZodAny[T, R] {
-	in := z.internals.Clone()
-
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Overwrite applies data transformation while preserving the type structure.
@@ -323,7 +313,7 @@ func (z *ZodAny[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodAny[T, *T
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -334,7 +324,7 @@ func (z *ZodAny[T, R]) withInternals(in *core.ZodTypeInternals) *ZodAny[T, R] {
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -368,7 +358,7 @@ func newZodAnyFromDef[T any, R any](def *ZodAnyDef) *ZodAny[T, R] {
 	}
 
 	// The any type defaults to accepting nil values, matching Zod v4 behavior.
-	in.Nilable = true
+	in.SetNilable(true)
 
 	in.Constructor = func(newDef *core.ZodTypeDef) core.ZodType[any] {
 		d := &ZodAnyDef{ZodTypeDef: *newDef}

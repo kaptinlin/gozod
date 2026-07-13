@@ -256,24 +256,13 @@ func (z *ZodRecord[T, R]) PrefaultFunc(fn func() T) *ZodRecord[T, R] {
 // Meta stores metadata for this record schema.
 func (z *ZodRecord[T, R]) Meta(meta core.GlobalMeta) *ZodRecord[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodRecord[T, R]) Describe(description string) *ZodRecord[T, R] {
-	newInternals := z.internals.Clone()
-
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Min sets the minimum number of entries.
@@ -346,7 +335,7 @@ func (z *ZodRecord[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodRecord
 	clone := &ZodRecord[T, *T]{
 		internals: z.newRecordInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -354,7 +343,7 @@ func (z *ZodRecord[T, R]) withInternals(in *core.ZodTypeInternals) *ZodRecord[T,
 	clone := &ZodRecord[T, R]{
 		internals: z.newRecordInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -509,28 +498,27 @@ func extractRecordValue[T any, R any](value R) T {
 // convertToRecordConstraintValue converts any value to constraint type R.
 func convertToRecordConstraintValue[T any, R any](value any) (R, bool) {
 	var zero R
+	target := reflect.TypeFor[R]()
 
 	if value == nil {
-		if _, ok := any(zero).(*map[string]any); ok {
-			return any((*map[string]any)(nil)).(R), true
+		if target.Kind() == reflect.Pointer {
+			return zero, true
 		}
+		return zero, false
 	}
 
 	if r, ok := any(value).(R); ok { //nolint:unconvert // Required for generic type constraint conversion
 		return r, true
 	}
 
-	if _, ok := any(zero).(*map[string]any); ok {
-		if recordVal, ok := value.(map[string]any); ok {
-			return any(&recordVal).(R), true
-		}
-		if recordPtr, ok := value.(*map[string]any); ok {
-			return any(recordPtr).(R), true
-		}
-	} else {
-		if recordPtr, ok := value.(*map[string]any); ok && recordPtr != nil {
-			return any(*recordPtr).(R), true
-		}
+	source := reflect.ValueOf(value)
+	if target.Kind() == reflect.Pointer && source.Type().AssignableTo(target.Elem()) {
+		pointer := reflect.New(target.Elem())
+		pointer.Elem().Set(source)
+		return pointer.Interface().(R), true
+	}
+	if source.Kind() == reflect.Pointer && !source.IsNil() && source.Type().Elem().AssignableTo(target) {
+		return source.Elem().Interface().(R), true
 	}
 
 	return zero, false

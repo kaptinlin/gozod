@@ -6,12 +6,12 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for Employee
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for Employee.
+// Package-local generated dependencies call their generated schema methods.
 func (e Employee) Schema() *gozod.ZodStruct[Employee, Employee] {
 	return gozod.Struct[Employee](gozod.StructSchema{
 		"name":       gozod.String(),
-		"department": gozod.FromStruct[Department]().Optional(),
-		"reports":    gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Employee]() })).Optional(),
+		"department": gozod.LazyTyped[*Department](func() any { return Department{}.Schema() }).Optional(),
+		"reports":    gozod.Slice[*Employee](gozod.LazyTyped[*Employee](func() any { return Employee{}.Schema() })).Optional(),
 	})
 }

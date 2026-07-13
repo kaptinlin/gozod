@@ -11,6 +11,11 @@ The root facade also exposes the shared schema contract as `gozod.ZodSchema`.
 User code should be able to name the schema abstraction without importing
 `core` unless it needs lower-level internals.
 
+Exported facade operations are declared functions. Constructors, configuration,
+error presentation, and JSON Schema conversion cannot be rebound as mutable
+package state. Sentinel errors, registries, constants, and precision values
+remain data declarations because callers inspect or configure them as data.
+
 Go type identity is strict by default. Coercion belongs behind explicit
 constructors such as `coerce` or `Coerced*`. Lossy conversion and compatibility
 surface should be explicit, not accidental.
@@ -59,26 +64,19 @@ input only when it is the outer modifier that claims the input. Prefault supplie
 fallback input that still flows through validation. Nonoptional rejects missing
 or nil values according to its position in the chain.
 
-Legacy summary fields such as `Optional`, `Nilable`, `DefaultValue`, and
-`PrefaultValue` may remain only as compatibility or fast-path state while real
-behavior is protected by the ordered modifier spine. No second priority system
-should be reintroduced beside `Modifiers`; the slice order is the call order.
+No summary flags or fallback fields may form a second priority system beside
+`Modifiers`; the slice order is the call order.
 
 All fluent modifier methods must remain copy-on-write. The original schema must
 not change when a modifier returns a configured clone.
 
 ## Checks
 
-First-party checks are semantic runtime units. Their `core.ZodCheckDef.Params`
-are the source of truth for:
-
-- runtime issue creation
-- JSON Schema projection
-- tests that tie fluent calls to produced constraints
-
-Schema bags may cache projection hints, but they are not the semantic owner of a
-check. JSON Schema conversion must be able to project first-party checks from
-check definitions even when bag state is absent.
+First-party checks are semantic runtime units. Attachment materializes their
+JSON Schema-relevant constraints into the schema bag through the check's
+`OnAttach` behavior. The exporter reads that materialized bag; it does not run a
+second check-definition projector. `core.ZodCheckDef.Params` remains semantic
+introspection data for checks and tests, not a parallel export implementation.
 
 The check runner owns runtime issue production. It stamps issue instances,
 honors per-check `Abort` and `When` behavior, applies custom error functions,
@@ -99,7 +97,7 @@ exists yet. Fields may move out of it only after behavior tests prove the new
 semantic owner:
 
 - modifier order belongs to `Modifiers`
-- first-party JSON Schema projection belongs to check definitions
+- first-party JSON Schema projection is materialized by check attachment and read from the schema bag
 - conversion caches belong to converters, not to public contract language
 
 Package topology should not be created for appearance. New internal packages or

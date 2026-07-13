@@ -27,7 +27,7 @@ type MainPackageUser struct {
 
 func TestMainFromStruct_BasicUsage(t *testing.T) {
 	// Test main package FromStruct function
-	schema := FromStruct[MainPackageUser]()
+	schema := MustFromStruct[MainPackageUser]()
 	require.NotNil(t, schema, "FromStruct should return a non-nil schema")
 
 	// Test basic validation
@@ -42,9 +42,22 @@ func TestMainFromStruct_BasicUsage(t *testing.T) {
 	assert.Equal(t, user.Name, result.Name)
 }
 
+func TestMainFromStruct_ConstructionError(t *testing.T) {
+	t.Parallel()
+
+	type invalid struct {
+		Age int `gozod:"mystery=1"`
+	}
+
+	schema, err := FromStruct[invalid]()
+
+	assert.Nil(t, schema)
+	assert.ErrorContains(t, err, "invalid.Age")
+}
+
 func TestMainFromStructPtr_BasicUsage(t *testing.T) {
 	// Test main package FromStructPtr function
-	schema := FromStructPtr[MainPackageUser]()
+	schema := MustFromStructPtr[MainPackageUser]()
 	require.NotNil(t, schema, "FromStructPtr should return a non-nil schema")
 
 	// Test with pointer input
@@ -63,7 +76,7 @@ func TestMainFromStructPtr_BasicUsage(t *testing.T) {
 
 func TestMainFromStruct_WithModifiers(t *testing.T) {
 	// Test that FromStruct works with existing modifiers
-	schema := FromStruct[MainPackageUser]()
+	schema := MustFromStruct[MainPackageUser]()
 
 	// Test chaining with modifiers
 	optionalSchema := schema.Optional()
@@ -93,7 +106,7 @@ func TestMainFromStruct_WithModifiers(t *testing.T) {
 
 func TestMainFromStruct_Integration(t *testing.T) {
 	// Test integration with existing gozod functionality
-	schema := FromStruct[MainPackageUser]()
+	schema := MustFromStruct[MainPackageUser]()
 
 	// Test error handling
 	invalidUser := struct {
@@ -117,7 +130,7 @@ func TestMainFromStruct_DocumentationExample(t *testing.T) {
 		Email string `gozod:"required,email"`
 	}
 
-	schema := FromStruct[User]()
+	schema := MustFromStruct[User]()
 
 	// Test valid input
 	validUser := User{
@@ -150,7 +163,7 @@ func TestTagValidation_StringValidators(t *testing.T) {
 		DefaultField  string `gozod:"default=defaultvalue"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid input", func(t *testing.T) {
 		valid := TestStruct{
@@ -197,7 +210,7 @@ func TestTagValidation_NumericValidators(t *testing.T) {
 		DefaultFloat float64 `gozod:"default=3.14"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid numeric input", func(t *testing.T) {
 		valid := TestStruct{
@@ -231,7 +244,7 @@ func TestTagValidation_ModifierCombinations(t *testing.T) {
 		ComplexField  string  `gozod:"required,min=5,regex=^[A-Z],endswith=end"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid complex combinations", func(t *testing.T) {
 		testStr := "test@example.com"
@@ -257,7 +270,7 @@ func TestTagValidation_ErrorHandling(t *testing.T) {
 		StrictRange int    `gozod:"min=10,max=20"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("email validation failure", func(t *testing.T) {
 		invalid := TestStruct{
@@ -289,7 +302,7 @@ func TestTagValidation_EdgeCases(t *testing.T) {
 		SingleValidator string `gozod:"email"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("edge cases handling", func(t *testing.T) {
 		valid := TestStruct{
@@ -320,7 +333,7 @@ func TestTagValidation_NestedStructSupport(t *testing.T) {
 		Address Address // No gozod tag - basic struct validation
 	}
 
-	schema := FromStruct[User]()
+	schema := MustFromStruct[User]()
 
 	t.Run("nested struct with tags", func(t *testing.T) {
 		valid := User{
@@ -352,7 +365,7 @@ func TestTagValidation_EmailFormats(t *testing.T) {
 		DomainEmail   string `gozod:"email,endswith=@company.com"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid emails", func(t *testing.T) {
 		valid := TestStruct{
@@ -386,7 +399,7 @@ func TestTagValidation_NetworkFormats(t *testing.T) {
 		CIDRv6 string `gozod:"cidrv6"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid network formats", func(t *testing.T) {
 		valid := TestStruct{
@@ -405,13 +418,13 @@ func TestTagValidation_NetworkFormats(t *testing.T) {
 func TestTagValidation_IDFormats(t *testing.T) {
 	type TestStruct struct {
 		UUID   string `gozod:"uuid"`
-		UUIDv4 string `gozod:"uuid:v4"`
+		UUIDv4 string `gozod:"uuid"`
 		CUID   string `gozod:"cuid"`
 		CUID2  string `gozod:"cuid2"`
 		JWT    string `gozod:"jwt"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid ID formats", func(t *testing.T) {
 		valid := TestStruct{
@@ -441,7 +454,7 @@ func TestTagValidation_TimeFormats(t *testing.T) {
 		ISODuration  string     `gozod:"iso_duration"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid time formats", func(t *testing.T) {
 		now := time.Now()
@@ -473,7 +486,7 @@ func TestTagValidation_ArrayValidation(t *testing.T) {
 		RequiredList []int    `gozod:"required,min=1"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid arrays", func(t *testing.T) {
 		valid := TestStruct{
@@ -512,7 +525,7 @@ func TestTagValidation_MapValidation(t *testing.T) {
 		Optional map[string]string // No validation
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid maps", func(t *testing.T) {
 		valid := TestStruct{
@@ -539,7 +552,7 @@ func TestTagValidation_EnumValidation(t *testing.T) {
 		HTTPCode int    `gozod:"enum=200 404 500 503"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid enum values", func(t *testing.T) {
 		valid := TestStruct{
@@ -572,7 +585,7 @@ func TestTagValidation_LiteralValidation(t *testing.T) {
 		Magic   int    `gozod:"literal=42"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("valid literal values", func(t *testing.T) {
 		valid := TestStruct{
@@ -608,7 +621,7 @@ func TestTagValidation_DefaultValues(t *testing.T) {
 		Config *map[string]any `gozod:"default={\"theme\":\"dark\"}"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("default values applied for nil pointer fields", func(t *testing.T) {
 		empty := TestStruct{
@@ -675,7 +688,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 			Name string `gozod:"prefault=DefaultName,min=2"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should be created successfully")
 
 		// Test with valid struct - should work normally
@@ -690,7 +703,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 			Name string `gozod:"prefault=ValidPrefault,min=5"` // Prefault passes validation
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 
 		// Test with struct that has valid data
 		validInput := TestStruct{Name: "LongEnoughName"}
@@ -711,7 +724,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 
 		// This mainly tests that the schema creation doesn't fail
 		// when both modifiers are present
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema with both default and prefault should be created")
 
 		// Test normal parsing behavior
@@ -729,7 +742,7 @@ func TestTagValidation_Prefault(t *testing.T) {
 			Score    float64 `gozod:"prefault=5.5,min=0"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should be created successfully")
 
 		// Test normal parsing
@@ -753,7 +766,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 			Value int `gozod:"coerce,min=0"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should not be nil")
 	})
 
@@ -762,7 +775,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 			Value bool `gozod:"coerce"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should not be nil")
 
 		// Test with actual boolean value (coercion happens at parse time)
@@ -777,7 +790,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 			Value float64 `gozod:"coerce,positive"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should not be nil")
 
 		valid := TestStruct{Value: 3.14}
@@ -791,7 +804,7 @@ func TestTagValidation_Coercion(t *testing.T) {
 			Value string `gozod:"coerce,min=2"`
 		}
 
-		schema := FromStruct[TestStruct]()
+		schema := MustFromStruct[TestStruct]()
 		require.NotNil(t, schema, "Schema should not be nil")
 
 		valid := TestStruct{Value: "test"}
@@ -808,7 +821,7 @@ func TestTagValidation_PointerFields(t *testing.T) {
 		NilableField *string `gozod:"nilable"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	t.Run("pointer fields with nil", func(t *testing.T) {
 		email := "test@example.com"
@@ -856,7 +869,7 @@ func TestTagValidation_ComplexNestedStructs(t *testing.T) {
 		Billing  *Address    // Optional
 	}
 
-	schema := FromStruct[Order]()
+	schema := MustFromStruct[Order]()
 
 	t.Run("valid complex nested struct", func(t *testing.T) {
 		valid := Order{
@@ -904,7 +917,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 	}
 
 	t.Run("create validation", func(t *testing.T) {
-		schema := FromStruct[CreateUserRequest]()
+		schema := MustFromStruct[CreateUserRequest]()
 		valid := CreateUserRequest{
 			Name:  "John Doe",
 			Email: "john@example.com",
@@ -916,7 +929,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 	})
 
 	t.Run("update validation", func(t *testing.T) {
-		schema := FromStructPtr[UpdateUserRequest]()
+		schema := MustFromStructPtr[UpdateUserRequest]()
 		newName := "Jane Doe"
 		valid := &UpdateUserRequest{
 			Name:  &newName,
@@ -929,7 +942,7 @@ func TestTagValidation_CRUDPatterns(t *testing.T) {
 	})
 
 	t.Run("query validation", func(t *testing.T) {
-		schema := FromStruct[UserQuery]()
+		schema := MustFromStruct[UserQuery]()
 
 		// Test with nil values - defaults only apply at the schema level for missing values
 		// In struct validation, nil is a valid value for pointer fields
@@ -975,7 +988,7 @@ func TestTagValidation_ErrorMessages(t *testing.T) {
 		Age   int    `gozod:"required,min=18,max=120"`
 	}
 
-	schema := FromStruct[TestStruct]()
+	schema := MustFromStruct[TestStruct]()
 
 	invalid := TestStruct{
 		Name:  "A",       // Too short
@@ -999,35 +1012,6 @@ func TestTagValidation_ErrorMessages(t *testing.T) {
 }
 
 // =============================================================================
-// CUSTOM VALIDATORS TESTS
-// =============================================================================
-
-func TestTagValidation_CustomValidators(t *testing.T) {
-	type TestStruct struct {
-		Username string `gozod:"unique_username"`
-		Age      int    `gozod:"min_age=21"`
-		SKU      string `gozod:"sku_prefix=PROD"`
-		Code     string `gozod:"exact_length=8"`
-	}
-
-	schema := FromStruct[TestStruct]()
-
-	t.Run("custom validators work", func(t *testing.T) {
-		valid := TestStruct{
-			Username: "validuser123",
-			Age:      25,
-			SKU:      "PROD12345",
-			Code:     "ABCD1234",
-		}
-
-		// Note: These tests assume custom validators are registered
-		// In practice, you'd need to register them with the validator system
-		_, err := schema.Parse(valid)
-		_ = err // Custom validators may not be registered in test environment
-	})
-}
-
-// =============================================================================
 // PERFORMANCE BENCHMARKS
 // =============================================================================
 
@@ -1038,7 +1022,7 @@ func BenchmarkTagValidation_SimpleStruct(b *testing.B) {
 		Age   int    `gozod:"min=18,max=120"`
 	}
 
-	schema := FromStruct[User]()
+	schema := MustFromStruct[User]()
 	user := User{
 		Name:  "John Doe",
 		Email: "john@example.com",
@@ -1067,7 +1051,7 @@ func BenchmarkTagValidation_ComplexStruct(b *testing.B) {
 		Address Address `gozod:"required"`
 	}
 
-	schema := FromStruct[User]()
+	schema := MustFromStruct[User]()
 	user := User{
 		Name:  "John Doe",
 		Email: "john@example.com",

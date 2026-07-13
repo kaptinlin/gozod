@@ -257,7 +257,7 @@ type TestProduct struct {
 
 	helper.AssertCodeContains(productContent,
 		"func (tp TestProduct) Schema() *gozod.ZodStruct[TestProduct, TestProduct]",
-		`"price": gozod.Float64().Gt(0)`,
+		`"price": gozod.Float64().Gt(0.0)`,
 	)
 
 	// Check imports

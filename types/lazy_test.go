@@ -295,6 +295,85 @@ func TestLazy_TypeSafety(t *testing.T) {
 	})
 }
 
+func TestLazyTyped_DeclaredPointerOutput(t *testing.T) {
+	type node struct {
+		Value string `json:"value"`
+	}
+
+	schema := LazyTyped[*node](func() any {
+		return Struct[node](core.StructSchema{
+			"value": String().Min(1),
+		})
+	})
+
+	got, err := schema.Parse(node{Value: "root"})
+	require.NoError(t, err)
+	assert.Equal(t, &node{Value: "root"}, got)
+
+	_, err = schema.Parse(node{})
+	assert.Error(t, err)
+}
+
+func TestLazyTyped_DeclaredPointerOutputAcceptsPointerInput(t *testing.T) {
+	type node struct {
+		Value string `json:"value"`
+	}
+
+	schema := LazyTyped[*node](func() any {
+		return Struct[node](core.StructSchema{
+			"value": String().Min(1),
+		})
+	})
+
+	got, err := schema.Parse(&node{Value: "child"})
+	require.NoError(t, err)
+	assert.Equal(t, &node{Value: "child"}, got)
+
+	_, err = schema.Parse(&node{})
+	assert.Error(t, err)
+}
+
+func TestLazyTyped_OptionalPreservesDeclaredPointerOutput(t *testing.T) {
+	type node struct {
+		Value string `json:"value"`
+	}
+
+	base := LazyTyped[*node](func() any {
+		return Struct[node](core.StructSchema{
+			"value": String(),
+		})
+	})
+	optional := base.Optional()
+
+	got, err := optional.Parse(node{Value: "root"})
+	require.NoError(t, err)
+	assert.Equal(t, &node{Value: "root"}, got)
+
+	got, err = optional.Parse(nil)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	assert.False(t, base.IsOptional())
+	assert.True(t, optional.IsOptional())
+}
+
+func TestLazyTyped_OptionalAcceptsTypedNilPointer(t *testing.T) {
+	type node struct {
+		Value string `json:"value"`
+	}
+
+	schema := LazyTyped[*node](func() any {
+		return Struct[node](core.StructSchema{
+			"value": String(),
+		})
+	}).Optional()
+
+	var input *node
+	got, err := schema.Parse(input)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
 // =============================================================================
 // Modifier methods tests
 // =============================================================================

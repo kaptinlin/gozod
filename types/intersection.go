@@ -304,21 +304,13 @@ func (i *ZodIntersection[T, R]) PrefaultFunc(fn func() T) *ZodIntersection[T, R]
 // Meta stores metadata for this schema.
 func (i *ZodIntersection[T, R]) Meta(meta core.GlobalMeta) *ZodIntersection[T, R] {
 	clone := i.withInternals(i.internals.Clone())
-	core.ApplyGlobalMeta(i, clone, meta)
+	core.ApplySchemaMeta(i, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (i *ZodIntersection[T, R]) Describe(description string) *ZodIntersection[T, R] {
-	in := i.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(i)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := i.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return i.Meta(core.GlobalMeta{Description: description})
 }
 
 // Left returns the left schema of the intersection.
@@ -388,13 +380,13 @@ func (i *ZodIntersection[T, R]) Or(other any) *ZodUnion[any, any] {
 
 func (i *ZodIntersection[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodIntersection[T, *T] {
 	clone := &ZodIntersection[T, *T]{internals: i.newIntersectionInternals(in)}
-	finalizeClone(i, clone)
+	finalizeClone(clone)
 	return clone
 }
 
 func (i *ZodIntersection[T, R]) withInternals(in *core.ZodTypeInternals) *ZodIntersection[T, R] {
 	clone := &ZodIntersection[T, R]{internals: i.newIntersectionInternals(in)}
-	finalizeClone(i, clone)
+	finalizeClone(clone)
 	return clone
 }
 

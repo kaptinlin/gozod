@@ -236,27 +236,16 @@ func (z *ZodArray[T, R]) PrefaultFunc(fn func() T) *ZodArray[T, R] {
 
 // Metadata methods
 
-// Meta stores metadata for this array schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodArray[T, R]) Meta(meta core.GlobalMeta) *ZodArray[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe sets a description for this schema in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodArray[T, R]) Describe(description string) *ZodArray[T, R] {
-	in := z.internals.Clone()
-
-	meta, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		meta = core.GlobalMeta{}
-	}
-	meta.Description = description
-
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, meta)
-
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Validation constraint methods
@@ -396,7 +385,7 @@ func (z *ZodArray[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodArray[T
 	clone := &ZodArray[T, *T]{
 		internals: z.newArrayInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -405,7 +394,7 @@ func (z *ZodArray[T, R]) withInternals(in *core.ZodTypeInternals) *ZodArray[T, R
 	clone := &ZodArray[T, R]{
 		internals: z.newArrayInternals(in),
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

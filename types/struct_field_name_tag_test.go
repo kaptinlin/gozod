@@ -34,26 +34,26 @@ func firstIssuePath(t *testing.T, err error) []any {
 
 func TestFromStruct_WithFieldNameTag(t *testing.T) {
 	t.Run("default uses json field name", func(t *testing.T) {
-		schema := FromStruct[fieldNameTagUser]()
+		schema := MustFromStruct[fieldNameTagUser]()
 		_, err := schema.Parse(fieldNameTagUser{UserName: "ab"})
 		assert.Equal(t, []any{"userName"}, firstIssuePath(t, err))
 	})
 
 	t.Run("WithFieldNameTag yaml uses yaml field name", func(t *testing.T) {
-		schema := FromStruct[fieldNameTagUser](WithFieldNameTag("yaml"))
+		schema := MustFromStruct[fieldNameTagUser](WithFieldNameTag("yaml"))
 		_, err := schema.Parse(fieldNameTagUser{UserName: "ab"})
 		assert.Equal(t, []any{"user_name"}, firstIssuePath(t, err))
 	})
 
 	t.Run("field-name tag survives copy-on-write modifier", func(t *testing.T) {
-		base := FromStruct[fieldNameTagUser](WithFieldNameTag("yaml"))
+		base := MustFromStruct[fieldNameTagUser](WithFieldNameTag("yaml"))
 		derived := base.Describe("a user")
 		_, err := derived.Parse(fieldNameTagUser{UserName: "ab"})
 		assert.Equal(t, []any{"user_name"}, firstIssuePath(t, err))
 	})
 
 	t.Run("nested structs use selected field-name tag", func(t *testing.T) {
-		schema := FromStruct[fieldNameTagAccount](WithFieldNameTag("yaml"))
+		schema := MustFromStruct[fieldNameTagAccount](WithFieldNameTag("yaml"))
 		_, err := schema.Parse(fieldNameTagAccount{Profile: fieldNameTagProfile{UserName: "ab"}})
 		assert.Equal(t, []any{"profile", "user_name"}, firstIssuePath(t, err))
 	})

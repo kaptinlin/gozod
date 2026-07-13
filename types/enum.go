@@ -182,24 +182,16 @@ func (z *ZodEnum[T, R]) PrefaultFunc(fn func() T) *ZodEnum[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this enum schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodEnum[T, R]) Meta(meta core.GlobalMeta) *ZodEnum[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodEnum[T, R]) Describe(desc string) *ZodEnum[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Enum returns a copy of the enum key-value mapping.
@@ -417,7 +409,7 @@ func (z *ZodEnum[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodEnum[T, 
 		Entries:          z.internals.Entries,
 		Values:           z.internals.Values,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -429,7 +421,7 @@ func (z *ZodEnum[T, R]) withInternals(in *core.ZodTypeInternals) *ZodEnum[T, R] 
 		Entries:          z.internals.Entries,
 		Values:           z.internals.Values,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

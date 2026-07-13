@@ -10,6 +10,32 @@ import (
 	"github.com/kaptinlin/gozod/core"
 )
 
+func TestModifierCloneDoesNotCopyRegistryMetadata(t *testing.T) {
+	source := String()
+	core.GlobalRegistry.Add(source, core.GlobalMeta{Title: "Caller registry entry"})
+	t.Cleanup(func() { core.GlobalRegistry.Remove(source) })
+
+	clone := source.Optional()
+	t.Cleanup(func() { core.GlobalRegistry.Remove(clone) })
+
+	assert.False(t, core.GlobalRegistry.Has(clone))
+	assert.Equal(t, core.GlobalMeta{}, clone.Internals().Metadata())
+}
+
+func TestCloneFromCopiesSchemaMetadataWithoutRegistrySideEffects(t *testing.T) {
+	source := String().Meta(core.GlobalMeta{Title: "Schema metadata"})
+	target := String()
+	core.GlobalRegistry.Add(source, core.GlobalMeta{Title: "Caller registry entry"})
+	t.Cleanup(func() {
+		core.GlobalRegistry.Remove(source).Remove(target)
+	})
+
+	target.CloneFrom(source)
+
+	assert.Equal(t, "Schema metadata", target.Internals().Metadata().Title)
+	assert.False(t, core.GlobalRegistry.Has(target))
+}
+
 func TestArray_CloneFromDoesNotShareState(t *testing.T) {
 	source := Array([]any{String(), Int()}).Describe("source array")
 	target := Array([]any{Bool()}).Meta(core.GlobalMeta{Description: "target array"})
@@ -30,8 +56,7 @@ func TestArray_CloneFromDoesNotShareState(t *testing.T) {
 	_, err = target.Parse([]any{"name", 1})
 	require.Error(t, err)
 
-	meta, ok := core.GlobalRegistry.Get(target)
-	require.True(t, ok)
+	meta := target.Internals().Metadata()
 	assert.Equal(t, "source array", meta.Description)
 }
 
@@ -51,8 +76,7 @@ func TestSlice_CloneFromDoesNotShareState(t *testing.T) {
 	_, err := source.Parse([]string{"name"})
 	require.NoError(t, err)
 
-	meta, ok := core.GlobalRegistry.Get(target)
-	require.True(t, ok)
+	meta := target.Internals().Metadata()
 	assert.Equal(t, "source slice", meta.Description)
 }
 
@@ -67,8 +91,7 @@ func TestCollectionCloneFromDoesNotShareInternals(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source map", meta.Description)
 	})
 
@@ -82,8 +105,7 @@ func TestCollectionCloneFromDoesNotShareInternals(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source set", meta.Description)
 	})
 
@@ -97,8 +119,7 @@ func TestCollectionCloneFromDoesNotShareInternals(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source record", meta.Description)
 	})
 
@@ -112,8 +133,7 @@ func TestCollectionCloneFromDoesNotShareInternals(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source intersection", meta.Description)
 	})
 }
@@ -129,8 +149,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source string", meta.Description)
 	})
 
@@ -144,8 +163,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source file", meta.Description)
 	})
 
@@ -159,8 +177,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source never", meta.Description)
 	})
 
@@ -174,8 +191,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source function", meta.Description)
 	})
 
@@ -189,8 +205,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source union", meta.Description)
 	})
 
@@ -204,22 +219,21 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source xor", meta.Description)
 	})
 
 	t.Run("discriminated union", func(t *testing.T) {
-		source := DiscriminatedUnion(
+		source := MustDiscriminatedUnion(
 			"type",
-			[]any{
+			[]core.ZodSchema{
 				Object(core.ObjectSchema{"type": Literal("a"), "name": String()}),
 				Object(core.ObjectSchema{"type": Literal("b"), "age": Int()}),
 			},
 		).Describe("source discriminated union")
-		target := DiscriminatedUnion(
+		target := MustDiscriminatedUnion(
 			"type",
-			[]any{
+			[]core.ZodSchema{
 				Object(core.ObjectSchema{"type": Literal("x")}),
 			},
 		).Meta(core.GlobalMeta{Description: "target discriminated union"})
@@ -230,8 +244,7 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 		target.internals.SetOptional(true)
 		assert.False(t, source.IsOptional())
 
-		meta, ok := core.GlobalRegistry.Get(target)
-		require.True(t, ok)
+		meta := target.Internals().Metadata()
 		assert.Equal(t, "source discriminated union", meta.Description)
 	})
 }
@@ -239,92 +252,79 @@ func TestPrimitiveCloneFromSyncsMetadataAndState(t *testing.T) {
 func TestModifierChainsPreserveMetadataOnScalarSchemas(t *testing.T) {
 	t.Run("bool", func(t *testing.T) {
 		schema := Bool().Describe("bool schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "bool schema", meta.Description)
 	})
 
 	t.Run("integer", func(t *testing.T) {
 		schema := Int().Describe("int schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "int schema", meta.Description)
 	})
 
 	t.Run("time", func(t *testing.T) {
 		schema := Time().Describe("time schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "time schema", meta.Description)
 	})
 
 	t.Run("file", func(t *testing.T) {
 		schema := File().Describe("file schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "file schema", meta.Description)
 	})
 
 	t.Run("bigint", func(t *testing.T) {
 		schema := BigInt().Describe("bigint schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "bigint schema", meta.Description)
 	})
 
 	t.Run("array", func(t *testing.T) {
 		schema := Array([]any{String()}).Describe("array schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "array schema", meta.Description)
 	})
 
 	t.Run("slice", func(t *testing.T) {
 		schema := Slice[string](String()).Describe("slice schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "slice schema", meta.Description)
 	})
 
 	t.Run("map", func(t *testing.T) {
 		schema := Map(String(), Int()).Describe("map schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "map schema", meta.Description)
 	})
 
 	t.Run("set", func(t *testing.T) {
 		schema := Set[string](String()).Describe("set schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "set schema", meta.Description)
 	})
 
 	t.Run("record", func(t *testing.T) {
 		schema := Record(String(), Int()).Describe("record schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "record schema", meta.Description)
 	})
 
 	t.Run("intersection", func(t *testing.T) {
 		schema := Intersection(String(), String()).Describe("intersection schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "intersection schema", meta.Description)
 	})
 
 	t.Run("literal", func(t *testing.T) {
 		schema := Literal("x").Describe("literal schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "literal schema", meta.Description)
 	})
 
 	t.Run("tuple", func(t *testing.T) {
 		schema := Tuple(String(), Int()).Describe("tuple schema").Optional()
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "tuple schema", meta.Description)
 	})
 }

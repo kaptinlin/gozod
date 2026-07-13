@@ -1,17 +1,138 @@
 package main
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
+
+func TestFileWriterRejectsInvalidFieldPlan(t *testing.T) {
+	t.Parallel()
+
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err)
+	field := &tagparser.FieldInfo{
+		Name:     "Age",
+		Type:     reflect.TypeFor[int](),
+		GoZodTag: "mystery=1",
+		Rules: []tagparser.TagRule{
+			{Name: "mystery", Params: []string{"1"}},
+		},
+	}
+
+	code, err := writer.generateFieldSchemaCode(field, "User")
+
+	assert.Empty(t, code)
+	assert.True(t, errors.Is(err, tagparser.ErrUnknownRule))
+	assert.ErrorContains(t, err, "Age")
+	assert.ErrorContains(t, err, "mystery=1")
+}
+
+func TestFileWriterRejectsUnknownFieldType(t *testing.T) {
+	t.Parallel()
+
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err)
+	field := &tagparser.FieldInfo{Name: "Mystery", TypeName: "unknown"}
+
+	code, err := writer.generateFieldSchemaCode(field, "User")
+
+	assert.Empty(t, code)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "Mystery")
+	assert.ErrorContains(t, err, "unknown")
+}
+
+func TestFileWriterUsesCoercionConstructors(t *testing.T) {
+	t.Parallel()
+
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		fieldType reflect.Type
+		want      string
+	}{
+		{name: "string", fieldType: reflect.TypeFor[string](), want: "coerce.String()"},
+		{name: "bool", fieldType: reflect.TypeFor[bool](), want: "coerce.Bool()"},
+		{name: "signed integer", fieldType: reflect.TypeFor[int](), want: "coerce.Int()"},
+		{name: "unsigned integer", fieldType: reflect.TypeFor[uint32](), want: "coerce.Uint32()"},
+		{name: "float", fieldType: reflect.TypeFor[float64](), want: "coerce.Float64()"},
+		{name: "time", fieldType: reflect.TypeFor[time.Time](), want: "coerce.Time()"},
+		{name: "string pointer", fieldType: reflect.TypeFor[*string](), want: "coerce.StringPtr().Optional()"},
+		{name: "integer pointer", fieldType: reflect.TypeFor[*int16](), want: "coerce.Int16Ptr().Optional()"},
+		{name: "time pointer", fieldType: reflect.TypeFor[*time.Time](), want: "coerce.TimePtr().Optional()"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			field := &tagparser.FieldInfo{
+				Name:     "Value",
+				Type:     test.fieldType,
+				Required: true,
+				Rules: []tagparser.TagRule{
+					{Name: "required"},
+					{Name: "coerce"},
+				},
+			}
+
+			code, err := writer.generateFieldSchemaCode(field, "User")
+
+			require.NoError(t, err)
+			assert.Equal(t, test.want, code)
+		})
+	}
+}
+
+func TestWriteGeneratedCodePreservesExistingFileWhenAtomicReplaceCannotStart(t *testing.T) {
+	dir := t.TempDir()
+	sourcePath := filepath.Join(dir, "user.go")
+	outputPath := filepath.Join(dir, "user_gen.go")
+	require.NoError(t, os.WriteFile(sourcePath, []byte("package main\n"), 0o600))
+	require.NoError(t, os.WriteFile(outputPath, []byte("old generated content\n"), 0o600))
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { require.NoError(t, os.Chmod(dir, 0o700)) })
+
+	writer, err := NewFileWriter("", "main", "_gen.go", false, false)
+	require.NoError(t, err)
+	err = writer.WriteGeneratedCode(&GenerationInfo{
+		Name:     "User",
+		Package:  "main",
+		FilePath: sourcePath,
+	})
+
+	assert.Error(t, err)
+	content, readErr := os.ReadFile(outputPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, "old generated content\n", string(content))
+}
+
+func TestRenderValidatorChainRejectsInvalidOperand(t *testing.T) {
+	t.Parallel()
+
+	code, err := renderValidatorChain(tagparser.RulePlan{
+		Name:    "regex",
+		Op:      tagparser.RuleRegex,
+		Family:  tagparser.FieldFamilyString,
+		Operand: "not-compiled",
+	}, reflect.TypeFor[string]())
+
+	assert.Empty(t, code)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "regex")
+}
 
 func TestFileWriter_GenerateImports(t *testing.T) {
 	tests := []struct {
@@ -541,7 +662,7 @@ func TestBasicTypeConstructor(t *testing.T) {
 		{name: "int64 type", typeName: "int64", expected: "gozod.Int64()"},
 		{name: "float64 type", typeName: "float64", expected: "gozod.Float64()"},
 		{name: "bool type", typeName: "bool", expected: "gozod.Bool()"},
-		{name: "unknown type", typeName: "CustomType", expected: "gozod.Any()"},
+		{name: "non-basic type", typeName: "CustomType", expected: ""},
 	}
 
 	for _, tt := range tests {
@@ -558,24 +679,25 @@ func TestCircularReferenceHandling(t *testing.T) {
 		typeName   string
 		structName string
 		expected   string
+		wantErr    bool
 	}{
 		{
 			name:       "self reference",
 			typeName:   "Node",
 			structName: "Node",
-			expected:   "gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() })",
+			expected:   "gozod.LazyTyped[*Node](func() any { return gozod.MustFromStruct[Node]() })",
 		},
 		{
 			name:       "pointer self reference",
 			typeName:   "*Node",
 			structName: "Node",
-			expected:   "gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() })",
+			expected:   "gozod.LazyTyped[*Node](func() any { return gozod.MustFromStruct[Node]() })",
 		},
 		{
 			name:       "slice self reference",
 			typeName:   "[]*Node",
 			structName: "Node",
-			expected:   "gozod.Slice(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() }))",
+			expected:   "gozod.Slice[*Node](gozod.LazyTyped[*Node](func() any { return gozod.MustFromStruct[Node]() }))",
 		},
 		{
 			name:       "no circular reference",
@@ -590,28 +712,33 @@ func TestCircularReferenceHandling(t *testing.T) {
 			expected:   "gozod.Time()",
 		},
 		{
-			name:       "unknown type uses Any",
+			name:       "explicit unknown uses Any",
 			typeName:   "unknown",
 			structName: "Node",
 			expected:   "gozod.Any()",
 		},
 		{
-			name:       "malformed map uses Any record",
+			name:       "malformed map fails",
 			typeName:   "map[string]",
 			structName: "Node",
-			expected:   "gozod.Record(gozod.Any())",
+			wantErr:    true,
 		},
 		{
 			name:       "map self reference",
 			typeName:   "map[string]*Node",
 			structName: "Node",
-			expected:   "gozod.Record(gozod.Lazy(func() gozod.ZodType[any] { return gozod.FromStruct[Node]() }))",
+			expected:   "gozod.Record[string, *Node](gozod.String(), gozod.LazyTyped[*Node](func() any { return gozod.MustFromStruct[Node]() }))",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := baseConstructor(tt.typeName, tt.structName, defaultFieldNameTag)
+			result, err := baseConstructor(tt.typeName, tt.structName, defaultFieldNameTag)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
 			if !strings.Contains(result, tt.expected) {
 				assert.Equal(t, tt.expected, result)
 			}
@@ -620,11 +747,13 @@ func TestCircularReferenceHandling(t *testing.T) {
 }
 
 func TestBaseConstructor_FieldNameTag(t *testing.T) {
-	result := baseConstructor("Profile", "User", "yaml")
-	assert.Equal(t, `gozod.FromStruct[Profile](gozod.WithFieldNameTag("yaml"))`, result)
+	result, err := baseConstructor("Profile", "User", "yaml")
+	require.NoError(t, err)
+	assert.Equal(t, `gozod.MustFromStruct[Profile](gozod.WithFieldNameTag("yaml"))`, result)
 
-	self := baseConstructor("*Node", "Node", "yaml")
-	assert.Contains(t, self, `gozod.FromStruct[Node](gozod.WithFieldNameTag("yaml"))`)
+	self, err := baseConstructor("*Node", "Node", "yaml")
+	require.NoError(t, err)
+	assert.Contains(t, self, `gozod.MustFromStruct[Node](gozod.WithFieldNameTag("yaml"))`)
 }
 
 func TestGenerateValidatorChain(t *testing.T) {
@@ -633,17 +762,18 @@ func TestGenerateValidatorChain(t *testing.T) {
 		rule      tagparser.TagRule
 		fieldType reflect.Type
 		expected  string
+		wantErr   bool
 	}{
 		// String validators
 		{name: "trim", rule: tagparser.TagRule{Name: "trim"}, fieldType: reflect.TypeFor[string](), expected: ".Trim()"},
 		{name: "lowercase", rule: tagparser.TagRule{Name: "lowercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToLowerCase()"},
 		{name: "uppercase", rule: tagparser.TagRule{Name: "uppercase"}, fieldType: reflect.TypeFor[string](), expected: ".ToUpperCase()"},
 		{name: "nilable", rule: tagparser.TagRule{Name: "nilable"}, fieldType: reflect.TypeFor[string](), expected: ".Nilable()"},
-		{name: "email constructor-owned", rule: tagparser.TagRule{Name: "email"}, fieldType: reflect.TypeFor[string](), expected: ""},
-		{name: "url constructor-owned", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeFor[string](), expected: ""},
-		{name: "ipv4 constructor-owned", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ""},
-		{name: "ipv6 constructor-owned", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ""},
-		{name: "cidrv4 constructor-owned", rule: tagparser.TagRule{Name: "cidrv4"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "email chain", rule: tagparser.TagRule{Name: "email"}, fieldType: reflect.TypeFor[string](), expected: ".Email()"},
+		{name: "url chain", rule: tagparser.TagRule{Name: "url"}, fieldType: reflect.TypeFor[string](), expected: ".URL()"},
+		{name: "ipv4 chain", rule: tagparser.TagRule{Name: "ipv4"}, fieldType: reflect.TypeFor[string](), expected: ".IPv4()"},
+		{name: "ipv6 chain", rule: tagparser.TagRule{Name: "ipv6"}, fieldType: reflect.TypeFor[string](), expected: ".IPv6()"},
+		{name: "cidrv4 chain", rule: tagparser.TagRule{Name: "cidrv4"}, fieldType: reflect.TypeFor[string](), expected: ".CIDRv4()"},
 		{name: "regex", rule: tagparser.TagRule{Name: "regex", Params: []string{"^[A-Z]+$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^[A-Z]+$"))`},
 		{name: "regex with quotes", rule: tagparser.TagRule{Name: "regex", Params: []string{"^\"[A-Z]+\"$"}}, fieldType: reflect.TypeFor[string](), expected: `.Regex(regexp.MustCompile("^\"[A-Z]+\"$"))`},
 		{name: "includes", rule: tagparser.TagRule{Name: "includes", Params: []string{"PROD"}}, fieldType: reflect.TypeFor[string](), expected: `.Includes("PROD")`},
@@ -662,101 +792,36 @@ func TestGenerateValidatorChain(t *testing.T) {
 		{name: "required", rule: tagparser.TagRule{Name: "required"}, fieldType: reflect.TypeFor[string](), expected: ""},
 
 		// Time (returns empty)
-		{name: "time", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "time on string fails", rule: tagparser.TagRule{Name: "time"}, fieldType: reflect.TypeFor[string](), wantErr: true},
 		{name: "enum method returns empty", rule: tagparser.TagRule{Name: "enum", Params: []string{"active"}}, fieldType: reflect.TypeFor[string](), expected: ""},
-		{name: "unknown rule returns empty", rule: tagparser.TagRule{Name: "unknown"}, fieldType: reflect.TypeFor[string](), expected: ""},
+		{name: "unknown rule fails", rule: tagparser.TagRule{Name: "unknown"}, fieldType: reflect.TypeFor[string](), wantErr: true},
 
-		// Refine and check
-		{name: "refine", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeFor[string](), expected: ".Refine(myValidator)"},
-		{name: "check", rule: tagparser.TagRule{Name: "check", Params: []string{"customCheck"}}, fieldType: reflect.TypeFor[string](), expected: ".Check(customCheck)"},
+		// Function names cannot be bound safely from struct-tag strings.
+		{name: "refine fails", rule: tagparser.TagRule{Name: "refine", Params: []string{"myValidator"}}, fieldType: reflect.TypeFor[string](), wantErr: true},
+		{name: "check fails", rule: tagparser.TagRule{Name: "check", Params: []string{"customCheck"}}, fieldType: reflect.TypeFor[string](), wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateValidatorChain(tagparser.CompileRule(tt.rule), tt.fieldType)
+			plan, err := tagparser.CompileFieldPlan(&tagparser.FieldInfo{
+				Name:  "Field",
+				Type:  tt.fieldType,
+				Rules: []tagparser.TagRule{tt.rule},
+			})
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			if len(plan.Operations) == 0 {
+				assert.Empty(t, tt.expected)
+				return
+			}
+			result, err := renderValidatorChain(plan.Operations[0], tt.fieldType)
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestGenerateDefaultValue(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		fieldType reflect.Type
-		expected  string
-	}{
-		{name: "string", value: "hello", fieldType: reflect.TypeFor[string](), expected: `.Default("hello")`},
-		{name: "int", value: "42", fieldType: reflect.TypeFor[int](), expected: ".Default(42)"},
-		{name: "int64", value: "100", fieldType: reflect.TypeFor[int64](), expected: ".Default(100)"},
-		{name: "uint", value: "10", fieldType: reflect.TypeFor[uint](), expected: ".Default(10)"},
-		{name: "float64", value: "3.14", fieldType: reflect.TypeFor[float64](), expected: ".Default(3.14)"},
-		{name: "bool", value: "true", fieldType: reflect.TypeFor[bool](), expected: ".Default(true)"},
-		{name: "pointer string", value: "world", fieldType: reflect.TypeFor[*string](), expected: `.Default("world")`},
-		// Slice types
-		{name: "string slice", value: `["a","b"]`, fieldType: reflect.TypeFor[[]string](), expected: `.Default([]string{"a", "b"})`},
-		{name: "int slice", value: `[1,2,3]`, fieldType: reflect.TypeFor[[]int](), expected: `.Default([]int{1, 2, 3})`},
-		{name: "float slice", value: `[1.1,2.2]`, fieldType: reflect.TypeFor[[]float64](), expected: `.Default([]float64{1.1, 2.2})`},
-		{name: "bool slice", value: `[true,false]`, fieldType: reflect.TypeFor[[]bool](), expected: `.Default([]bool{true, false})`},
-		{name: "raw slice literal fallback", value: `items`, fieldType: reflect.TypeFor[[]string](), expected: `.Default(items)`},
-		{name: "unsupported slice element fallback", value: `[1,2]`, fieldType: reflect.TypeFor[[]uint](), expected: `.Default([1,2])`},
-		// Map types
-		{name: "string map", value: `{"k":"v"}`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Default(map[string]string{"k": "v"})`},
-		{name: "interface map", value: `{"a":1}`, fieldType: reflect.TypeFor[map[string]any](), expected: `.Default(map[string]any{"a": 1})`},
-		{name: "raw map literal fallback", value: `defaults`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Default(defaults)`},
-		{name: "unsupported map value fallback", value: `{"a":1}`, fieldType: reflect.TypeFor[map[string]int](), expected: `.Default({"a":1})`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := generateDefaultValue(tt.value, tt.fieldType)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGeneratePrefaultValue(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		fieldType reflect.Type
-		expected  string
-	}{
-		{name: "string", value: "hello", fieldType: reflect.TypeFor[string](), expected: `.Prefault("hello")`},
-		{name: "int", value: "42", fieldType: reflect.TypeFor[int](), expected: ".Prefault(42)"},
-		{name: "int64", value: "100", fieldType: reflect.TypeFor[int64](), expected: ".Prefault(100)"},
-		{name: "uint", value: "10", fieldType: reflect.TypeFor[uint](), expected: ".Prefault(10)"},
-		{name: "float64", value: "3.14", fieldType: reflect.TypeFor[float64](), expected: ".Prefault(3.14)"},
-		{name: "bool", value: "true", fieldType: reflect.TypeFor[bool](), expected: ".Prefault(true)"},
-		{name: "pointer string", value: "world", fieldType: reflect.TypeFor[*string](), expected: `.Prefault("world")`},
-		// Slice types
-		{name: "string slice", value: `["x","y"]`, fieldType: reflect.TypeFor[[]string](), expected: `.Prefault([]string{"x", "y"})`},
-		{name: "int slice", value: `[4,5,6]`, fieldType: reflect.TypeFor[[]int](), expected: `.Prefault([]int{4, 5, 6})`},
-		{name: "float slice", value: `[3.3,4.4]`, fieldType: reflect.TypeFor[[]float64](), expected: `.Prefault([]float64{3.3, 4.4})`},
-		{name: "bool slice", value: `[false,true]`, fieldType: reflect.TypeFor[[]bool](), expected: `.Prefault([]bool{false, true})`},
-		// Map types
-		{name: "string map", value: `{"foo":"bar"}`, fieldType: reflect.TypeFor[map[string]string](), expected: `.Prefault(map[string]string{"foo": "bar"})`},
-		{name: "interface map", value: `{"x":99}`, fieldType: reflect.TypeFor[map[string]any](), expected: `.Prefault(map[string]any{"x": 99})`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := generatePrefaultValue(tt.value, tt.fieldType)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGenerateDefaultValueEscapesQuotes(t *testing.T) {
-	assert.Equal(t, `.Default("hello \"world\"")`, generateDefaultValue(`hello "world"`, reflect.TypeFor[string]()))
-	assert.Equal(t, `.Default([]string{"a\"b"})`, generateDefaultValue(`["a\"b"]`, reflect.TypeFor[[]string]()))
-	assert.Equal(t, `.Default(map[string]string{"k": "v\"w"})`, generateDefaultValue(`{"k":"v\"w"}`, reflect.TypeFor[map[string]string]()))
-}
-
-func TestGeneratePrefaultValueEscapesQuotes(t *testing.T) {
-	assert.Equal(t, `.Prefault("hello \"world\"")`, generatePrefaultValue(`hello "world"`, reflect.TypeFor[string]()))
-	assert.Equal(t, `.Prefault([]string{"x\"y"})`, generatePrefaultValue(`["x\"y"]`, reflect.TypeFor[[]string]()))
-	assert.Equal(t, `.Prefault(map[string]string{"foo": "bar\"baz"})`, generatePrefaultValue(`{"foo":"bar\"baz"}`, reflect.TypeFor[map[string]string]()))
 }
 
 func TestFileWriter_FirstLowerCase(t *testing.T) {

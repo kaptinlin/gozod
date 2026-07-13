@@ -826,8 +826,7 @@ func TestObject_ValidationMethods(t *testing.T) {
 			"name": String(),
 		}).Meta(core.GlobalMeta{Title: "object schema"}).Optional()
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "object schema", meta.Title)
 	})
 }

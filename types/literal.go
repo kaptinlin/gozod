@@ -163,23 +163,15 @@ func (z *ZodLiteral[T, R]) PrefaultFunc(fn func() T) *ZodLiteral[T, R] {
 	return z.withInternals(in)
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodLiteral[T, R]) Describe(description string) *ZodLiteral[T, R] {
-	newInternals := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Meta stores metadata for this literal schema.
 func (z *ZodLiteral[T, R]) Meta(meta core.GlobalMeta) *ZodLiteral[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
@@ -233,7 +225,7 @@ func (z *ZodLiteral[T, R]) withInternals(in *core.ZodTypeInternals) *ZodLiteral[
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -243,7 +235,7 @@ func (z *ZodLiteral[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodLiter
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

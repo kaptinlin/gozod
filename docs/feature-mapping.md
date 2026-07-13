@@ -25,7 +25,7 @@ and package documentation define the current contract.
 | `z.set(T)` | `gozod.Set(elementSchema)` | `map[T]struct{}` | ✅ Go idiomatic set pattern with element validation | ✅ Fully implemented |
 | `z.union([...])` | `gozod.Union([...])` | `any` | ✅ Type-safe union validation with Go interfaces | ✅ Fully implemented |
 | `z.xor([...])` | `gozod.Xor([...])` | `any` | ✅ Exclusive union - exactly one must match | ✅ Fully implemented |
-| `z.discriminatedUnion(key, [...])` | `gozod.DiscriminatedUnion(key, [...])` | `any` | ✅ Optimized discriminated union with key-based lookup | ✅ Fully implemented |
+| `z.discriminatedUnion(key, [...])` | `gozod.DiscriminatedUnion(key, []gozod.ZodSchema{...})` | `any` | ✅ Construction-validated discriminated union with key-based lookup | ✅ Fully implemented |
 | `z.intersection(A, B)` | `gozod.Intersection(A, B)` | `any` | ✅ Intersection type validation with Go type system | ✅ Fully implemented |
 | `z.literal(value)` | `gozod.Literal(value)` | `T` | ✅ Type-safe literal value validation | ✅ Fully implemented |
 | `z.enum([...])` | `gozod.Enum(...)` | `T` | ✅ Go native enum support with type constraints | ✅ Fully implemented |
@@ -94,10 +94,8 @@ and package documentation define the current contract.
 
 | TypeScript Zod v4 | GoZod Method | Status | Description |
 |-------------------|-------------|--------|-------------|
-| `.describe(desc)` | `.Describe(desc)` | ✅ | Instance method on all 26 schema types |
-| `z.describe(desc)` | `gozod.Describe(desc)` | ✅ | Check factory for use with `.Check()` |
-| `.meta(meta)` | `.Meta(meta)` | ✅ | Instance method on all 26 schema types |
-| `z.meta(meta)` | `gozod.Meta(meta)` | ✅ | Check factory for use with `.Check()` |
+| `.describe(desc)` | `.Describe(desc)` | ✅ | Copy-on-write fluent schema metadata |
+| `.meta(meta)` | `.Meta(meta)` | ✅ | Copy-on-write fluent standard metadata |
 | `z.fromJSONSchema(schema)` | `gozod.FromJSONSchema(schema)` | ✅ | Create GoZod schema from JSON Schema (supports prefixItems → Tuple) |
 
 ### Coercion Method Mapping
@@ -256,7 +254,7 @@ type User struct {
 }
 
 // Generate schema from tags
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 result, err := schema.Parse(user)
 ```
 
@@ -270,7 +268,7 @@ type User struct {
 }
 
 // GoZod automatically detects and handles circular references
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 result, err := schema.Parse(user) // ✅ No stack overflow
 ```
 
@@ -431,7 +429,7 @@ type User struct {
 }
 
 // Generate schema from tags
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 user, err := schema.Parse(data)
 ```
 
@@ -483,7 +481,7 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | **All Go numeric types** | int8, uint32, complex64, etc. | Limited to number/bigint |
 | **Parse vs StrictParse** | Runtime vs compile-time type checking | Compile-time only |
 | **Panic-based parsing** | `MustParse()` methods | Throwing behavior |
-| **Custom validator system** | Registry-based with struct tag integration | Limited to refinements |
+| **Custom validation** | Programmatic `.Refine()` and `.Check()` | Refinements |
 | **Circular reference handling** | Automatic detection with lazy evaluation | Manual lazy schemas |
 | **JSON tag mapping** | Automatic field mapping | Manual specification |
 | **Apply function** | `gozod.Apply(schema, fn)` for composable schema modifiers | No equivalent |
@@ -515,7 +513,7 @@ nullishResult, _ := gozod.String().Nullish().Parse(nil)   // (*string)(nil)
 | Feature | Reflection-based | Generated |
 |---------|------------------|-----------|
 | **Schema construction** | Derives schema from tags at runtime | Uses explicit generated schema methods |
-| **Validation API** | `FromStruct[T]().Parse(...)` | `T{}.Schema().Parse(...)` |
+| **Validation API** | `FromStruct[T]()` then `.Parse(...)` | `T{}.Schema().Parse(...)` |
 | **Type safety** | Runtime validation | Runtime validation from generated schema |
 
 ---

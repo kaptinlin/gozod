@@ -11,7 +11,7 @@ GoZod ships with a first-class *Registry* API that allows you to attach **strong
 ```go
 import "github.com/kaptinlin/gozod"
 
-// 1) Define a metadata struct – any comparable type works.
+// 1) Define a metadata struct - any Go type works.
 type FieldMeta struct {
     Title       string            `json:"title"`
     Description string            `json:"description,omitempty"`
@@ -51,7 +51,7 @@ Each method returns the registry itself so you can chain calls if desired.
 
 ## Instance Methods (Recommended)
 
-All 26 GoZod schema types now include built-in `.Describe()` and `.Meta()` methods:
+All built-in GoZod schema families include `.Describe()` and `.Meta()` methods:
 
 ```go
 // Describe - shorthand for description only
@@ -67,11 +67,9 @@ schema := gozod.Object(core.ObjectSchema{
     }),
 })
 
-// Retrieve metadata
-meta, ok := gozod.GlobalRegistry.Get(schema)
-if ok {
-    fmt.Println(meta.Description)  // "Primary contact email"
-}
+// Read a defensive copy of schema-owned metadata when needed.
+meta := schema.Internals().Metadata()
+fmt.Println(meta.Description)
 ```
 
 ### Supported Types
@@ -85,34 +83,14 @@ All schema types support `.Describe()` and `.Meta()`:
 - **Format**: StringBool, File
 
 `.Describe()` and `.Meta()` are copy-on-write modifiers. They return a new
-schema instance and register metadata on that returned schema; the original
+schema instance and store metadata on that returned schema; the original
 schema is left unchanged.
-
----
-
-## Check Factories (Zod v4 Compatible)
-
-For Zod v4 API compatibility, GoZod also provides check factory functions:
-
-```go
-import "github.com/kaptinlin/gozod"
-
-// These are equivalent:
-schema1 := gozod.String().Describe("Username")
-schema2 := gozod.String().Check(gozod.Describe("Username"))
-
-// Check factories allow composition with other checks
-schema := gozod.String().Check(
-    gozod.Describe("Username"),
-    gozod.Meta(gozod.GlobalMeta{Title: "User Name"}),
-)
-```
 
 ---
 
 ## Global Registry
 
-For convenience GoZod exposes a *global* registry so you don't have to pass a registry around everywhere.
+GoZod exposes a global registry for callers that explicitly want process-wide metadata association.
 
 ```go
 import "github.com/kaptinlin/gozod"
@@ -133,15 +111,29 @@ gozod.GlobalRegistry.Add(emailSchema, GlobalMeta{
     Title:       "Email Address",
     Description: "A valid e-mail address",
 })
+
+// Registries participate in conversion only when explicitly supplied.
+jsonSchema, err := gozod.ToJSONSchema(emailSchema, gozod.JSONSchemaOptions{
+    Metadata: gozod.GlobalRegistry,
+})
 ```
 
-If you prefer local encapsulation you can ignore `GlobalRegistry` entirely and stick with your own registries.
+Prefer schema-owned `.Meta/.Describe` for standard JSON Schema metadata and local registries for application-specific
+metadata. Use `GlobalRegistry` only when process-wide association is intentional.
 
 ---
 
 ## Integration with JSON Schema
 
-The `gozod.ToJSONSchema` converter will automatically consume registries:
+`gozod.ToJSONSchema` consumes schema-owned `GlobalMeta` by default. Pass
+`JSONSchemaOptions.Metadata` when a caller registry should provide whole-record
+overrides for schemas it contains; missing entries fall back to schema-owned metadata.
+
+`gozod.FromJSONSchema` stores imported standard metadata on the returned schema
+by default. `FromJSONSchemaOptions.Metadata` selects a caller registry as the
+sole destination. Import and export detach nested examples at the JSON Schema
+boundary; generic registry reads and writes otherwise retain shallow
+caller-owned value semantics.
 
 * **`ID` extraction** – Schemas that have an `ID` will be hoisted into `$defs` and referenced with `$ref`.
 * **Metadata merging** – Keys like `title`, `description` and `examples` will be copied onto the generated JSON-Schema nodes.

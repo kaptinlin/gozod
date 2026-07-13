@@ -208,21 +208,13 @@ func (z *ZodSet[T, R]) PrefaultFunc(fn func() map[T]struct{}) *ZodSet[T, R] {
 // Meta stores metadata for this set schema.
 func (z *ZodSet[T, R]) Meta(meta core.GlobalMeta) *ZodSet[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodSet[T, R]) Describe(description string) *ZodSet[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Min sets the minimum number of elements.
@@ -298,13 +290,13 @@ func (z *ZodSet[T, R]) Or(other any) *ZodUnion[any, any] {
 
 func (z *ZodSet[T, R]) withInternals(in *core.ZodTypeInternals) *ZodSet[T, R] {
 	clone := &ZodSet[T, R]{internals: z.newSetInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
 func (z *ZodSet[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodSet[T, *map[T]struct{}] {
 	clone := &ZodSet[T, *map[T]struct{}]{internals: z.newSetInternals(in)}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/core"
 )
@@ -30,8 +29,7 @@ func TestObject_CloneFromDoesNotShareState(t *testing.T) {
 	_, exists := source.internals.Shape["age"]
 	assert.False(t, exists)
 
-	meta, ok := core.GlobalRegistry.Get(target)
-	require.True(t, ok)
+	meta := target.Internals().Metadata()
 	assert.Equal(t, "source object", meta.Description)
 }
 

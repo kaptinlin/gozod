@@ -29,7 +29,7 @@ type NoTagUser struct {
 
 func TestFromStruct_BasicUsage(t *testing.T) {
 	// Test that FromStruct creates a valid schema
-	schema := FromStruct[TaggedUser]()
+	schema := MustFromStruct[TaggedUser]()
 	if schema == nil {
 		t.Fatal("FromStruct should return a non-nil schema")
 	}
@@ -52,7 +52,7 @@ func TestFromStruct_BasicUsage(t *testing.T) {
 
 func TestFromStructPtr_PointerTypes(t *testing.T) {
 	// Test that FromStructPtr creates a valid pointer schema
-	schema := FromStructPtr[TaggedUser]()
+	schema := MustFromStructPtr[TaggedUser]()
 	if schema == nil {
 		t.Fatal("FromStructPtr should return a non-nil schema")
 	}
@@ -76,7 +76,7 @@ func TestFromStruct_EmptyStruct(t *testing.T) {
 	// Test FromStruct with empty struct
 	type EmptyStruct struct{}
 
-	schema := FromStruct[EmptyStruct]()
+	schema := MustFromStruct[EmptyStruct]()
 	if schema == nil {
 		t.Fatal("FromStruct should handle empty structs")
 	}
@@ -90,7 +90,7 @@ func TestFromStruct_EmptyStruct(t *testing.T) {
 
 func TestFromStruct_NoTags(t *testing.T) {
 	// Test that FromStruct works even without gozod tags
-	schema := FromStruct[NoTagUser]()
+	schema := MustFromStruct[NoTagUser]()
 	if schema == nil {
 		t.Fatal("FromStruct should work without tags")
 	}
@@ -114,7 +114,7 @@ func TestFromStruct_StringTransformTags(t *testing.T) {
 		Code string `gozod:"uppercase"`
 	}
 
-	schema := FromStruct[Input]()
+	schema := MustFromStruct[Input]()
 	got, err := schema.Parse(Input{Slug: " Hello ", Code: "ab"})
 
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestFromStruct_StringTransformTags(t *testing.T) {
 
 func TestFromStruct_Integration(t *testing.T) {
 	// Test that FromStruct integrates well with existing functionality
-	schema := FromStruct[TaggedUser]()
+	schema := MustFromStruct[TaggedUser]()
 
 	// Test with modifiers
 	optionalSchema := schema.Optional()
@@ -148,7 +148,7 @@ func TestFromStruct_Integration(t *testing.T) {
 
 func TestFromStruct_WithRefine(t *testing.T) {
 	// Test that FromStruct works with Refine
-	schema := FromStruct[TaggedUser]().Refine(func(user TaggedUser) bool {
+	schema := MustFromStruct[TaggedUser]().Refine(func(user TaggedUser) bool {
 		return user.Age >= 21 // Adult validation
 	}, "User must be at least 21 years old")
 
@@ -175,4 +175,19 @@ func TestFromStruct_WithRefine(t *testing.T) {
 	if err == nil {
 		t.Fatal("Minor user should fail refine validation")
 	}
+}
+
+func TestFromStruct_NestedFieldAppliesTagPlanOnce(t *testing.T) {
+	type Child struct {
+		Name string `gozod:"required"`
+	}
+	type Parent struct {
+		Child *Child `gozod:"optional"`
+	}
+
+	schema := MustFromStruct[Parent]()
+	child := schema.Shape()["Child"]
+	require.NotNil(t, child)
+	assert.True(t, child.IsOptional())
+	assert.Len(t, child.Internals().Modifiers, 1)
 }

@@ -24,6 +24,7 @@ func (g *CodeGenerator) ProcessPackage(packagePath string) error {
 		}
 		return nil
 	}
+	g.writer.providers = newGeneratedProviderPlan(structInfos)
 
 	for _, structInfo := range structInfos {
 		if err := g.writer.WriteGeneratedCode(structInfo); err != nil {

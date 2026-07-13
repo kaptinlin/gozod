@@ -11,7 +11,8 @@ decide what a tag means.
 
 Generated schemas are explicit artifacts. `gozodgen` emits methods such as
 `User{}.Schema()` for callers that want generated code. `gozod.FromStruct[T]()`
-uses runtime reflection and does not auto-detect generated methods.
+returns a construction error and uses runtime reflection; `gozod.MustFromStruct[T]()`
+is the explicit panic wrapper. Neither auto-detects generated methods.
 
 ## Field Plans
 

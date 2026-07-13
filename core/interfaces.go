@@ -26,6 +26,8 @@ const (
 	ZodModifierNilable ZodModifierKind = "nilable"
 	// ZodModifierNonOptional records a NonOptional modifier.
 	ZodModifierNonOptional ZodModifierKind = "nonoptional"
+	// ZodModifierExactOptional records an ExactOptional modifier.
+	ZodModifierExactOptional ZodModifierKind = "exact_optional"
 	// ZodModifierDefault records a Default modifier.
 	ZodModifierDefault ZodModifierKind = "default"
 	// ZodModifierPrefault records a Prefault modifier.
@@ -113,17 +115,7 @@ type ZodTypeInternals struct {
 	Parse  func(payload *ParsePayload, ctx *ParseContext) *ParsePayload
 
 	// Core validation flags
-	Coerce        bool
-	Optional      bool
-	Nilable       bool
-	NonOptional   bool
-	ExactOptional bool
-
-	// Default/Prefault values
-	DefaultValue  any
-	DefaultFunc   func() any
-	PrefaultValue any
-	PrefaultFunc  func() any
+	Coerce bool
 
 	// Ordered fluent modifier applications.
 	Modifiers []ZodModifier
@@ -141,6 +133,7 @@ type ZodTypeInternals struct {
 	Pattern     *regexp.Regexp
 	Error       *ZodErrorMap
 	Bag         map[string]any
+	metadata    GlobalMeta
 }
 
 // Clone creates a deep copy of the internals for copy-on-write modifications.
@@ -151,12 +144,6 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 		return nil
 	}
 	cp := *z
-	if z.DefaultValue != nil {
-		cp.DefaultValue = cloneutil.Clone(z.DefaultValue)
-	}
-	if z.PrefaultValue != nil {
-		cp.PrefaultValue = cloneutil.Clone(z.PrefaultValue)
-	}
 	if len(z.Checks) > 0 {
 		cp.Checks = slices.Clone(z.Checks)
 	}
@@ -177,17 +164,72 @@ func (z *ZodTypeInternals) Clone() *ZodTypeInternals {
 			cp.Bag[key] = cloneutil.Clone(value)
 		}
 	}
+	cp.metadata = cloneGlobalMeta(z.metadata)
 	return &cp
+}
+
+// Metadata returns a defensive copy of the schema's standard metadata.
+func (z *ZodTypeInternals) Metadata() GlobalMeta {
+	if z == nil {
+		return GlobalMeta{}
+	}
+	return cloneGlobalMeta(z.metadata)
+}
+
+// SetMetadata replaces the schema's standard metadata with a defensive copy.
+func (z *ZodTypeInternals) SetMetadata(meta GlobalMeta) {
+	if z == nil {
+		return
+	}
+	z.metadata = cloneGlobalMeta(meta)
+}
+
+// MergeMetadata overlays non-zero fields onto the schema's standard metadata.
+func (z *ZodTypeInternals) MergeMetadata(update GlobalMeta) {
+	if z == nil {
+		return
+	}
+	z.SetMetadata(MergeGlobalMeta(z.metadata, update))
+}
+
+func cloneGlobalMeta(meta GlobalMeta) GlobalMeta {
+	if meta.Examples == nil {
+		return meta
+	}
+	examples := make([]any, len(meta.Examples))
+	for i, example := range meta.Examples {
+		examples[i] = cloneutil.Clone(example)
+	}
+	meta.Examples = examples
+	return meta
 }
 
 // IsOptional reports whether the field is optional.
 func (z *ZodTypeInternals) IsOptional() bool {
-	return z.Optional
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch z.Modifiers[i].Kind {
+		case ZodModifierOptional, ZodModifierExactOptional:
+			return true
+		case ZodModifierNonOptional:
+			return false
+		case ZodModifierNilable, ZodModifierDefault, ZodModifierPrefault:
+		}
+	}
+	return false
 }
 
 // IsNilable reports whether nil values are allowed.
 func (z *ZodTypeInternals) IsNilable() bool {
-	return z.Nilable
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch z.Modifiers[i].Kind {
+		case ZodModifierNilable:
+			return true
+		case ZodModifierNonOptional, ZodModifierExactOptional:
+			return false
+		case ZodModifierOptional, ZodModifierDefault, ZodModifierPrefault:
+		}
+	}
+	return false
 }
 
 // IsCoerce reports whether type coercion is enabled.
@@ -197,24 +239,54 @@ func (z *ZodTypeInternals) IsCoerce() bool {
 
 // IsNonOptional reports whether the field is non-optional.
 func (z *ZodTypeInternals) IsNonOptional() bool {
-	return z.NonOptional
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch z.Modifiers[i].Kind {
+		case ZodModifierNonOptional:
+			return true
+		case ZodModifierOptional, ZodModifierNilable, ZodModifierExactOptional:
+			return false
+		case ZodModifierDefault, ZodModifierPrefault:
+		}
+	}
+	return false
 }
 
 // IsExactOptional reports whether exact optional mode is enabled.
 func (z *ZodTypeInternals) IsExactOptional() bool {
-	return z.ExactOptional
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch z.Modifiers[i].Kind {
+		case ZodModifierExactOptional:
+			return true
+		case ZodModifierOptional, ZodModifierNilable, ZodModifierNonOptional,
+			ZodModifierDefault, ZodModifierPrefault:
+			return false
+		}
+	}
+	return false
 }
 
 // NilInputUsesDefault reports whether nil input is claimed by an outer default modifier.
 func (z *ZodTypeInternals) NilInputUsesDefault() bool {
-	if len(z.Modifiers) == 0 {
-		return z.DefaultValue != nil || z.DefaultFunc != nil
-	}
 	for i := len(z.Modifiers) - 1; i >= 0; i-- {
 		switch modifier := z.Modifiers[i]; modifier.Kind {
 		case ZodModifierDefault:
 			return modifier.HasValue || modifier.Func != nil
-		case ZodModifierPrefault, ZodModifierOptional, ZodModifierNilable, ZodModifierNonOptional:
+		case ZodModifierPrefault, ZodModifierOptional, ZodModifierNilable,
+			ZodModifierNonOptional, ZodModifierExactOptional:
+			return false
+		}
+	}
+	return false
+}
+
+// NilInputUsesFallback reports whether the outer nil-input modifier supplies a value.
+func (z *ZodTypeInternals) NilInputUsesFallback() bool {
+	for i := len(z.Modifiers) - 1; i >= 0; i-- {
+		switch modifier := z.Modifiers[i]; modifier.Kind {
+		case ZodModifierDefault, ZodModifierPrefault:
+			return modifier.HasValue || modifier.Func != nil
+		case ZodModifierOptional, ZodModifierNilable, ZodModifierNonOptional,
+			ZodModifierExactOptional:
 			return false
 		}
 	}
@@ -223,7 +295,6 @@ func (z *ZodTypeInternals) NilInputUsesDefault() bool {
 
 // SetOptional marks the field as optional.
 func (z *ZodTypeInternals) SetOptional(value bool) {
-	z.Optional = value
 	if value {
 		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierOptional})
 	}
@@ -231,7 +302,6 @@ func (z *ZodTypeInternals) SetOptional(value bool) {
 
 // SetNilable allows nil values for this field.
 func (z *ZodTypeInternals) SetNilable(value bool) {
-	z.Nilable = value
 	if value {
 		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierNilable})
 	}
@@ -239,19 +309,15 @@ func (z *ZodTypeInternals) SetNilable(value bool) {
 
 // SetNonOptional marks the field as nonoptional.
 func (z *ZodTypeInternals) SetNonOptional(value bool) {
-	z.NonOptional = value
 	if value {
 		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierNonOptional})
 	}
 }
 
 // SetExactOptional enables exact optional mode.
-// Also sets Optional=true because ExactOptional implies Optional for absent key handling.
 func (z *ZodTypeInternals) SetExactOptional(value bool) {
-	z.ExactOptional = value
 	if value {
-		z.Optional = true
-		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierOptional})
+		z.Modifiers = append(z.Modifiers, ZodModifier{Kind: ZodModifierExactOptional})
 	}
 }
 
@@ -262,7 +328,6 @@ func (z *ZodTypeInternals) SetCoerce(value bool) {
 
 // SetDefaultValue sets a default value.
 func (z *ZodTypeInternals) SetDefaultValue(value any) {
-	z.DefaultValue = cloneutil.Clone(value)
 	z.Modifiers = append(z.Modifiers, ZodModifier{
 		Kind:     ZodModifierDefault,
 		Value:    cloneutil.Clone(value),
@@ -272,7 +337,6 @@ func (z *ZodTypeInternals) SetDefaultValue(value any) {
 
 // SetDefaultFunc sets a default value function.
 func (z *ZodTypeInternals) SetDefaultFunc(fn func() any) {
-	z.DefaultFunc = fn
 	z.Modifiers = append(z.Modifiers, ZodModifier{
 		Kind: ZodModifierDefault,
 		Func: fn,
@@ -281,7 +345,6 @@ func (z *ZodTypeInternals) SetDefaultFunc(fn func() any) {
 
 // SetPrefaultValue sets a prefault value.
 func (z *ZodTypeInternals) SetPrefaultValue(value any) {
-	z.PrefaultValue = cloneutil.Clone(value)
 	z.Modifiers = append(z.Modifiers, ZodModifier{
 		Kind:     ZodModifierPrefault,
 		Value:    cloneutil.Clone(value),
@@ -291,7 +354,6 @@ func (z *ZodTypeInternals) SetPrefaultValue(value any) {
 
 // SetPrefaultFunc sets a prefault value function.
 func (z *ZodTypeInternals) SetPrefaultFunc(fn func() any) {
-	z.PrefaultFunc = fn
 	z.Modifiers = append(z.Modifiers, ZodModifier{
 		Kind: ZodModifierPrefault,
 		Func: fn,

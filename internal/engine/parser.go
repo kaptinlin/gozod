@@ -84,10 +84,7 @@ func ParsePrimitiveStrict[T any, R any](
 
 	// Fast path: no modifiers, return input directly.
 	if !isNilInput(input) && len(internals.Checks) == 0 &&
-		internals.Transform == nil && internals.DefaultValue == nil &&
-		internals.PrefaultValue == nil && !internals.Optional &&
-		!internals.Nilable && !internals.NonOptional &&
-		internals.DefaultFunc == nil {
+		internals.Transform == nil && len(internals.Modifiers) == 0 {
 		return input, nil
 	}
 
@@ -161,10 +158,8 @@ func ParseComplexStrict[T any, R any](
 	// Fast path: no modifiers, return input directly.
 	// Struct types always need field validation.
 	if validator == nil && !isNilInput(input) && len(internals.Checks) == 0 &&
-		internals.Transform == nil && internals.DefaultValue == nil &&
-		internals.PrefaultValue == nil && !internals.Optional &&
-		!internals.Nilable && !internals.NonOptional &&
-		internals.DefaultFunc == nil && expectedType != core.ZodTypeStruct {
+		internals.Transform == nil && len(internals.Modifiers) == 0 &&
+		expectedType != core.ZodTypeStruct {
 		return input, nil
 	}
 
@@ -173,10 +168,16 @@ func ParseComplexStrict[T any, R any](
 	}
 
 	// Validation-only fast path (skip for struct types).
-	if len(internals.Checks) > 0 && internals.Transform == nil &&
-		internals.DefaultValue == nil && internals.PrefaultValue == nil &&
-		internals.DefaultFunc == nil && expectedType != core.ZodTypeStruct {
-		result, extracted, err := tryComplexValidationOnly[T, R](input, internals, validator, pc, typeExtractor, ptrExtractor)
+	if len(internals.Checks) > 0 && internals.Transform == nil && expectedType != core.ZodTypeStruct {
+		result, extracted, err := tryComplexValidationOnly[T, R](
+			input,
+			internals,
+			expectedType,
+			validator,
+			pc,
+			typeExtractor,
+			ptrExtractor,
+		)
 		if extracted {
 			return result, err
 		}
@@ -242,7 +243,7 @@ func isNilInput[R any](input R) bool {
 		return true
 	}
 	switch rv.Kind() {
-	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Chan, reflect.Func:
 		return rv.IsNil()
 	default:
 		return false
@@ -910,21 +911,12 @@ func parseComplexStrictNil[T any, R any](
 		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
 	}
 
-	// Prefault values: full parsing and validation.
-	if internals.PrefaultValue != nil {
-		r, err := ParseComplex[T](internals.PrefaultValue, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
+	if r != nil {
+		parsed, err := ParseComplex[T](r, internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
 		if err != nil {
 			return zero, err
 		}
-		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
-	}
-
-	if internals.PrefaultFunc != nil {
-		r, err := ParseComplex[T](internals.PrefaultFunc(), internals, expectedType, typeExtractor, ptrExtractor, validator, pc)
-		if err != nil {
-			return zero, err
-		}
-		return convertComplexResultToConstraint[T, R](r, typeExtractor, ptrExtractor, expectedType, pc)
+		return convertComplexResultToConstraint[T, R](parsed, typeExtractor, ptrExtractor, expectedType, pc)
 	}
 
 	return zero, issues.CreateNonOptionalError(pc)
@@ -935,6 +927,7 @@ func parseComplexStrictNil[T any, R any](
 func tryComplexValidationOnly[T any, R any](
 	input R,
 	internals *core.ZodTypeInternals,
+	expectedType core.ZodTypeCode,
 	validator func(T, []core.ZodCheck, *core.ParseContext) (T, error),
 	pc *core.ParseContext,
 	typeExtractor func(any) (T, bool),
@@ -956,11 +949,19 @@ func tryComplexValidationOnly[T any, R any](
 		return zero, false, nil
 	}
 
-	if _, err := validator(val, internals.Checks, pc); err != nil {
+	validated, err := validator(val, internals.Checks, pc)
+	if err != nil {
 		var zero R
 		return zero, true, err
 	}
-	return input, true, nil
+	result, err := convertComplexResultToConstraint[T, R](
+		validated,
+		typeExtractor,
+		ptrExtractor,
+		expectedType,
+		pc,
+	)
+	return result, true, err
 }
 
 func convertComplexResultToConstraint[T any, R any](

@@ -54,7 +54,7 @@ type Employee struct {
 
 func TestCircularReferences_BasicSelfReference(t *testing.T) {
 	t.Run("User with Friends array of same type", func(t *testing.T) {
-		schema := FromStruct[CircularUser]()
+		schema := MustFromStruct[CircularUser]()
 
 		// Test valid user with no friends
 		user1 := CircularUser{
@@ -100,7 +100,7 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 		// Circular references work correctly (no stack overflow), but nested validation needs improvement.
 		// Classified in improves/06-tests-tooling.md so this skip is not the only record.
 		t.Skip("Known limitation: validation propagation through lazy schemas in slices needs improvement")
-		schema := FromStruct[CircularUser]()
+		schema := MustFromStruct[CircularUser]()
 
 		// First let's test that the main user validation works
 		invalidMainUser := CircularUser{
@@ -148,7 +148,7 @@ func TestCircularReferences_BasicSelfReference(t *testing.T) {
 
 func TestCircularReferences_LinkedList(t *testing.T) {
 	t.Run("circular linked list node", func(t *testing.T) {
-		schema := FromStruct[CircularNode]()
+		schema := MustFromStruct[CircularNode]()
 
 		// Create a simple linked list
 		node3 := &CircularNode{Value: 3, Next: nil, Prev: nil}
@@ -172,7 +172,7 @@ func TestCircularReferences_LinkedList(t *testing.T) {
 
 func TestCircularReferences_TreeStructure(t *testing.T) {
 	t.Run("tree with parent and children references", func(t *testing.T) {
-		schema := FromStruct[CircularTree]()
+		schema := MustFromStruct[CircularTree]()
 
 		// Create a tree structure
 		root := CircularTree{
@@ -208,7 +208,7 @@ func TestCircularReferences_TreeStructure(t *testing.T) {
 
 func TestCircularReferences_MutualReferences(t *testing.T) {
 	t.Run("Department and Employee mutual references", func(t *testing.T) {
-		deptSchema := FromStruct[Department]()
+		deptSchema := MustFromStruct[Department]()
 
 		// Create department with employees
 		dept := Department{
@@ -238,7 +238,7 @@ func TestCircularReferences_MutualReferences(t *testing.T) {
 	})
 
 	t.Run("Employee with self-references", func(t *testing.T) {
-		empSchema := FromStruct[Employee]()
+		empSchema := MustFromStruct[Employee]()
 
 		// Create employee hierarchy
 		emp := Employee{
@@ -271,7 +271,7 @@ func TestCircularReferences_MutualReferences(t *testing.T) {
 
 func TestCircularReferences_ValidationDepth(t *testing.T) {
 	t.Run("deeply nested circular validation", func(t *testing.T) {
-		schema := FromStruct[CircularUser]()
+		schema := MustFromStruct[CircularUser]()
 
 		// Create a deep chain of friends
 		deepUser := CircularUser{

@@ -1,9 +1,6 @@
 package gozod
 
-import (
-	"github.com/kaptinlin/gozod/core"
-	"github.com/kaptinlin/gozod/internal/checks"
-)
+import "github.com/kaptinlin/gozod/core"
 
 type Registry[M any] = core.Registry[M]
 type GlobalMeta = core.GlobalMeta
@@ -12,8 +9,4 @@ func NewRegistry[M any]() *Registry[M] {
 	return core.NewRegistry[M]()
 }
 
-var (
-	GlobalRegistry = core.GlobalRegistry
-	Describe       = checks.Describe
-	Meta           = checks.Meta
-)
+var GlobalRegistry = core.GlobalRegistry

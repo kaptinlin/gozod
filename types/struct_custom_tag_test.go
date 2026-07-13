@@ -14,7 +14,7 @@ func TestFromStructWithCustomTag(t *testing.T) {
 		Age   int    `validate:"min=18,max=120"`
 	}
 
-	schema := FromStruct[User](WithTagName("validate"))
+	schema := MustFromStruct[User](WithTagName("validate"))
 
 	t.Run("valid user", func(t *testing.T) {
 		user := User{
@@ -58,7 +58,7 @@ func TestFromStructPtrWithCustomTag(t *testing.T) {
 		Port int    `validate:"required,min=1,max=65535"`
 	}
 
-	schema := FromStructPtr[Config](WithTagName("validate"))
+	schema := MustFromStructPtr[Config](WithTagName("validate"))
 
 	t.Run("valid config", func(t *testing.T) {
 		cfg := Config{
@@ -80,7 +80,7 @@ func TestFromStructDefaultTag(t *testing.T) {
 	}
 
 	// Without WithTagName, should use default "gozod"
-	schema := FromStruct[Product]()
+	schema := MustFromStruct[Product]()
 
 	t.Run("valid product", func(t *testing.T) {
 		product := Product{

@@ -293,7 +293,7 @@ schema := gozod.FromStruct[User]()
 | `gozod:"min=N"` | `.Min(N)` | `Name string \`gozod:"min=2"\`` | ✅ Implemented |
 | `gozod:"max=N"` | `.Max(N)` | `Name string \`gozod:"max=50"\`` | ✅ Implemented |
 | `gozod:"email"` | `.Email()` | `Email string \`gozod:"email"\`` | ✅ Implemented |
-| `gozod:"custom_validator"` | Custom validator | `Username string \`gozod:"required,unique_username"\`` | ✅ Implemented |
+| Arbitrary rule name | Unsupported; construction returns an error | `Username string \`gozod:"unique_username"\`` | ❌ Use `.Refine()` or `.Check()` |
 
 ### Custom Validation Integration
 

@@ -209,23 +209,13 @@ func (z *ZodFunction[T]) PrefaultFunc(fn func() any) *ZodFunction[T] {
 // Meta stores metadata for this function schema.
 func (z *ZodFunction[T]) Meta(meta core.GlobalMeta) *ZodFunction[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodFunction[T]) Describe(description string) *ZodFunction[T] {
-	in := z.internals.Clone()
-
-	meta, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		meta = core.GlobalMeta{}
-	}
-	meta.Description = description
-
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, meta)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // =============================================================================
@@ -354,7 +344,7 @@ func (z *ZodFunction[T]) extractFunctionPtr(v any) (*any, bool) {
 func (z *ZodFunction[T]) validateFunction(v any, checks []core.ZodCheck, ctx *core.ParseContext) (any, error) {
 	if v == nil {
 		in := z.Internals()
-		if in.Optional || in.Nilable {
+		if in.IsOptional() || in.IsNilable() {
 			return v, nil
 		}
 		return nil, newFuncTypeError(v, ctx)

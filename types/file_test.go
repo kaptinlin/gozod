@@ -229,8 +229,7 @@ func TestFile_Describe(t *testing.T) {
 		schema := File().Describe("upload file")
 		require.NotNil(t, schema)
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "upload file", meta.Description)
 	})
 }
@@ -242,8 +241,7 @@ func TestFile_Meta(t *testing.T) {
 		})
 		require.NotNil(t, schema)
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "file upload", meta.Description)
 	})
 }

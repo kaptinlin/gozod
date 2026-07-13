@@ -216,7 +216,7 @@ func (z *ZodString[T]) PrefaultFunc(fn func() string) *ZodString[T] {
 	return z.withInternals(in)
 }
 
-// Meta attaches metadata to this schema via the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodString[T]) Meta(meta core.GlobalMeta) *ZodString[T] {
 	return z.withMeta(meta)
 }
@@ -354,9 +354,9 @@ func isJWTAlgorithm(s string) bool {
 			strings.HasPrefix(s, "Ed") || s == "none")
 }
 
-// Describe attaches a description to this schema via the global registry.
+// Describe returns a schema with the description.
 func (z *ZodString[T]) Describe(description string) *ZodString[T] {
-	return z.withMeta(core.GlobalMeta{Description: description})
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // Transform applies a transformation function to the validated string.
@@ -476,7 +476,7 @@ func (z *ZodString[T]) withCheck(check core.ZodCheck) *ZodString[T] {
 // withMeta clones internals, merges metadata, and returns a new schema.
 func (z *ZodString[T]) withMeta(meta core.GlobalMeta) *ZodString[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
@@ -488,7 +488,7 @@ func (z *ZodString[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodString[*s
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -500,7 +500,7 @@ func (z *ZodString[T]) withInternals(in *core.ZodTypeInternals) *ZodString[T] {
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

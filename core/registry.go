@@ -67,14 +67,24 @@ func (r *Registry[M]) Has(schema ZodSchema) bool {
 // Range iterates over the schemas and metadata in the registry.
 // If the callback function returns false, iteration stops.
 //
-// Important: The callback is executed while holding a read lock. Avoid
-// performing expensive operations or calling back into the registry within
-// the callback, as this may cause deadlocks or performance issues.
+// Range iterates over a snapshot of the registry entries until f returns false.
+// The callback may safely call back into the registry. Values are copied as M
+// values; referenced data within M remains owned by the caller.
 func (r *Registry[M]) Range(f func(schema ZodSchema, m M) bool) {
+	type entry struct {
+		schema ZodSchema
+		meta   M
+	}
+
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for k, v := range r.meta {
-		if !f(k, v) {
+	entries := make([]entry, 0, len(r.meta))
+	for schema, meta := range r.meta {
+		entries = append(entries, entry{schema: schema, meta: meta})
+	}
+	r.mu.RUnlock()
+
+	for _, entry := range entries {
+		if !f(entry.schema, entry.meta) {
 			break
 		}
 	}
@@ -97,16 +107,6 @@ type GlobalMeta struct {
 // convenient, shared metadata collection.
 var GlobalRegistry = NewRegistry[GlobalMeta]()
 
-// CopyGlobalMeta copies metadata from one schema instance to another.
-func CopyGlobalMeta(from, to ZodSchema) {
-	if from == nil || to == nil {
-		return
-	}
-	if meta, ok := GlobalRegistry.Get(from); ok {
-		GlobalRegistry.Add(to, meta)
-	}
-}
-
 // MergeGlobalMeta overlays update on base, keeping base fields when update
 // leaves them empty.
 func MergeGlobalMeta(base, update GlobalMeta) GlobalMeta {
@@ -125,13 +125,10 @@ func MergeGlobalMeta(base, update GlobalMeta) GlobalMeta {
 	return base
 }
 
-// ApplyGlobalMeta merges update from source metadata and stores it on target.
-func ApplyGlobalMeta(source, target ZodSchema, update GlobalMeta) {
+// ApplySchemaMeta merges source schema metadata and update onto target.
+func ApplySchemaMeta(source, target ZodSchema, update GlobalMeta) {
 	if source == nil || target == nil {
 		return
 	}
-	if existing, ok := GlobalRegistry.Get(source); ok {
-		update = MergeGlobalMeta(existing, update)
-	}
-	GlobalRegistry.Add(target, update)
+	target.Internals().SetMetadata(MergeGlobalMeta(source.Internals().Metadata(), update))
 }

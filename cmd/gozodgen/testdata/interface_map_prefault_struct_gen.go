@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for InterfaceMapPrefaultStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for InterfaceMapPrefaultStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (imps InterfaceMapPrefaultStruct) Schema() *gozod.ZodStruct[InterfaceMapPrefaultStruct, InterfaceMapPrefaultStruct] {
 	return gozod.Struct[InterfaceMapPrefaultStruct](gozod.StructSchema{
 		"data": gozod.Record(gozod.Any()).Optional().Prefault(map[string]interface{}{"x": 99, "y": "test"}),

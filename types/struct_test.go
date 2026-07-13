@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/issues"
+	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
 
 // Test data structures
@@ -757,8 +758,7 @@ func TestStruct_CloneFromDoesNotShareState(t *testing.T) {
 	_, exists := source.internals.Shape["age"]
 	assert.False(t, exists)
 
-	meta, ok := core.GlobalRegistry.Get(target)
-	require.True(t, ok)
+	meta := target.Internals().Metadata()
 	assert.Equal(t, "source struct", meta.Description)
 }
 
@@ -1787,4 +1787,105 @@ func TestValidateStruct(t *testing.T) {
 		assert.Equal(t, 8080, parsed.Port)
 		assert.Equal(t, 30, parsed.Timeout)
 	})
+}
+
+func TestValidateStructRejectsInvalidTagPlan(t *testing.T) {
+	t.Parallel()
+
+	type invalidTag struct {
+		Age int `gozod:"mystery=1"`
+	}
+
+	result, err := ValidateStruct(invalidTag{Age: 21})
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "Age")
+	assert.ErrorContains(t, err, "mystery=1")
+}
+
+func TestFromStructRejectsUnsupportedFieldType(t *testing.T) {
+	t.Parallel()
+
+	type unsupported struct {
+		Events chan int `gozod:"required"`
+	}
+
+	schema, err := FromStruct[unsupported]()
+
+	assert.Nil(t, schema)
+	assert.ErrorIs(t, err, ErrUnsupportedFieldType)
+	assert.ErrorContains(t, err, "unsupported.Events")
+	assert.ErrorContains(t, err, "chan int")
+}
+
+func TestFromStructConstructionErrors(t *testing.T) {
+	t.Parallel()
+
+	type invalidTag struct {
+		Age int `gozod:"mystery=1"`
+	}
+	type child struct {
+		Code string `gozod:"regex=["`
+	}
+	type parent struct {
+		Child child `gozod:"required"`
+	}
+
+	t.Run("invalid tag returns nil schema", func(t *testing.T) {
+		schema, err := FromStruct[invalidTag]()
+		assert.Nil(t, schema)
+		assert.ErrorContains(t, err, "invalidTag.Age")
+		assert.ErrorContains(t, err, "mystery=1")
+	})
+
+	t.Run("nested error contains full path once", func(t *testing.T) {
+		schema, err := FromStruct[parent]()
+		assert.Nil(t, schema)
+		assert.ErrorContains(t, err, "parent.Child.Code")
+		assert.NotContains(t, err.Error(), "parent.Child.parent.Child")
+	})
+
+	t.Run("must constructor panics", func(t *testing.T) {
+		assert.Panics(t, func() { MustFromStruct[invalidTag]() })
+	})
+}
+
+func TestFromStructRejectsNonStructType(t *testing.T) {
+	t.Parallel()
+
+	schema, err := FromStruct[int]()
+
+	assert.Nil(t, schema)
+	assert.ErrorIs(t, err, tagparser.ErrTypeMustBeStruct)
+}
+
+func TestFromStructAcceptsExplicitAnyField(t *testing.T) {
+	t.Parallel()
+
+	type dynamic struct {
+		Value any `gozod:"required"`
+	}
+
+	schema, err := FromStruct[dynamic]()
+
+	require.NoError(t, err)
+	require.NotNil(t, schema)
+	parsed, err := schema.Parse(dynamic{Value: "value"})
+	require.NoError(t, err)
+	assert.Equal(t, "value", parsed.Value)
+}
+
+func TestStructAssignsOptionalTypedNilSliceToValueField(t *testing.T) {
+	type node struct {
+		Children []string `json:"children"`
+	}
+
+	schema := Struct[node](core.StructSchema{
+		"children": Slice[string](String()).Optional(),
+	})
+
+	got, err := schema.Parse(node{})
+	require.NoError(t, err)
+	assert.Nil(t, got.Children)
 }

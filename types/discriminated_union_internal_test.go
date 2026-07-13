@@ -9,13 +9,13 @@ import (
 )
 
 func TestDiscriminatedUnion_CloneFromDoesNotShareInternals(t *testing.T) {
-	source := DiscriminatedUnion("type", []any{
+	source := MustDiscriminatedUnion("type", []core.ZodSchema{
 		Object(core.ObjectSchema{
 			"type": LiteralOf([]string{"user"}),
 			"name": String(),
 		}),
 	})
-	target := DiscriminatedUnion("kind", []any{
+	target := MustDiscriminatedUnion("kind", []core.ZodSchema{
 		Object(core.ObjectSchema{
 			"kind": LiteralOf([]string{"admin"}),
 			"role": String(),

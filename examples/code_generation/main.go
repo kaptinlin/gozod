@@ -1,4 +1,4 @@
-// Package main demonstrates GoZod code generation for zero-overhead struct tag validation.
+// Package main demonstrates explicit GoZod schema generation from struct tags.
 //
 // Usage:
 //  1. Add //go:generate gozodgen directive to your Go files
@@ -55,7 +55,7 @@ func main() {
 
 	// This example stays runnable before code generation. After running
 	// go generate, use User{}.Schema() to call the generated schema explicitly.
-	schema := gozod.FromStruct[User]()
+	schema := gozod.MustFromStruct[User]()
 	result, err := schema.Parse(user)
 
 	if err != nil {
@@ -77,7 +77,7 @@ func main() {
 		InStock:  true,
 	}
 
-	productSchema := gozod.FromStruct[Product]()
+	productSchema := gozod.MustFromStruct[Product]()
 	productResult, err := productSchema.Parse(product)
 
 	if err != nil {

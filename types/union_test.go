@@ -218,6 +218,34 @@ func TestUnion_Chaining(t *testing.T) {
 	})
 }
 
+func TestUnion_ParentRefinementRunsAfterCandidateSelection(t *testing.T) {
+	parse := func(t *testing.T, strict bool) {
+		t.Helper()
+
+		calls := 0
+		schema := Union([]any{
+			Any().Overwrite(func(any) any { return "first" }),
+			Any().Overwrite(func(any) any { return "second" }),
+		}).RefineAny(func(value any) bool {
+			calls++
+			return value == "second"
+		})
+
+		var err error
+		if strict {
+			_, err = schema.StrictParse("input")
+		} else {
+			_, err = schema.Parse("input")
+		}
+
+		require.Error(t, err)
+		assert.Equal(t, 1, calls)
+	}
+
+	t.Run("Parse", func(t *testing.T) { parse(t, false) })
+	t.Run("StrictParse", func(t *testing.T) { parse(t, true) })
+}
+
 func TestUnion_DefaultAndPrefault(t *testing.T) {
 	t.Run("outer Default over inner Prefault", func(t *testing.T) {
 		schema := Union([]any{String(), Int()}).Prefault("prefault_value").Default("default_value")
@@ -409,7 +437,7 @@ func TestUnion_EdgeCases(t *testing.T) {
 		})
 
 		schema := Union([]any{
-			DiscriminatedUnion("type", []any{dog, cat}),
+			MustDiscriminatedUnion("type", []core.ZodSchema{dog, cat}),
 			Int(),
 		})
 

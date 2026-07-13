@@ -321,24 +321,16 @@ func (z *ZodComplex[T]) PrefaultFunc(fn func() complex128) *ZodComplex[T] {
 
 // Metadata methods.
 
-// Meta stores metadata in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodComplex[T]) Meta(meta core.GlobalMeta) *ZodComplex[T] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodComplex[T]) Describe(desc string) *ZodComplex[T] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // Validation constraint methods.
@@ -579,7 +571,7 @@ func (z *ZodComplex[T]) withPtrInternals(in *core.ZodTypeInternals) *ZodComplex[
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -591,7 +583,7 @@ func (z *ZodComplex[T]) withInternals(in *core.ZodTypeInternals) *ZodComplex[T] 
 			Def:              z.internals.Def,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

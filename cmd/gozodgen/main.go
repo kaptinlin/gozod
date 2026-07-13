@@ -1,6 +1,6 @@
 // Package main implements the gozodgen code generation tool.
-// This tool generates optimized Schema methods for Go structs with gozod tags,
-// enabling zero-reflection validation at runtime.
+// This tool generates explicit Schema methods for Go structs with gozod tags.
+// Package-local generated dependencies call their generated schema methods.
 //
 // Usage:
 //
@@ -129,8 +129,8 @@ func main() {
 func showHelp() {
 	fmt.Println(`gozodgen - GoZod Code Generation Tool
 
-Generates optimized Schema methods for Go structs with gozod tags,
-enabling zero-reflection validation at runtime.
+Generates explicit Schema methods for Go structs with gozod tags.
+Package-local generated dependencies call their generated schema methods.
 
 USAGE:
     gozodgen [flags] [packages...]
@@ -179,7 +179,8 @@ DIRECTIVES:
 OUTPUT:
     Generated files follow the pattern: <original>_gen.go
     Each generated file contains Schema() methods for structs with
-    gozod tags, providing zero-reflection validation performance.`)
+    gozod tags. Imported or otherwise opaque field types may retain an
+    explicit runtime-reflection fallback.`)
 }
 
 // parseBuildTags parses comma-separated build tags.

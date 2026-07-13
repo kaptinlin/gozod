@@ -213,8 +213,7 @@ func TestZodEnumPtr_BasicFunctionality(t *testing.T) {
 	t.Run("metadata survives modifier chaining", func(t *testing.T) {
 		schema := Enum("red", "green").Meta(core.GlobalMeta{Title: "color enum"}).Optional()
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "color enum", meta.Title)
 	})
 }

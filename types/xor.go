@@ -101,20 +101,14 @@ func (z *ZodXor[T, R]) validate(input any, chks []core.ZodCheck, parseCtx *core.
 			continue
 		}
 
-		// Apply custom checks on the xor schema itself.
-		if len(chks) > 0 {
-			result, err = engine.ApplyChecks[any](result, chks, parseCtx)
-			if err != nil {
-				allErrors = append(allErrors, fmt.Errorf("option %d: %w", i, err))
-				continue
-			}
-		}
-
 		successes = append(successes, result)
 	}
 
 	switch len(successes) {
 	case 1:
+		if len(chks) > 0 {
+			return engine.ApplyChecks[any](successes[0], chks, parseCtx)
+		}
 		return successes[0], nil
 	case 0:
 		if len(allErrors) == 0 {
@@ -246,23 +240,13 @@ func (z *ZodXor[T, R]) PrefaultFunc(fn func() T) *ZodXor[T, R] {
 // Meta attaches metadata to this schema.
 func (z *ZodXor[T, R]) Meta(meta core.GlobalMeta) *ZodXor[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
 // Describe sets a human-readable description for this schema.
 func (z *ZodXor[T, R]) Describe(description string) *ZodXor[T, R] {
-	newInternals := z.internals.Clone()
-
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // =============================================================================
@@ -350,7 +334,7 @@ func (z *ZodXor[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodXor[T, *T
 			Options:          z.internals.Options,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -362,7 +346,7 @@ func (z *ZodXor[T, R]) withInternals(in *core.ZodTypeInternals) *ZodXor[T, R] {
 			Options:          z.internals.Options,
 		},
 	}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

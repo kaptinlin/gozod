@@ -401,8 +401,7 @@ func TestNever_Metadata(t *testing.T) {
 	t.Run("Describe sets description", func(t *testing.T) {
 		schema := Never().Describe("a never type")
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "a never type", meta.Description)
 	})
 
@@ -411,8 +410,7 @@ func TestNever_Metadata(t *testing.T) {
 			Description: "never schema",
 		})
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "never schema", meta.Description)
 	})
 }

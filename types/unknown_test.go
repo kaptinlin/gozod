@@ -182,8 +182,7 @@ func TestUnknown_Modifiers(t *testing.T) {
 	t.Run("metadata survives modifier chaining", func(t *testing.T) {
 		schema := Unknown().Describe("unknown schema").Nilable()
 
-		meta, ok := core.GlobalRegistry.Get(schema)
-		require.True(t, ok)
+		meta := schema.Internals().Metadata()
 		assert.Equal(t, "unknown schema", meta.Description)
 	})
 }

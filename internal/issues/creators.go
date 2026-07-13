@@ -482,6 +482,15 @@ func CreateInvalidUnionError(unionErrors []error, input any, ctx *core.ParseCont
 	return NewZodError([]core.ZodIssue{final})
 }
 
+// CreateInvalidDiscriminatorError reports a discriminator value not owned by any option.
+func CreateInvalidDiscriminatorError(field string, values []any, input any, ctx *core.ParseContext) error {
+	raw := CreateIssue(core.InvalidUnion, "", map[string]any{
+		"values": slices.Clone(values),
+	}, input)
+	raw.Path = []any{field}
+	return NewZodError([]core.ZodIssue{FinalizeIssue(raw, ctx, nil)})
+}
+
 // CreateInvalidXorError creates an exclusive union error when multiple options match.
 // Uses InvalidUnion code with inclusive=false to indicate xor failure.
 // See: .reference/zod/packages/zod/src/v4/core/schemas.ts:2185-2192

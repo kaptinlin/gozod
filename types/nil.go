@@ -177,24 +177,16 @@ func (z *ZodNil[T, R]) PrefaultFunc(fn func() T) *ZodNil[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodNil[T, R]) Meta(meta core.GlobalMeta) *ZodNil[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodNil[T, R]) Describe(desc string) *ZodNil[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // =============================================================================
@@ -323,7 +315,7 @@ func (z *ZodNil[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodNil[T, *T
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -333,7 +325,7 @@ func (z *ZodNil[T, R]) withInternals(in *core.ZodTypeInternals) *ZodNil[T, R] {
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -403,7 +395,7 @@ func newZodNilFromDef[T any, R any](def *ZodNilDef) *ZodNil[T, R] {
 	}
 
 	// Nil type accepts nil values by default.
-	in.Nilable = true
+	in.SetNilable(true)
 
 	in.Constructor = func(d *core.ZodTypeDef) core.ZodType[any] {
 		nd := &ZodNilDef{ZodTypeDef: *d}

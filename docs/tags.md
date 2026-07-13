@@ -1,6 +1,6 @@
 # GoZod Struct Tags Guide
 
-Declarative validation for Go structs using familiar tag syntax with zero-reflection performance optimization.
+Declarative validation for Go structs using familiar tag syntax, with optional code generation for explicit schemas.
 
 ## 🚀 Quick Start
 
@@ -19,7 +19,11 @@ type User struct {
 }
 
 func main() {
-    schema := gozod.FromStruct[User]()
+    schema, err := gozod.FromStruct[User]()
+    if err != nil {
+        fmt.Printf("Schema error: %v\n", err)
+        return
+    }
 
     user := User{
         Name:  "Alice Smith",
@@ -104,7 +108,7 @@ type User struct {
 }
 
 // Use custom tag name
-schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
+schema := gozod.MustFromStruct[User](gozod.WithTagName("validate"))
 ```
 
 This is useful when:
@@ -149,7 +153,7 @@ type User struct {
 }
 
 // Schema automatically uses JSON field names for validation paths
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 ```
 
 ### Field Name Tags (json / yaml / toml)
@@ -165,10 +169,10 @@ type User struct {
 }
 
 // Error paths and JSON Schema use "userName" (json, the default).
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 
 // Error paths and JSON Schema use "user_name" (yaml).
-yamlSchema := gozod.FromStruct[User](gozod.WithFieldNameTag("yaml"))
+yamlSchema := gozod.MustFromStruct[User](gozod.WithFieldNameTag("yaml"))
 ```
 
 `WithFieldNameTag` accepts any struct tag key (`"json"`, `"yaml"`, `"toml"`,
@@ -241,7 +245,7 @@ type User struct {
     Bio      string `gozod:"max=500"`                         // Non-required => generated Optional()
 }
 
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 
 // Valid user
 user := User{
@@ -270,7 +274,7 @@ func createPostHandler(w http.ResponseWriter, r *http.Request) {
     var req CreatePostRequest
     json.NewDecoder(r.Body).Decode(&req)
 
-    schema := gozod.FromStruct[CreatePostRequest]()
+    schema := gozod.MustFromStruct[CreatePostRequest]()
     validatedReq, err := schema.Parse(req)
     if err != nil {
         // Handle validation errors
@@ -315,7 +319,7 @@ func LoadConfig(path string) (*AppConfig, error) {
         return nil, err
     }
 
-    schema := gozod.FromStruct[AppConfig]()
+    schema := gozod.MustFromStruct[AppConfig]()
     return schema.Parse(config)
 }
 ```
@@ -341,7 +345,7 @@ type UserProfile struct {
     Age     int     `gozod:"required,min=18"`
 }
 
-schema := gozod.FromStruct[UserProfile]()
+schema := gozod.MustFromStruct[UserProfile]()
 
 profile := UserProfile{
     Name:  "Bob Smith",
@@ -368,7 +372,7 @@ type User struct {
 }
 
 // GoZod automatically detects and handles circular references
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 
 alice := &User{
     Name:  "Alice",
@@ -400,7 +404,7 @@ type Team struct {
     Scores  []int    `gozod:"nonempty"`                  // Must have scores
 }
 
-schema := gozod.FromStruct[Team]()
+schema := gozod.MustFromStruct[Team]()
 
 team := Team{
     Name:    "Backend Team",
@@ -421,7 +425,7 @@ type Project struct {
     Tags  [][]string `gozod:"max=10"`                // Nested arrays
 }
 
-schema := gozod.FromStruct[Project]()
+schema := gozod.MustFromStruct[Project]()
 // Automatically validates each team in the slice
 ```
 
@@ -449,7 +453,7 @@ type Company struct {
 
 func main() {
     // Create schema from struct tags
-    schema := gozod.FromStruct[Company]()
+    schema := gozod.MustFromStruct[Company]()
 
     // Add custom validation with Refine
     schemaWithCustomValidation := schema.Refine(func(c Company) bool {
@@ -483,7 +487,7 @@ type PasswordForm struct {
     ConfirmPassword string `gozod:"required"`
 }
 
-schema := gozod.FromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
+schema := gozod.MustFromStruct[PasswordForm]().Refine(func(form PasswordForm) bool {
     return form.Password == form.ConfirmPassword
 }, "Passwords must match")
 ```
@@ -507,7 +511,7 @@ type ServerConfig struct {
     Port Optional[int] `gozod:"min=1000,max=9999"`
 }
 
-schema := gozod.FromStruct[ServerConfig]()
+schema := gozod.MustFromStruct[ServerConfig]()
 
 // Port not set - validation skipped
 config1 := ServerConfig{Host: "localhost"}
@@ -540,7 +544,7 @@ type User struct {
     Age   int    `gozod:"required,min=18"`
 }
 
-// Generated Schema() method in user_gen.go returns a pre-built schema.
+// Generated Schema() method in user_gen.go returns an explicit schema.
 func main() {
     schema := User{}.Schema()
 
@@ -561,14 +565,20 @@ gozodgen -method=Validate      # generate a Validate() method instead of Schema(
 `-tag-name` defaults to `gozod`; `-field-name-tag` defaults to `json`;
 `-method` defaults to `Schema` and must be a valid exported Go identifier.
 
+When both endpoint types are generated in the same package run, `gozodgen`
+links them through their generated methods, using typed lazy schemas for cycles.
+Imported or otherwise opaque types retain an explicit runtime-reflection
+fallback; code generation does not claim that an arbitrary dependency graph is
+reflection-free.
+
 ### StrictParse for Known Types
 
 ```go
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 
 // Use StrictParse when input type is guaranteed
 user := User{Name: "Alice", Email: "alice@example.com", Age: 25}
-result, err := schema.StrictParse(user)  // Optimal performance
+result, err := schema.StrictParse(user)  // Compile-time constrained input
 ```
 
 ---
@@ -584,7 +594,7 @@ type User struct {
     Age   int    `gozod:"required,min=18,max=120"`
 }
 
-schema := gozod.FromStruct[User]()
+schema := gozod.MustFromStruct[User]()
 
 invalidUser := User{
     Name:  "A",                    // Too short
@@ -654,7 +664,7 @@ func createProduct(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    schema := gozod.FromStruct[Product]()
+    schema := gozod.MustFromStruct[Product]()
     validProduct, err := schema.Parse(product)
     if err != nil {
         writeValidationError(w, err)
@@ -695,7 +705,7 @@ func registerUser(c *gin.Context) {
         return
     }
 
-    schema := gozod.FromStruct[RegistrationForm]()
+    schema := gozod.MustFromStruct[RegistrationForm]()
     validForm, err := schema.Parse(form)
     if err != nil {
         c.JSON(400, gin.H{"validation_errors": formatValidationErrors(err)})
@@ -741,7 +751,7 @@ func validateTenantConfig(configPath string) (*TenantConfig, error) {
         return nil, fmt.Errorf("parsing YAML: %w", err)
     }
 
-    schema := gozod.FromStruct[TenantConfig]()
+    schema := gozod.MustFromStruct[TenantConfig]()
     validConfig, err := schema.Parse(config)
     if err != nil {
         return nil, fmt.Errorf("validation failed: %w", err)
@@ -766,7 +776,7 @@ func setupValidatedRoutes(r *gin.Engine) {
             return
         }
 
-        schema := gozod.FromStruct[User]()
+        schema := gozod.MustFromStruct[User]()
         if validUser, err := schema.Parse(user); err != nil {
             c.JSON(422, gin.H{"validation_error": err.Error()})
         } else {
@@ -787,7 +797,7 @@ func setupFiberRoutes(app *fiber.App) {
             return c.Status(400).JSON(fiber.Map{"error": "Invalid JSON"})
         }
 
-        schema := gozod.FromStruct[Product]()
+        schema := gozod.MustFromStruct[Product]()
         validProduct, err := schema.Parse(product)
         if err != nil {
             return c.Status(422).JSON(fiber.Map{"validation_error": err.Error()})
@@ -827,4 +837,6 @@ func setupFiberRoutes(app *fiber.App) {
 
 ---
 
-This comprehensive guide covers all aspects of GoZod struct tags, from basic usage to advanced patterns and real-world integration examples. The tag system provides a declarative, maintainable way to define validation rules while maintaining full type safety and optimal performance.
+This guide covers GoZod struct tags from basic usage through generated schemas.
+The tag system keeps validation rules next to Go fields while preserving typed
+parse results.

@@ -29,6 +29,15 @@ func TestSlice_BasicGeneric(t *testing.T) {
 		assert.Equal(t, []int{1, 2, 3}, result)
 	})
 
+	t.Run("typed nil slice is a valid slice value", func(t *testing.T) {
+		schema := Slice[string](String()).Min(0)
+		var input []string
+
+		result, err := schema.Parse(input)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
 	t.Run("optional modifier returns pointer constraint", func(t *testing.T) {
 		schema := Slice[string](String()).Optional()
 

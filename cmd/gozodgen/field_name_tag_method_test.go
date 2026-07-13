@@ -87,6 +87,44 @@ func TestFileWriter_MethodName(t *testing.T) {
 	assert.NotContains(t, content, ") Schema() *gozod.ZodStruct")
 }
 
+func TestFileWriter_ProviderUsesConfiguredMethodName(t *testing.T) {
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err)
+	writer.methodName = "Validate"
+
+	profile := &GenerationInfo{Name: "Profile", Package: "main"}
+	user := &GenerationInfo{
+		Name:    "User",
+		Package: "main",
+		Fields: []tagparser.FieldInfo{{
+			Name:     "Profile",
+			FieldKey: "profile",
+			Type:     reflect.TypeFor[struct{}](),
+			TypeName: "Profile",
+			Required: true,
+			Rules:    []tagparser.TagRule{{Name: "required"}},
+		}},
+	}
+	writer.providers = newGeneratedProviderPlan([]*GenerationInfo{user, profile})
+
+	content, err := writer.generateCode(user)
+
+	require.NoError(t, err)
+	assert.Contains(t, content, `"profile": Profile{}.Validate()`)
+	assert.NotContains(t, content, "FromStruct")
+}
+
+func TestFileWriter_UnknownProviderUsesReflectionFallback(t *testing.T) {
+	writer, err := NewFileWriter("", "main", "_gen.go", true, false)
+	require.NoError(t, err)
+	writer.providers = newGeneratedProviderPlan([]*GenerationInfo{{Name: "User"}})
+
+	got, err := writer.baseConstructor("external.Profile", "User")
+
+	require.NoError(t, err)
+	assert.Equal(t, "gozod.MustFromStruct[external.Profile]()", got)
+}
+
 func TestIsExportedIdent(t *testing.T) {
 	valid := []string{"Schema", "Validate", "GozodSchema", "Schema2", "A_b"}
 	for _, s := range valid {

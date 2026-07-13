@@ -14,7 +14,7 @@ type User struct {
 
 func main() {
 	// Use custom tag name "validate" instead of default "gozod"
-	schema := gozod.FromStruct[User](gozod.WithTagName("validate"))
+	schema := gozod.MustFromStruct[User](gozod.WithTagName("validate"))
 
 	// Valid user
 	user := User{
@@ -50,7 +50,7 @@ func main() {
 		UserName string `gozod:"min=3" json:"userName" yaml:"user_name"`
 	}
 
-	yamlSchema := gozod.FromStruct[Account](gozod.WithFieldNameTag("yaml"))
+	yamlSchema := gozod.MustFromStruct[Account](gozod.WithFieldNameTag("yaml"))
 	if _, err := yamlSchema.Parse(Account{UserName: "ab"}); err != nil {
 		// Error path reads "user_name" (yaml) rather than "userName" (json).
 		fmt.Printf("✗ yaml-named field failed: %v\n", err)

@@ -6,8 +6,8 @@ import (
 	"github.com/kaptinlin/gozod"
 )
 
-// Schema returns a pre-built gozod schema for FloatDefaultStruct
-// This generated function provides zero-reflection validation with optimal performance
+// Schema returns a generated gozod schema for FloatDefaultStruct.
+// Package-local generated dependencies call their generated schema methods.
 func (fds FloatDefaultStruct) Schema() *gozod.ZodStruct[FloatDefaultStruct, FloatDefaultStruct] {
 	return gozod.Struct[FloatDefaultStruct](gozod.StructSchema{
 		"float_slice": gozod.Slice(gozod.Float64()).Optional().Default([]float64{1.1, 2.2}),

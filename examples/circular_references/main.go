@@ -63,7 +63,7 @@ func demoSelfReference() {
 
 	// Create schema from struct with circular references
 	// GoZod automatically detects the circular reference and uses lazy evaluation
-	schema := gozod.FromStruct[User]()
+	schema := gozod.MustFromStruct[User]()
 
 	// Create a user with friends
 	user := User{
@@ -122,7 +122,7 @@ func demoTreeStructure() {
 	fmt.Println("2. Tree Structure with Parent/Child References:")
 	fmt.Println("-----------------------------------------------")
 
-	schema := gozod.FromStruct[TreeNode]()
+	schema := gozod.MustFromStruct[TreeNode]()
 
 	// Create a tree structure
 	root := TreeNode{
@@ -165,8 +165,8 @@ func demoMutualReferences() {
 	fmt.Println("-----------------------------------")
 
 	// Department and Employee have mutual references
-	deptSchema := gozod.FromStruct[Department]()
-	empSchema := gozod.FromStruct[Employee]()
+	deptSchema := gozod.MustFromStruct[Department]()
+	empSchema := gozod.MustFromStruct[Employee]()
 
 	// Create a department
 	dept := Department{

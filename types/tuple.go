@@ -269,21 +269,13 @@ func (z *ZodTuple[T, R]) With(check core.ZodCheck) *ZodTuple[T, R] {
 // Meta stores metadata for this tuple schema.
 func (z *ZodTuple[T, R]) Meta(meta core.GlobalMeta) *ZodTuple[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodTuple[T, R]) Describe(description string) *ZodTuple[T, R] {
-	newInternals := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = description
-	clone := z.withInternals(newInternals)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: description})
 }
 
 // =============================================================================
@@ -432,7 +424,7 @@ func (z *ZodTuple[T, R]) withInternals(in *core.ZodTypeInternals) *ZodTuple[T, R
 		Rest:             z.internals.Rest,
 		RequiredCount:    z.internals.RequiredCount,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -445,7 +437,7 @@ func (z *ZodTuple[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodTuple[T
 		Rest:             z.internals.Rest,
 		RequiredCount:    z.internals.RequiredCount,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 

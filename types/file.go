@@ -177,24 +177,16 @@ func (z *ZodFile[T, R]) PrefaultFunc(fn func() T) *ZodFile[T, R] {
 	return z.withInternals(in)
 }
 
-// Meta stores metadata for this file schema in the global registry.
+// Meta returns a schema with merged metadata.
 func (z *ZodFile[T, R]) Meta(meta core.GlobalMeta) *ZodFile[T, R] {
 	clone := z.withInternals(z.internals.Clone())
-	core.ApplyGlobalMeta(z, clone, meta)
+	core.ApplySchemaMeta(z, clone, meta)
 	return clone
 }
 
-// Describe registers a description in the global registry.
+// Describe returns a schema with the description.
 func (z *ZodFile[T, R]) Describe(desc string) *ZodFile[T, R] {
-	in := z.internals.Clone()
-	existing, ok := core.GlobalRegistry.Get(z)
-	if !ok {
-		existing = core.GlobalMeta{}
-	}
-	existing.Description = desc
-	clone := z.withInternals(in)
-	core.GlobalRegistry.Add(clone, existing)
-	return clone
+	return z.Meta(core.GlobalMeta{Description: desc})
 }
 
 // =============================================================================
@@ -348,7 +340,7 @@ func (z *ZodFile[T, R]) withPtrInternals(in *core.ZodTypeInternals) *ZodFile[T, 
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
@@ -358,7 +350,7 @@ func (z *ZodFile[T, R]) withInternals(in *core.ZodTypeInternals) *ZodFile[T, R] 
 		ZodTypeInternals: *in,
 		Def:              z.internals.Def,
 	}}
-	finalizeClone(z, clone)
+	finalizeClone(clone)
 	return clone
 }
 
