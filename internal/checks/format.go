@@ -11,10 +11,10 @@ import (
 	"github.com/kaptinlin/gozod/pkg/validate"
 )
 
-// newFormatCheck creates a format validation check with standard JSON Schema
-// annotations. Most format checks share the same structure: validate with a
-// function, report an invalid_format issue on failure, and attach format +
-// pattern metadata on schema attachment.
+// newFormatCheck creates a format validation check with JSON Schema metadata.
+// Most format checks share the same structure: validate with a function,
+// report an invalid_format issue on failure, and attach the authoritative
+// format or pattern constraint to the schema.
 // This is an unexported helper function for internal use.
 func newFormatCheck(
 	checkID string,
@@ -35,14 +35,21 @@ func newFormatCheck(
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", format)
-				if pattern != nil {
-					addPatternToSchema(schema, pattern.String())
-				}
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, format, pattern)
 			},
 		},
 	}
+}
+
+// attachFormatProjection keeps regex-backed checks from being narrowed by a
+// JSON Schema format implementation with a different accepted set.
+func attachFormatProjection(schema any, format string, pattern *regexp.Regexp) {
+	if pattern != nil {
+		addPatternToSchema(schema, pattern.String())
+	} else {
+		SetBagProperty(schema, "format", format)
+	}
+	SetBagProperty(schema, "type", "string")
 }
 
 func formatCheckParams(format string, pattern *regexp.Regexp) map[string]any {
@@ -77,9 +84,7 @@ func EmailWithPattern(pattern *regexp.Regexp, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "email")
-				addPatternToSchema(schema, pattern.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "email", pattern)
 			},
 		},
 	}
@@ -131,9 +136,7 @@ func URLWithOptions(options validate.URLOptions, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "uri")
-				addPatternToSchema(schema, regex.URL.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "uri", regex.URL)
 				if options.Hostname != nil {
 					SetBagProperty(schema, "hostnamePattern", options.Hostname.String())
 				}
@@ -191,9 +194,7 @@ func MACWithOptions(options validate.MACOptions, params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "mac")
-				addPatternToSchema(schema, pattern.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "mac", pattern)
 			},
 		},
 	}
@@ -225,10 +226,8 @@ func Base64(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "base64")
 				SetBagProperty(schema, "contentEncoding", "base64")
-				addPatternToSchema(schema, regex.Base64.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "base64", regex.Base64)
 			},
 		},
 	}
@@ -250,10 +249,8 @@ func Base64URL(params ...any) core.ZodCheck {
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "base64url")
 				SetBagProperty(schema, "contentEncoding", "base64url")
-				addPatternToSchema(schema, regex.Base64URL.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "base64url", regex.Base64URL)
 			},
 		},
 	}
@@ -328,9 +325,7 @@ func ISODateTimeWithOptions(options validate.ISODateTimeOptions, params ...any) 
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "iso_datetime")
-				addPatternToSchema(schema, pattern.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "iso_datetime", pattern)
 			},
 		},
 	}
@@ -411,9 +406,7 @@ func ISOTimeWithOptions(options validate.ISOTimeOptions, params ...any) core.Zod
 		},
 		OnAttach: []func(any){
 			func(schema any) {
-				SetBagProperty(schema, "format", "iso_time")
-				addPatternToSchema(schema, pattern.String())
-				SetBagProperty(schema, "type", "string")
+				attachFormatProjection(schema, "iso_time", pattern)
 			},
 		},
 	}

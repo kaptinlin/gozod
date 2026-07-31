@@ -102,6 +102,15 @@ alternate source of truth. First-party check attachment materializes exportable
 constraints into the schema bag. The exporter reads that bag and does not own a
 second projector from `ZodCheckDef.Params`.
 
+Regex-backed format checks emit their authoritative `pattern` without also
+emitting `format`. Combining both keywords would intersect independently
+defined accepted sets and can narrow GoZod semantics when format assertion is
+enabled. Check definitions may retain the format name as introspection data;
+only attachment metadata controls export. Patterns are emitted from Go's RE2
+dialect and parity is verified with the owned Go JSON Schema validator. This
+does not claim character-class equivalence with ECMAScript engines; for
+example, RE2 `\s` and ECMAScript `\s` are different sets.
+
 Unrepresentable GoZod schemas fail by default.
 `Options{Unrepresentable: JSONSchemaUnrepresentableAny}` may emit `{}` only when
 the caller explicitly chooses that fallback.
@@ -173,3 +182,5 @@ metadata types.
   mutation cannot tear a conversion snapshot, and callbacks/errors follow ID order.
 - External JSON Schema validator tests cover emitted Draft 2020-12 schemas for
   supported string, number, array, object, enum, union, and metadata cases.
+  Format-asserting tests prove regex-backed Email and URL exports accept the
+  runtime-valid edge cases that their standard formats reject.

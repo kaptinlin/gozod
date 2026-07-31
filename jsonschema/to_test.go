@@ -382,6 +382,42 @@ func TestToJSONSchema_ExternalValidatorParity(t *testing.T) {
 	}
 }
 
+func TestToJSONSchema_RegexBackedFormatsPreserveRuntimeAcceptedSet(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema core.ZodSchema
+		input  string
+	}{
+		{
+			name:   "email local part longer than format limit",
+			schema: types.Email(),
+			input:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+		},
+		{
+			name:   "URL with invalid percent encoding",
+			schema: types.URL(),
+			input:  "https://example.com/%zz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tt.schema.ParseAny(tt.input)
+			require.NoError(t, err)
+
+			exported, err := ToJSONSchema(tt.schema)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(exported)
+			require.NoError(t, err)
+			compiled, err := lib.NewCompiler().SetAssertFormat(true).Compile(encoded)
+			require.NoError(t, err)
+
+			result := compiled.Validate(tt.input)
+			assert.True(t, result.IsValid(), "export rejected runtime-valid input: %v", result.DetailedErrors())
+		})
+	}
+}
+
 func assertZodAndJSONSchemaAgree(t *testing.T, zod core.ZodSchema, exported *lib.Schema, sample any, want bool) {
 	t.Helper()
 
@@ -558,72 +594,72 @@ func TestToJSONSchema_StringFormats(t *testing.T) {
 		{
 			name:     "Email",
 			schema:   types.Email(),
-			expected: `{"type":"string", "format":"email", "pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
+			expected: `{"type":"string", "pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
 		},
 		{
 			name:     "UUID",
 			schema:   types.UUID(),
-			expected: `{"type":"string","format":"uuid","pattern":"^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"}`,
+			expected: `{"type":"string","pattern":"^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"}`,
 		},
 		{
 			name:     "UUIDv4",
 			schema:   types.UUIDv4(),
-			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
+			expected: `{"type":"string","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv6",
 			schema:   types.UUIDv6(),
-			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
+			expected: `{"type":"string","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-6[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "UUIDv7",
 			schema:   types.UUIDv7(),
-			expected: `{"type":"string","format":"uuid","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
+			expected: `{"type":"string","pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}`,
 		},
 		{
 			name:     "URL",
 			schema:   types.URL(),
-			expected: `{"type":"string","format":"uri","pattern":"^[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/$.?#].[^\\s]*$"}`,
+			expected: `{"type":"string","pattern":"^[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/$.?#].[^\\s]*$"}`,
 		},
 		{
 			name:     "Base64",
 			schema:   types.Base64(),
-			expected: `{"type":"string","format":"base64","contentEncoding":"base64","pattern":"^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"}`,
+			expected: `{"type":"string","contentEncoding":"base64","pattern":"^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"}`,
 		},
 		{
 			name:     "Base64URL",
 			schema:   types.Base64URL(),
-			expected: `{"type":"string","format":"base64url","contentEncoding":"base64url","pattern":"^[A-Za-z0-9_-]*={0,2}$"}`,
+			expected: `{"type":"string","contentEncoding":"base64url","pattern":"^[A-Za-z0-9_-]*={0,2}$"}`,
 		},
 		{
 			name:     "CUID",
 			schema:   types.CUID(),
-			expected: `{"type":"string","format":"cuid","pattern":"^[cC][^\\s-]{8,}$"}`,
+			expected: `{"type":"string","pattern":"^[cC][^\\s-]{8,}$"}`,
 		},
 		{
 			name:     "CUID2",
 			schema:   types.CUID2(),
-			expected: `{"type":"string","format":"cuid2","pattern":"^[0-9a-z]+$"}`,
+			expected: `{"type":"string","pattern":"^[0-9a-z]+$"}`,
 		},
 		{
 			name:     "ULID",
 			schema:   types.ULID(),
-			expected: `{"type":"string","format":"ulid","pattern":"^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$"}`,
+			expected: `{"type":"string","pattern":"^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$"}`,
 		},
 		{
 			name:     "XID",
 			schema:   types.XID(),
-			expected: `{"type":"string","format":"xid","pattern":"^[0-9a-vA-V]{20}$"}`,
+			expected: `{"type":"string","pattern":"^[0-9a-vA-V]{20}$"}`,
 		},
 		{
 			name:     "KSUID",
 			schema:   types.KSUID(),
-			expected: `{"type":"string","format":"ksuid","pattern":"^[A-Za-z0-9]{27}$"}`,
+			expected: `{"type":"string","pattern":"^[A-Za-z0-9]{27}$"}`,
 		},
 		{
 			name:     "NanoID",
 			schema:   types.NanoID(),
-			expected: `{"type":"string","format":"nanoid","pattern":"^[a-zA-Z0-9_-]{21}$"}`,
+			expected: `{"type":"string","pattern":"^[a-zA-Z0-9_-]{21}$"}`,
 		},
 		{
 			name:     "JWT",
@@ -656,22 +692,22 @@ func TestToJSONSchema_NetworkFormats(t *testing.T) {
 		{
 			name:     "IPv4",
 			schema:   types.IPv4(),
-			expected: `{"type":"string","format":"ipv4","pattern":"^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"}`,
+			expected: `{"type":"string","pattern":"^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"}`,
 		},
 		{
 			name:     "IPv6",
 			schema:   types.IPv6(),
-			expected: `{"type":"string","format":"ipv6","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$"}`,
+			expected: `{"type":"string","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$"}`,
 		},
 		{
 			name:     "CIDRv4",
 			schema:   types.CIDRv4(),
-			expected: `{"type":"string","format":"cidrv4","pattern":"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"}`,
+			expected: `{"type":"string","pattern":"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"}`,
 		},
 		{
 			name:     "CIDRv6",
 			schema:   types.CIDRv6(),
-			expected: `{"type":"string","format":"cidrv6","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"}`,
+			expected: `{"type":"string","pattern":"^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"}`,
 		},
 	}
 
@@ -699,22 +735,22 @@ func TestToJSONSchema_ISOFormats(t *testing.T) {
 		{
 			name:     "ISO DateTime",
 			schema:   types.IsoDateTime(),
-			expected: `{"type":"string","format":"iso_datetime","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d))$"}`,
+			expected: `{"type":"string","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d))$"}`,
 		},
 		{
 			name:     "ISO Date",
 			schema:   types.IsoDate(),
-			expected: `{"type":"string","format":"iso_date","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"}`,
+			expected: `{"type":"string","pattern":"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"}`,
 		},
 		{
 			name:     "ISO Time",
 			schema:   types.IsoTime(),
-			expected: `{"type":"string","format":"iso_time","pattern":"^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?$"}`,
+			expected: `{"type":"string","pattern":"^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?$"}`,
 		},
 		{
 			name:     "ISO Duration",
 			schema:   types.IsoDuration(),
-			expected: `{"type":"string","format":"iso_duration","pattern":"^P(?:(\\d+W)|(\\d+Y)?(\\d+M)?(\\d+D)?(?:T(\\d+H)?(\\d+M)?(\\d+(?:[.,]\\d+)?S)?)?)$"}`,
+			expected: `{"type":"string","pattern":"^P(?:(\\d+W)|(\\d+Y)?(\\d+M)?(\\d+D)?(?:T(\\d+H)?(\\d+M)?(\\d+(?:[.,]\\d+)?S)?)?)$"}`,
 		},
 	}
 
@@ -1350,7 +1386,6 @@ func TestToJSONSchema_Objects(t *testing.T) {
 				"name": {"type": "string"},
 				"email": {
 					"type": "string",
-					"format": "email",
 					"pattern": "^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"
 				},
 				"age": {"type": "number"},
@@ -1667,12 +1702,12 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 		{
 			name:     "String Email",
 			schema:   types.String().Email(),
-			expected: `{"type":"string","format":"email","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
+			expected: `{"type":"string","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"}`,
 		},
 		{
 			name:     "String with Length and Email",
 			schema:   types.String().Email().Min(10).Max(50),
-			expected: `{"type":"string","format":"email","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$","minLength":10,"maxLength":50}`,
+			expected: `{"type":"string","pattern":"^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$","minLength":10,"maxLength":50}`,
 		},
 		{
 			name:     "String with JSON validation",
@@ -1696,7 +1731,6 @@ func TestToJSONSchema_StringFormatsChaining(t *testing.T) {
 			schema: types.String().Email().StartsWith("test"),
 			expected: `{
 				"type": "string",
-				"format": "email",
 				"allOf": [
 					{"pattern": "^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"},
 					{"pattern": "^test.*"}
@@ -1835,7 +1869,6 @@ func TestToJSONSchema_Structs(t *testing.T) {
 				},
 				"email": {
 					"type": "string",
-					"format": "email",
 					"pattern": "^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"
 				}
 			},
@@ -1903,7 +1936,6 @@ func TestToJSONSchema_Structs(t *testing.T) {
 				},
 				"email": {
 					"type": "string",
-					"format": "email",
 					"pattern": "^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"
 				}
 			},
@@ -1945,7 +1977,6 @@ func TestToJSONSchema_Structs(t *testing.T) {
 							"age": {"type": "integer"},
 							"email": {
 								"type": "string",
-								"format": "email",
 								"pattern": "^[A-Za-z0-9_'+\\-]+([A-Za-z0-9_'+\\-]*\\.[A-Za-z0-9_'+\\-]+)*@[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9\\-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}$"
 							}
 						},

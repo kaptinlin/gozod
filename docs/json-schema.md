@@ -69,45 +69,52 @@ func main() {
 
 ## String Formats
 
-GoZod converts the following schema types to the equivalent JSON Schema `format`:
+GoZod exports regex-backed string checks with their authoritative `pattern`.
+It does not also emit `format`, because a format implementation may accept a
+different set and would silently narrow the GoZod rule:
 
 ```go
-// Supported via `format`
-gozod.Email()         // => {"type": "string", "format": "email"}
-gozod.UUID()          // => {"type": "string", "format": "uuid"}
-gozod.URL()           // => {"type": "string", "format": "uri"}
+gozod.Email()         // => {"type": "string", "pattern": "..."}
+gozod.UUID()          // => {"type": "string", "pattern": "..."}
+gozod.URL()           // => {"type": "string", "pattern": "..."}
+gozod.IsoDateTime()   // => {"type": "string", "pattern": "..."}
+gozod.IsoDate()       // => {"type": "string", "pattern": "..."}
+gozod.IsoTime()       // => {"type": "string", "pattern": "..."}
+gozod.IsoDuration()   // => {"type": "string", "pattern": "..."}
+gozod.IPv4()          // => {"type": "string", "pattern": "..."}
+gozod.IPv6()          // => {"type": "string", "pattern": "..."}
+```
+
+Checks without an authoritative regex can use `format`:
+
+```go
 gozod.JWT()           // => {"type": "string", "format": "jwt"}
-gozod.IsoDateTime()   // => {"type": "string", "format": "date-time"}
-gozod.IsoDate()       // => {"type": "string", "format": "date"}
-gozod.IsoTime()       // => {"type": "string", "format": "time"}
-gozod.IsoDuration()   // => {"type": "string", "format": "duration"}
-gozod.IPv4()          // => {"type": "string", "format": "ipv4"}
-gozod.IPv6()          // => {"type": "string", "format": "ipv6"}
+gozod.Time()          // => {"type": "string", "format": "time"}
 ```
 
-These schemas are supported via `contentEncoding`:
+Encoded strings combine `contentEncoding` with their pattern:
 
 ```go
-gozod.Base64()        // => {"type": "string", "contentEncoding": "base64"}
-gozod.Base64URL()     // => {"type": "string", "contentEncoding": "base64url", "format": "base64url"}
+gozod.Base64()        // => {"type": "string", "contentEncoding": "base64", "pattern": "..."}
+gozod.Base64URL()     // => {"type": "string", "contentEncoding": "base64url", "pattern": "..."}
 ```
 
-String patterns and custom formats are supported via `pattern`:
+Other regex-backed checks follow the same rule:
 
 ```go
 gozod.String().Regex(regexp.MustCompile("^[a-z]+$"))
 // => {"type": "string", "pattern": "^[a-z]+$"}
 
-gozod.UUIDv4()        // => {"type": "string", "format": "uuid", "pattern": "..."}
-gozod.UUIDv6()        // => {"type": "string", "format": "uuid", "pattern": "..."}
-gozod.UUIDv7()        // => {"type": "string", "format": "uuid", "pattern": "..."}
-gozod.CIDRv4()        // => {"type": "string", "format": "cidrv4", "pattern": "..."}
-gozod.CIDRv6()        // => {"type": "string", "format": "cidrv6", "pattern": "..."}
-gozod.CUID()          // => {"type": "string", "format": "cuid", "pattern": "..."}
-gozod.CUID2()         // => {"type": "string", "format": "cuid2", "pattern": "..."}
-gozod.ULID()          // => {"type": "string", "format": "ulid", "pattern": "..."}
-gozod.KSUID()         // => {"type": "string", "format": "ksuid", "pattern": "..."}
-gozod.NanoID()        // => {"type": "string", "format": "nanoid", "pattern": "..."}
+gozod.UUIDv4()        // => {"type": "string", "pattern": "..."}
+gozod.UUIDv6()        // => {"type": "string", "pattern": "..."}
+gozod.UUIDv7()        // => {"type": "string", "pattern": "..."}
+gozod.CIDRv4()        // => {"type": "string", "pattern": "..."}
+gozod.CIDRv6()        // => {"type": "string", "pattern": "..."}
+gozod.CUID()          // => {"type": "string", "pattern": "..."}
+gozod.CUID2()         // => {"type": "string", "pattern": "..."}
+gozod.ULID()          // => {"type": "string", "pattern": "..."}
+gozod.KSUID()         // => {"type": "string", "pattern": "..."}
+gozod.NanoID()        // => {"type": "string", "pattern": "..."}
 ```
 
 ## File Types

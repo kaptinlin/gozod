@@ -2014,8 +2014,8 @@ func TestJSONSchemaSupportedSubsetRoundTrip(t *testing.T) {
 
 	emailSchema := (*exported.Properties)["email"]
 	require.NotNil(t, emailSchema)
-	require.NotNil(t, emailSchema.Format)
-	assert.Equal(t, email, *emailSchema.Format)
+	assert.Nil(t, emailSchema.Format)
+	require.NotNil(t, emailSchema.Pattern)
 
 	tagsSchema := (*exported.Properties)["tags"]
 	require.NotNil(t, tagsSchema)
