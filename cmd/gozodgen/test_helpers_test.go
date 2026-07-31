@@ -19,6 +19,13 @@ type TestHelper struct {
 // NewTestHelper creates a new test helper
 func NewTestHelper(t *testing.T) *TestHelper {
 	tempDir := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(tempDir, "go.mod"),
+		[]byte("module example.test/gozodgenfixture\n\ngo 1.26.5\n"),
+		0600,
+	); err != nil {
+		t.Fatalf("Failed to create fixture go.mod: %v", err)
+	}
 	return &TestHelper{
 		t:       t,
 		tempDir: tempDir,

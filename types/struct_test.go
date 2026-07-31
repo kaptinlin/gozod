@@ -1711,99 +1711,6 @@ func TestStruct_MultiErrorCollection(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// ValidateStruct tests
-// =============================================================================
-
-func TestValidateStruct(t *testing.T) {
-	t.Run("valid struct", func(t *testing.T) {
-		type Config struct {
-			Host string `validate:"required,min=1"`
-			Port int    `validate:"min=1000,max=9999"`
-		}
-
-		config := &Config{Host: "localhost", Port: 8080}
-		result, err := ValidateStruct(config, WithTagName("validate"))
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-
-		parsed := result.(Config)
-		assert.Equal(t, "localhost", parsed.Host)
-		assert.Equal(t, 8080, parsed.Port)
-	})
-
-	t.Run("collects all validation errors", func(t *testing.T) {
-		type Config struct {
-			Host string `validate:"required,min=5"`
-			Port int    `validate:"min=1000,max=9999"`
-			Name string `validate:"required,min=3"`
-		}
-
-		config := &Config{Host: "", Port: 500, Name: "ab"}
-		_, err := ValidateStruct(config, WithTagName("validate"))
-
-		require.Error(t, err)
-
-		var zodErr *issues.ZodError
-		require.True(t, issues.IsZodError(err, &zodErr))
-
-		// Should have at least 3 errors (Host required, Port too small, Name too short)
-		assert.GreaterOrEqual(t, len(zodErr.Issues), 3)
-	})
-
-	t.Run("non-struct input", func(t *testing.T) {
-		_, err := ValidateStruct("not a struct", WithTagName("validate"))
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "must be a struct")
-	})
-
-	t.Run("pointer to struct", func(t *testing.T) {
-		type Config struct {
-			Host string `validate:"required"`
-		}
-
-		config := &Config{Host: "localhost"}
-		result, err := ValidateStruct(config, WithTagName("validate"))
-
-		require.NoError(t, err)
-		parsed := result.(Config)
-		assert.Equal(t, "localhost", parsed.Host)
-	})
-
-	t.Run("fields without tags are copied", func(t *testing.T) {
-		type Config struct {
-			Host    string `validate:"required"`
-			Port    int
-			Timeout int
-		}
-
-		config := &Config{Host: "localhost", Port: 8080, Timeout: 30}
-		result, err := ValidateStruct(config, WithTagName("validate"))
-
-		require.NoError(t, err)
-		parsed := result.(Config)
-		assert.Equal(t, "localhost", parsed.Host)
-		assert.Equal(t, 8080, parsed.Port)
-		assert.Equal(t, 30, parsed.Timeout)
-	})
-}
-
-func TestValidateStructRejectsInvalidTagPlan(t *testing.T) {
-	t.Parallel()
-
-	type invalidTag struct {
-		Age int `gozod:"mystery=1"`
-	}
-
-	result, err := ValidateStruct(invalidTag{Age: 21})
-
-	assert.Nil(t, result)
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "Age")
-	assert.ErrorContains(t, err, "mystery=1")
-}
-
 func TestFromStructRejectsUnsupportedFieldType(t *testing.T) {
 	t.Parallel()
 
@@ -1876,6 +1783,22 @@ func TestFromStructAcceptsExplicitAnyField(t *testing.T) {
 	assert.Equal(t, "value", parsed.Value)
 }
 
+func TestFromStructShapeAppliesNamedStringSliceDefault(t *testing.T) {
+	type userID string
+	type config struct {
+		Users []userID `gozod:"default=[\"primary\",\"backup\"]"`
+	}
+
+	structSchema, err := FromStruct[config]()
+	require.NoError(t, err)
+	schema := Object(structSchema.Shape())
+
+	result, err := schema.Parse(map[string]any{})
+	require.NoError(t, err)
+	defaultValue := []string{"primary", "backup"}
+	assert.Equal(t, &defaultValue, result["Users"])
+}
+
 func TestStructAssignsOptionalTypedNilSliceToValueField(t *testing.T) {
 	type node struct {
 		Children []string `json:"children"`
@@ -1888,4 +1811,20 @@ func TestStructAssignsOptionalTypedNilSliceToValueField(t *testing.T) {
 	got, err := schema.Parse(node{})
 	require.NoError(t, err)
 	assert.Nil(t, got.Children)
+}
+
+func TestStruct_PreservesNestedIssueDetails(t *testing.T) {
+	schema := Struct[User](core.StructSchema{"email": String().Email()})
+
+	_, err := schema.Parse(User{Email: "not-an-email"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	issue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidFormat, issue.Code)
+	assert.NotEmpty(t, issue.Message)
+	assert.Equal(t, []any{"email"}, issue.Path)
+	assert.Equal(t, "email", issue.Format)
 }

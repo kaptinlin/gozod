@@ -154,26 +154,8 @@ func (f FieldInfo) IsEnumStringField() bool {
 	return f.Type != nil && f.EnumRule() != nil && f.Type.Kind() == reflect.String
 }
 
-// NeedsOptionalModifier reports whether generated schema code should
-// append .Optional() for this field.
-func (f FieldInfo) NeedsOptionalModifier() bool {
-	return !f.Required && !f.IsPointerType()
-}
-
-// NeedsGeneratedOptional reports whether generated schema code should
-// append .Optional() after applying all rules.
-func (f FieldInfo) NeedsGeneratedOptional() bool {
-	return f.IsPointerType() || !f.Required
-}
-
 // NeedsPointerNilable reports whether a pointer-backed schema should
 // become nilable during struct-schema derivation.
 func (f FieldInfo) NeedsPointerNilable() bool {
-	return f.IsPointerType() && !f.Required
-}
-
-// NeedsPointerOptional reports whether pointer field rules should add
-// Optional() at the end of parsed tag application.
-func (f FieldInfo) NeedsPointerOptional() bool {
 	return f.IsPointerType() && !f.Required
 }

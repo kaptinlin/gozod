@@ -6,13 +6,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
-	"regexp"
-	"strconv"
-	"strings"
 	"time"
-	"unicode"
-
-	"github.com/go-json-experiment/json"
 
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/internal/checks"
@@ -27,8 +21,6 @@ var (
 	ErrFieldNotFoundOrNotSettable = errors.New("field not found or not settable")
 	// ErrCannotAssignToField is returned when a value cannot be assigned to a struct field.
 	ErrCannotAssignToField = errors.New("cannot assign value to field of type")
-	// ErrValueMustBeStruct is returned when a value is not a struct or pointer to struct.
-	ErrValueMustBeStruct = errors.New("value must be a struct or pointer to struct")
 	// ErrUnsupportedFieldType indicates that FromStruct cannot represent a Go field type faithfully.
 	ErrUnsupportedFieldType = errors.New("unsupported struct field type")
 )
@@ -989,7 +981,18 @@ func (z *ZodStruct[T, R]) setReflectFieldValue(fieldVal reflect.Value, value any
 	}
 
 	// Handle pointer type conversions
-	if fieldVal.Type().Kind() == reflect.Pointer && valueVal.Type().Kind() != reflect.Pointer {
+	if fieldVal.Type().Kind() == reflect.Pointer && valueVal.Type().Kind() == reflect.Pointer {
+		if valueVal.IsNil() {
+			fieldVal.Set(reflect.Zero(fieldVal.Type()))
+			return nil
+		}
+		if converted := z.convertValue(valueVal.Elem().Interface(), fieldVal.Type().Elem()); converted != nil {
+			ptrVal := reflect.New(fieldVal.Type().Elem())
+			ptrVal.Elem().Set(reflect.ValueOf(converted))
+			fieldVal.Set(ptrVal)
+			return nil
+		}
+	} else if fieldVal.Type().Kind() == reflect.Pointer {
 		// Field is pointer, value is not - create pointer to value
 		if valueVal.Type().AssignableTo(fieldVal.Type().Elem()) {
 			ptrVal := reflect.New(fieldVal.Type().Elem())
@@ -1093,6 +1096,9 @@ func (z *ZodStruct[T, R]) convertValue(value any, targetType reflect.Type) any {
 	if valueType.AssignableTo(targetType) {
 		return value
 	}
+	if valueType.ConvertibleTo(targetType) {
+		return valueVal.Convert(targetType).Interface()
+	}
 
 	// Handle conversions between compatible types
 	//nolint:exhaustive // Only handling specific conversion cases
@@ -1151,6 +1157,18 @@ func (z *ZodStruct[T, R]) convertValue(value any, targetType reflect.Type) any {
 		if valueVal.Type().Kind() == reflect.Slice {
 			return z.convertSliceTypes(value, targetType)
 		}
+	case reflect.Array:
+		if (valueVal.Kind() == reflect.Slice || valueVal.Kind() == reflect.Array) && valueVal.Len() == targetType.Len() {
+			converted := reflect.New(targetType).Elem()
+			for i := range valueVal.Len() {
+				element := z.convertValue(valueVal.Index(i).Interface(), targetType.Elem())
+				if element == nil {
+					return nil
+				}
+				converted.Index(i).Set(reflect.ValueOf(element))
+			}
+			return converted.Interface()
+		}
 	case reflect.Struct:
 		// Handle struct conversions from maps
 		if valueVal.Type().Kind() == reflect.Map {
@@ -1164,11 +1182,6 @@ func (z *ZodStruct[T, R]) convertValue(value any, targetType reflect.Type) any {
 		}
 	default:
 		// No specific conversion logic for other types
-	}
-
-	// Attempt direct conversion if possible
-	if valueVal.Type().ConvertibleTo(targetType) {
-		return valueVal.Convert(targetType).Interface()
 	}
 
 	return nil
@@ -1548,95 +1561,6 @@ func WithFieldNameTag(name string) FromStructOption {
 	return func(c *fromStructConfig) {
 		c.fieldNameTag = name
 	}
-}
-
-// ValidateStruct validates a struct using tags and returns the parsed result.
-// Returns the struct with defaults applied, coercions performed, and all validation issues.
-//
-// This is the runtime equivalent of constructing with FromStruct[T] and parsing value.
-//
-// Example:
-//
-//	type Config struct {
-//	    Host string `validate:"default=localhost"`
-//	    Port int    `validate:"min=1000"`
-//	}
-//	result, err := types.ValidateStruct(&Config{Port: 8080}, types.WithTagName("validate"))
-//	config := result.(*Config)  // Host is now "localhost"
-func ValidateStruct(value any, opts ...FromStructOption) (any, error) {
-	cfg := &fromStructConfig{tagName: "gozod", fieldNameTag: defaultFieldNameTag}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Pointer {
-		rv = rv.Elem()
-	}
-
-	if rv.Kind() != reflect.Struct {
-		return nil, ErrValueMustBeStruct
-	}
-
-	structType := rv.Type()
-
-	// Parse struct tags
-	parser := tagparser.NewWithTags(cfg.tagName, cfg.fieldNameTag)
-	parsedFields, err := parser.ParseStructTags(structType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse struct tags: %w", err)
-	}
-	if err := validateStructTagGraph(structType, cfg.tagName, cfg.fieldNameTag); err != nil {
-		return nil, err
-	}
-
-	fieldSchemas := parseStructTagsToSchemasWithTag(structType, cfg.tagName, cfg.fieldNameTag)
-
-	var allIssues []core.ZodIssue
-	result := reflect.New(structType).Elem()
-
-	for i := range structType.NumField() {
-		result.Field(i).Set(rv.Field(i))
-	}
-
-	for _, pf := range parsedFields {
-		schema := fieldSchemas[pf.FieldKey]
-		if schema == nil {
-			continue
-		}
-
-		fieldValue := rv.FieldByName(pf.Name)
-		if !fieldValue.IsValid() {
-			continue
-		}
-
-		parsed, err := schema.ParseAny(fieldValue.Interface())
-		if err != nil {
-			if zodErr, ok := errors.AsType[*issues.ZodError](err); ok {
-				for _, issue := range zodErr.Issues {
-					issue.Path = append([]any{pf.FieldKey}, issue.Path...)
-					allIssues = append(allIssues, issue)
-				}
-			} else {
-				allIssues = append(allIssues, issues.ZodIssue{
-					ZodIssueBase: core.ZodIssueBase{
-						Code:    core.Custom,
-						Path:    []any{pf.FieldKey},
-						Message: err.Error(),
-					},
-				})
-			}
-			continue
-		}
-
-		result.FieldByName(pf.Name).Set(reflect.ValueOf(parsed))
-	}
-
-	if len(allIssues) > 0 {
-		return nil, issues.NewZodError(allIssues)
-	}
-
-	return result.Interface(), nil
 }
 
 func validateStructTagGraph(structType reflect.Type, tagName, fieldNameTag string) error {
@@ -2278,7 +2202,6 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 	case reflect.Interface:
 		schema = Any()
 	case reflect.Slice, reflect.Array:
-		// Handle slices and arrays
 		elemType := fieldType.Elem()
 		elemSchema := createSchemaFromType(elemType)
 		if elemSchema != nil {
@@ -2291,6 +2214,9 @@ func createSchemaFromTypeWithInfo(fieldType reflect.Type, fieldInfo tagparser.Fi
 			}
 		} else {
 			schema = SlicePtr[any](Any())
+		}
+		if fieldType.Kind() == reflect.Array {
+			schema = applySchemaMethod(schema, "Length", fieldType.Len())
 		}
 	case reflect.Map:
 		// Handle maps
@@ -2358,7 +2284,6 @@ func createSchemaFromType(fieldType reflect.Type) core.ZodSchema {
 	// Create a dummy field info that doesn't have required flag
 	dummyFieldInfo := tagparser.FieldInfo{
 		Required: false,
-		Optional: true,
 	}
 	return createSchemaFromTypeWithInfo(fieldType, dummyFieldInfo)
 }
@@ -2370,7 +2295,7 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 	if err != nil {
 		panic(fmt.Sprintf("materialize unvalidated tag plan for field %s: %v", fieldInfo.Name, err))
 	}
-	if fieldPlan.RuntimePointerOptional == tagparser.OptionalPlacementBeforeOperations {
+	if fieldPlan.Optional == tagparser.OptionalPlacementBeforeOperations {
 		schema = applyOptionalToSchema(schema)
 	}
 
@@ -2388,13 +2313,13 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 		case tagparser.RuleTime:
 			schema = Time()
 		case tagparser.RulePositive:
-			schema = applyPositiveModifier(schema)
+			schema = applySchemaMethod(schema, "Positive")
 		case tagparser.RuleNegative:
-			schema = applyNegativeModifier(schema)
+			schema = applySchemaMethod(schema, "Negative")
 		case tagparser.RuleFinite:
-			schema = applyFiniteModifier(schema)
+			schema = applySchemaMethod(schema, "Finite")
 		case tagparser.RuleNonEmpty:
-			schema = applyNonEmptyModifier(schema)
+			schema = applySchemaMethod(schema, "Min", 1)
 		case tagparser.RuleEnum:
 			schema = applyCompiledEnumConstraint(schema, operation.Operand)
 		case tagparser.RuleLiteral:
@@ -2408,7 +2333,7 @@ func applyParsedTagRules(schema core.ZodSchema, fieldInfo tagparser.FieldInfo) c
 		}
 	}
 
-	if fieldPlan.RuntimePointerOptional == tagparser.OptionalPlacementAfterOperations {
+	if fieldPlan.Optional == tagparser.OptionalPlacementAfterOperations {
 		schema = applyOptionalToSchema(schema)
 	}
 
@@ -2434,60 +2359,38 @@ func applyCompiledRule(schema core.ZodSchema, plan tagparser.RulePlan) core.ZodS
 	case tagparser.RuleNilable:
 		return applyNilableModifier(schema)
 	case tagparser.RuleTrim:
-		return applyStringTransformRule(schema, "trim")
+		return applySchemaMethod(schema, "Trim")
 	case tagparser.RuleLowercase:
-		return applyStringTransformRule(schema, "lowercase")
+		return applySchemaMethod(schema, "ToLowerCase")
 	case tagparser.RuleUppercase:
-		return applyStringTransformRule(schema, "uppercase")
+		return applySchemaMethod(schema, "ToUpperCase")
 	case tagparser.RuleMin:
-		if value, ok := intOperand(plan.Operand); ok {
-			return applyMinConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Min", plan.Operand)
 	case tagparser.RuleMax:
-		if value, ok := intOperand(plan.Operand); ok {
-			return applyMaxConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Max", plan.Operand)
 	case tagparser.RuleLength:
-		if value, ok := intOperand(plan.Operand); ok {
-			return applyLengthConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Length", plan.Operand)
 	case tagparser.RuleGT:
-		if value, ok := floatOperand(plan.Operand); ok {
-			return applyGtConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Gt", plan.Operand)
 	case tagparser.RuleGTE:
-		if value, ok := floatOperand(plan.Operand); ok {
-			return applyGteConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Gte", plan.Operand)
 	case tagparser.RuleLT:
-		if value, ok := floatOperand(plan.Operand); ok {
-			return applyLtConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Lt", plan.Operand)
 	case tagparser.RuleLTE:
-		if value, ok := floatOperand(plan.Operand); ok {
-			return applyLteConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "Lte", plan.Operand)
 	case tagparser.RuleMultipleOf:
-		if value, ok := floatOperand(plan.Operand); ok {
-			return applyMultipleOfConstraint(schema, value)
-		}
+		return applySchemaMethod(schema, "MultipleOf", plan.Operand)
 	case tagparser.RuleRegex:
-		if pattern, ok := plan.Operand.(*regexp.Regexp); ok {
-			switch s := schema.(type) {
-			case *ZodString[string]:
-				return s.Regex(pattern)
-			case *ZodString[*string]:
-				return s.Regex(pattern)
-			}
-		}
-	case tagparser.RuleIncludes, tagparser.RuleStartsWith, tagparser.RuleEndsWith:
-		if value, ok := plan.Operand.(string); ok {
-			return applyParameterizedRule(schema, plan.Name, value)
-		}
+		return applySchemaMethod(schema, "Regex", plan.Operand)
+	case tagparser.RuleIncludes:
+		return applySchemaMethod(schema, "Includes", plan.Operand)
+	case tagparser.RuleStartsWith:
+		return applySchemaMethod(schema, "StartsWith", plan.Operand)
+	case tagparser.RuleEndsWith:
+		return applySchemaMethod(schema, "EndsWith", plan.Operand)
 	default:
 		return schema
 	}
-	return schema
 }
 
 func intOperand(value any) (int, bool) {
@@ -2508,64 +2411,12 @@ func intOperand(value any) (int, bool) {
 	}
 }
 
-func floatOperand(value any) (float64, bool) {
-	switch value := value.(type) {
-	case int:
-		return float64(value), true
-	case int64:
-		return float64(value), true
-	case uint64:
-		return float64(value), true
-	case float64:
-		return value, true
-	default:
-		return 0, false
-	}
-}
-
-func applyLengthConstraint(schema core.ZodSchema, value int) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Length(value)
-	case *ZodSlice[string, []string]:
-		return s.Length(value)
-	case *ZodSlice[int, []int]:
-		return s.Length(value)
-	case *ZodSlice[any, []any]:
-		return s.Length(value)
-	}
-	return schema
-}
-
 func applyCompiledFallback(schema core.ZodSchema, value any, prefault bool) core.ZodSchema {
 	methodName := "Default"
 	if prefault {
 		methodName = "Prefault"
 	}
-	method := reflect.ValueOf(schema).MethodByName(methodName)
-	if !method.IsValid() || method.Type().NumIn() != 1 {
-		return schema
-	}
-	parameterType := method.Type().In(0)
-	var argument reflect.Value
-	if value == nil {
-		argument = reflect.Zero(parameterType)
-	} else {
-		argument = reflect.ValueOf(value)
-		if !argument.Type().AssignableTo(parameterType) {
-			if !argument.Type().ConvertibleTo(parameterType) {
-				return schema
-			}
-			argument = argument.Convert(parameterType)
-		}
-	}
-	result := method.Call([]reflect.Value{argument})
-	if len(result) == 1 {
-		if compiled, ok := result[0].Interface().(core.ZodSchema); ok {
-			return compiled
-		}
-	}
-	return schema
+	return applySchemaMethod(schema, methodName, value)
 }
 
 func applyCompiledEnumConstraint(schema core.ZodSchema, operand any) core.ZodSchema {
@@ -2611,30 +2462,6 @@ func applyCompiledLiteralConstraint(schema core.ZodSchema, value any) core.ZodSc
 	case *ZodBool[bool]:
 		if typed, ok := value.(bool); ok {
 			return Literal(typed)
-		}
-	}
-	return schema
-}
-
-func applyStringTransformRule(schema core.ZodSchema, ruleName string) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		switch ruleName {
-		case "trim":
-			return s.Trim()
-		case "lowercase":
-			return s.ToLowerCase()
-		case "uppercase":
-			return s.ToUpperCase()
-		}
-	case *ZodString[*string]:
-		switch ruleName {
-		case "trim":
-			return s.Trim()
-		case "lowercase":
-			return s.ToLowerCase()
-		case "uppercase":
-			return s.ToUpperCase()
 		}
 	}
 	return schema
@@ -2690,649 +2517,6 @@ func applyNilableModifier(schema core.ZodSchema) core.ZodSchema {
 	return applySchemaModifier(schema, "Nilable")
 }
 
-// applyPositiveModifier applies positive constraint to numeric types
-func applyPositiveModifier(schema core.ZodSchema) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Positive()
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Positive()
-	case *ZodFloatTyped[float64, float64]:
-		return s.Positive()
-	case *ZodFloatTyped[float32, float32]:
-		return s.Positive()
-	}
-	return schema
-}
-
-// applyNegativeModifier applies negative constraint to numeric types
-func applyNegativeModifier(schema core.ZodSchema) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Negative()
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Negative()
-	case *ZodFloatTyped[float64, float64]:
-		return s.Negative()
-	case *ZodFloatTyped[float32, float32]:
-		return s.Negative()
-	}
-	return schema
-}
-
-func applyFiniteModifier(schema core.ZodSchema) core.ZodSchema {
-	if floatSchema, ok := schema.(*ZodFloatTyped[float64, float64]); ok {
-		return floatSchema.Finite()
-	}
-	if float32Schema, ok := schema.(*ZodFloatTyped[float32, float32]); ok {
-		return float32Schema.Finite()
-	}
-	return schema
-}
-
-func applyNonEmptyModifier(schema core.ZodSchema) core.ZodSchema {
-	if stringSchema, ok := schema.(*ZodString[string]); ok {
-		return stringSchema.Min(1)
-	}
-	if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
-		return sliceSchema.Min(1)
-	}
-	if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
-		return sliceIntSchema.Min(1)
-	}
-	if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
-		return sliceAnySchema.Min(1)
-	}
-	if mapStrSchema, ok := schema.(*ZodMap[map[string]string, map[string]string]); ok {
-		return mapStrSchema.Min(1)
-	}
-	if mapIntSchema, ok := schema.(*ZodMap[map[string]int, map[string]int]); ok {
-		return mapIntSchema.Min(1)
-	}
-	if mapAnySchema, ok := schema.(*ZodMap[map[string]any, map[string]any]); ok {
-		return mapAnySchema.Min(1)
-	}
-	return schema
-}
-
-// applyParameterizedRule applies rules that have parameters
-func applyParameterizedRule(schema core.ZodSchema, ruleName, param string) core.ZodSchema {
-	switch ruleName {
-	case "min":
-		if value, err := strconv.Atoi(param); err == nil {
-			schema = applyMinConstraint(schema, value)
-		}
-	case "max":
-		if value, err := strconv.Atoi(param); err == nil {
-			schema = applyMaxConstraint(schema, value)
-		}
-	case "length":
-		if value, err := strconv.Atoi(param); err == nil {
-			if stringSchema, ok := schema.(*ZodString[string]); ok {
-				schema = stringSchema.Length(value)
-			} else if sliceSchema, ok := schema.(*ZodSlice[string, []string]); ok {
-				schema = sliceSchema.Length(value)
-			} else if sliceIntSchema, ok := schema.(*ZodSlice[int, []int]); ok {
-				schema = sliceIntSchema.Length(value)
-			} else if sliceAnySchema, ok := schema.(*ZodSlice[any, []any]); ok {
-				schema = sliceAnySchema.Length(value)
-			}
-		}
-	case "gt":
-		if value, err := strconv.ParseFloat(param, 64); err == nil {
-			schema = applyGtConstraint(schema, value)
-		}
-	case "gte":
-		if value, err := strconv.ParseFloat(param, 64); err == nil {
-			schema = applyGteConstraint(schema, value)
-		}
-	case "lt":
-		if value, err := strconv.ParseFloat(param, 64); err == nil {
-			schema = applyLtConstraint(schema, value)
-		}
-	case "lte":
-		if value, err := strconv.ParseFloat(param, 64); err == nil {
-			schema = applyLteConstraint(schema, value)
-		}
-	case "regex":
-		if stringSchema, ok := schema.(*ZodString[string]); ok {
-			schema = stringSchema.RegexString(param)
-		}
-	case "includes":
-		if stringSchema, ok := schema.(*ZodString[string]); ok {
-			schema = stringSchema.Includes(param)
-		}
-	case "startswith":
-		if stringSchema, ok := schema.(*ZodString[string]); ok {
-			schema = stringSchema.StartsWith(param)
-		}
-	case "endswith":
-		if stringSchema, ok := schema.(*ZodString[string]); ok {
-			schema = stringSchema.EndsWith(param)
-		}
-	case "default":
-		schema = applyDefaultValue(schema, param)
-	case "prefault":
-		schema = applyPrefaultValue(schema, param)
-	case "multipleof":
-		if value, err := strconv.ParseFloat(param, 64); err == nil {
-			schema = applyMultipleOfConstraint(schema, value)
-		}
-	}
-
-	return schema
-}
-
-// Helper functions for applying constraints
-func applyMinConstraint(schema core.ZodSchema, value int) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Min(value)
-	case *ZodIntegerTyped[int, int]:
-		return s.Min(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Min(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Min(float64(value))
-	case *ZodFloatTyped[float32, float32]:
-		return s.Min(float64(value))
-	case *ZodSlice[string, []string]:
-		return s.Min(value)
-	case *ZodSlice[int, []int]:
-		return s.Min(value)
-	case *ZodSlice[any, []any]:
-		return s.Min(value)
-	case *ZodMap[map[string]string, map[string]string]:
-		return s.Min(value)
-	case *ZodMap[map[string]int, map[string]int]:
-		return s.Min(value)
-	case *ZodMap[map[string]any, map[string]any]:
-		return s.Min(value)
-	}
-	return schema
-}
-
-func applyMaxConstraint(schema core.ZodSchema, value int) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Max(value)
-	case *ZodIntegerTyped[int, int]:
-		return s.Max(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Max(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Max(float64(value))
-	case *ZodFloatTyped[float32, float32]:
-		return s.Max(float64(value))
-	case *ZodSlice[string, []string]:
-		return s.Max(value)
-	case *ZodSlice[int, []int]:
-		return s.Max(value)
-	case *ZodSlice[any, []any]:
-		return s.Max(value)
-	case *ZodMap[map[string]string, map[string]string]:
-		return s.Max(value)
-	case *ZodMap[map[string]int, map[string]int]:
-		return s.Max(value)
-	case *ZodMap[map[string]any, map[string]any]:
-		return s.Max(value)
-	}
-	return schema
-}
-
-func applyGtConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Gt(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Gt(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Gt(value)
-	case *ZodFloatTyped[float32, float32]:
-		return s.Gt(value)
-	}
-	return schema
-}
-
-func applyGteConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Gte(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Gte(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Gte(value)
-	case *ZodFloatTyped[float32, float32]:
-		return s.Gte(value)
-	}
-	return schema
-}
-
-func applyLtConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Lt(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Lt(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Lt(value)
-	case *ZodFloatTyped[float32, float32]:
-		return s.Lt(value)
-	}
-	return schema
-}
-
-func applyLteConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.Lte(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.Lte(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.Lte(value)
-	case *ZodFloatTyped[float32, float32]:
-		return s.Lte(value)
-	}
-	return schema
-}
-
-func applyMultipleOfConstraint(schema core.ZodSchema, value float64) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodIntegerTyped[int, int]:
-		return s.MultipleOf(int64(value))
-	case *ZodIntegerTyped[int64, int64]:
-		return s.MultipleOf(int64(value))
-	case *ZodFloatTyped[float64, float64]:
-		return s.MultipleOf(value)
-	case *ZodFloatTyped[float32, float32]:
-		return s.MultipleOf(value)
-	}
-	return schema
-}
-
-func applyDefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Default(value)
-	case *ZodString[*string]:
-		return s.Default(value)
-	case *ZodIntegerTyped[int, int]:
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[int, *int]:
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[int8, int8]:
-		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int8, *int8]:
-		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int16, int16]:
-		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int16, *int16]:
-		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int32, int32]:
-		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int32, *int32]:
-		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int64, int64]:
-		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[int64, *int64]:
-		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return s.Default(intVal)
-		}
-	case *ZodIntegerTyped[uint, uint]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Default(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint, *uint]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Default(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint8, uint8]:
-		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint8, *uint8]:
-		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint16, uint16]:
-		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint16, *uint16]:
-		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint32, uint32]:
-		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint32, *uint32]:
-		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
-			return s.Default(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint64, uint64]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Default(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint64, *uint64]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Default(int64(intVal))
-			}
-		}
-	case *ZodFloatTyped[float64, float64]:
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return s.Default(floatVal)
-		}
-	case *ZodFloatTyped[float64, *float64]:
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return s.Default(floatVal)
-		}
-	case *ZodFloatTyped[float32, float32]:
-		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
-			return s.Default(floatVal)
-		}
-	case *ZodFloatTyped[float32, *float32]:
-		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
-			return s.Default(floatVal)
-		}
-	case *ZodBool[bool]:
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return s.Default(boolVal)
-		}
-	case *ZodBool[*bool]:
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return s.Default(boolVal)
-		}
-	case *ZodSlice[string, []string]:
-		// Parse array-like default value: ['val1','val2'] or ["val1","val2"]
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			// Convert interface{} slice to string slice
-			stringArray := make([]string, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				if str, ok := item.(string); ok {
-					stringArray = append(stringArray, str)
-				}
-			}
-			if len(stringArray) > 0 {
-				return s.Default(stringArray)
-			}
-		}
-	case *ZodSlice[int, []int]:
-		// Parse array of integers
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			intArray := make([]int, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case float64: // JSON numbers are float64
-					intArray = append(intArray, int(v))
-				case int:
-					intArray = append(intArray, v)
-				case string:
-					if intVal, err := strconv.Atoi(v); err == nil {
-						intArray = append(intArray, intVal)
-					}
-				}
-			}
-			if len(intArray) > 0 {
-				return s.Default(intArray)
-			}
-		}
-	case *ZodSlice[float64, []float64]:
-		// Parse array of floats
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			floatArray := make([]float64, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case float64:
-					floatArray = append(floatArray, v)
-				case int:
-					floatArray = append(floatArray, float64(v))
-				case string:
-					if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
-						floatArray = append(floatArray, floatVal)
-					}
-				}
-			}
-			if len(floatArray) > 0 {
-				return s.Default(floatArray)
-			}
-		}
-	case *ZodSlice[bool, []bool]:
-		// Parse array of booleans
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			boolArray := make([]bool, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case bool:
-					boolArray = append(boolArray, v)
-				case string:
-					if boolVal, err := strconv.ParseBool(v); err == nil {
-						boolArray = append(boolArray, boolVal)
-					}
-				}
-			}
-			if len(boolArray) > 0 {
-				return s.Default(boolArray)
-			}
-		}
-	case *ZodMap[map[string]string, map[string]string]:
-		// Parse map-like default value: {"key":"val"}
-		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
-			// Convert interface{} map to string map
-			stringMap := make(map[string]string)
-			for k, v := range defaultMap {
-				if str, ok := v.(string); ok {
-					stringMap[k] = str
-				}
-			}
-			if len(stringMap) > 0 {
-				return s.Default(stringMap)
-			}
-		}
-	case *ZodMap[map[string]any, map[string]any]:
-		// Parse map with any values: {"key":"val", "count":42}
-		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
-			return s.Default(defaultMap)
-		}
-
-	// Pointer slice types
-	case *ZodSlice[string, *[]string]:
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			stringArray := make([]string, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				if str, ok := item.(string); ok {
-					stringArray = append(stringArray, str)
-				}
-			}
-			if len(stringArray) > 0 {
-				return s.Default(stringArray)
-			}
-		}
-	case *ZodSlice[int, *[]int]:
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			intArray := make([]int, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case float64:
-					intArray = append(intArray, int(v))
-				case int:
-					intArray = append(intArray, v)
-				case string:
-					if intVal, err := strconv.Atoi(v); err == nil {
-						intArray = append(intArray, intVal)
-					}
-				}
-			}
-			if len(intArray) > 0 {
-				return s.Default(intArray)
-			}
-		}
-	case *ZodSlice[float64, *[]float64]:
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			floatArray := make([]float64, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case float64:
-					floatArray = append(floatArray, v)
-				case int:
-					floatArray = append(floatArray, float64(v))
-				case string:
-					if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
-						floatArray = append(floatArray, floatVal)
-					}
-				}
-			}
-			if len(floatArray) > 0 {
-				return s.Default(floatArray)
-			}
-		}
-	case *ZodSlice[bool, *[]bool]:
-		if defaultArray := parseArrayDefault(value); len(defaultArray) > 0 {
-			boolArray := make([]bool, 0, len(defaultArray))
-			for _, item := range defaultArray {
-				switch v := item.(type) {
-				case bool:
-					boolArray = append(boolArray, v)
-				case string:
-					if boolVal, err := strconv.ParseBool(v); err == nil {
-						boolArray = append(boolArray, boolVal)
-					}
-				}
-			}
-			if len(boolArray) > 0 {
-				return s.Default(boolArray)
-			}
-		}
-
-	// Pointer map types
-	case *ZodMap[map[string]string, *map[string]string]:
-		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
-			stringMap := make(map[string]string)
-			for k, v := range defaultMap {
-				if str, ok := v.(string); ok {
-					stringMap[k] = str
-				}
-			}
-			if len(stringMap) > 0 {
-				return s.Default(stringMap)
-			}
-		}
-	case *ZodMap[map[string]any, *map[string]any]:
-		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
-			return s.Default(defaultMap)
-		}
-
-	// Record types for map[string]any fields
-	case *ZodRecord[map[string]any, *map[string]any]:
-		if defaultMap := parseMapDefault(value); len(defaultMap) > 0 {
-			return s.Default(defaultMap)
-		}
-	}
-	return schema
-}
-
-// Helper function to parse array-like default values
-func parseArrayDefault(value string) []any {
-	// Handle both ['val1','val2'] and JSON array format
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "[") || !strings.HasSuffix(value, "]") {
-		return nil
-	}
-
-	// Try JSON parsing first for complex arrays
-	var jsonResult []any
-	if err := json.Unmarshal([]byte(value), &jsonResult); err == nil {
-		return jsonResult
-	}
-
-	// Fallback to simple parsing for backward compatibility
-	value = value[1 : len(value)-1] // Remove brackets
-	if value == "" {
-		return []any{}
-	}
-
-	// Parse comma-separated values
-	var result []any
-	var current strings.Builder
-	inQuote := false
-	quoteChar := rune(0)
-
-	for _, char := range value {
-		switch {
-		case char == '\'' || char == '"':
-			switch {
-			case !inQuote:
-				inQuote = true
-				quoteChar = char
-			case char == quoteChar:
-				inQuote = false
-				quoteChar = 0
-			default:
-				current.WriteRune(char)
-			}
-		case char == ',' && !inQuote:
-			if str := strings.TrimSpace(current.String()); str != "" {
-				result = append(result, str)
-			}
-			current.Reset()
-		default:
-			if inQuote || !unicode.IsSpace(char) {
-				current.WriteRune(char)
-			}
-		}
-	}
-
-	// Add final value
-	if str := strings.TrimSpace(current.String()); str != "" {
-		result = append(result, str)
-	}
-
-	return result
-}
-
-// Helper function to parse map-like default values
-func parseMapDefault(value string) map[string]any {
-	// Handle JSON object format: {"key":"value","count":42}
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-		return nil
-	}
-
-	// Try to parse as JSON
-	var result map[string]any
-	if err := json.Unmarshal([]byte(value), &result); err != nil {
-		return make(map[string]any)
-	}
-
-	return result
-}
-
-// Helper function to create slice schema based on element type
 func createSliceSchema(elemSchema core.ZodSchema, elemType reflect.Type) core.ZodSchema {
 	// Create appropriate slice schema based on element type
 	switch elemType.Kind() {
@@ -3346,9 +2530,11 @@ func createSliceSchema(elemSchema core.ZodSchema, elemType reflect.Type) core.Zo
 		return Slice[float64](elemSchema)
 	case reflect.Bool:
 		return Slice[bool](elemSchema)
+	case reflect.Array:
+		return Slice[any](elemSchema)
 	case reflect.Invalid, reflect.Int8, reflect.Int16, reflect.Int32,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Float32, reflect.Complex64, reflect.Complex128, reflect.Chan,
 		reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice,
 		reflect.Struct, reflect.UnsafePointer:
 		return SlicePtr[any](elemSchema)
@@ -3385,14 +2571,36 @@ func createMapSchema(valueSchema core.ZodSchema, valueType reflect.Type) core.Zo
 	// Maps in Go always have string keys for JSON unmarshaling
 	switch valueType.Kind() {
 	case reflect.String:
-		return Map(String(), valueSchema)
+		return RecordTyped[map[string]string, map[string]string](String(), valueSchema)
+	case reflect.Bool:
+		return RecordTyped[map[string]bool, map[string]bool](String(), valueSchema)
 	case reflect.Int:
-		return Map(String(), valueSchema)
+		return RecordTyped[map[string]int, map[string]int](String(), valueSchema)
+	case reflect.Int8:
+		return RecordTyped[map[string]int8, map[string]int8](String(), valueSchema)
+	case reflect.Int16:
+		return RecordTyped[map[string]int16, map[string]int16](String(), valueSchema)
+	case reflect.Int32:
+		return RecordTyped[map[string]int32, map[string]int32](String(), valueSchema)
+	case reflect.Int64:
+		return RecordTyped[map[string]int64, map[string]int64](String(), valueSchema)
+	case reflect.Uint:
+		return RecordTyped[map[string]uint, map[string]uint](String(), valueSchema)
+	case reflect.Uint8:
+		return RecordTyped[map[string]uint8, map[string]uint8](String(), valueSchema)
+	case reflect.Uint16:
+		return RecordTyped[map[string]uint16, map[string]uint16](String(), valueSchema)
+	case reflect.Uint32:
+		return RecordTyped[map[string]uint32, map[string]uint32](String(), valueSchema)
+	case reflect.Uint64:
+		return RecordTyped[map[string]uint64, map[string]uint64](String(), valueSchema)
+	case reflect.Float32:
+		return RecordTyped[map[string]float32, map[string]float32](String(), valueSchema)
+	case reflect.Float64:
+		return RecordTyped[map[string]float64, map[string]float64](String(), valueSchema)
 	case reflect.Interface:
-		return Map(String(), Any())
-	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
+		return RecordTyped[map[string]any, map[string]any](String(), Any())
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Array,
 		reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
 		reflect.Struct, reflect.UnsafePointer:
 		return Map(String(), valueSchema)
@@ -3405,16 +2613,36 @@ func createMapPtrSchema(valueSchema core.ZodSchema, valueType reflect.Type) core
 	// Maps in Go always have string keys for JSON unmarshaling
 	switch valueType.Kind() {
 	case reflect.String:
-		return MapPtr(String(), valueSchema)
+		return RecordTyped[map[string]string, *map[string]string](String(), valueSchema)
+	case reflect.Bool:
+		return RecordTyped[map[string]bool, *map[string]bool](String(), valueSchema)
 	case reflect.Int:
-		return MapPtr(String(), valueSchema)
+		return RecordTyped[map[string]int, *map[string]int](String(), valueSchema)
+	case reflect.Int8:
+		return RecordTyped[map[string]int8, *map[string]int8](String(), valueSchema)
+	case reflect.Int16:
+		return RecordTyped[map[string]int16, *map[string]int16](String(), valueSchema)
+	case reflect.Int32:
+		return RecordTyped[map[string]int32, *map[string]int32](String(), valueSchema)
+	case reflect.Int64:
+		return RecordTyped[map[string]int64, *map[string]int64](String(), valueSchema)
+	case reflect.Uint:
+		return RecordTyped[map[string]uint, *map[string]uint](String(), valueSchema)
+	case reflect.Uint8:
+		return RecordTyped[map[string]uint8, *map[string]uint8](String(), valueSchema)
+	case reflect.Uint16:
+		return RecordTyped[map[string]uint16, *map[string]uint16](String(), valueSchema)
+	case reflect.Uint32:
+		return RecordTyped[map[string]uint32, *map[string]uint32](String(), valueSchema)
+	case reflect.Uint64:
+		return RecordTyped[map[string]uint64, *map[string]uint64](String(), valueSchema)
+	case reflect.Float32:
+		return RecordTyped[map[string]float32, *map[string]float32](String(), valueSchema)
+	case reflect.Float64:
+		return RecordTyped[map[string]float64, *map[string]float64](String(), valueSchema)
 	case reflect.Interface:
-		// For any values, use Record instead of Map for better type compatibility
-		// Record uses map[string]any internally which matches Go's map[string]any
 		return RecordTyped[map[string]any, *map[string]any](String(), Any())
-	case reflect.Invalid, reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Array,
+	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Array,
 		reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice,
 		reflect.Struct, reflect.UnsafePointer:
 		return MapPtr(String(), valueSchema)
@@ -3443,186 +2671,144 @@ func applyOptionalToSchema(schema core.ZodSchema) core.ZodSchema {
 }
 
 func applySchemaModifier(schema core.ZodSchema, methodName string) core.ZodSchema {
+	return applySchemaMethod(schema, methodName)
+}
+
+func applySchemaMethod(schema core.ZodSchema, methodName string, args ...any) core.ZodSchema {
 	if schema == nil {
 		return nil
 	}
 	method := reflect.ValueOf(schema).MethodByName(methodName)
-	if method.IsValid() && method.Type().NumIn() == 0 && method.Type().NumOut() == 1 {
-		result := method.Call(nil)
-		if modified, ok := result[0].Interface().(core.ZodSchema); ok {
-			return modified
+	if !method.IsValid() || method.Type().NumOut() != 1 {
+		return schema
+	}
+
+	methodType := method.Type()
+	fixedArgs := methodType.NumIn()
+	if methodType.IsVariadic() {
+		fixedArgs--
+	}
+	if len(args) != fixedArgs {
+		return schema
+	}
+
+	input := make([]reflect.Value, 0, methodType.NumIn())
+	for i, arg := range args {
+		value, ok := schemaMethodArgument(arg, methodType.In(i))
+		if !ok {
+			return schema
 		}
+		input = append(input, value)
+	}
+	if methodType.IsVariadic() {
+		input = append(input, reflect.Zero(methodType.In(methodType.NumIn()-1)))
+	}
+
+	var result []reflect.Value
+	if methodType.IsVariadic() {
+		result = method.CallSlice(input)
+	} else {
+		result = method.Call(input)
+	}
+	if modified, ok := result[0].Interface().(core.ZodSchema); ok {
+		return modified
 	}
 	return schema
 }
 
-// applyPrefaultValue applies prefault values to schema types (pre-parse default with full validation)
-func applyPrefaultValue(schema core.ZodSchema, value string) core.ZodSchema {
-	switch s := schema.(type) {
-	case *ZodString[string]:
-		return s.Prefault(value)
-	case *ZodString[*string]:
-		return s.Prefault(value)
-	case *ZodIntegerTyped[int, int]:
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[int, *int]:
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[int8, int8]:
-		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int8, *int8]:
-		if intVal, err := strconv.ParseInt(value, 10, 8); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int16, int16]:
-		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int16, *int16]:
-		if intVal, err := strconv.ParseInt(value, 10, 16); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int32, int32]:
-		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int32, *int32]:
-		if intVal, err := strconv.ParseInt(value, 10, 32); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int64, int64]:
-		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[int64, *int64]:
-		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return s.Prefault(intVal)
-		}
-	case *ZodIntegerTyped[uint, uint]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Prefault(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint, *uint]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Prefault(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint8, uint8]:
-		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint8, *uint8]:
-		if intVal, err := strconv.ParseUint(value, 10, 8); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint16, uint16]:
-		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint16, *uint16]:
-		if intVal, err := strconv.ParseUint(value, 10, 16); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint32, uint32]:
-		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint32, *uint32]:
-		if intVal, err := strconv.ParseUint(value, 10, 32); err == nil {
-			return s.Prefault(int64(intVal))
-		}
-	case *ZodIntegerTyped[uint64, uint64]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Prefault(int64(intVal))
-			}
-		}
-	case *ZodIntegerTyped[uint64, *uint64]:
-		if intVal, err := strconv.ParseUint(value, 10, 64); err == nil {
-			if intVal <= 9223372036854775807 { // max int64 value
-				return s.Prefault(int64(intVal))
-			}
-		}
-	case *ZodFloatTyped[float64, float64]:
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return s.Prefault(floatVal)
-		}
-	case *ZodFloatTyped[float64, *float64]:
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return s.Prefault(floatVal)
-		}
-	case *ZodFloatTyped[float32, float32]:
-		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
-			return s.Prefault(floatVal)
-		}
-	case *ZodFloatTyped[float32, *float32]:
-		if floatVal, err := strconv.ParseFloat(value, 32); err == nil {
-			return s.Prefault(floatVal)
-		}
-	case *ZodBool[bool]:
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return s.Prefault(boolVal)
-		}
-	case *ZodBool[*bool]:
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return s.Prefault(boolVal)
-		}
-	case *ZodSlice[string, []string]:
-		// Parse array-like prefault value: ['val1','val2'] or ["val1","val2"]
-		if prefaultArray := parseArrayDefault(value); len(prefaultArray) > 0 {
-			// Convert interface{} slice to string slice
-			stringArray := make([]string, 0, len(prefaultArray))
-			for _, item := range prefaultArray {
-				if str, ok := item.(string); ok {
-					stringArray = append(stringArray, str)
-				}
-			}
-			if len(stringArray) > 0 {
-				return s.Prefault(stringArray)
-			}
-		}
-	case *ZodSlice[int, []int]:
-		// Parse array of integers
-		if prefaultArray := parseArrayDefault(value); len(prefaultArray) > 0 {
-			intArray := make([]int, 0, len(prefaultArray))
-			for _, item := range prefaultArray {
-				switch v := item.(type) {
-				case float64: // JSON numbers are float64
-					intArray = append(intArray, int(v))
-				case int:
-					intArray = append(intArray, v)
-				case string:
-					if intVal, err := strconv.Atoi(v); err == nil {
-						intArray = append(intArray, intVal)
-					}
-				}
-			}
-			if len(intArray) > 0 {
-				return s.Prefault(intArray)
-			}
-		}
-	case *ZodMap[map[string]string, map[string]string]:
-		// Parse map-like prefault value: {"key":"val"}
-		if prefaultMap := parseMapDefault(value); len(prefaultMap) > 0 {
-			// Convert interface{} map to string map
-			stringMap := make(map[string]string)
-			for k, v := range prefaultMap {
-				if str, ok := v.(string); ok {
-					stringMap[k] = str
-				}
-			}
-			if len(stringMap) > 0 {
-				return s.Prefault(stringMap)
-			}
-		}
+func schemaMethodArgument(value any, target reflect.Type) (reflect.Value, bool) {
+	if value == nil {
+		return reflect.Zero(target), true
 	}
-	return schema
+	source := reflect.ValueOf(value)
+	if source.Type().AssignableTo(target) {
+		return source, true
+	}
+
+	switch target.Kind() {
+	case reflect.Map:
+		if source.Kind() != reflect.Map {
+			return reflect.Value{}, false
+		}
+		if source.IsNil() {
+			return reflect.Zero(target), true
+		}
+		converted := reflect.MakeMapWithSize(target, source.Len())
+		iter := source.MapRange()
+		for iter.Next() {
+			key, ok := schemaMethodArgument(iter.Key().Interface(), target.Key())
+			if !ok {
+				return reflect.Value{}, false
+			}
+			value, ok := schemaMethodArgument(iter.Value().Interface(), target.Elem())
+			if !ok {
+				return reflect.Value{}, false
+			}
+			converted.SetMapIndex(key, value)
+		}
+		return converted, true
+	case reflect.Slice:
+		if source.Kind() != reflect.Slice && source.Kind() != reflect.Array {
+			return reflect.Value{}, false
+		}
+		if source.Kind() == reflect.Slice && source.IsNil() {
+			return reflect.Zero(target), true
+		}
+		converted := reflect.MakeSlice(target, source.Len(), source.Len())
+		for i := range source.Len() {
+			element, ok := schemaMethodArgument(source.Index(i).Interface(), target.Elem())
+			if !ok {
+				return reflect.Value{}, false
+			}
+			converted.Index(i).Set(element)
+		}
+		return converted, true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		var integer int64
+		switch source.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			integer = source.Int()
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			unsigned := source.Uint()
+			if unsigned > math.MaxInt64 {
+				return reflect.Value{}, false
+			}
+			integer = int64(unsigned)
+		default:
+			return reflect.Value{}, false
+		}
+		converted := reflect.New(target).Elem()
+		if converted.OverflowInt(integer) {
+			return reflect.Value{}, false
+		}
+		converted.SetInt(integer)
+		return converted, true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		var unsigned uint64
+		switch source.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			integer := source.Int()
+			if integer < 0 {
+				return reflect.Value{}, false
+			}
+			unsigned = uint64(integer)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			unsigned = source.Uint()
+		default:
+			return reflect.Value{}, false
+		}
+		converted := reflect.New(target).Elem()
+		if converted.OverflowUint(unsigned) {
+			return reflect.Value{}, false
+		}
+		converted.SetUint(unsigned)
+		return converted, true
+	default:
+		// Other kinds use the general conversion below.
+	}
+
+	if source.Type().ConvertibleTo(target) {
+		return source.Convert(target), true
+	}
+	return reflect.Value{}, false
 }

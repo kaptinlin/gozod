@@ -10,7 +10,6 @@ import (
 	"github.com/kaptinlin/gozod/internal/engine"
 	"github.com/kaptinlin/gozod/internal/issues"
 	"github.com/kaptinlin/gozod/internal/utils"
-	"github.com/kaptinlin/gozod/pkg/slicex"
 )
 
 var errUnexpectedSliceType = errors.New("unexpected result type from slice parser")
@@ -396,20 +395,22 @@ func (z *ZodSlice[T, R]) extractForEngine(value any) ([]T, bool) {
 		return nil, false
 	}
 
-	// Fall back to slicex for non-standard slice types.
+	// Fall back to reflection for named slices and fixed arrays.
 	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Slice {
-		if converted, err := slicex.ToAny(value); err == nil && converted != nil {
-			result := make([]T, len(converted))
-			for i, elem := range converted {
-				typed, ok := elem.(T)
-				if !ok {
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		elementType := reflect.TypeFor[T]()
+		result := make([]T, rv.Len())
+		for i := range rv.Len() {
+			element := rv.Index(i)
+			if !element.Type().AssignableTo(elementType) {
+				if !element.Type().ConvertibleTo(elementType) {
 					return nil, false
 				}
-				result[i] = typed
+				element = element.Convert(elementType)
 			}
-			return result, true
+			result[i] = element.Interface().(T)
 		}
+		return result, true
 	}
 
 	return nil, false
@@ -422,6 +423,12 @@ func (z *ZodSlice[T, R]) extractPtrForEngine(value any) (*[]T, bool) {
 	}
 	if s, ok := value.([]T); ok {
 		return &s, true
+	}
+	rv := reflect.ValueOf(value)
+	if rv.IsValid() && rv.Kind() == reflect.Pointer && !rv.IsNil() {
+		if converted, ok := z.extractForEngine(rv.Elem().Interface()); ok {
+			return &converted, true
+		}
 	}
 	return nil, false
 }

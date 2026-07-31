@@ -220,6 +220,12 @@ func (ctx *fromJSONSchemaContext) convertUnseen(s *lib.Schema) (core.ZodSchema, 
 	if s.ResolvedRef != nil {
 		return ctx.convertResolvedRef(s)
 	}
+	if s.MultipleOf != nil && (s.MultipleOf.Rat == nil || s.MultipleOf.Sign() <= 0) {
+		return nil, ctx.importError("multipleOf", fmt.Errorf(
+			"%w: multipleOf must be greater than zero",
+			ErrInvalidJSONSchema,
+		))
+	}
 
 	unsupported := ctx.unsupportedFeatures(s)
 	unsupported = append(unsupported, unanchoredValidationFeatures(s)...)
@@ -785,19 +791,39 @@ func (ctx *fromJSONSchemaContext) convertInteger(s *lib.Schema) (core.ZodSchema,
 	schema := types.Int()
 
 	if s.Minimum != nil {
-		schema = schema.Min(ratCeilInt64(s.Minimum))
+		minimum, ok := ratCeilIntOperand(s.Minimum)
+		if !ok {
+			return nil, ctx.invalidIntegerOperand("minimum", s.Minimum)
+		}
+		schema = schema.Min(minimum)
 	}
 	if s.Maximum != nil {
-		schema = schema.Max(ratFloorInt64(s.Maximum))
+		maximum, ok := ratFloorIntOperand(s.Maximum)
+		if !ok {
+			return nil, ctx.invalidIntegerOperand("maximum", s.Maximum)
+		}
+		schema = schema.Max(maximum)
 	}
 	if s.ExclusiveMinimum != nil {
-		schema = schema.Min(ratFloorInt64(s.ExclusiveMinimum) + 1)
+		minimum, ok := ratExclusiveMinimumOperand(s.ExclusiveMinimum)
+		if !ok {
+			return nil, ctx.invalidIntegerOperand("exclusiveMinimum", s.ExclusiveMinimum)
+		}
+		schema = schema.Min(minimum)
 	}
 	if s.ExclusiveMaximum != nil {
-		schema = schema.Max(ratCeilInt64(s.ExclusiveMaximum) - 1)
+		maximum, ok := ratExclusiveMaximumOperand(s.ExclusiveMaximum)
+		if !ok {
+			return nil, ctx.invalidIntegerOperand("exclusiveMaximum", s.ExclusiveMaximum)
+		}
+		schema = schema.Max(maximum)
 	}
 	if s.MultipleOf != nil {
-		if divisor := ratIntegerMultipleDivisor(s.MultipleOf); divisor > 1 {
+		divisor, ok := ratIntegerMultipleDivisor(s.MultipleOf)
+		if !ok {
+			return nil, ctx.invalidIntegerOperand("multipleOf", s.MultipleOf)
+		}
+		if divisor > 1 {
 			schema = schema.MultipleOf(divisor)
 		}
 	}
@@ -805,24 +831,63 @@ func (ctx *fromJSONSchemaContext) convertInteger(s *lib.Schema) (core.ZodSchema,
 	return schema, nil
 }
 
-func ratFloorInt64(r *lib.Rat) int64 {
+func (ctx *fromJSONSchemaContext) invalidIntegerOperand(keyword string, value *lib.Rat) error {
+	return ctx.importError(keyword, fmt.Errorf(
+		"%w: value %s is outside the int%d constraint domain",
+		ErrInvalidJSONSchema,
+		lib.FormatRat(value),
+		strconv.IntSize,
+	))
+}
+
+func ratFloorIntOperand(r *lib.Rat) (int64, bool) {
 	var floor big.Int
 	floor.Div(r.Num(), r.Denom())
-	return floor.Int64()
+	return bigIntOperand(&floor)
 }
 
-func ratCeilInt64(r *lib.Rat) int64 {
-	ceil := ratFloorInt64(r)
+func ratCeilIntOperand(r *lib.Rat) (int64, bool) {
+	var ceil big.Int
+	ceil.Div(r.Num(), r.Denom())
 	if !r.IsInt() {
-		ceil++
+		ceil.Add(&ceil, big.NewInt(1))
 	}
-	return ceil
+	return bigIntOperand(&ceil)
 }
 
-func ratIntegerMultipleDivisor(r *lib.Rat) int64 {
+func ratExclusiveMinimumOperand(r *lib.Rat) (int64, bool) {
+	var minimum big.Int
+	minimum.Div(r.Num(), r.Denom())
+	minimum.Add(&minimum, big.NewInt(1))
+	return bigIntOperand(&minimum)
+}
+
+func ratExclusiveMaximumOperand(r *lib.Rat) (int64, bool) {
+	var maximum big.Int
+	maximum.Div(r.Num(), r.Denom())
+	if !r.IsInt() {
+		maximum.Add(&maximum, big.NewInt(1))
+	}
+	maximum.Sub(&maximum, big.NewInt(1))
+	return bigIntOperand(&maximum)
+}
+
+func bigIntOperand(value *big.Int) (int64, bool) {
+	if !value.IsInt64() {
+		return 0, false
+	}
+
+	operand := value.Int64()
+	if strconv.IntSize == 32 && (operand < -1<<31 || operand > 1<<31-1) {
+		return 0, false
+	}
+	return operand, true
+}
+
+func ratIntegerMultipleDivisor(r *lib.Rat) (int64, bool) {
 	var numerator big.Int
 	numerator.Abs(r.Num())
-	return numerator.Int64()
+	return bigIntOperand(&numerator)
 }
 
 // convertArray converts an array type schema.

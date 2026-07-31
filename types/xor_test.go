@@ -7,8 +7,26 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 	. "github.com/kaptinlin/gozod/types"
 )
+
+func TestXor_PreservesAllBranchIssues(t *testing.T) {
+	schema := Xor([]any{
+		Slice[string](String().Min(5).Email()),
+		Slice[string](String().StartsWith("z").EndsWith("q")),
+	})
+
+	_, err := schema.Parse([]string{"x"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	require.Len(t, zodErr.Issues[0].Errors, 2)
+	assert.Len(t, zodErr.Issues[0].Errors[0], 2)
+	assert.Len(t, zodErr.Issues[0].Errors[1], 2)
+}
 
 // =============================================================================
 // Optional / Nilable / Nullish / NonOptional modifiers

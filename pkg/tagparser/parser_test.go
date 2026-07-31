@@ -135,21 +135,18 @@ func TestTagParser_ParseStructTags(t *testing.T) {
 	require.NotNil(t, nameField, "Name field not found")
 	assert.Equal(t, "name", nameField.FieldKey)
 	assert.True(t, nameField.Required, "Name field should be required")
-	assert.False(t, nameField.Optional, "Name field should not be optional")
 	assert.Len(t, nameField.Rules, 3)
 
 	// Verify OptionalField
 	optField := findField(fields, "OptionalField")
 	require.NotNil(t, optField, "OptionalField not found")
 	assert.False(t, optField.Required, "OptionalField should not be required")
-	assert.True(t, optField.Optional, "OptionalField should be optional (pointer type)")
 	assert.Len(t, optField.Rules, 1)
 
 	// Verify NoTagField (field without gozod tag)
 	noTagField := findField(fields, "NoTagField")
 	require.NotNil(t, noTagField, "NoTagField not found")
 	assert.False(t, noTagField.Required, "NoTagField should not be required")
-	assert.False(t, noTagField.Optional, "NoTagField should not be optional (no pointer, no rules)")
 	assert.Len(t, noTagField.Rules, 0)
 }
 

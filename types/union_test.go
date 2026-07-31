@@ -7,8 +7,49 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 	. "github.com/kaptinlin/gozod/types"
 )
+
+func TestUnion_PreservesAllBranchIssues(t *testing.T) {
+	schema := Union([]any{
+		Slice[string](String().Min(5).Email()),
+		Slice[string](String().StartsWith("z").EndsWith("q")),
+	})
+
+	_, err := schema.Parse([]string{"x"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	unionIssue := zodErr.Issues[0]
+	require.Equal(t, core.InvalidUnion, unionIssue.Code)
+	require.Len(t, unionIssue.Errors, 2)
+	require.Len(t, unionIssue.Errors[0], 2)
+	require.Len(t, unionIssue.Errors[1], 2)
+
+	assert.Equal(t, core.TooSmall, unionIssue.Errors[0][0].Code)
+	assert.Equal(t, 5, unionIssue.Errors[0][0].Minimum)
+	assert.Equal(t, []any{0}, unionIssue.Errors[0][0].Path)
+	assert.Equal(t, core.InvalidFormat, unionIssue.Errors[0][1].Code)
+	assert.Equal(t, "email", unionIssue.Errors[0][1].Format)
+	assert.Equal(t, []any{0}, unionIssue.Errors[0][1].Path)
+
+	assert.Equal(t, "z", unionIssue.Errors[1][0].Prefix)
+	assert.Equal(t, []any{0}, unionIssue.Errors[1][0].Path)
+	assert.Equal(t, "q", unionIssue.Errors[1][1].Suffix)
+	assert.Equal(t, []any{0}, unionIssue.Errors[1][1].Path)
+
+	before := make([][]core.ZodIssue, len(unionIssue.Errors))
+	for i, branch := range unionIssue.Errors {
+		before[i] = append([]core.ZodIssue(nil), branch...)
+	}
+	assert.NotPanics(t, func() { _ = issues.TreeifyError(zodErr) })
+	assert.NotPanics(t, func() { _ = issues.FlattenError(zodErr) })
+	assert.NotPanics(t, func() { _ = issues.PrettifyError(zodErr) })
+	assert.Equal(t, before, zodErr.Issues[0].Errors)
+}
 
 func TestUnion_BasicFunctionality(t *testing.T) {
 	t.Run("valid inputs", func(t *testing.T) {

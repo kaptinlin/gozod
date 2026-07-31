@@ -2,9 +2,9 @@
 // reusable representation shared by GoZod runtime code and codegen.
 //
 // Callers should prefer [FieldInfo] helper methods such as
-// [FieldInfo.ValidationRules], [FieldInfo.NeedsGeneratedOptional], and
+// [FieldInfo.ValidationRules], [FieldInfo.NeedsPointerNilable], and
 // [FieldInfo.RequiredImports] instead of re-deriving schema-generation
-// semantics from raw fields like Rules, Required, or Optional.
+// semantics from raw fields like Rules or Required.
 //
 // Use [TagParser.ParseStructTags] for compatibility-oriented callers
 // that prefer empty results on non-struct input, or

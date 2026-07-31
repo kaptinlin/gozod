@@ -1,10 +1,12 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -415,6 +417,170 @@ func TestCodeGenerator_ProcessPackageReturnsAnalysisError(t *testing.T) {
 	err = generator.ProcessPackage(helper.GetTempDir())
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "analyze package")
+}
+
+func TestCodeGenerator_ProcessPackageLeavesOutputsUnchangedOnTypeError(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("go.mod", `module example.test/typeerror
+
+go 1.26.5
+`)
+	helper.CreateGoFile("user.go", `package main
+
+var invalid string = 42
+
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+
+type Product struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+	want := []byte("existing generated output\n")
+	outputPath := filepath.Join(helper.GetTempDir(), "user_gen.go")
+	require.NoError(t, os.WriteFile(outputPath, want, 0600))
+
+	generator, err := NewCodeGenerator(&GeneratorConfig{OutputSuffix: "_gen.go", PackageName: "main"})
+	require.NoError(t, err)
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.Error(t, err)
+	got, readErr := os.ReadFile(outputPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, want, got)
+	helper.AssertFileNotExists("product_gen.go")
+}
+
+func TestCodeGenerator_ProcessPackageLeavesOutputsUnchangedOnUnsupportedField(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("models.go", `package main
+
+type Valid struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+
+type Broken struct {
+	Updates chan int `+"`gozod:\"required\"`"+`
+}
+`)
+	want := []byte("package main\n\nconst existingGeneratedOutput = true\n")
+	outputPath := filepath.Join(helper.GetTempDir(), "models_gen.go")
+	require.NoError(t, os.WriteFile(outputPath, want, 0600))
+
+	generator, err := NewCodeGenerator(&GeneratorConfig{OutputSuffix: "_gen.go", PackageName: "main"})
+	require.NoError(t, err)
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "Updates")
+	assert.ErrorContains(t, err, "chan int")
+	assert.ErrorContains(t, err, "unsupported field type")
+	got, readErr := os.ReadFile(outputPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, want, got)
+}
+
+func TestCodeGenerator_ProcessPackageLeavesOutputsUnchangedOnUnsupportedMapKey(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("models.go", `package main
+
+type Valid struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+
+type Broken struct {
+	Values map[int]string `+"`gozod:\"required\"`"+`
+}
+`)
+	want := []byte("package main\n\nconst existingGeneratedOutput = true\n")
+	outputPath := filepath.Join(helper.GetTempDir(), "models_gen.go")
+	require.NoError(t, os.WriteFile(outputPath, want, 0600))
+
+	generator, err := NewCodeGenerator(&GeneratorConfig{OutputSuffix: "_gen.go", PackageName: "main"})
+	require.NoError(t, err)
+
+	err = generator.ProcessPackage(helper.GetTempDir())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "Values")
+	assert.ErrorContains(t, err, "map[int]string")
+	assert.ErrorContains(t, err, "unsupported field type")
+	got, readErr := os.ReadFile(outputPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, want, got)
+}
+
+func TestCodeGenerator_ProcessPackageDoesNotPublishPartialRenderResults(t *testing.T) {
+	tests := []struct {
+		name   string
+		dryRun bool
+	}{
+		{name: "files", dryRun: false},
+		{name: "dry run output", dryRun: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := NewTestHelper(t)
+			helper.CreateGoFile("models.go", `package main
+
+type First struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+
+type Second struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+			want := []byte("package main\n\nconst existingFirstOutput = true\n")
+			firstPath := filepath.Join(helper.GetTempDir(), "first_gen.go")
+			if !tt.dryRun {
+				require.NoError(t, os.WriteFile(firstPath, want, 0600))
+			}
+
+			generator, err := NewCodeGenerator(&GeneratorConfig{
+				OutputSuffix: "_gen.go",
+				PackageName:  "main",
+				DryRun:       tt.dryRun,
+			})
+			require.NoError(t, err)
+			writer, err := NewFileWriter("", "main", "_gen.go", tt.dryRun, false)
+			require.NoError(t, err)
+			writer.templates = template.Must(template.New("main").Parse(`package main
+{{if eq .StructName "Second"}}func ({{else}}const renderedFirst = true{{end}}
+`))
+			generator.writer = writer
+
+			var output string
+			if tt.dryRun {
+				readEnd, writeEnd, pipeErr := os.Pipe()
+				require.NoError(t, pipeErr)
+				originalStdout := os.Stdout
+				os.Stdout = writeEnd
+				err = generator.ProcessPackage(helper.GetTempDir())
+				os.Stdout = originalStdout
+				require.NoError(t, writeEnd.Close())
+				captured, readErr := io.ReadAll(readEnd)
+				require.NoError(t, readErr)
+				require.NoError(t, readEnd.Close())
+				output = string(captured)
+			} else {
+				err = generator.ProcessPackage(helper.GetTempDir())
+			}
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "Second")
+			if tt.dryRun {
+				assert.Empty(t, output)
+				helper.AssertFileNotExists("first_gen.go")
+			} else {
+				got, readErr := os.ReadFile(firstPath)
+				require.NoError(t, readErr)
+				assert.Equal(t, want, got)
+			}
+			helper.AssertFileNotExists("second_gen.go")
+		})
+	}
 }
 
 func TestCodeGenerator_ProcessPackageReturnsWriteError(t *testing.T) {

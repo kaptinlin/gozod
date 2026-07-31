@@ -138,7 +138,7 @@ func CreateInvalidKeyIssue(key string, origin string, input any) core.ZodRawIssu
 }
 
 // CreateInvalidUnionIssue creates an invalid union issue.
-func CreateInvalidUnionIssue(unionErrors []core.ZodRawIssue, input any) core.ZodRawIssue {
+func CreateInvalidUnionIssue(unionErrors [][]core.ZodRawIssue, input any) core.ZodRawIssue {
 	properties := map[string]any{
 		"union_errors": unionErrors,
 	}
@@ -151,11 +151,11 @@ func CreateInvalidUnionIssue(unionErrors []core.ZodRawIssue, input any) core.Zod
 }
 
 // CreateInvalidElementIssue creates an invalid element issue with proper path.
-func CreateInvalidElementIssue(index int, origin string, input any, elementError core.ZodRawIssue) core.ZodRawIssue {
+func CreateInvalidElementIssue(index int, origin string, input any, elementErrors []core.ZodRawIssue) core.ZodRawIssue {
 	properties := map[string]any{
-		"index":         index,
-		"origin":        origin,
-		"element_error": elementError,
+		"index":  index,
+		"origin": origin,
+		"issues": elementErrors,
 	}
 
 	rawIssue := CreateIssue(core.InvalidElement, "", properties, input)
@@ -253,53 +253,89 @@ func CreateNonOptionalIssue(input any) core.ZodRawIssue {
 
 // ConvertZodIssueToRaw converts a ZodIssue to ZodRawIssue.
 func ConvertZodIssueToRaw(issue core.ZodIssue) core.ZodRawIssue {
-	return core.ZodRawIssue{
-		Code:       issue.Code,
-		Message:    issue.Message,
-		Input:      issue.Input,
-		Path:       []any{},
-		Properties: make(map[string]any),
-	}
+	return convertZodIssueToRawWithPath(issue, issue.Path)
 }
 
-// ConvertZodIssueToRawWithProperties converts a ZodIssue to ZodRawIssue with essential properties.
-// The pathPrefix is set directly as the path (for slice/set where elements have simple index paths).
+// ConvertZodIssueToRawWithProperties converts a ZodIssue to ZodRawIssue with its path prefixed.
 func ConvertZodIssueToRawWithProperties(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
-	return convertZodIssueToRawWithPath(issue, pathPrefix)
+	return ConvertZodIssueToRawWithPrependedPath(issue, pathPrefix)
 }
 
 // ConvertZodIssueToRawWithPrependedPath converts a ZodIssue to ZodRawIssue,
 // prepending pathPrefix to the issue's existing path.
 func ConvertZodIssueToRawWithPrependedPath(issue core.ZodIssue, pathPrefix []any) core.ZodRawIssue {
-	fullPath := slices.Concat(pathPrefix, issue.Path)
-	return convertZodIssueToRawWithPath(issue, fullPath)
+	return convertZodIssueToRawWithPath(issue, slices.Concat(pathPrefix, issue.Path))
 }
 
-// convertZodIssueToRawWithPath creates a raw issue with the given path and copies essential properties.
 func convertZodIssueToRawWithPath(issue core.ZodIssue, path []any) core.ZodRawIssue {
-	rawIssue := core.ZodRawIssue{
+	return core.ZodRawIssue{
 		Code:       issue.Code,
 		Message:    issue.Message,
 		Input:      issue.Input,
-		Path:       path,
-		Properties: make(map[string]any),
+		Path:       slices.Clone(path),
+		Properties: zodIssueProperties(issue),
 	}
+}
 
+func zodIssueProperties(issue core.ZodIssue) map[string]any {
+	properties := make(map[string]any)
 	if issue.Minimum != nil {
-		rawIssue.Properties["minimum"] = issue.Minimum
+		properties["minimum"] = issue.Minimum
 	}
 	if issue.Maximum != nil {
-		rawIssue.Properties["maximum"] = issue.Maximum
+		properties["maximum"] = issue.Maximum
 	}
 	if issue.Expected != "" {
-		rawIssue.Properties["expected"] = issue.Expected
+		properties["expected"] = string(issue.Expected)
 	}
 	if issue.Received != "" {
-		rawIssue.Properties["received"] = issue.Received
+		properties["received"] = string(issue.Received)
 	}
-	rawIssue.Properties["inclusive"] = issue.Inclusive
-
-	return rawIssue
+	properties["inclusive"] = issue.Inclusive
+	if len(issue.Keys) > 0 {
+		properties["keys"] = slices.Clone(issue.Keys)
+	}
+	if len(issue.Values) > 0 {
+		properties["values"] = slices.Clone(issue.Values)
+	}
+	if issue.Format != "" {
+		properties["format"] = issue.Format
+	}
+	for key, value := range map[string]string{
+		"pattern": issue.Pattern, "includes": issue.Includes, "prefix": issue.Prefix,
+		"suffix": issue.Suffix, "algorithm": issue.Algorithm, "origin": issue.Origin,
+	} {
+		if value != "" {
+			properties[key] = value
+		}
+	}
+	if issue.Divisor != nil {
+		properties["divisor"] = issue.Divisor
+	}
+	if issue.Key != nil {
+		properties["key"] = issue.Key
+	}
+	if len(issue.Params) > 0 {
+		properties["params"] = maps.Clone(issue.Params)
+	}
+	if len(issue.Errors) > 0 {
+		errors := make([][]core.ZodRawIssue, len(issue.Errors))
+		for i, branch := range issue.Errors {
+			errors[i] = make([]core.ZodRawIssue, len(branch))
+			for j, nested := range branch {
+				errors[i][j] = ConvertZodIssueToRaw(nested)
+			}
+		}
+		properties["errors"] = errors
+	}
+	if len(issue.Issues) > 0 {
+		issues := make([]core.ZodRawIssue, len(issue.Issues))
+		for i, nested := range issue.Issues {
+			issues[i] = ConvertZodIssueToRaw(nested)
+		}
+		properties["issues"] = issues
+	}
+	return properties
 }
 
 // CreateErrorMap creates an error map from various input types.
@@ -427,19 +463,21 @@ func CreateInvalidKeyError(key string, origin string, input any, ctx *core.Parse
 	return NewZodError([]core.ZodIssue{final})
 }
 
-// extractFirstRawIssue extracts the first raw issue from an error, returning
-// a fallback issue if the error is not a ZodError or has no issues.
-func extractFirstRawIssue(err error, fallbackCode core.IssueCode, input any) core.ZodRawIssue {
+func extractRawIssues(err error, fallbackCode core.IssueCode, input any) []core.ZodRawIssue {
 	if zodErr, ok := errors.AsType[*ZodError](err); ok && len(zodErr.Issues) > 0 {
-		return ConvertZodIssueToRaw(zodErr.Issues[0])
+		rawIssues := make([]core.ZodRawIssue, len(zodErr.Issues))
+		for i, issue := range zodErr.Issues {
+			rawIssues[i] = ConvertZodIssueToRaw(issue)
+		}
+		return rawIssues
 	}
-	return CreateIssue(fallbackCode, err.Error(), nil, input)
+	return []core.ZodRawIssue{CreateIssue(fallbackCode, err.Error(), nil, input)}
 }
 
 // CreateElementValidationIssue creates a raw issue for invalid element validation.
 func CreateElementValidationIssue(index int, origin string, element any, elementError error) core.ZodRawIssue {
-	raw := extractFirstRawIssue(elementError, core.InvalidElement, element)
-	return CreateInvalidElementIssue(index, origin, element, raw)
+	rawIssues := extractRawIssues(elementError, core.InvalidElement, element)
+	return CreateInvalidElementIssue(index, origin, element, rawIssues)
 }
 
 // CreateArrayValidationIssues creates a ZodError from multiple array validation issues.
@@ -456,14 +494,6 @@ func CreateArrayValidationIssues(issues []core.ZodRawIssue) error {
 	return NewZodError(finalizedIssues)
 }
 
-// CreateInvalidElementError creates an invalid element error with proper context.
-func CreateInvalidElementError(index int, origin string, input any, elementError error, ctx *core.ParseContext) error {
-	raw := extractFirstRawIssue(elementError, core.Custom, input)
-	issue := CreateInvalidElementIssue(index, origin, input, raw)
-	final := FinalizeIssue(issue, ctx, nil)
-	return NewZodError([]core.ZodIssue{final})
-}
-
 // CreateNotMultipleOfError creates a "not multiple of" error with proper context.
 func CreateNotMultipleOfError(divisor any, origin string, input any, ctx *core.ParseContext) error {
 	raw := CreateNotMultipleOfIssue(divisor, origin, input)
@@ -473,9 +503,9 @@ func CreateNotMultipleOfError(divisor any, origin string, input any, ctx *core.P
 
 // CreateInvalidUnionError creates an invalid union error with proper context.
 func CreateInvalidUnionError(unionErrors []error, input any, ctx *core.ParseContext) error {
-	raws := make([]core.ZodRawIssue, len(unionErrors))
+	raws := make([][]core.ZodRawIssue, len(unionErrors))
 	for i, err := range unionErrors {
-		raws[i] = extractFirstRawIssue(err, core.Custom, input)
+		raws[i] = extractRawIssues(err, core.Custom, input)
 	}
 	raw := CreateInvalidUnionIssue(raws, input)
 	final := FinalizeIssue(raw, ctx, nil)

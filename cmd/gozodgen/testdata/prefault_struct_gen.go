@@ -12,7 +12,7 @@ func (ps PrefaultStruct) Schema() *gozod.ZodStruct[PrefaultStruct, PrefaultStruc
 	return gozod.Struct[PrefaultStruct](gozod.StructSchema{
 		"str":   gozod.String().Optional().Prefault("world"),
 		"num":   gozod.Int().Optional().Prefault(100),
-		"slice": gozod.Slice(gozod.String()).Optional().Prefault([]string{"x", "y"}),
-		"map":   gozod.Record(gozod.String()).Optional().Prefault(map[string]string{"foo": "bar"}),
+		"slice": gozod.Slice[string](gozod.String()).Optional().Prefault([]string{"x", "y"}),
+		"map":   gozod.Record[string, string](gozod.String(), gozod.String()).Optional().Prefault(map[string]string{"foo": "bar"}),
 	})
 }

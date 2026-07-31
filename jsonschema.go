@@ -14,12 +14,19 @@ type JSONSchemaImportLossError = jsonschema.ImportLossError
 type JSONSchemaUnrepresentableMode = jsonschema.UnrepresentableMode
 type JSONSchemaCyclesMode = jsonschema.CyclesMode
 type JSONSchemaReusedMode = jsonschema.ReusedMode
-type JSONSchemaTargetMode = jsonschema.TargetMode
 type JSONSchemaIOMode = jsonschema.IOMode
 
-// ToJSONSchema converts a GoZod schema or registry into JSON Schema.
-func ToJSONSchema(input any, opts ...JSONSchemaOptions) (*lib.Schema, error) {
-	return jsonschema.ToJSONSchema(input, opts...)
+// ToJSONSchema converts a GoZod schema into JSON Schema.
+func ToJSONSchema(schema ZodSchema, opts ...JSONSchemaOptions) (*lib.Schema, error) {
+	return jsonschema.ToJSONSchema(schema, opts...)
+}
+
+// ToJSONSchemaRegistry converts a schema registry into a JSON Schema document.
+func ToJSONSchemaRegistry(
+	registry *Registry[GlobalMeta],
+	opts ...JSONSchemaOptions,
+) (*lib.Schema, error) {
+	return jsonschema.ToJSONSchemaRegistry(registry, opts...)
 }
 
 // FromJSONSchema converts JSON Schema into a GoZod schema.
@@ -42,13 +49,11 @@ const (
 	JSONSchemaCyclesThrow          = jsonschema.CyclesThrow
 	JSONSchemaReusedInline         = jsonschema.ReusedInline
 	JSONSchemaReusedRef            = jsonschema.ReusedRef
-	JSONSchemaTargetDraft202012    = jsonschema.TargetDraft202012
 	JSONSchemaIOOutput             = jsonschema.IOOutput
 	JSONSchemaIOInput              = jsonschema.IOInput
 )
 
 var (
-	ErrUnsupportedInputType          = jsonschema.ErrUnsupportedInputType
 	ErrCircularReference             = jsonschema.ErrCircularReference
 	ErrUnrepresentableType           = jsonschema.ErrUnrepresentableType
 	ErrSchemaNotObjectOrStruct       = jsonschema.ErrSchemaNotObjectOrStruct
@@ -70,7 +75,6 @@ var (
 	ErrMapKeyNotSchema               = jsonschema.ErrMapKeyNotSchema
 	ErrMapValueNotSchema             = jsonschema.ErrMapValueNotSchema
 	ErrInvalidJSONSchemaOption       = jsonschema.ErrInvalidJSONSchemaOption
-	ErrUnsupportedJSONSchemaTarget   = jsonschema.ErrUnsupportedJSONSchemaTarget
 	ErrUnsupportedJSONSchemaType     = jsonschema.ErrUnsupportedJSONSchemaType
 	ErrUnsupportedJSONSchemaKeyword  = jsonschema.ErrUnsupportedJSONSchemaKeyword
 	ErrInvalidJSONSchema             = jsonschema.ErrInvalidJSONSchema

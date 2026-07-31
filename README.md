@@ -7,7 +7,7 @@ A TypeScript Zod v4-inspired validation library for Go with strict type semantic
 
 ## Features
 
-- **Strict type semantics**: Value schemas and pointer schemas accept exact input types unless coercion is explicit.
+- **Go type semantics**: Primitive schemas accept their Go kind, including defined primitives, while cross-kind coercion stays explicit and struct output preserves declared field types.
 - **Dual parsing modes**: Use `Parse(any)` for dynamic data and `StrictParse(T)` for known Go values.
 - **Fluent schema API**: Compose primitives, collections, structs, unions, intersections, transforms, refinements, defaults, and metadata.
 - **Schema-described output**: Object fields, catchall values, defaults, prefaults, transforms, and overwrites return the parsed child output.
@@ -69,7 +69,10 @@ if err != nil {
 fmt.Println(fromJSON, knownValue)
 ```
 
-`StrictParse` keeps the call site compile-time constrained. `Parse` keeps the boundary flexible and returns ordinary Go errors.
+`StrictParse` keeps the call site compile-time constrained. `Parse` keeps the
+boundary flexible, accepts defined primitives with the expected underlying
+kind, and does not perform cross-kind coercion unless the schema explicitly
+enables it.
 
 ## Struct Tags
 
@@ -112,6 +115,10 @@ func main() {
 ```
 
 Use `gozod.WithTagName("validate")` when your project uses another rule tag, and `gozod.WithFieldNameTag("yaml")` to resolve field names (error paths and JSON Schema) from `yaml`/`toml` tags instead of `json`. See [docs/tags.md](docs/tags.md) for supported tag rules and generated-schema details.
+
+`required` is the field-presence switch. Tagged fields without `required` are
+optional whether their Go type is a value or pointer; pointer types separately
+control pointer output and nil handling.
 
 ## Programmatic Schemas
 
@@ -199,6 +206,8 @@ See [docs/metadata.md](docs/metadata.md) for registries and JSON Schema metadata
 
 `gozod.ToJSONSchema` returns a `*jsonschema.Schema` from `github.com/kaptinlin/jsonschema`.
 Use the exported `JSONSchema*` mode constants instead of raw strings when setting conversion options.
+It exports one schema using the fixed Draft 2020-12 dialect. Use the separate
+typed `ToJSONSchemaRegistry` entry point for a registry bundle.
 
 ```go
 schema := gozod.Object(gozod.ObjectSchema{
@@ -245,6 +254,20 @@ zodSchema, err := gozod.FromJSONSchema(jsonSchema, gozod.FromJSONSchemaOptions{
 })
 ```
 
+For a batch export, give every top-level registry entry a unique non-empty ID:
+
+```go
+registry := gozod.NewRegistry[gozod.GlobalMeta]().
+	Add(gozod.String(), gozod.GlobalMeta{ID: "Name"})
+
+bundle, err := gozod.ToJSONSchemaRegistry(registry)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(len(bundle.Defs))
+```
+
 See [docs/json-schema.md](docs/json-schema.md) for conversion options, unsupported features, registries, and Draft 2020-12 notes.
 
 ## Error Handling
@@ -275,6 +298,13 @@ Install `gozodgen` when generated struct-tag schemas fit your path better than r
 go install github.com/kaptinlin/gozod/cmd/gozodgen@latest
 go generate ./...
 ```
+
+`gozodgen` loads each concrete package with its Go module and build context,
+fails before publishing files when package analysis or schema rendering fails,
+and generates only types it can represent faithfully. Use `-tag-name`,
+`-field-name-tag`, `-suffix`, and `-method` to select real generation behavior.
+Generated `Schema()` methods are explicit; `FromStruct[T]()` remains the
+reflection path and does not auto-discover them.
 
 See [cmd/gozodgen](cmd/gozodgen/) and [examples/code_generation](examples/code_generation/).
 

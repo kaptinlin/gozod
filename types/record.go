@@ -689,7 +689,7 @@ func (z *ZodRecord[T, R]) validateRecord(value map[string]any, checks []core.Zod
 				// For non-ZodError errors, propagate immediately to match strict validation behavior.
 				if zodErr, ok := errors.AsType[*issues.ZodError](keyErr); ok {
 					for _, issue := range zodErr.Issues {
-						rawIssues = append(rawIssues, issues.ConvertZodIssueToRaw(issue))
+						rawIssues = append(rawIssues, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{key}))
 					}
 				} else {
 					return nil, keyErr

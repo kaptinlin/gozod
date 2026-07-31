@@ -17,7 +17,6 @@ import (
 
 // Conversion errors for ToJSONSchema operations.
 var (
-	ErrUnsupportedInputType          = errors.New("unsupported input type")
 	ErrCircularReference             = errors.New("circular reference detected")
 	ErrUnrepresentableType           = errors.New("unrepresentable type")
 	ErrSchemaNotObjectOrStruct       = errors.New("schema is not a ZodObject or ZodStruct")
@@ -39,7 +38,6 @@ var (
 	ErrMapKeyNotSchema               = errors.New("map key type is not a valid schema")
 	ErrMapValueNotSchema             = errors.New("map value type is not a valid schema")
 	ErrInvalidJSONSchemaOption       = errors.New("invalid JSON Schema option")
-	ErrUnsupportedJSONSchemaTarget   = errors.New("unsupported JSON Schema target")
 )
 
 // OverrideContext provides context for the Override function.
@@ -57,9 +55,6 @@ type CyclesMode string
 // ReusedMode controls how export handles reused schema instances.
 type ReusedMode string
 
-// TargetMode identifies the JSON Schema dialect emitted by export.
-type TargetMode string
-
 // IOMode selects whether export represents schema input or output shape.
 type IOMode string
 
@@ -73,8 +68,6 @@ const (
 
 	ReusedInline ReusedMode = "inline"
 	ReusedRef    ReusedMode = "ref"
-
-	TargetDraft202012 TargetMode = "draft-2020-12"
 
 	IOOutput IOMode = "output"
 	IOInput  IOMode = "input"
@@ -104,10 +97,6 @@ type Options struct {
 	// A function used to convert ID values to URIs for external $refs.
 	URI func(id string) string
 
-	// Target specifies the JSON Schema version.
-	// "draft-2020-12" (default).
-	Target TargetMode
-
 	// Override is a custom logic to modify the schema after generation.
 	Override func(ctx OverrideContext)
 
@@ -116,26 +105,36 @@ type Options struct {
 	IO IOMode
 }
 
-// ToJSONSchema converts a GoZod schema or registry into a JSON Schema instance.
-func ToJSONSchema(input any, opts ...Options) (*lib.Schema, error) {
+// ToJSONSchema converts a GoZod schema into a JSON Schema instance.
+func ToJSONSchema(schema core.ZodSchema, opts ...Options) (*lib.Schema, error) {
+	options, err := optionsFrom(opts)
+	if err != nil {
+		return nil, err
+	}
+	return toJSONSchemaSingle(schema, options)
+}
+
+// ToJSONSchemaRegistry converts a schema registry into a JSON Schema document.
+func ToJSONSchemaRegistry(
+	registry *core.Registry[core.GlobalMeta],
+	opts ...Options,
+) (*lib.Schema, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("registry is nil: %w", ErrInvalidRegistrySchemaID)
+	}
+	options, err := optionsFrom(opts)
+	if err != nil {
+		return nil, err
+	}
+	return toJSONSchemaRegistry(registry, options)
+}
+
+func optionsFrom(opts []Options) (Options, error) {
 	var options Options
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	var err error
-	options, err = normalizeOptions(options)
-	if err != nil {
-		return nil, err
-	}
-
-	switch v := input.(type) {
-	case core.ZodSchema:
-		return toJSONSchemaSingle(v, options)
-	case *core.Registry[core.GlobalMeta]:
-		return toJSONSchemaRegistry(v, options)
-	default:
-		return nil, fmt.Errorf("%w: %T", ErrUnsupportedInputType, v)
-	}
+	return normalizeOptions(options)
 }
 
 func normalizeOptions(opts Options) (Options, error) {
@@ -158,13 +157,6 @@ func normalizeOptions(opts Options) (Options, error) {
 	}
 	if opts.Reused != ReusedInline && opts.Reused != ReusedRef {
 		return opts, fmt.Errorf("%w: Reused=%q", ErrInvalidJSONSchemaOption, opts.Reused)
-	}
-
-	if opts.Target == "" {
-		opts.Target = TargetDraft202012
-	}
-	if opts.Target != TargetDraft202012 {
-		return opts, fmt.Errorf("%w: %s", ErrUnsupportedJSONSchemaTarget, opts.Target)
 	}
 
 	if opts.IO == "" {
@@ -206,6 +198,7 @@ type registryEntry struct {
 func toJSONSchemaRegistry(reg *core.Registry[core.GlobalMeta], opts Options) (*lib.Schema, error) {
 	var entries []registryEntry
 	reg.Range(func(schema core.ZodSchema, meta core.GlobalMeta) bool {
+		meta = cloneutil.Clone(meta).(core.GlobalMeta)
 		entries = append(entries, registryEntry{schema: schema, meta: meta})
 		return true
 	})
@@ -258,7 +251,6 @@ type converter struct {
 	auto          int
 	path          []string
 	defs          map[string]*lib.Schema
-	depth         int
 	idCache       map[core.ZodSchema]string         // cache for getID results
 	unwrapCache   map[core.ZodSchema]core.ZodSchema // cache for unwrapSchema results
 }
@@ -309,10 +301,6 @@ func (c *converter) unwrapSchema(s core.ZodSchema) core.ZodSchema {
 }
 
 func (c *converter) convert(schema core.ZodSchema) (*lib.Schema, error) {
-	// Track recursion depth
-	c.depth++
-	defer func() { c.depth-- }()
-
 	if schema == nil {
 		return nil, nil
 	}
@@ -1226,73 +1214,39 @@ func isCompositeType(t core.ZodTypeCode) bool {
 
 // convertLazy resolves inner schema and delegates conversion.
 func (c *converter) convertLazy(schema core.ZodSchema) (*lib.Schema, error) {
-	resolveLazyInner := func(inner any) core.ZodSchema {
-		current := inner
-		for range 8 {
-			if current == nil {
-				return nil
-			}
-			if unwrapAny, ok := current.(interface{ Inner() any }); ok {
-				next := unwrapAny.Inner()
-				if next != nil && next != current {
-					current = next
-					continue
-				}
-			}
-			if zodSchema, ok := current.(core.ZodSchema); ok {
-				return zodSchema
-			}
-			break
-		}
-		return nil
+	s, ok := schema.(unwrapper)
+	if !ok {
+		return c.unrepresentableLazy()
+	}
+	innerValue := any(s.Unwrap())
+	if wrapper, ok := innerValue.(interface{ Inner() any }); ok {
+		innerValue = wrapper.Inner()
+	}
+	inner, ok := innerValue.(core.ZodSchema)
+	if !ok || inner == nil {
+		return c.unrepresentableLazy()
 	}
 
-	// Use interface assertion to get inner schema
-	if s, ok := schema.(unwrapper); ok {
-		inner := s.Unwrap()
-
-		if zodSchema := resolveLazyInner(inner); zodSchema != nil {
-			// Check if this creates a cycle by looking for the inner schema in our path
-			if _, found := c.seen[zodSchema]; found {
-				if c.opts.Cycles == "throw" {
-					return nil, ErrCircularReference
-				}
-				// This is a cycle, return a reference to the root or $defs if available
-				if id := c.getID(zodSchema); id != "" {
-					return &lib.Schema{Ref: "#/$defs/" + id}, nil
-				}
-				if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
-					return &lib.Schema{Ref: "#/$defs/" + name}, nil
-				}
-				return &lib.Schema{Ref: "#"}, nil
-			}
-			return c.convert(zodSchema)
+	if _, found := c.seen[inner]; found {
+		if c.opts.Cycles == CyclesThrow {
+			return nil, ErrCircularReference
 		}
-
-		// `inner` is already a core.ZodType[any]; attempt to call Inner via reflection to unwrap further
-		if method := reflect.ValueOf(inner).MethodByName("Inner"); method.IsValid() {
-			if results := method.Call(nil); len(results) == 1 {
-				if zodSchema := resolveLazyInner(results[0].Interface()); zodSchema != nil {
-					// Detect potential cycles
-					if _, found := c.seen[zodSchema]; found {
-						if c.opts.Cycles == "throw" {
-							return nil, ErrCircularReference
-						}
-						if id := c.getID(zodSchema); id != "" {
-							return &lib.Schema{Ref: "#/$defs/" + id}, nil
-						}
-						if name, ok := c.refs[c.unwrapSchema(zodSchema)]; ok {
-							return &lib.Schema{Ref: "#/$defs/" + name}, nil
-						}
-						return &lib.Schema{Ref: "#"}, nil
-					}
-					return c.convert(zodSchema)
-				}
-			}
+		if id := c.getID(inner); id != "" {
+			return &lib.Schema{Ref: "#/$defs/" + id}, nil
 		}
+		if name, ok := c.refs[c.unwrapSchema(inner)]; ok {
+			return &lib.Schema{Ref: "#/$defs/" + name}, nil
+		}
+		return &lib.Schema{Ref: "#"}, nil
 	}
-	// Fallback: treat as any
-	return &lib.Schema{}, nil
+	return c.convert(inner)
+}
+
+func (c *converter) unrepresentableLazy() (*lib.Schema, error) {
+	if c.opts.Unrepresentable == UnrepresentableAny {
+		return &lib.Schema{}, nil
+	}
+	return nil, fmt.Errorf("%w: unresolved lazy target", ErrUnrepresentableType)
 }
 
 // convertMap converts ZodMap -> JSON Schema object with additionalProperties

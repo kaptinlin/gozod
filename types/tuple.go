@@ -319,13 +319,7 @@ func collectParseIssues(err error, index int, input any) []core.ZodRawIssue {
 	if issues.IsZodError(err, &zodErr) {
 		result := make([]core.ZodRawIssue, 0, len(zodErr.Issues))
 		for _, issue := range zodErr.Issues {
-			result = append(result, core.ZodRawIssue{
-				Code:       issue.Code,
-				Message:    issue.Message,
-				Input:      issue.Input,
-				Path:       append([]any{index}, issue.Path...),
-				Properties: make(map[string]any),
-			})
+			result = append(result, issues.ConvertZodIssueToRawWithPrependedPath(issue, []any{index}))
 		}
 		return result
 	}

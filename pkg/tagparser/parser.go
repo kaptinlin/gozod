@@ -54,7 +54,6 @@ type FieldInfo struct {
 	GoZodTag string       // raw gozod tag value
 	Rules    []TagRule    // parsed tag rules before helper-level filtering
 	Required bool         // whether the parsed rules include "required"
-	Optional bool         // derived optionality for parsed-tag callers
 	Nilable  bool         // whether the parsed rules include "nilable"
 }
 
@@ -157,7 +156,6 @@ func (p *TagParser) parseStructFields(typ reflect.Type) ([]FieldInfo, error) {
 			info.Nilable = hasRule(rules, "nilable")
 		}
 
-		info.Optional = isOptional(f, info.Required, info.Nilable)
 		fields = append(fields, info)
 	}
 
@@ -337,13 +335,4 @@ func hasRule(rules []TagRule, name string) bool {
 	return slices.ContainsFunc(rules, func(r TagRule) bool {
 		return r.Name == name
 	})
-}
-
-// isOptional reports whether a field should be treated as optional
-// based on its type and parsed rules.
-func isOptional(f reflect.StructField, required, nilable bool) bool {
-	if required {
-		return false
-	}
-	return nilable || f.Type.Kind() == reflect.Pointer
 }

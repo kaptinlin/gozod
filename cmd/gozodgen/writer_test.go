@@ -71,9 +71,9 @@ func TestFileWriterUsesCoercionConstructors(t *testing.T) {
 		{name: "unsigned integer", fieldType: reflect.TypeFor[uint32](), want: "coerce.Uint32()"},
 		{name: "float", fieldType: reflect.TypeFor[float64](), want: "coerce.Float64()"},
 		{name: "time", fieldType: reflect.TypeFor[time.Time](), want: "coerce.Time()"},
-		{name: "string pointer", fieldType: reflect.TypeFor[*string](), want: "coerce.StringPtr().Optional()"},
-		{name: "integer pointer", fieldType: reflect.TypeFor[*int16](), want: "coerce.Int16Ptr().Optional()"},
-		{name: "time pointer", fieldType: reflect.TypeFor[*time.Time](), want: "coerce.TimePtr().Optional()"},
+		{name: "string pointer", fieldType: reflect.TypeFor[*string](), want: "coerce.StringPtr()"},
+		{name: "integer pointer", fieldType: reflect.TypeFor[*int16](), want: "coerce.Int16Ptr()"},
+		{name: "time pointer", fieldType: reflect.TypeFor[*time.Time](), want: "coerce.TimePtr()"},
 	}
 
 	for _, test := range tests {
@@ -92,6 +92,115 @@ func TestFileWriterUsesCoercionConstructors(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, test.want, code)
+		})
+	}
+}
+
+func TestFileWriterPreservesFixedArrayLength(t *testing.T) {
+	t.Parallel()
+
+	writer, err := NewFileWriter("", "fixture", "_gen.go", true, false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		fieldType reflect.Type
+		typeName  string
+		want      string
+	}{
+		{
+			name:      "fixed array",
+			fieldType: reflect.TypeFor[[3]string](),
+			typeName:  "[3]string",
+			want:      "gozod.Slice[string](gozod.String()).Length(3)",
+		},
+		{
+			name:      "slice",
+			fieldType: reflect.TypeFor[[]string](),
+			typeName:  "[]string",
+			want:      "gozod.Slice[string](gozod.String())",
+		},
+		{
+			name:      "nested fixed array",
+			fieldType: reflect.TypeFor[[2][3]string](),
+			typeName:  "[2][3]string",
+			want:      "gozod.Slice[any](gozod.Slice[string](gozod.String()).Length(3)).Length(2)",
+		},
+		{
+			name:      "pointer to fixed array",
+			fieldType: reflect.TypeFor[*[2]string](),
+			typeName:  "*[2]string",
+			want:      "gozod.SlicePtr[string](gozod.String()).Length(2)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			field := &tagparser.FieldInfo{
+				Name:     "Values",
+				Type:     tt.fieldType,
+				TypeName: tt.typeName,
+				Required: true,
+				Rules:    []tagparser.TagRule{{Name: "required"}},
+			}
+
+			got, err := writer.generateFieldSchemaCode(field, "Shape")
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFileWriterUsesUnderlyingFamilyForDeclaredScalars(t *testing.T) {
+	t.Parallel()
+
+	writer, err := NewFileWriter("", "fixture", "_gen.go", true, false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		fieldType reflect.Type
+		typeName  string
+		want      string
+	}{
+		{name: "named string", fieldType: reflect.TypeFor[string](), typeName: "UserID", want: "gozod.String()"},
+		{name: "named integer", fieldType: reflect.TypeFor[int64](), typeName: "Counter", want: "gozod.Int64()"},
+		{name: "named bool", fieldType: reflect.TypeFor[bool](), typeName: "Enabled", want: "gozod.Bool()"},
+		{name: "string alias", fieldType: reflect.TypeFor[string](), typeName: "Label", want: "gozod.String()"},
+		{name: "pointer to named string", fieldType: reflect.TypeFor[*string](), typeName: "*UserID", want: "gozod.StringPtr()"},
+		{
+			name:      "slice of named string",
+			fieldType: reflect.TypeFor[[]string](),
+			typeName:  "[]UserID",
+			want:      "gozod.Slice[string](gozod.String())",
+		},
+		{
+			name:      "map of named integer",
+			fieldType: reflect.TypeFor[map[string]int64](),
+			typeName:  "map[string]Counter",
+			want:      "gozod.Record[string, int64](gozod.String(), gozod.Int64())",
+		},
+		{
+			name:      "array of named string",
+			fieldType: reflect.TypeFor[[2]string](),
+			typeName:  "[2]UserID",
+			want:      "gozod.Slice[string](gozod.String()).Length(2)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			field := &tagparser.FieldInfo{
+				Name:     "Value",
+				Type:     tt.fieldType,
+				TypeName: tt.typeName,
+				Required: true,
+				Rules:    []tagparser.TagRule{{Name: "required"}},
+			}
+
+			got, err := writer.generateFieldSchemaCode(field, "Record")
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -366,15 +475,14 @@ func TestFileWriter_GenerateFieldSchema(t *testing.T) {
 		{
 			name: "optional pointer field",
 			field: tagparser.FieldInfo{
-				Name:     "Description",
-				Type:     reflect.TypeFor[*string](),
-				Optional: true,
+				Name: "Description",
+				Type: reflect.TypeFor[*string](),
 				Rules: []tagparser.TagRule{
 					{Name: "max", Params: []string{"500"}},
 				},
 			},
 			structName:     "Product",
-			expectedSchema: "gozod.String().Max(500).Optional()",
+			expectedSchema: "gozod.StringPtr().Max(500).Optional()",
 			expectError:    false,
 		},
 	}

@@ -88,20 +88,30 @@ schema = gozod.Int().Check(func(v int, p *core.ParsePayload) {
 
 ## 🧱 Core Types
 
-### ZodType Interface
+### Schema Interfaces
 
-All GoZod schemas implement the core `ZodType[T]` interface:
+All schemas implement the dynamic `ZodSchema` boundary. Typed schemas add
+`ZodType[T]`, while schemas that support compile-time constrained parsing also
+implement `StrictZodType[In, Out]`:
 
 ```go
-type ZodType[T any] interface {
-    Parse(input any, ctx ...*ParseContext) (T, error)
-    StrictParse(input T, ctx ...*ParseContext) (T, error)
-    MustParse(input any, ctx ...*ParseContext) T
-    MustStrictParse(input T, ctx ...*ParseContext) T
+type ZodSchema interface {
     ParseAny(input any, ctx ...*ParseContext) (any, error)
-    GetInternals() *ZodTypeInternals
+    Internals() *ZodTypeInternals
     IsOptional() bool
     IsNilable() bool
+}
+
+type ZodType[T any] interface {
+    ZodSchema
+    Parse(input any, ctx ...*ParseContext) (T, error)
+    MustParse(input any, ctx ...*ParseContext) T
+}
+
+type StrictZodType[In, Out any] interface {
+    ZodType[Out]
+    StrictParse(input In, ctx ...*ParseContext) (Out, error)
+    MustStrictParse(input In, ctx ...*ParseContext) Out
 }
 ```
 
@@ -175,7 +185,6 @@ schema := gozod.String().Optional()  // Returns ZodString[*string]
 
 result, _ := schema.Parse("hello")   // ✅ "hello" → &"hello"
 result, _ = schema.Parse(nil)        // ✅ nil → nil
-result, _ = schema.Parse(undefined)  // ✅ undefined → nil
 ```
 
 ### Nilable() - Allows nil Values
@@ -185,7 +194,6 @@ schema := gozod.String().Nilable()   // Returns ZodString[*string]
 
 result, _ := schema.Parse("hello")   // ✅ "hello" → &"hello"
 result, _ = schema.Parse(nil)        // ✅ nil → nil
-// result, _ = schema.Parse(undefined) // ❌ undefined still invalid
 ```
 
 ### Nullish() - Optional + Nilable
@@ -195,7 +203,6 @@ schema := gozod.String().Nullish()   // Returns ZodString[*string]
 
 result, _ := schema.Parse("hello")   // ✅ "hello" → &"hello"
 result, _ = schema.Parse(nil)        // ✅ nil → nil
-result, _ = schema.Parse(undefined)  // ✅ undefined → nil
 ```
 
 ### Default() - Short-Circuit Fallback
@@ -1023,7 +1030,8 @@ result, err := schema.Parse(example)
 schema := gozod.String().Min(5).Email()
 _, err := schema.Parse("hi")
 
-if zodErr, ok := err.(*issues.ZodError); ok {
+var zodErr *gozod.ZodError
+if gozod.IsZodError(err, &zodErr) {
     // Access structured error information
     for _, issue := range zodErr.Issues {
         fmt.Printf("Path: %v, Code: %s, Message: %s\n",
@@ -1031,10 +1039,10 @@ if zodErr, ok := err.(*issues.ZodError); ok {
     }
 
     // Pretty print errors
-    fmt.Println(zodErr.PrettifyError())
+    fmt.Println(gozod.PrettifyError(zodErr))
 
     // Get flattened field errors
-    fieldErrors := zodErr.FlattenError()
+    fieldErrors := gozod.FlattenError(zodErr)
     fmt.Printf("Field errors: %+v\n", fieldErrors.FieldErrors)
 }
 ```
@@ -1099,7 +1107,8 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
     schema := gozod.MustFromStruct[CreateUserRequest]()
     validatedReq, err := schema.Parse(req)
     if err != nil {
-        if zodErr, ok := err.(*issues.ZodError); ok {
+        var zodErr *gozod.ZodError
+        if gozod.IsZodError(err, &zodErr) {
             response := map[string]any{
                 "error": "Validation failed",
                 "issues": zodErr.Issues,

@@ -2,6 +2,7 @@ package gozod_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -715,6 +716,74 @@ func TestTagValidation_Prefault(t *testing.T) {
 		invalidInput := TestStruct{Name: "Bad"} // Too short
 		_, err = schema.Parse(invalidInput)
 		assert.Error(t, err, "Invalid input should fail validation")
+	})
+
+	t.Run("default-like modifiers keep following rules", func(t *testing.T) {
+		t.Run("string max", func(t *testing.T) {
+			type TestStruct struct {
+				Value string `gozod:"default=ok,max=3"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: "long"})
+			assert.Error(t, err)
+		})
+
+		t.Run("string length", func(t *testing.T) {
+			type TestStruct struct {
+				Value string `gozod:"prefault=valid,length=5"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: "bad"})
+			assert.Error(t, err)
+		})
+
+		t.Run("parameterized string rule", func(t *testing.T) {
+			type TestStruct struct {
+				Value string `gozod:"prefault=contains-test,includes=test"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: "missing"})
+			assert.Error(t, err)
+		})
+
+		t.Run("numeric bounds and multiple", func(t *testing.T) {
+			type TestStruct struct {
+				Value int `gozod:"prefault=6,gt=5,lt=10,multipleof=2"`
+			}
+			schema := MustFromStruct[TestStruct]()
+
+			_, err := schema.Parse(TestStruct{Value: 5})
+			assert.Error(t, err)
+			_, err = schema.Parse(TestStruct{Value: 7})
+			assert.Error(t, err)
+		})
+
+		t.Run("numeric nullary rule", func(t *testing.T) {
+			type TestStruct struct {
+				Value int `gozod:"prefault=1,positive"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: -1})
+			assert.Error(t, err)
+		})
+
+		t.Run("finite", func(t *testing.T) {
+			type TestStruct struct {
+				Value float64 `gozod:"prefault=1,finite"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: math.Inf(1)})
+			assert.Error(t, err)
+		})
+
+		t.Run("collection nonempty", func(t *testing.T) {
+			type TestStruct struct {
+				Value []string `gozod:"prefault=[\"valid\"],nonempty"`
+			}
+
+			_, err := MustFromStruct[TestStruct]().Parse(TestStruct{Value: []string{}})
+			assert.Error(t, err)
+		})
 	})
 
 	t.Run("default and prefault together", func(t *testing.T) {

@@ -26,13 +26,21 @@ func (g *CodeGenerator) ProcessPackage(packagePath string) error {
 	}
 	g.writer.providers = newGeneratedProviderPlan(structInfos)
 
+	rendered := make([]renderedFile, 0, len(structInfos))
 	for _, structInfo := range structInfos {
-		if err := g.writer.WriteGeneratedCode(structInfo); err != nil {
+		result, err := g.writer.renderGeneratedCode(structInfo)
+		if err != nil {
 			return fmt.Errorf("generate code for struct %s: %w", structInfo.Name, err)
 		}
+		rendered = append(rendered, result)
+	}
 
+	for i, result := range rendered {
+		if err := g.writer.publishGeneratedCode(result); err != nil {
+			return fmt.Errorf("generate code for struct %s: %w", structInfos[i].Name, err)
+		}
 		if g.config.Verbose {
-			fmt.Printf("Generated code for struct: %s\n", structInfo.Name)
+			fmt.Printf("Generated code for struct: %s\n", structInfos[i].Name)
 		}
 	}
 

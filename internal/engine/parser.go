@@ -653,6 +653,9 @@ func parsePrimitiveValue[T any](
 	if v, ok := input.(T); ok {
 		return validateWithChecks(v, internals.Checks, validator, ctx)
 	}
+	if v, ok := convertDefinedPrimitive[T](input); ok {
+		return validateWithChecks(v, internals.Checks, validator, ctx)
+	}
 
 	if p, ok := input.(*T); ok {
 		if p == nil {
@@ -677,6 +680,9 @@ func parsePrimitiveValue[T any](
 	if v, ok := deref.(T); ok {
 		return validateWithChecks(v, internals.Checks, validator, ctx)
 	}
+	if v, ok := convertDefinedPrimitive[T](deref); ok {
+		return validateWithChecks(v, internals.Checks, validator, ctx)
+	}
 
 	if internals.Coerce {
 		if v, err := coerce.To[T](input); err == nil {
@@ -687,6 +693,33 @@ func parsePrimitiveValue[T any](
 	raw := issues.CreateInvalidTypeIssue(expectedType, input)
 	raw.Inst = internals
 	return nil, issues.NewZodError([]core.ZodIssue{issues.FinalizeIssue(raw, ctx, nil)})
+}
+
+func convertDefinedPrimitive[T any](input any) (T, bool) {
+	var zero T
+	if input == nil {
+		return zero, false
+	}
+
+	source := reflect.ValueOf(input)
+	target := reflect.TypeFor[T]()
+	if source.Type().PkgPath() == "" || source.Kind() != target.Kind() || !source.Type().ConvertibleTo(target) {
+		return zero, false
+	}
+
+	switch target.Kind() {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128,
+		reflect.String:
+		return source.Convert(target).Interface().(T), true
+	case reflect.Invalid, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		return zero, false
+	}
+	return zero, false
 }
 
 // parsePrimitiveStrictNil handles nil input for ParsePrimitiveStrict.

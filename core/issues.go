@@ -35,7 +35,6 @@ type ZodIssue struct {
 	Maximum   any            `json:"maximum,omitempty"`   // Maximum value for range checks
 	Inclusive bool           `json:"inclusive,omitempty"` // Whether range bounds are inclusive
 	Keys      []string       `json:"keys,omitempty"`      // Keys for unrecognized_keys errors
-	Options   []any          `json:"options,omitempty"`   // Valid options for literal errors
 	Errors    [][]ZodIssue   `json:"errors,omitempty"`    // Nested errors for union types
 	Issues    []ZodIssue     `json:"issues,omitempty"`    // Sub-issues for complex validations
 	Format    string         `json:"format,omitempty"`    // Expected format for format validation

@@ -16,7 +16,7 @@ func (p Product) Schema() *gozod.ZodStruct[Product, Product] {
 		"name":     gozod.String().Min(1).Max(200),
 		"price":    gozod.Float64().Gt(0.0),
 		"currency": gozod.Enum("USD", "EUR", "GBP"),
-		"tags":     gozod.Slice(gozod.String()).Min(0).Max(10).Optional(),
-		"active":   gozod.Bool().Optional().Default(true),
+		"tags":     gozod.Slice[string](gozod.String()).Min(0).Max(10).Optional(),
+		"active":   gozod.BoolPtr().Optional().Default(true),
 	})
 }

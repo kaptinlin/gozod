@@ -940,3 +940,19 @@ func TestSlice_MultipleErrorCollection(t *testing.T) {
 		assert.Equal(t, []int{15, 20, 25}, result)
 	})
 }
+
+func TestSlice_PreservesNestedIssueDetails(t *testing.T) {
+	schema := Slice[string](String().Email())
+
+	_, err := schema.Parse([]string{"not-an-email"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	issue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidFormat, issue.Code)
+	assert.NotEmpty(t, issue.Message)
+	assert.Equal(t, []any{0}, issue.Path)
+	assert.Equal(t, "email", issue.Format)
+}

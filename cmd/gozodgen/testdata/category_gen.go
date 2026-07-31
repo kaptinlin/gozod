@@ -12,7 +12,7 @@ func (c Category) Schema() *gozod.ZodStruct[Category, Category] {
 	return gozod.Struct[Category](gozod.StructSchema{
 		"id":          gozod.UUID(),
 		"name":        gozod.String().Min(2),
-		"description": gozod.String().Max(500).Optional(),
-		"parent_id":   gozod.UUID(),
+		"description": gozod.StringPtr().Max(500).Optional(),
+		"parent_id":   gozod.UUID().Optional(),
 	})
 }

@@ -372,25 +372,27 @@ func (f *DefaultMessageFormatter) FormatMessage(raw core.ZodRawIssue) string {
 		return "Invalid input: no union member matched"
 
 	case core.InvalidElement:
-		// Get origin and index information first
 		origin := mapx.StringOr(raw.Properties, "origin", "")
 		index := mapx.AnyOr(raw.Properties, "index", nil)
-
-		// Try to extract the original element error message
-		if elementError, exists := raw.Properties["element_error"]; exists {
-			if elementRaw, ok := elementError.(core.ZodRawIssue); ok {
-				// Format the original element error and add index information
-				elementMessage := f.FormatMessage(elementRaw)
-				if index != nil {
-					if origin == "array rest" {
-						return fmt.Sprintf("%s (rest element at index %v)", elementMessage, index)
-					}
-					return fmt.Sprintf("%s (element at index %v)", elementMessage, index)
-				}
+		formatElement := func(elementRaw core.ZodRawIssue) string {
+			elementMessage := f.FormatMessage(elementRaw)
+			if index == nil {
 				return elementMessage
 			}
+			if origin == "array rest" {
+				return fmt.Sprintf("%s (rest element at index %v)", elementMessage, index)
+			}
+			return fmt.Sprintf("%s (element at index %v)", elementMessage, index)
 		}
-		// Fallback to generic message if element_error is not available
+
+		if elementIssues, ok := raw.Properties["issues"].([]core.ZodRawIssue); ok && len(elementIssues) > 0 {
+			return formatElement(elementIssues[0])
+		}
+		if elementError, exists := raw.Properties["element_error"]; exists {
+			if elementRaw, ok := elementError.(core.ZodRawIssue); ok {
+				return formatElement(elementRaw)
+			}
+		}
 		if origin == "" {
 			return "Invalid element"
 		}

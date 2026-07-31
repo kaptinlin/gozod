@@ -21,9 +21,7 @@ field plan owns:
 
 - ordered validation operations
 - default and prefault operations
-- pointer optionality
-- generated optional placement
-- runtime optional placement
+- one backend-neutral optional placement
 - enum, regex, literal, and string-format rule meaning
 
 Generated code may still render typed values, imports, and Go syntax, but it
@@ -36,17 +34,22 @@ constructors. A format tag that is not represented by GoZod should fail
 explicitly or remain an ordinary string rule; it must not render a guessed API
 call.
 
-Optional placement is semantic. A pointer field with a default or prefault must
-preserve whether `.Optional()` belongs before or after the default/prefault
-operation so generated schemas and reflection schemas parse nil and missing
-inputs the same way.
+Presence and nil behavior are separate. `required` is the only field-presence
+switch; every non-required tagged field is optional regardless of whether its
+Go type is a value or pointer. Pointer types preserve pointer output and nil
+behavior, but do not create a second presence rule.
+
+Optional placement is semantic. A non-required field with a default or prefault
+places `.Optional()` before the fallback operation; other non-required fields
+place it after validation operations. Runtime reflection and generated code
+consume the same placement from `FieldPlan`.
 
 ## Runtime And Generated Parity
 
 Behavior tests should cover both reflection and generated schemas for:
 
 - required and optional fields
-- pointer optionality
+- value and pointer presence
 - defaults and prefaults
 - enum and regex rules
 - string format rules
@@ -64,6 +67,34 @@ Unsupported tags are explicit. Semantics that GoZod does not own, such as
 version-specific UUID tags or ambiguous sign aliases, should return a clear tag
 error instead of degrading into a weaker validation.
 
+## Package Analysis And Type Fidelity
+
+`gozodgen` analyzes a concrete package in its active Go module and build
+context. Import, syntax, and type errors fail the package before generation;
+analysis never continues with partial type information or an AST-only type
+guess.
+
+Generated schemas preserve the field type's validation family and declared Go
+identity. Fixed arrays retain their length, named scalars and aliases use their
+underlying validation family, and successful parsed values remain assignable or
+convertible to the declared field type. String-underlying map keys are
+supported; unsupported key kinds fail explicitly.
+
+The language-level `any` and empty interface intentionally generate `Any`.
+Channels, functions, non-empty interfaces, unresolved generic shapes, and other
+types without a faithful schema representation fail with field and declared
+type context. Unsupported fields outside the selected generation scope do not
+block valid targets in the same package.
+
+> **Why**: generated code is trusted as an explicit schema artifact. Losing an
+> array length, mistaking a named scalar for a struct, or converting an analysis
+> failure into `Any` weakens validation while still producing compilable-looking
+> output.
+>
+> **Rejected**: warning-and-continue package loading, unknown-type-to-`Any`
+> fallback, or a parallel type model when Go type information already carries
+> kind, identity, and length.
+
 ## Generated Artifacts
 
 Generated code should change only when inputs or generator logic change.
@@ -77,6 +108,21 @@ The generated file header is stable:
 Generation timestamps do not belong in generated files. Golden tests compare the
 real generated output and should not normalize away unstable timestamp lines.
 
+For one package run, analysis and rendering of every selected output complete
+before any file is published. Each successful file replacement remains atomic;
+the generator does not claim rollback across independent I/O failures.
+Dry-run uses the same rendered results as publication.
+
+Repository-owned generated fixtures have an explicit source/output manifest in
+the existing Go test suite. Tests regenerate them in a temporary directory and
+compare the complete declared output set byte for byte. The generator does not
+guess ownership from suffixes or headers and does not delete undeclared files.
+
+CLI options exist only when they drive end-to-end behavior. `-tag-name`,
+`-field-name-tag`, `-suffix`, `-package`, `-method`, `-dry-run`, and `-verbose`
+are active; options with no runtime consumer are not retained as compatibility
+surface.
+
 ## Acceptance Criteria
 
 - Runtime and generated parity tests prove required, optional, pointer, default,
@@ -88,4 +134,13 @@ real generated output and should not normalize away unstable timestamp lines.
   rule language from a non-default tag key.
 - Unsupported tag tests prove unsupported or ambiguous tags fail with clear
   errors in both reflection and generated-code analysis.
+- Package-loading tests prove module-local and standard imports resolve through
+  the active Go build context, while load/type errors publish no output.
+- Type-fidelity fixtures prove fixed arrays, named scalars and aliases,
+  supported maps, and explicit `any` preserve runtime/generated parity; selected
+  unsupported types fail before publication.
+- Package publication tests prove a later render failure leaves every existing
+  output unchanged and dry-run uses the same pre-rendered result.
+- Fixture freshness tests regenerate only the explicit owned set in a temporary
+  directory and compare both filenames and bytes.
 - Golden tests compare stable generated output without timestamp normalization.

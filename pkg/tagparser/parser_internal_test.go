@@ -128,33 +128,6 @@ func TestHasRule(t *testing.T) {
 	assert.False(t, hasRule([]TagRule{}, "required"), "hasRule should return false for empty rules")
 }
 
-func TestIsOptional(t *testing.T) {
-	requiredField := reflect.StructField{
-		Name: "RequiredField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.False(t, isOptional(requiredField, true, false), "Required field should not be optional")
-
-	pointerField := reflect.StructField{
-		Name: "PointerField",
-		Type: reflect.TypeFor[*string](),
-	}
-	assert.True(t, isOptional(pointerField, false, false), "Pointer field should be optional by default")
-	assert.False(t, isOptional(pointerField, true, false), "Required pointer field should not be optional")
-
-	nilableField := reflect.StructField{
-		Name: "NilableField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.True(t, isOptional(nilableField, false, true), "Nilable field should be optional")
-
-	regularField := reflect.StructField{
-		Name: "RegularField",
-		Type: reflect.TypeFor[string](),
-	}
-	assert.False(t, isOptional(regularField, false, false), "Regular field should not be optional")
-}
-
 func TestFieldInfoHelpers(t *testing.T) {
 	info := FieldInfo{
 		Type:     reflect.TypeFor[string](),
@@ -177,8 +150,6 @@ func TestFieldInfoHelpers(t *testing.T) {
 	assert.True(t, info.HasCoerceRule())
 	assert.Equal(t, "MyString", info.EffectiveTypeName())
 	assert.True(t, info.HasSchemaSpec())
-	assert.True(t, info.NeedsOptionalModifier())
-	assert.True(t, info.NeedsGeneratedOptional())
 	if assert.NotNil(t, info.EnumRule()) {
 		assert.Equal(t, []string{"a", "b"}, info.EnumRule().Params)
 	}
@@ -198,13 +169,9 @@ func TestFieldInfoHelpers(t *testing.T) {
 	assert.True(t, info.IsUUIDStringField())
 	assert.True(t, info.IsEnumStringField())
 	assert.False(t, info.NeedsPointerNilable())
-	assert.False(t, info.NeedsPointerOptional())
 
 	info.Type = reflect.TypeFor[*string]()
-	assert.False(t, info.NeedsOptionalModifier())
-	assert.True(t, info.NeedsGeneratedOptional())
 	assert.True(t, info.NeedsPointerNilable())
-	assert.True(t, info.NeedsPointerOptional())
 
 	info = FieldInfo{
 		Type:     reflect.TypeFor[string](),
@@ -215,7 +182,6 @@ func TestFieldInfoHelpers(t *testing.T) {
 			{Name: "coerce"},
 		},
 	}
-	assert.False(t, info.NeedsGeneratedOptional())
 	assert.Equal(t, []TagRule{{Name: "min", Params: []string{"1"}}}, info.ValidationRules())
 	assert.Equal(t, []TagRule{{Name: "min", Params: []string{"1"}}}, info.ValidationRulesExcept("uuid"))
 

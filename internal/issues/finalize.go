@@ -193,6 +193,9 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 			issue.Issues = []core.ZodIssue{finalizedElementIssue}
 		}
 	}
+	if nestedIssues, ok := finalizeIssues(properties["issues"]); ok {
+		issue.Issues = nestedIssues
+	}
 
 	if unionErrors, ok := finalizeUnionErrors(properties["union_errors"]); ok {
 		issue.Errors = unionErrors
@@ -205,16 +208,43 @@ func MapPropertiesToIssue(issue *core.ZodIssue, properties map[string]any) {
 }
 
 func finalizeUnionErrors(value any) ([][]core.ZodIssue, bool) {
+	switch rawErrors := value.(type) {
+	case [][]core.ZodRawIssue:
+		if len(rawErrors) == 0 {
+			return nil, false
+		}
+		finalized := make([][]core.ZodIssue, len(rawErrors))
+		for i, branch := range rawErrors {
+			finalized[i] = make([]core.ZodIssue, len(branch))
+			for j, rawIssue := range branch {
+				finalized[i][j] = FinalizeIssue(rawIssue, nil, nil)
+			}
+		}
+		return finalized, true
+	case []core.ZodRawIssue:
+		if len(rawErrors) == 0 {
+			return nil, false
+		}
+		finalized := make([][]core.ZodIssue, len(rawErrors))
+		for i, rawIssue := range rawErrors {
+			finalized[i] = []core.ZodIssue{FinalizeIssue(rawIssue, nil, nil)}
+		}
+		return finalized, true
+	default:
+		return nil, false
+	}
+}
+
+func finalizeIssues(value any) ([]core.ZodIssue, bool) {
 	rawIssues, ok := value.([]core.ZodRawIssue)
 	if !ok || len(rawIssues) == 0 {
 		return nil, false
 	}
 
-	finalized := make([][]core.ZodIssue, 0, len(rawIssues))
-	for _, rawIssue := range rawIssues {
-		finalized = append(finalized, []core.ZodIssue{FinalizeIssue(rawIssue, nil, nil)})
+	finalized := make([]core.ZodIssue, len(rawIssues))
+	for i, rawIssue := range rawIssues {
+		finalized[i] = FinalizeIssue(rawIssue, nil, nil)
 	}
-
 	return finalized, true
 }
 

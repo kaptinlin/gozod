@@ -139,7 +139,7 @@ gozod.Number()   // => {"type": "number"}
 gozod.Float32()  // => {"type": "number", "minimum": ..., "maximum": ...}
 
 // integer
-gozod.Int()      // => {"type": "integer"}
+gozod.Int()      // => integer with platform int minimum/maximum
 gozod.Int32()    // => {"type": "integer", "minimum": ..., "maximum": ...}
 gozod.Int64()    // => {"type": "integer", "minimum": ..., "maximum": ...}
 ```
@@ -267,9 +267,6 @@ type JSONSchemaOptions struct {
     
     // A function used to convert ID values to URIs for external $refs
     URI func(id string) string
-
-    // Target JSON Schema version. Only Draft 2020-12 is currently supported.
-    Target gozod.JSONSchemaTargetMode
 
     // IO specifies whether to convert the "input" or "output" schema.
     // JSONSchemaIOOutput is the default.
@@ -414,8 +411,8 @@ gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: gozod.JSONSchemaIOInput})
 gozod.ToJSONSchema(schema, gozod.JSONSchemaOptions{IO: gozod.JSONSchemaIOOutput})
 ```
 
-`Target` currently supports only `gozod.JSONSchemaTargetDraft202012`. Other
-values, including `"draft-07"`, return `gozod.ErrUnsupportedJSONSchemaTarget`.
+Export always emits the supported Draft 2020-12 dialect. There is no target
+option until the converter implements another dialect faithfully.
 
 ### Override
 
@@ -438,7 +435,7 @@ jsonSchema, _ := gozod.ToJSONSchema(schema, opts)
 
 ## Working with Registries
 
-For complex applications with multiple schemas, you can use a registry to manage schema relationships and generate all schemas at once. `ToJSONSchema` can directly accept a registry and will return a single root schema containing all registered schemas in its `$defs`.
+For complex applications with multiple schemas, use `ToJSONSchemaRegistry` to generate a single root schema containing every registered schema in `$defs`.
 
 ```go
 // Create a registry for related schemas
@@ -466,7 +463,7 @@ registry.Add(postSchema, gozod.GlobalMeta{ID: "Post"})
 
 // Convert the entire registry to a single root JSON Schema.
 // Schemas with IDs will be defined in `$defs` and can be referenced.
-rootSchema, _ := gozod.ToJSONSchema(registry)
+rootSchema, _ := gozod.ToJSONSchemaRegistry(registry)
 ```
 
 ## Converting JSON Schema to GoZod
@@ -606,6 +603,12 @@ validation.
 Round-trip expectations apply only to the overlap GoZod owns: primitive types,
 known string formats, numeric and length constraints, arrays, tuples, objects,
 records, enums, literals, and `allOf` / `anyOf` / `oneOf` composition.
+
+Imported `integer` schemas use Go's platform-sized `int` domain. Rational
+bounds are rounded to the equivalent inclusive integer bound. If a bound,
+exclusive-bound adjustment, or `multipleOf` divisor cannot be represented in
+that domain, both strict and lossy import return a fatal
+`ErrInvalidJSONSchema` with the keyword's JSON Pointer.
 
 ### Supported Conversions
 

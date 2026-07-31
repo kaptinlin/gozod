@@ -139,6 +139,41 @@ func TestCreationHelpersWithOptions(t *testing.T) {
 	})
 }
 
+func TestConvertZodIssueToRaw_RoundTripsLeafDetails(t *testing.T) {
+	want := core.ZodIssue{
+		ZodIssueBase: core.ZodIssueBase{
+			Code: core.InvalidFormat, Input: "input", Path: []any{"profile", 1}, Message: "invalid",
+		},
+		Expected: core.ZodTypeString, Received: core.ZodTypeNumber,
+		Minimum: 2, Maximum: 8, Inclusive: true,
+		Keys: []string{"extra"}, Values: []any{"a", 2},
+		Format: "email", Divisor: 2, Pattern: "^[a-z]+$", Includes: "a",
+		Prefix: "pre", Suffix: "post", Algorithm: "HS256", Origin: "string",
+		Key: "field", Params: map[string]any{"reason": "test"},
+	}
+
+	raw := ConvertZodIssueToRaw(want)
+	got := FinalizeIssue(raw, nil, nil)
+
+	assert.Equal(t, want, got)
+}
+
+func TestConvertZodIssueToRaw_RoundTripsNestedDetails(t *testing.T) {
+	leaf := core.ZodIssue{
+		ZodIssueBase: core.ZodIssueBase{Code: core.InvalidFormat, Path: []any{"leaf"}, Message: "invalid"},
+		Format:       "email",
+	}
+	want := core.ZodIssue{
+		ZodIssueBase: core.ZodIssueBase{Code: core.InvalidUnion, Path: []any{"root"}, Message: "invalid"},
+		Errors:       [][]core.ZodIssue{{leaf, leaf}, {leaf}},
+		Issues:       []core.ZodIssue{leaf, leaf},
+	}
+
+	got := FinalizeIssue(ConvertZodIssueToRaw(want), nil, nil)
+
+	assert.Equal(t, want, got)
+}
+
 func TestComplexCreationScenarios(t *testing.T) {
 	t.Run("create issue with all possible properties", func(t *testing.T) {
 		keys := []string{"key1", "key2"}

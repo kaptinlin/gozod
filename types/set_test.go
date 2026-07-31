@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kaptinlin/gozod/core"
+	"github.com/kaptinlin/gozod/internal/issues"
 	. "github.com/kaptinlin/gozod/types"
 )
 
@@ -480,4 +482,20 @@ func TestSetInternals(t *testing.T) {
 		schema := Set[string](String()).Nilable()
 		assert.True(t, schema.IsNilable())
 	})
+}
+
+func TestSet_PreservesNestedIssueDetails(t *testing.T) {
+	schema := Set[string](String().Email())
+
+	_, err := schema.Parse(map[string]struct{}{"not-an-email": {}})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	issue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidFormat, issue.Code)
+	assert.NotEmpty(t, issue.Message)
+	assert.Equal(t, []any{"not-an-email"}, issue.Path)
+	assert.Equal(t, "email", issue.Format)
 }

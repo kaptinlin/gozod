@@ -216,8 +216,9 @@ func toFloat(v any) (float64, bool) {
 
 // toRat converts numeric values to jsonschema.Rat (alias for big.Rat wrapper).
 func toRat(v any) (lib.Rat, bool) {
-	if f, ok := toFloat(v); ok {
-		return *lib.NewRat(f), true
+	r := lib.NewRat(v)
+	if r != nil {
+		return *r, true
 	}
 	return lib.Rat{}, false
 }
@@ -283,24 +284,23 @@ func (c *converter) convertFile(bag map[string]any) (*lib.Schema, error) {
 }
 
 // numericRangeDefaults maps ZodTypeCode to its inclusive minimum and maximum.
-var numericRangeDefaults = map[core.ZodTypeCode][2]float64{
-	// Go platform dependent int range (assuming 64-bit build).
-	core.ZodTypeInt:     {float64(math.MinInt), float64(math.MaxInt)},
-	core.ZodTypeInteger: {float64(math.MinInt), float64(math.MaxInt)},
+var numericRangeDefaults = map[core.ZodTypeCode][2]any{
+	// Go platform dependent int range.
+	core.ZodTypeInt:     {int(math.MinInt), int(math.MaxInt)},
+	core.ZodTypeInteger: {int(math.MinInt), int(math.MaxInt)},
 
 	// Signed integers
 	core.ZodTypeInt8:  {-128, 127},
 	core.ZodTypeInt16: {-32768, 32767},
 	core.ZodTypeInt32: {-2147483648, 2147483647},
-	// Using float64 to hold these large ints – precision loss is acceptable for JSON-Schema ranges
-	core.ZodTypeInt64: {float64(math.MinInt64), float64(math.MaxInt64)}, // Int64 full range
+	core.ZodTypeInt64: {int64(math.MinInt64), int64(math.MaxInt64)},
 
 	// Unsigned integers
-	core.ZodTypeUint:   {0, float64(math.MaxUint)},
+	core.ZodTypeUint:   {uint(0), uint(math.MaxUint)},
 	core.ZodTypeUint8:  {0, 255},
 	core.ZodTypeUint16: {0, 65535},
 	core.ZodTypeUint32: {0, 4294967295},
-	core.ZodTypeUint64: {0, 1.844674407371e19}, // approximate math.MaxUint64 as float64
+	core.ZodTypeUint64: {uint64(0), uint64(math.MaxUint64)},
 
 	// Floats
 	core.ZodTypeFloat32: {-math.MaxFloat32, math.MaxFloat32},
@@ -309,18 +309,14 @@ var numericRangeDefaults = map[core.ZodTypeCode][2]float64{
 
 // applyNumericRangeDefaults populates default numeric range constraints for a given schema based on its type.
 func (c *converter) applyNumericRangeDefaults(zodType core.ZodTypeCode, js *lib.Schema, internals *core.ZodTypeInternals) {
-	// Apply only at top-level (depth==1)
-	if c.depth != 1 {
-		return
-	}
-
-	// Do not override explicit constraints from bag.
+	var hasExplicitLower, hasExplicitUpper bool
 	if internals != nil && internals.Bag != nil {
-		for _, key := range []string{"minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum"} {
-			if _, exists := internals.Bag[key]; exists {
-				return
-			}
-		}
+		_, hasMinimum := internals.Bag["minimum"]
+		_, hasExclusiveMinimum := internals.Bag["exclusiveMinimum"]
+		hasExplicitLower = hasMinimum || hasExclusiveMinimum
+		_, hasMaximum := internals.Bag["maximum"]
+		_, hasExclusiveMaximum := internals.Bag["exclusiveMaximum"]
+		hasExplicitUpper = hasMaximum || hasExclusiveMaximum
 	}
 
 	rng, ok := numericRangeDefaults[zodType]
@@ -329,10 +325,10 @@ func (c *converter) applyNumericRangeDefaults(zodType core.ZodTypeCode, js *lib.
 	}
 
 	// Only set if not already set.
-	if js.Minimum == nil {
+	if js.Minimum == nil && !hasExplicitLower {
 		js.Minimum = lib.NewRat(rng[0])
 	}
-	if js.Maximum == nil {
+	if js.Maximum == nil && !hasExplicitUpper {
 		js.Maximum = lib.NewRat(rng[1])
 	}
 }

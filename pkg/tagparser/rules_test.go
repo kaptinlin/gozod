@@ -13,38 +13,35 @@ func TestCompileFieldPlan(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                  string
-		field                 tagparser.FieldInfo
-		wantRuntimeOptional   tagparser.OptionalPlacement
-		wantGeneratedOptional tagparser.OptionalPlacement
-		wantOperationNames    []string
-		wantOperations        []tagparser.RuleOp
+		name               string
+		field              tagparser.FieldInfo
+		wantOptional       tagparser.OptionalPlacement
+		wantOperationNames []string
+		wantOperations     []tagparser.RuleOp
 	}{
 		{
-			name: "default makes generated optional inner",
+			name: "default makes optional inner",
 			field: tagparser.FieldInfo{
 				Type: reflect.TypeFor[string](),
 				Rules: []tagparser.TagRule{
 					{Name: "default", Params: []string{"guest"}},
 				},
 			},
-			wantRuntimeOptional:   tagparser.OptionalPlacementNone,
-			wantGeneratedOptional: tagparser.OptionalPlacementBeforeOperations,
-			wantOperationNames:    []string{"default"},
-			wantOperations:        []tagparser.RuleOp{tagparser.RuleDefault},
+			wantOptional:       tagparser.OptionalPlacementBeforeOperations,
+			wantOperationNames: []string{"default"},
+			wantOperations:     []tagparser.RuleOp{tagparser.RuleDefault},
 		},
 		{
-			name: "pointer default makes runtime and generated optional inner",
+			name: "pointer default makes optional inner",
 			field: tagparser.FieldInfo{
 				Type: reflect.TypeFor[*string](),
 				Rules: []tagparser.TagRule{
 					{Name: "default", Params: []string{"guest"}},
 				},
 			},
-			wantRuntimeOptional:   tagparser.OptionalPlacementBeforeOperations,
-			wantGeneratedOptional: tagparser.OptionalPlacementBeforeOperations,
-			wantOperationNames:    []string{"default"},
-			wantOperations:        []tagparser.RuleOp{tagparser.RuleDefault},
+			wantOptional:       tagparser.OptionalPlacementBeforeOperations,
+			wantOperationNames: []string{"default"},
+			wantOperations:     []tagparser.RuleOp{tagparser.RuleDefault},
 		},
 		{
 			name: "plain optional stays outer",
@@ -54,10 +51,9 @@ func TestCompileFieldPlan(t *testing.T) {
 					{Name: "min", Params: []string{"2"}},
 				},
 			},
-			wantRuntimeOptional:   tagparser.OptionalPlacementNone,
-			wantGeneratedOptional: tagparser.OptionalPlacementAfterOperations,
-			wantOperationNames:    []string{"min"},
-			wantOperations:        []tagparser.RuleOp{tagparser.RuleMin},
+			wantOptional:       tagparser.OptionalPlacementAfterOperations,
+			wantOperationNames: []string{"min"},
+			wantOperations:     []tagparser.RuleOp{tagparser.RuleMin},
 		},
 	}
 
@@ -68,8 +64,7 @@ func TestCompileFieldPlan(t *testing.T) {
 			got, err := tagparser.CompileFieldPlan(&tt.field)
 			assert.NoError(t, err)
 
-			assert.Equal(t, tt.wantRuntimeOptional, got.RuntimePointerOptional)
-			assert.Equal(t, tt.wantGeneratedOptional, got.GeneratedOptional)
+			assert.Equal(t, tt.wantOptional, got.Optional)
 			assert.Len(t, got.Operations, len(tt.wantOperationNames))
 			for i, operation := range got.Operations {
 				assert.Equal(t, tt.wantOperationNames[i], operation.Name)

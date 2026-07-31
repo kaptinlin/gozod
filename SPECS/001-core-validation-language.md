@@ -16,9 +16,11 @@ error presentation, and JSON Schema conversion cannot be rebound as mutable
 package state. Sentinel errors, registries, constants, and precision values
 remain data declarations because callers inspect or configure them as data.
 
-Go type identity is strict by default. Coercion belongs behind explicit
-constructors such as `coerce` or `Coerced*`. Lossy conversion and compatibility
-surface should be explicit, not accidental.
+Go primitive families are strict by default. Dynamic `Parse` may accept a
+defined primitive with the expected underlying kind, and struct assignment
+restores the declared field type when conversion is valid. Cross-kind coercion
+belongs behind explicit constructors such as `coerce` or `Coerced*`. Lossy
+conversion and compatibility surface should be explicit, not accidental.
 
 ## Structural Output
 
@@ -83,6 +85,42 @@ honors per-check `Abort` and `When` behavior, applies custom error functions,
 and returns accumulated issues through one path. Structural checks should not
 hide in documentation-only assertions or converter-only metadata.
 
+Native Go integer checks preserve integer semantics. Comparisons and
+`MultipleOf` operate without a `float64` intermediary when both operands are
+signed or unsigned integers, including mixed signed/unsigned values at the
+platform boundaries. Floating-point behavior applies only when at least one
+operand is a float.
+
+> **Why**: adjacent integers above `2^53` and large remainders are observable
+> validation inputs in Go; converting them to `float64` changes the accepted
+> set.
+>
+> **Rejected**: one numeric helper that normalizes every Go number to
+> `float64` for convenience.
+
+## Issue Fidelity
+
+Canonical validation errors preserve the complete leaf facts produced by child
+schemas. Composite schemas may prepend their structural path or group branch and
+element failures, but they must retain every issue, its order, nested groups,
+and all code-specific detail.
+
+Union and XOR errors keep every issue from every candidate. Fixed-array element
+errors keep every issue produced for that element. Object, struct, slice,
+tuple, map, set, and record paths are prepended once through the shared
+finalized-to-raw projection.
+
+Formatters are projections over canonical errors. Pretty, flat, and tree views
+may choose a concise presentation, but they do not truncate or mutate the
+stored issue graph.
+
+> **Why**: callers use code, path, and code-specific fields for programmatic
+> recovery. Reconstructing a sparse issue after child validation silently
+> destroys information even when the rendered message still looks plausible.
+>
+> **Rejected**: first-error-only storage with complete detail deferred to a
+> formatter or rebuilt independently by each composite schema.
+
 ## Transforms And Pipes
 
 `core.ZodTransform` and `core.ZodPipe` stay structural. Modifier ordering should
@@ -111,6 +149,11 @@ public interfaces need a real caller and a behavior contract.
   prefault chains follow call order and preserve copy-on-write behavior.
 - Check runner tests prove first-party checks produce the expected issue
   instance, continue, abort, and custom-error behavior.
+- Numeric helper and public schema tests prove native integer comparison and
+  divisibility remain exact at signed/unsigned boundaries while float behavior
+  remains unchanged.
+- Composite-schema tests prove path prefixing, union branch grouping, and fixed
+  array element grouping retain all leaf issues and code-specific detail.
 - Composite constructor tests prove root constructor spelling and `gozod.ZodSchema`
   are real exported API, not only documentation claims.
 - `task contractcheck` passes after schema interface or family changes.

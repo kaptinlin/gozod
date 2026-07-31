@@ -2,7 +2,7 @@
 
 GoZod is a TypeScript Zod v4-inspired validation library for Go 1.26.5. The root package is a user-facing facade over concrete schemas in `types/`, shared contracts in `core/`, runtime machinery in `internal/`, struct-tag helpers in `pkg/tagparser`, and JSON Schema conversion in `jsonschema/`.
 
-- **Reference implementation:** TypeScript Zod v4 in [`.reference/zod/`](.reference/zod/) when that submodule is initialized.
+- **Reference implementations:** [`.reference/zod/`](.reference/zod/) for Zod v4 semantics, [`.reference/valibot/`](.reference/valibot/) for validation composition and issue propagation, and [`.reference/validator/`](.reference/validator/) for Go reflection and declared-type handling.
 - **User-facing usage:** see [README.md](README.md), [docs/](docs/), and [examples/](examples/).
 
 ## Commands
@@ -65,7 +65,7 @@ gozod/
 
 - Read the relevant guide in [`.agents/rules/`](.agents/rules/) before changing schema internals, checks, struct tags, naming, tests, performance-sensitive paths, or package boundaries.
 - Read the relevant durable contract in [SPECS/](SPECS/) before changing core validation semantics, JSON Schema conversion, or struct-tag/codegen behavior.
-- Use [`.reference/zod/`](.reference/zod/) for parity work only after the submodule is initialized and the relevant TypeScript Zod v4 behavior is inspected.
+- Use [`.reference/zod/`](.reference/zod/) for Zod parity, [`.reference/valibot/`](.reference/valibot/) for independent validation semantics, and [`.reference/validator/`](.reference/validator/) for Go reflection/type evidence. Inspect only references relevant to the decision; do not copy their architecture.
 - Keep `README.md` user-facing, `CLAUDE.md` development-facing, and `.agents/rules/` contract-facing.
 - When public APIs or docs change, update examples and docs-integrity expectations together.
 - Work with the current dirty tree; never revert unrelated user changes.
@@ -104,7 +104,7 @@ gozod/
 ## API Design Principles
 
 - **Progressive Disclosure:** Start with `gozod` root constructors and `FromStruct[T]()`; use `MustFromStruct[T]()` only when construction failure is an invariant breach.
-- **Strict by default:** Preserve Go type identity unless callers explicitly opt into coercion through `coerce/` or `Coerced*` constructors.
+- **Strict by default:** Keep primitive families strict, preserve declared struct output types, and require `coerce/` or `Coerced*` constructors for cross-kind conversion.
 - **Loss explicitness:** JSON Schema import fails on unsupported keywords by default; use `FromJSONSchemaLossy` only when dropping information is intentional and inspect every returned location-aware loss.
 
 ## Coding Rules
@@ -119,11 +119,13 @@ gozod/
 - Keep modifier methods copy-on-write. `Optional`, `Nilable`, `Default`, `Prefault`, `Describe`, `Meta`, and similar fluent modifiers must return a new configured schema.
 - Route parsing through `internal/engine` helpers. Do not reimplement parsing pipelines in root facade files.
 - Build validations through `internal/checks` and shared helpers; do not duplicate validation logic in schema methods.
+- Preserve canonical issue detail when composite schemas prepend paths or group failures. Formatters may summarize but must not truncate or mutate stored issues.
+- Compare and divide native Go integers exactly; use floating-point semantics only when an operand is actually floating-point.
 - Materialize first-party JSON Schema constraints through check `OnAttach` behavior and read the schema bag in the exporter; keep `core.ZodCheckDef.Params` as introspection data, not a second projector.
 - Keep struct-tag behavior shared between runtime reflection and `gozodgen` through `pkg/tagparser`.
 - Keep root facade operations as declared functions; only sentinels, registries, constants, and other genuine data remain exported variables.
-- Keep JSON Schema protocol modes typed and fail loud: invalid option values return errors, unsupported targets do not silently emit Draft 2020-12, and invalid batch IDs fail before conversion.
-- Snapshot batch registry entries before conversion, visit them in ID order, and detach imported/exported nested examples at the JSON Schema boundary.
+- Keep JSON Schema protocol modes typed and fail loud: invalid option values return errors, Draft 2020-12 remains the fixed dialect, and invalid batch IDs fail before conversion.
+- Deep-snapshot batch registry metadata before conversion, visit entries in ID order, and detach imported/exported nested examples at the JSON Schema boundary.
 - Store imported metadata on the returned schema by default; an explicit registry is the sole destination and `GlobalRegistry` is never an implicit fallback.
 - Keep dependency direction one-way. Schema files in `types/` do not import each other; shared behavior belongs in `internal/`, `pkg/`, `core/`, or `coerce/`.
 - Update [types/constraints_verify.go](types/constraints_verify.go) when changing schema interfaces or adding new schema families.
@@ -188,6 +190,7 @@ The `reports/` directory is checked after work cycles and routed to the appropri
 - `github.com/kaptinlin/deepclone` - deep cloning for copy-on-write schema internals.
 - `github.com/golang-jwt/jwt/v5` - JWT structure validation.
 - `golang.org/x/text` - Unicode normalization for string validation.
+- `golang.org/x/tools` - Module-aware package loading and type information for `gozodgen`.
 - `github.com/stretchr/testify` and `github.com/google/go-cmp` - test assertions and structural diffs.
 
 ## Agent Skills

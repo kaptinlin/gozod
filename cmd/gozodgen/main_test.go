@@ -3,56 +3,22 @@ package main
 import (
 	"flag"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseBuildTags(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected []string
-	}{
-		{
-			name:     "empty string",
-			input:    "",
-			expected: nil,
-		},
-		{
-			name:     "single tag",
-			input:    "integration",
-			expected: []string{"integration"},
-		},
-		{
-			name:     "multiple tags",
-			input:    "integration,test,dev",
-			expected: []string{"integration", "test", "dev"},
-		},
-		{
-			name:     "tags with spaces",
-			input:    " integration , test , dev ",
-			expected: []string{"integration", "test", "dev"},
-		},
-	}
+func TestHelpOnlyListsEffectiveOptions(t *testing.T) {
+	command := exec.Command("go", "run", ".", "-help")
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseBuildTags(tt.input)
-
-			if len(result) != len(tt.expected) {
-				t.Errorf("Expected %d tags, got %d", len(tt.expected), len(result))
-				return
-			}
-
-			for i, tag := range result {
-				if tag != tt.expected[i] {
-					assert.Equal(t, tt.expected[i], tag, "Expected tag %s, got %s", tt.expected[i], tag)
-				}
-			}
-		})
-	}
+	help := string(output)
+	assert.NotContains(t, help, "-tags")
+	assert.NotContains(t, help, "-force")
+	assert.Contains(t, help, "-method")
 }
 
 func TestGeneratorConfig(t *testing.T) {
@@ -66,10 +32,8 @@ func TestGeneratorConfig(t *testing.T) {
 			config: &GeneratorConfig{
 				OutputSuffix: "_gen.go",
 				PackageName:  "main",
-				BuildTags:    []string{"integration"},
 				Verbose:      true,
 				DryRun:       false,
-				Force:        true,
 			},
 			expectValid: true,
 		},
@@ -222,7 +186,6 @@ type TestProduct struct {
 		PackageName:  "main",
 		Verbose:      false,
 		DryRun:       false,
-		Force:        false,
 	}
 
 	// Create and run generator

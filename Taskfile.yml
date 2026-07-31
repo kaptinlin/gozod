@@ -157,7 +157,8 @@ tasks:
   docs:integrity:
     desc: Run documentation integrity checks
     cmds:
-      - go test . -run 'TestDocumentationDoesNotUseStalePublicLanguage|TestDocumentationJSONSchemaRegistryExampleCompiles'
+      - go test . -run 'TestDocumentationDoesNotUseStalePublicLanguage|TestDocumentationJSONSchemaRegistryExampleCompiles|Example(PrettifyError|String_parseContext|ToJSONSchema.*)'
+      - go test ./examples/code_generation -run '^ExampleUser_Schema$'
 
   bench:smoke:
     desc: Compile and smoke-run benchmarks without enforcing performance numbers

@@ -2,8 +2,6 @@ package main
 
 import (
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -134,6 +132,205 @@ type User struct {
 	assert.ErrorContains(t, err, "parse gozod tag for field Name")
 }
 
+func TestStructAnalyzer_AnalyzePackageIgnoresUnsupportedFieldsOutsideGenerationScope(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("models.go", `package main
+
+type Runner interface { Run() }
+
+type Plain struct {
+	Updates  chan int
+	Callback func(int) error
+	Runner   Runner
+}
+
+type Generated struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
+	require.NoError(t, err)
+	require.Len(t, structs, 1)
+	assert.Equal(t, "Generated", structs[0].Name)
+	require.Len(t, structs[0].Fields, 1)
+	assert.Equal(t, "Name", structs[0].Fields[0].Name)
+}
+
+func TestStructAnalyzer_AnalyzePackageLoadsModuleLocalImports(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("go.mod", `module example.test/local
+
+go 1.26.5
+`)
+	helper.CreateGoFile("domain/code.go", `package domain
+
+type Code string
+`)
+	helper.CreateGoFile("model/user.go", `package model
+
+import "example.test/local/domain"
+
+type User struct {
+	Code domain.Code `+"`gozod:\"min=2\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(filepath.Join(helper.GetTempDir(), "model"))
+	require.NoError(t, err)
+	require.Len(t, structs, 1)
+	require.Len(t, structs[0].Fields, 1)
+	assert.Equal(t, reflect.String, structs[0].Fields[0].Type.Kind())
+	assert.Equal(t, "domain.Code", structs[0].Fields[0].TypeName)
+}
+
+func TestStructAnalyzer_AnalyzePackageUsesDefaultBuildConstraints(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("active.go", `package fixture
+
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+	helper.CreateGoFile("ignored.go", `//go:build never
+
+package fixture
+
+this is not valid Go syntax
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
+	require.NoError(t, err)
+	require.Len(t, structs, 1)
+	assert.Equal(t, "User", structs[0].Name)
+}
+
+func TestStructAnalyzer_AnalyzePackagePreservesFixedArrayType(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("shape.go", `package fixture
+
+type Shape struct {
+	Fixed   [3]string `+"`gozod:\"required\"`"+`
+	Dynamic []string  `+"`gozod:\"required\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
+	require.NoError(t, err)
+	require.Len(t, structs, 1)
+	require.Len(t, structs[0].Fields, 2)
+
+	fixed := structs[0].Fields[0]
+	require.Equal(t, reflect.Array, fixed.Type.Kind())
+	assert.Equal(t, 3, fixed.Type.Len())
+	assert.Equal(t, "[3]string", fixed.TypeName)
+
+	dynamic := structs[0].Fields[1]
+	assert.Equal(t, reflect.Slice, dynamic.Type.Kind())
+	assert.Equal(t, "[]string", dynamic.TypeName)
+}
+
+func TestStructAnalyzer_AnalyzePackageRejectsTypeErrors(t *testing.T) {
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("go.mod", `module example.test/typeerror
+
+go 1.26.5
+`)
+	helper.CreateGoFile("model/user.go", `package model
+
+var invalid string = 42
+
+type User struct {
+	Name string `+"`gozod:\"required\"`"+`
+}
+`)
+
+	analyzer, err := NewStructAnalyzer()
+	require.NoError(t, err)
+
+	_, err = analyzer.AnalyzePackage(filepath.Join(helper.GetTempDir(), "model"))
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "model/user.go")
+	assert.ErrorContains(t, err, "cannot use 42")
+}
+
+func TestStructAnalyzer_AnalyzePackageRejectsInvalidPackages(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    map[string]string
+		contains []string
+	}{
+		{
+			name: "unresolved import",
+			files: map[string]string{
+				"user.go": `package fixture
+
+import "example.test/missing"
+
+type User struct {
+	Value missing.Value ` + "`gozod:\"required\"`" + `
+}
+`,
+			},
+			contains: []string{"user.go", "example.test/missing"},
+		},
+		{
+			name: "undefined type",
+			files: map[string]string{
+				"user.go": `package fixture
+
+type User struct {
+	Value Missing ` + "`gozod:\"required\"`" + `
+}
+`,
+			},
+			contains: []string{"user.go", "undefined: Missing"},
+		},
+		{
+			name: "conflicting package",
+			files: map[string]string{
+				"alpha.go": "package alpha\n",
+				"beta.go":  "package beta\n",
+			},
+			contains: []string{"alpha.go", "beta.go", "found packages"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := NewTestHelper(t)
+			helper.CreateGoFile("go.mod", `module example.test/invalid
+
+go 1.26.5
+`)
+			for name, content := range tt.files {
+				helper.CreateGoFile(name, content)
+			}
+
+			analyzer, err := NewStructAnalyzer()
+			require.NoError(t, err)
+
+			_, err = analyzer.AnalyzePackage(helper.GetTempDir())
+			require.Error(t, err)
+			for _, text := range tt.contains {
+				assert.ErrorContains(t, err, text)
+			}
+		})
+	}
+}
+
 func TestStructAnalyzer_ParseTagRules(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -226,66 +423,6 @@ func TestStructAnalyzer_ParseTagRules(t *testing.T) {
 				expected := tt.expected[i]
 				assert.Equal(t, expected.Name, rule.Name, "Rule %d: expected name %s, got %s", i, expected.Name, rule.Name)
 				assert.Equal(t, expected.Params, rule.Params, "Rule %d: expected params %v, got %v", i, expected.Params, rule.Params)
-			}
-		})
-	}
-}
-
-func TestStructAnalyzer_ExtractImports(t *testing.T) {
-	tests := []struct {
-		name     string
-		source   string
-		expected []string
-	}{
-		{
-			name: "single import",
-			source: `package main
-import "time"
-type User struct {}`,
-			expected: []string{"time"},
-		},
-		{
-			name: "multiple imports",
-			source: `package main
-import (
-	"time"
-	"github.com/go-json-experiment/json"
-)
-type User struct {}`,
-			expected: []string{"time", "github.com/go-json-experiment/json"},
-		},
-		{
-			name: "aliased import",
-			source: `package main
-import t "time"
-type User struct {}`,
-			expected: []string{"time"},
-		},
-		{
-			name: "no imports",
-			source: `package main
-type User struct {}`,
-			expected: []string{},
-		},
-	}
-
-	analyzer, err := NewStructAnalyzer()
-	require.NoError(t, err, "Failed to create analyzer")
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			helper := NewTestHelper(t)
-			helper.CreateGoFile("test.go", tt.source)
-
-			// Use AnalyzePackage to get the imports
-			results, err := analyzer.AnalyzePackage(helper.GetTempDir())
-			require.NoError(t, err, "Failed to analyze package")
-
-			// We can't directly test extractImports since it's not public,
-			// but we can verify the analysis worked
-			if len(results) == 0 && len(tt.expected) > 0 {
-				// This test is more about ensuring the analysis pipeline works
-				t.Logf("Analysis completed successfully for imports test")
 			}
 		})
 	}
@@ -459,43 +596,82 @@ type User struct {
 }
 
 func TestStructAnalyzer_ParseStructFieldsWithFieldNameFallbacks(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "test.go", `package main
+	helper := NewTestHelper(t)
+	helper.CreateGoFile("test.go", `package main
 
+//go:generate gozodgen
 type User struct {
 	Name   string
 	Alias  string `+"`json:\"\"`"+`
 	Hidden string `+"`json:\"-\" gozod:\"required\"`"+`
 	hidden string
 }
-`, parser.ParseComments)
-	require.NoError(t, err)
-
-	genDecl := file.Decls[0].(*ast.GenDecl)
-	typeSpec := genDecl.Specs[0].(*ast.TypeSpec)
-	structType := typeSpec.Type.(*ast.StructType)
+`)
 
 	analyzer, err := NewStructAnalyzer()
 	require.NoError(t, err)
 
-	fields, err := analyzer.parseStructFields(structType)
+	structs, err := analyzer.AnalyzePackage(helper.GetTempDir())
 	require.NoError(t, err)
+	require.Len(t, structs, 1)
+	fields := structs[0].Fields
 	require.Len(t, fields, 2)
 
-	assert.Equal(t, "Name", fields[0].info.Name)
-	assert.Equal(t, reflect.TypeFor[string](), fields[0].info.Type)
-	assert.Equal(t, "string", fields[0].info.TypeName)
-	assert.Equal(t, "Name", fields[0].info.FieldKey)
-	assert.False(t, fields[0].hasGozodTag)
+	assert.Equal(t, "Name", fields[0].Name)
+	assert.Equal(t, reflect.TypeFor[string](), fields[0].Type)
+	assert.Equal(t, "string", fields[0].TypeName)
+	assert.Equal(t, "Name", fields[0].FieldKey)
 
-	assert.Equal(t, "Alias", fields[1].info.Name)
-	assert.Equal(t, reflect.TypeFor[string](), fields[1].info.Type)
-	assert.Equal(t, "string", fields[1].info.TypeName)
-	assert.Equal(t, "Alias", fields[1].info.FieldKey)
-	assert.False(t, fields[1].hasGozodTag)
+	assert.Equal(t, "Alias", fields[1].Name)
+	assert.Equal(t, reflect.TypeFor[string](), fields[1].Type)
+	assert.Equal(t, "string", fields[1].TypeName)
+	assert.Equal(t, "Alias", fields[1].FieldKey)
 
 	for _, field := range fields {
-		assert.NotEqual(t, "Hidden", field.info.Name)
+		assert.NotEqual(t, "Hidden", field.Name)
+	}
+}
+
+func TestStructAnalyzerRejectsUnsupportedFieldTypes(t *testing.T) {
+	tests := []struct {
+		name         string
+		declarations string
+		fieldType    string
+		wantType     string
+	}{
+		{name: "channel", fieldType: "chan int", wantType: "chan int"},
+		{name: "function", fieldType: "func(int) error", wantType: "func(int) error"},
+		{
+			name:         "non-empty interface",
+			declarations: "type Runner interface { Run() }\n",
+			fieldType:    "Runner",
+			wantType:     "Runner",
+		},
+		{
+			name:         "type parameter",
+			declarations: "type Box[T any] struct {\n\tValue T `gozod:\"required\"`\n}\n",
+			wantType:     "T",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := NewTestHelper(t)
+			source := "package main\n\n" + tt.declarations
+			if tt.fieldType != "" {
+				source += "type Box struct {\n\tValue " + tt.fieldType + " `gozod:\"required\"`\n}\n"
+			}
+			helper.CreateGoFile("box.go", source)
+
+			analyzer, err := NewStructAnalyzer()
+			require.NoError(t, err)
+			_, err = analyzer.AnalyzePackage(helper.GetTempDir())
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "Value")
+			assert.ErrorContains(t, err, tt.wantType)
+			assert.ErrorContains(t, err, "unsupported field type")
+		})
 	}
 }
 
@@ -689,64 +865,6 @@ func TestStructAnalyzer_ParseTagRulesPreservesStructuredParams(t *testing.T) {
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("parseTagRules() mismatch (-want +got):\n%s", diff)
 			}
-		})
-	}
-}
-
-func TestStructAnalyzer_GetReflectTypeFromAST(t *testing.T) {
-	analyzer, err := NewStructAnalyzer()
-	require.NoError(t, err)
-
-	tests := []struct {
-		name string
-		expr ast.Expr
-		want reflect.Type
-	}{
-		{
-			name: "string",
-			expr: &ast.Ident{Name: "string"},
-			want: reflect.TypeFor[string](),
-		},
-		{
-			name: "pointer",
-			expr: &ast.StarExpr{X: &ast.Ident{Name: "int"}},
-			want: reflect.PointerTo(reflect.TypeFor[int]()),
-		},
-		{
-			name: "slice",
-			expr: &ast.ArrayType{Elt: &ast.Ident{Name: "bool"}},
-			want: reflect.SliceOf(reflect.TypeFor[bool]()),
-		},
-		{
-			name: "map",
-			expr: &ast.MapType{Key: &ast.Ident{Name: "string"}, Value: &ast.Ident{Name: "float64"}},
-			want: reflect.MapOf(reflect.TypeFor[string](), reflect.TypeFor[float64]()),
-		},
-		{
-			name: "time selector",
-			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "time"}, Sel: &ast.Ident{Name: "Time"}},
-			want: reflect.TypeFor[timeType](),
-		},
-		{
-			name: "unknown selector falls back to any",
-			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "pkg"}, Sel: &ast.Ident{Name: "Type"}},
-			want: reflect.TypeFor[any](),
-		},
-		{
-			name: "unknown expression falls back to any",
-			expr: &ast.CallExpr{},
-			want: reflect.TypeFor[any](),
-		},
-		{
-			name: "unknown falls back to any",
-			expr: &ast.Ident{Name: "Custom"},
-			want: reflect.TypeFor[any](),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, analyzer.getReflectTypeFromAST(tt.expr))
 		})
 	}
 }

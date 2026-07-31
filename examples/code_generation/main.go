@@ -4,27 +4,23 @@
 //  1. Add //go:generate gozodgen directive to your Go files
 //  2. Define structs with gozod struct tags
 //  3. Run: go generate ./...
-//  4. Generated *_gen.go files contain optimized Schema() methods
+//  4. Generated *_schema.go files contain optimized Schema() methods
 //  5. Use generated methods explicitly, for example User{}.Schema()
 package main
 
 import (
 	"fmt"
-	"time"
-
-	"github.com/kaptinlin/gozod"
 )
 
 //go:generate go run ../../cmd/gozodgen -suffix=_schema.go
 
 // User demonstrates struct tag validation with code generation
 type User struct {
-	ID        string    `json:"id" gozod:"required,uuid"`
-	Name      string    `json:"name" gozod:"required,min=2,max=100"`
-	Email     string    `json:"email" gozod:"required,email"`
-	Age       int       `json:"age" gozod:"required,min=18,max=120"`
-	Status    string    `json:"status" gozod:"required,enum=active inactive,default=active"`
-	CreatedAt time.Time `json:"created_at" gozod:"required,time"`
+	ID     string `json:"id" gozod:"required,uuid"`
+	Name   string `json:"name" gozod:"required,min=2,max=100"`
+	Email  string `json:"email" gozod:"required,email"`
+	Age    int    `json:"age" gozod:"required,min=18,max=120"`
+	Status string `json:"status" gozod:"required,enum=active inactive,default=active"`
 }
 
 // Product demonstrates complex validation rules
@@ -45,17 +41,14 @@ func main() {
 	fmt.Println("\n👤 User Validation:")
 
 	user := User{
-		ID:        "550e8400-e29b-41d4-a716-446655440000",
-		Name:      "Alice Johnson",
-		Email:     "alice@example.com",
-		Age:       28,
-		Status:    "active",
-		CreatedAt: time.Now(),
+		ID:     "550e8400-e29b-41d4-a716-446655440000",
+		Name:   "Alice Johnson",
+		Email:  "alice@example.com",
+		Age:    28,
+		Status: "active",
 	}
 
-	// This example stays runnable before code generation. After running
-	// go generate, use User{}.Schema() to call the generated schema explicitly.
-	schema := gozod.MustFromStruct[User]()
+	schema := User{}.Schema()
 	result, err := schema.Parse(user)
 
 	if err != nil {
@@ -77,7 +70,7 @@ func main() {
 		InStock:  true,
 	}
 
-	productSchema := gozod.MustFromStruct[Product]()
+	productSchema := Product{}.Schema()
 	productResult, err := productSchema.Parse(product)
 
 	if err != nil {
@@ -90,11 +83,11 @@ func main() {
 	fmt.Println("\n💡 Code Generation Benefits:")
 	fmt.Println("   • Explicit pre-built Schema() methods in generated files")
 	fmt.Println("   • No runtime tag reflection in generated schema construction")
-	fmt.Println("   • Generated Schema() methods in *_gen.go files")
+	fmt.Println("   • Generated Schema() methods in *_schema.go files")
 	fmt.Println("   • Call generated schemas directly, for example User{}.Schema()")
 
 	fmt.Println("\n📚 Next Steps:")
 	fmt.Println("   1. Run: go generate ./...")
-	fmt.Println("   2. Check generated *_gen.go files")
+	fmt.Println("   2. Check generated *_schema.go files")
 	fmt.Println("   3. Call the generated Schema() method where you want generated validation")
 }

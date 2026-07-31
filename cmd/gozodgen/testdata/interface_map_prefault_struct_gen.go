@@ -10,6 +10,6 @@ import (
 // Package-local generated dependencies call their generated schema methods.
 func (imps InterfaceMapPrefaultStruct) Schema() *gozod.ZodStruct[InterfaceMapPrefaultStruct, InterfaceMapPrefaultStruct] {
 	return gozod.Struct[InterfaceMapPrefaultStruct](gozod.StructSchema{
-		"data": gozod.Record(gozod.Any()).Optional().Prefault(map[string]interface{}{"x": 99, "y": "test"}),
+		"data": gozod.Record[string, unknown](gozod.String(), gozod.Any()).Optional().Prefault(map[string]interface{}{"x": 99, "y": "test"}),
 	})
 }

@@ -78,6 +78,22 @@ func TestTuple_TypeValidation(t *testing.T) {
 	})
 }
 
+func TestTuple_PreservesNestedIssueDetails(t *testing.T) {
+	schema := Tuple(String().Email())
+
+	_, err := schema.Parse([]any{"not-an-email"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	issue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidFormat, issue.Code)
+	assert.NotEmpty(t, issue.Message)
+	assert.Equal(t, []any{0}, issue.Path)
+	assert.Equal(t, "email", issue.Format)
+}
+
 // =============================================================================
 // LENGTH VALIDATION TESTS
 // =============================================================================

@@ -4,8 +4,6 @@ package testdata
 
 import (
 	"github.com/kaptinlin/gozod"
-	"net"
-	"net/url"
 	"regexp"
 	"strings"
 )
@@ -14,16 +12,16 @@ import (
 // Package-local generated dependencies call their generated schema methods.
 func (vs ValidatorStruct) Schema() *gozod.ZodStruct[ValidatorStruct, ValidatorStruct] {
 	return gozod.Struct[ValidatorStruct](gozod.StructSchema{
-		"email":   gozod.String().Email().Optional(),
-		"url":     gozod.String().URL().Optional(),
+		"email":   gozod.Email().Optional(),
+		"url":     gozod.URL().Optional(),
 		"uuid":    gozod.UUID().Optional(),
-		"ipv4":    gozod.String().IPv4().Optional(),
-		"ipv6":    gozod.String().IPv6().Optional(),
+		"ipv4":    gozod.IPv4().Optional(),
+		"ipv6":    gozod.IPv6().Optional(),
 		"regex":   gozod.String().Regex(regexp.MustCompile("^[A-Z]+$")).Optional(),
 		"trim":    gozod.String().Trim().Optional(),
 		"lower":   gozod.String().ToLowerCase().Optional(),
 		"upper":   gozod.String().ToUpperCase().Optional(),
-		"nilable": gozod.String().Nilable().Optional(),
+		"nilable": gozod.StringPtr().Nilable().Optional(),
 		"gt":      gozod.Int().Gt(0).Optional(),
 		"gte":     gozod.Int().Gte(0).Optional(),
 		"lt":      gozod.Int().Lt(100).Optional(),

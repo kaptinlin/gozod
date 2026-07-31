@@ -1,17 +1,21 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
-	"go/importer"
-	"go/parser"
+	"go/format"
 	"go/token"
 	"go/types"
 	"reflect"
 	"strings"
 
+	"golang.org/x/tools/go/packages"
+
 	"github.com/kaptinlin/gozod/pkg/tagparser"
 )
+
+var errUnsupportedFieldType = errors.New("unsupported field type")
 
 // timeType is a marker type for time.Time detection.
 type timeType struct{}
@@ -19,8 +23,6 @@ type timeType struct{}
 // StructAnalyzer analyzes Go source files to find structs requiring code generation.
 type StructAnalyzer struct {
 	fset         *token.FileSet
-	packages     map[string]*types.Package
-	imports      map[string]string
 	info         *types.Info
 	ruleTagName  string // struct tag used for validation rules (default "gozod")
 	fieldNameTag string // struct tag used for field names (default "json")
@@ -46,8 +48,6 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 
 	return &StructAnalyzer{
 		fset:         token.NewFileSet(),
-		packages:     make(map[string]*types.Package),
-		imports:      make(map[string]string),
 		info:         info,
 		ruleTagName:  defaultRuleTag,
 		fieldNameTag: defaultFieldNameTag,
@@ -56,41 +56,40 @@ func NewStructAnalyzer() (*StructAnalyzer, error) {
 
 // AnalyzePackage analyzes all Go files in a package directory.
 func (a *StructAnalyzer) AnalyzePackage(pkgPath string) ([]*GenerationInfo, error) {
-	astPkgs, err := parser.ParseDir(a.fset, pkgPath, nil, parser.ParseComments) //nolint:staticcheck // SA1019: replacing with go/packages is a larger refactor
+	loaded, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo |
+			packages.NeedImports | packages.NeedDeps,
+		Dir:   pkgPath,
+		Tests: false,
+	}, ".")
 	if err != nil {
-		return nil, fmt.Errorf("parse package %s: %w", pkgPath, err)
+		return nil, fmt.Errorf("load package %s: %w", pkgPath, err)
+	}
+	if len(loaded) != 1 {
+		return nil, fmt.Errorf("load package %s: expected one package, got %d", pkgPath, len(loaded))
+	}
+	pkg := loaded[0]
+	if len(pkg.Errors) > 0 {
+		messages := make([]string, len(pkg.Errors))
+		for i, loadErr := range pkg.Errors {
+			messages[i] = loadErr.Error()
+		}
+		return nil, fmt.Errorf("load package %s: %s", pkgPath, strings.Join(messages, "; "))
 	}
 
-	var allStructs []*GenerationInfo
+	a.fset = pkg.Fset
+	a.info = pkg.TypesInfo
 
-	for pkgName, astPkg := range astPkgs {
-		if strings.HasSuffix(pkgName, "_test") {
-			continue
-		}
-
-		var files []*ast.File
-		for _, file := range astPkg.Files {
-			files = append(files, file)
-		}
-
-		conf := types.Config{Importer: importer.Default()}
-		typesPkg, err := conf.Check(pkgName, a.fset, files, a.info)
+	allStructs := make([]*GenerationInfo, 0)
+	for _, file := range pkg.Syntax {
+		fileName := a.fset.Position(file.Pos()).Filename
+		structs, err := a.analyzeFile(fileName, file, pkg.Name)
 		if err != nil {
-			fmt.Printf("Warning: type checking for package %s: %v\n", pkgName, err)
+			return nil, fmt.Errorf("analyze file %s: %w", fileName, err)
 		}
-		if typesPkg != nil {
-			a.packages[pkgName] = typesPkg
-		}
-
-		for fileName, file := range astPkg.Files {
-			structs, err := a.analyzeFile(fileName, file, pkgName)
-			if err != nil {
-				return nil, fmt.Errorf("analyze file %s: %w", fileName, err)
-			}
-			allStructs = append(allStructs, structs...)
-		}
+		allStructs = append(allStructs, structs...)
 	}
-
 	return allStructs, nil
 }
 
@@ -130,31 +129,17 @@ func (a *StructAnalyzer) analyzeFile(fileName string, file *ast.File, pkgName st
 	return structs, nil
 }
 
-// parsedField pairs a FieldInfo with a flag indicating whether the field had a gozod tag.
-type parsedField struct {
-	info        tagparser.FieldInfo
-	hasGozodTag bool
-}
-
 // analyzeStruct analyzes a single struct declaration.
 func (a *StructAnalyzer) analyzeStruct(name string, structType *ast.StructType, pkgName, fileName string, imports []string, hasGenerate bool) (*GenerationInfo, error) {
-	parsed, err := a.parseStructFields(structType)
+	fields, err := a.parseStructFields(structType, hasGenerate)
 	if err != nil {
 		return nil, fmt.Errorf("parse struct fields: %w", err)
-	}
-
-	var gozodFields []tagparser.FieldInfo
-	for _, pf := range parsed {
-		if pf.info.HasSchemaSpec() || pf.hasGozodTag || hasGenerate {
-			pf.info.Optional = pf.info.NeedsPointerOptional()
-			gozodFields = append(gozodFields, pf.info)
-		}
 	}
 
 	return &GenerationInfo{
 		Name:        name,
 		Package:     pkgName,
-		Fields:      gozodFields,
+		Fields:      fields,
 		Imports:     imports,
 		HasGenerate: hasGenerate,
 		FilePath:    fileName,
@@ -168,11 +153,6 @@ func (a *StructAnalyzer) extractImports(file *ast.File) []string {
 	for _, imp := range file.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
 		imports = append(imports, importPath)
-
-		// Store import alias if present
-		if imp.Name != nil {
-			a.imports[imp.Name.Name] = importPath
-		}
 	}
 
 	return imports
@@ -195,8 +175,8 @@ func hasGenerateDirective(comments *ast.CommentGroup) bool {
 }
 
 // parseStructFields parses struct fields from AST and extracts tag information.
-func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsedField, error) {
-	var fields []parsedField
+func (a *StructAnalyzer) parseStructFields(structType *ast.StructType, hasGenerate bool) ([]tagparser.FieldInfo, error) {
+	var fields []tagparser.FieldInfo
 
 	for _, field := range structType.Fields.List {
 		if len(field.Names) == 0 {
@@ -215,7 +195,6 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 
 			info := tagparser.FieldInfo{
 				Name:     name.Name,
-				Type:     a.getReflectType(field.Type),
 				TypeName: getTypeNameFromAST(field.Type),
 				FieldKey: fieldKey,
 			}
@@ -224,50 +203,95 @@ func (a *StructAnalyzer) parseStructFields(structType *ast.StructType) ([]parsed
 			if err != nil {
 				return nil, fmt.Errorf("parse gozod tag for field %s: %w", name.Name, err)
 			}
+			if !hasGozodTag && !hasGenerate {
+				continue
+			}
 
-			fields = append(fields, parsedField{info: info, hasGozodTag: hasGozodTag})
+			fieldType, err := a.getReflectType(field.Type)
+			if err != nil {
+				return nil, fmt.Errorf("resolve type for field %s: %w", name.Name, err)
+			}
+			info.Type = fieldType
+
+			fields = append(fields, info)
 		}
 	}
 
 	return fields, nil
 }
 
-// getReflectType converts AST type expression to reflect.Type using go/types
-func (a *StructAnalyzer) getReflectType(expr ast.Expr) reflect.Type {
-	// Try to get type information from the type checker first
-	if a.info != nil {
-		if typeAndValue, ok := a.info.Types[expr]; ok {
-			return a.typesToReflectType(typeAndValue.Type)
-		}
+// getReflectType converts a type-checked AST expression to reflect.Type.
+func (a *StructAnalyzer) getReflectType(expr ast.Expr) (reflect.Type, error) {
+	if a.info == nil {
+		return nil, errors.New("type information is unavailable")
 	}
-
-	// Fallback to AST-based type inference if type checker info is not available
-	return a.getReflectTypeFromAST(expr)
+	typeAndValue, ok := a.info.Types[expr]
+	if !ok || typeAndValue.Type == nil {
+		return nil, fmt.Errorf("type information is unavailable at %s", a.fset.Position(expr.Pos()))
+	}
+	fieldType, err := a.typesToReflectType(typeAndValue.Type)
+	if err != nil {
+		return nil, fmt.Errorf("%w %s", err, types.TypeString(typeAndValue.Type, nil))
+	}
+	return fieldType, nil
 }
 
 // typesToReflectType converts go/types.Type to reflect.Type.
-func (a *StructAnalyzer) typesToReflectType(t types.Type) reflect.Type {
+func (a *StructAnalyzer) typesToReflectType(t types.Type) (reflect.Type, error) {
+	t = types.Unalias(t)
 	switch typ := t.(type) {
 	case *types.Basic:
-		return basicKindToReflectType(typ.Kind())
+		if converted := basicKindToReflectType(typ.Kind()); converted != nil {
+			return converted, nil
+		}
+		return nil, errUnsupportedFieldType
 	case *types.Pointer:
-		return reflect.PointerTo(a.typesToReflectType(typ.Elem()))
+		elem, err := a.typesToReflectType(typ.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return reflect.PointerTo(elem), nil
 	case *types.Slice:
-		return reflect.SliceOf(a.typesToReflectType(typ.Elem()))
+		elem, err := a.typesToReflectType(typ.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return reflect.SliceOf(elem), nil
 	case *types.Array:
-		return reflect.SliceOf(a.typesToReflectType(typ.Elem()))
+		elem, err := a.typesToReflectType(typ.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return reflect.ArrayOf(int(typ.Len()), elem), nil
 	case *types.Map:
-		return reflect.MapOf(a.typesToReflectType(typ.Key()), a.typesToReflectType(typ.Elem()))
+		key, err := a.typesToReflectType(typ.Key())
+		if err != nil {
+			return nil, err
+		}
+		if key.Kind() != reflect.String {
+			return nil, errUnsupportedFieldType
+		}
+		elem, err := a.typesToReflectType(typ.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return reflect.MapOf(key, elem), nil
 	case *types.Named:
 		obj := typ.Obj()
 		if obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "time" && obj.Name() == "Time" {
-			return reflect.TypeFor[timeType]()
+			return reflect.TypeFor[timeType](), nil
+		}
+		if _, ok := typ.Underlying().(*types.Struct); ok {
+			return reflect.TypeFor[any](), nil
 		}
 		return a.typesToReflectType(typ.Underlying())
 	case *types.Interface:
-		return reflect.TypeFor[any]()
+		if typ.Empty() {
+			return reflect.TypeFor[any](), nil
+		}
+		return nil, errUnsupportedFieldType
 	default:
-		return reflect.TypeFor[any]()
+		return nil, errUnsupportedFieldType
 	}
 }
 
@@ -307,47 +331,7 @@ func basicKindToReflectType(kind types.BasicKind) reflect.Type {
 	case types.Bool:
 		return reflect.TypeFor[bool]()
 	default:
-		return reflect.TypeFor[any]()
-	}
-}
-
-// getReflectTypeFromAST is the fallback AST-based type inference.
-func (a *StructAnalyzer) getReflectTypeFromAST(expr ast.Expr) reflect.Type {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		switch t.Name {
-		case "string":
-			return reflect.TypeFor[string]()
-		case "int":
-			return reflect.TypeFor[int]()
-		case "int32":
-			return reflect.TypeFor[int32]()
-		case "int64":
-			return reflect.TypeFor[int64]()
-		case "float32":
-			return reflect.TypeFor[float32]()
-		case "float64":
-			return reflect.TypeFor[float64]()
-		case "bool":
-			return reflect.TypeFor[bool]()
-		default:
-			return reflect.TypeFor[any]()
-		}
-	case *ast.StarExpr:
-		return reflect.PointerTo(a.getReflectTypeFromAST(t.X))
-	case *ast.ArrayType:
-		return reflect.SliceOf(a.getReflectTypeFromAST(t.Elt))
-	case *ast.MapType:
-		return reflect.MapOf(a.getReflectTypeFromAST(t.Key), a.getReflectTypeFromAST(t.Value))
-	case *ast.SelectorExpr:
-		if ident, ok := t.X.(*ast.Ident); ok {
-			if ident.Name == "time" && t.Sel.Name == "Time" {
-				return reflect.TypeFor[timeType]()
-			}
-		}
-		return reflect.TypeFor[any]()
-	default:
-		return reflect.TypeFor[any]()
+		return nil
 	}
 }
 
@@ -434,7 +418,14 @@ func getTypeNameFromAST(expr ast.Expr) string {
 	case *ast.StarExpr:
 		return "*" + getTypeNameFromAST(t.X)
 	case *ast.ArrayType:
-		return "[]" + getTypeNameFromAST(t.Elt)
+		if t.Len == nil {
+			return "[]" + getTypeNameFromAST(t.Elt)
+		}
+		var length strings.Builder
+		if err := format.Node(&length, token.NewFileSet(), t.Len); err != nil {
+			return "unknown"
+		}
+		return "[" + length.String() + "]" + getTypeNameFromAST(t.Elt)
 	case *ast.MapType:
 		return "map[" + getTypeNameFromAST(t.Key) + "]" + getTypeNameFromAST(t.Value)
 	case *ast.SelectorExpr:

@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"regexp/syntax"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -625,6 +626,329 @@ func TestFromJSONSchema_Number(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 42, result)
 	})
+}
+
+func TestFromJSONSchema_IntegerMinimumRejectsOutOfRangeOperand(t *testing.T) {
+	minimum := "2147483648"
+	if strconv.IntSize == 64 {
+		minimum = "9223372036854775808"
+	}
+	schema := &lib.Schema{
+		Type:    []string{"integer"},
+		Minimum: lib.NewRat(minimum),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+
+	importErr, ok := errors.AsType[*ImportError](err)
+	require.True(t, ok)
+	assert.Equal(t, "minimum", importErr.Keyword)
+	assert.Equal(t, "/minimum", importErr.Pointer)
+}
+
+func TestFromJSONSchema_IntegerMaximumRejectsOutOfRangeOperand(t *testing.T) {
+	maximum := "-2147483649"
+	if strconv.IntSize == 64 {
+		maximum = "-9223372036854775809"
+	}
+	schema := &lib.Schema{
+		Type:    []string{"integer"},
+		Maximum: lib.NewRat(maximum),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+
+	var importErr *ImportError
+	require.True(t, errors.As(err, &importErr))
+	assert.Equal(t, "maximum", importErr.Keyword)
+	assert.Equal(t, "/maximum", importErr.Pointer)
+}
+
+func TestFromJSONSchema_IntegerExclusiveMinimumRejectsOverflowingAdjustment(t *testing.T) {
+	exclusiveMinimum := "2147483647"
+	if strconv.IntSize == 64 {
+		exclusiveMinimum = "9223372036854775807"
+	}
+	schema := &lib.Schema{
+		Type:             []string{"integer"},
+		ExclusiveMinimum: lib.NewRat(exclusiveMinimum),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+
+	var importErr *ImportError
+	require.True(t, errors.As(err, &importErr))
+	assert.Equal(t, "exclusiveMinimum", importErr.Keyword)
+	assert.Equal(t, "/exclusiveMinimum", importErr.Pointer)
+}
+
+func TestFromJSONSchema_IntegerExclusiveMaximumRejectsOverflowingAdjustment(t *testing.T) {
+	exclusiveMaximum := "-2147483648"
+	if strconv.IntSize == 64 {
+		exclusiveMaximum = "-9223372036854775808"
+	}
+	schema := &lib.Schema{
+		Type:             []string{"integer"},
+		ExclusiveMaximum: lib.NewRat(exclusiveMaximum),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+
+	var importErr *ImportError
+	require.True(t, errors.As(err, &importErr))
+	assert.Equal(t, "exclusiveMaximum", importErr.Keyword)
+	assert.Equal(t, "/exclusiveMaximum", importErr.Pointer)
+}
+
+func TestFromJSONSchema_IntegerMultipleOfRejectsOutOfRangeOperand(t *testing.T) {
+	multipleOf := "2147483648"
+	if strconv.IntSize == 64 {
+		multipleOf = "9223372036854775808"
+	}
+	schema := &lib.Schema{
+		Type:       []string{"integer"},
+		MultipleOf: lib.NewRat(multipleOf),
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+
+	var importErr *ImportError
+	require.True(t, errors.As(err, &importErr))
+	assert.Equal(t, "multipleOf", importErr.Keyword)
+	assert.Equal(t, "/multipleOf", importErr.Pointer)
+}
+
+func TestFromJSONSchema_RejectsNonPositiveMultipleOf(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  *lib.Schema
+		lossy   bool
+		pointer string
+	}{
+		{
+			name:    "strict number zero at root",
+			schema:  &lib.Schema{Type: []string{"number"}, MultipleOf: lib.NewRat(0)},
+			pointer: "/multipleOf",
+		},
+		{
+			name: "strict integer negative in property",
+			schema: &lib.Schema{
+				Type: []string{"object"},
+				Properties: &lib.SchemaMap{
+					"count": {Type: []string{"integer"}, MultipleOf: lib.NewRat(-1)},
+				},
+			},
+			pointer: "/properties/count/multipleOf",
+		},
+		{
+			name: "lossy number negative in items",
+			schema: &lib.Schema{
+				Type:  []string{"array"},
+				Items: &lib.Schema{Type: []string{"number"}, MultipleOf: lib.NewRat(-1)},
+			},
+			lossy:   true,
+			pointer: "/items/multipleOf",
+		},
+		{
+			name:    "lossy integer zero at root",
+			schema:  &lib.Schema{Type: []string{"integer"}, MultipleOf: lib.NewRat(0)},
+			lossy:   true,
+			pointer: "/multipleOf",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				imported core.ZodSchema
+				losses   []ImportLossError
+				err      error
+			)
+			if test.lossy {
+				imported, losses, err = FromJSONSchemaLossy(test.schema)
+			} else {
+				imported, err = FromJSONSchema(test.schema)
+			}
+
+			assert.Nil(t, imported)
+			assert.Empty(t, losses)
+			require.ErrorIs(t, err, ErrInvalidJSONSchema)
+			var importErr *ImportError
+			require.ErrorAs(t, err, &importErr)
+			assert.Equal(t, "multipleOf", importErr.Keyword)
+			assert.Equal(t, test.pointer, importErr.Pointer)
+		})
+	}
+}
+
+func TestFromJSONSchema_IntegerBoundsPreserveRepresentablePlatformEdges(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	minInt := -maxInt - 1
+	tests := []struct {
+		name    string
+		schema  *lib.Schema
+		valid   int
+		invalid int
+	}{
+		{
+			name:    "minimum",
+			schema:  &lib.Schema{Type: []string{"integer"}, Minimum: lib.NewRat(strconv.FormatInt(int64(maxInt), 10))},
+			valid:   maxInt,
+			invalid: maxInt - 1,
+		},
+		{
+			name:    "maximum",
+			schema:  &lib.Schema{Type: []string{"integer"}, Maximum: lib.NewRat(strconv.FormatInt(int64(minInt), 10))},
+			valid:   minInt,
+			invalid: minInt + 1,
+		},
+		{
+			name: "exclusiveMinimum",
+			schema: &lib.Schema{
+				Type:             []string{"integer"},
+				ExclusiveMinimum: lib.NewRat(strconv.FormatInt(int64(maxInt-1), 10)),
+			},
+			valid:   maxInt,
+			invalid: maxInt - 1,
+		},
+		{
+			name: "exclusiveMaximum",
+			schema: &lib.Schema{
+				Type:             []string{"integer"},
+				ExclusiveMaximum: lib.NewRat(strconv.FormatInt(int64(minInt+1), 10)),
+			},
+			valid:   minInt,
+			invalid: minInt + 1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			require.NoError(t, err)
+
+			result, err := imported.ParseAny(test.valid)
+			require.NoError(t, err)
+			assert.Equal(t, test.valid, result)
+
+			_, err = imported.ParseAny(test.invalid)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestFromJSONSchema_IntegerConstraintsPreserveRationalSemantics(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  *lib.Schema
+		valid   int
+		invalid int
+	}{
+		{
+			name:    "minimum rounds up",
+			schema:  &lib.Schema{Type: []string{"integer"}, Minimum: lib.NewRat("3/2")},
+			valid:   2,
+			invalid: 1,
+		},
+		{
+			name:    "maximum rounds down",
+			schema:  &lib.Schema{Type: []string{"integer"}, Maximum: lib.NewRat("3/2")},
+			valid:   1,
+			invalid: 2,
+		},
+		{
+			name: "exclusive minimum rounds up",
+			schema: &lib.Schema{
+				Type:             []string{"integer"},
+				ExclusiveMinimum: lib.NewRat("3/2"),
+			},
+			valid:   2,
+			invalid: 1,
+		},
+		{
+			name: "exclusive maximum rounds down",
+			schema: &lib.Schema{
+				Type:             []string{"integer"},
+				ExclusiveMaximum: lib.NewRat("3/2"),
+			},
+			valid:   1,
+			invalid: 2,
+		},
+		{
+			name:    "multipleOf uses reduced numerator",
+			schema:  &lib.Schema{Type: []string{"integer"}, MultipleOf: lib.NewRat("3/2")},
+			valid:   6,
+			invalid: 4,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			imported, err := FromJSONSchema(test.schema)
+			require.NoError(t, err)
+
+			_, err = imported.ParseAny(test.valid)
+			require.NoError(t, err)
+			_, err = imported.ParseAny(test.invalid)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestFromJSONSchema_IntegerOverflowCarriesNestedPointer(t *testing.T) {
+	maximum := "-2147483649"
+	if strconv.IntSize == 64 {
+		maximum = "-9223372036854775809"
+	}
+	schema := &lib.Schema{
+		Type: []string{"object"},
+		Properties: &lib.SchemaMap{
+			"limit/value": {
+				Type:    []string{"integer"},
+				Maximum: lib.NewRat(maximum),
+			},
+		},
+	}
+
+	imported, err := FromJSONSchema(schema)
+	assert.Nil(t, imported)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "maximum", importErr.Keyword)
+	assert.Equal(t, "/properties/limit~1value/maximum", importErr.Pointer)
+}
+
+func TestFromJSONSchemaLossy_IntegerOverflowRemainsAnError(t *testing.T) {
+	multipleOf := "2147483648"
+	if strconv.IntSize == 64 {
+		multipleOf = "9223372036854775808"
+	}
+	schema := &lib.Schema{Type: []string{"integer"}, MultipleOf: lib.NewRat(multipleOf)}
+
+	imported, losses, err := FromJSONSchemaLossy(schema)
+	assert.Nil(t, imported)
+	assert.Empty(t, losses)
+	require.ErrorIs(t, err, ErrInvalidJSONSchema)
+	var importErr *ImportError
+	require.ErrorAs(t, err, &importErr)
+	assert.Equal(t, "multipleOf", importErr.Keyword)
+	assert.Equal(t, "/multipleOf", importErr.Pointer)
 }
 
 func TestFromJSONSchema_Boolean(t *testing.T) {

@@ -6,3 +6,11 @@
 	path = .agents/skills
 	url = https://github.com/agentable/golang-skills.git
 	shallow = true
+[submodule ".reference/valibot"]
+	path = .reference/valibot
+	url = https://github.com/open-circle/valibot.git
+	shallow = true
+[submodule ".reference/validator"]
+	path = .reference/validator
+	url = https://github.com/go-playground/validator.git
+	shallow = true

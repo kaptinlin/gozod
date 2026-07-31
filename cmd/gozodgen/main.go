@@ -10,14 +10,12 @@
 //
 //	-suffix string     Output file suffix (default: "_gen.go")
 //	-package string    Specify package name (default: auto-detect)
-//	-tags string       Build tags
 //	-tag-name string   Struct tag used for validation rules (default: "gozod")
 //	-field-name-tag string
 //	                   Struct tag used for field names (default: "json")
 //	-method string     Name of the generated method (default: "Schema")
 //	-verbose          Verbose output
 //	-dry-run          Preview generated code without writing files
-//	-force            Force regeneration of all files
 package main
 
 import (
@@ -25,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"strings"
 	"unicode"
 )
 
@@ -42,13 +39,11 @@ const (
 var (
 	outputSuffix     = flag.String("suffix", "_gen.go", "Output file suffix (e.g., '_schema.go', '_validators.go')")
 	packageName      = flag.String("package", "", "Specify package name (default: auto-detect)")
-	buildTags        = flag.String("tags", "", "Build tags")
 	ruleTagFlag      = flag.String("tag-name", defaultRuleTag, "Struct tag used for validation rules (e.g. gozod, validate)")
 	fieldNameTagFlag = flag.String("field-name-tag", defaultFieldNameTag, "Struct tag used for field names (e.g. json, yaml, toml)")
 	method           = flag.String("method", defaultMethodName, "Name of the generated method")
 	verbose          = flag.Bool("verbose", false, "Verbose output")
 	dryRun           = flag.Bool("dry-run", false, "Preview generated code without writing files")
-	force            = flag.Bool("force", false, "Force regeneration of all files")
 	help             = flag.Bool("help", false, "Show help message")
 )
 
@@ -84,13 +79,11 @@ func main() {
 	config := &GeneratorConfig{
 		OutputSuffix: *outputSuffix,
 		PackageName:  *packageName,
-		BuildTags:    parseBuildTags(*buildTags),
 		RuleTagName:  *ruleTagFlag,
 		FieldNameTag: *fieldNameTagFlag,
 		MethodName:   *method,
 		Verbose:      *verbose,
 		DryRun:       *dryRun,
-		Force:        *force,
 	}
 
 	generator, err := NewCodeGenerator(config)
@@ -160,12 +153,6 @@ EXAMPLES:
 	    # Generate a method named Validate instead of Schema
 	    gozodgen -method=Validate
 
-    # Force regeneration with custom suffix
-    gozodgen -force -suffix="_validators.go"
-
-    # Generate with build tags
-    gozodgen -tags="integration,test"
-
 DIRECTIVES:
     Add //go:generate gozodgen to your Go files to enable automatic
     code generation when running 'go generate'.
@@ -183,32 +170,15 @@ OUTPUT:
     explicit runtime-reflection fallback.`)
 }
 
-// parseBuildTags parses comma-separated build tags.
-func parseBuildTags(tags string) []string {
-	if tags == "" {
-		return nil
-	}
-	parts := strings.Split(strings.TrimSpace(tags), ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if trimmed := strings.TrimSpace(part); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
-}
-
 // GeneratorConfig holds configuration for the code generator.
 type GeneratorConfig struct {
-	OutputSuffix string   // File suffix for generated files
-	PackageName  string   // Override package name
-	BuildTags    []string // Build tags to include
-	RuleTagName  string   // Struct tag used for validation rules (default "gozod")
-	FieldNameTag string   // Struct tag used for field names (default "json")
-	MethodName   string   // Generated method name (default "Schema")
-	Verbose      bool     // Enable verbose logging
-	DryRun       bool     // Preview mode without writing files
-	Force        bool     // Force regeneration
+	OutputSuffix string // File suffix for generated files
+	PackageName  string // Override package name
+	RuleTagName  string // Struct tag used for validation rules (default "gozod")
+	FieldNameTag string // Struct tag used for field names (default "json")
+	MethodName   string // Generated method name (default "Schema")
+	Verbose      bool   // Enable verbose logging
+	DryRun       bool   // Preview mode without writing files
 }
 
 // isExportedIdent reports whether s is a valid exported Go identifier

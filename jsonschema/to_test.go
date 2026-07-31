@@ -2,8 +2,11 @@ package jsonschema
 
 import (
 	"maps"
+	"math"
+	"os/exec"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +20,192 @@ import (
 	"github.com/kaptinlin/gozod/core"
 	"github.com/kaptinlin/gozod/types"
 )
+
+func TestToJSONSchema_PreservesExactIntegerConstraints(t *testing.T) {
+	schema, err := ToJSONSchema(types.Uint64().Max(math.MaxInt64))
+	require.NoError(t, err)
+
+	encoded, err := json.Marshal(schema)
+	require.NoError(t, err)
+	assert.Equal(t, `{"maximum":9223372036854775807,"minimum":0,"type":"integer"}`, string(encoded))
+}
+
+func TestToJSONSchema_PreservesEveryExplicitIntegerConstraint(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  core.ZodSchema
+		keyword func(*lib.Schema) *lib.Rat
+		want    string
+	}{
+		{name: "minimum", schema: types.Int64().Min(math.MinInt64), keyword: func(s *lib.Schema) *lib.Rat { return s.Minimum }, want: "-9223372036854775808"},
+		{name: "maximum", schema: types.Int64().Max(math.MaxInt64), keyword: func(s *lib.Schema) *lib.Rat { return s.Maximum }, want: "9223372036854775807"},
+		{name: "exclusive minimum", schema: types.Int64().Gt(math.MaxInt64 - 1), keyword: func(s *lib.Schema) *lib.Rat { return s.ExclusiveMinimum }, want: "9223372036854775806"},
+		{name: "exclusive maximum", schema: types.Int64().Lt(math.MinInt64 + 1), keyword: func(s *lib.Schema) *lib.Rat { return s.ExclusiveMaximum }, want: "-9223372036854775807"},
+		{name: "multiple of", schema: types.Int64().MultipleOf(math.MaxInt64), keyword: func(s *lib.Schema) *lib.Rat { return s.MultipleOf }, want: "9223372036854775807"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, err := ToJSONSchema(tt.schema)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, lib.FormatRat(tt.keyword(exported)))
+		})
+	}
+}
+
+func TestToJSONSchema_DefaultIntegerRangesAreExact(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  core.ZodSchema
+		minimum string
+		maximum string
+	}{
+		{name: "int64", schema: types.Int64(), minimum: "-9223372036854775808", maximum: "9223372036854775807"},
+		{name: "uint64", schema: types.Uint64(), minimum: "0", maximum: "18446744073709551615"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, err := ToJSONSchema(tt.schema)
+			require.NoError(t, err)
+			assert.Equal(t, tt.minimum, lib.FormatRat(exported.Minimum))
+			assert.Equal(t, tt.maximum, lib.FormatRat(exported.Maximum))
+
+			encoded, err := json.Marshal(exported)
+			require.NoError(t, err)
+			assert.Contains(t, string(encoded), `"minimum":`+tt.minimum)
+			assert.Contains(t, string(encoded), `"maximum":`+tt.maximum)
+		})
+	}
+}
+
+func TestToJSONSchema_DefaultIntegerRangesDoNotDependOnPosition(t *testing.T) {
+	direct, err := ToJSONSchema(types.Uint64())
+	require.NoError(t, err)
+
+	object, err := ToJSONSchema(types.Object(core.StructSchema{"value": types.Uint64()}))
+	require.NoError(t, err)
+	require.NotNil(t, object.Properties)
+	property := (*object.Properties)["value"]
+	require.NotNil(t, property)
+
+	array, err := ToJSONSchema(types.Slice[uint64](types.Uint64()))
+	require.NoError(t, err)
+	require.NotNil(t, array.Items)
+
+	union, err := ToJSONSchema(types.UnionOf(types.Uint64(), types.String()))
+	require.NoError(t, err)
+	require.NotEmpty(t, union.AnyOf)
+
+	definition, err := ToJSONSchema(types.Object(core.StructSchema{
+		"value": types.Uint64().Meta(core.GlobalMeta{ID: "wide"}),
+	}))
+	require.NoError(t, err)
+	require.Contains(t, definition.Defs, "wide")
+
+	for name, exported := range map[string]*lib.Schema{
+		"direct":       direct,
+		"property":     property,
+		"array item":   array.Items,
+		"union member": union.AnyOf[0],
+		"definition":   definition.Defs["wide"],
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, "0", lib.FormatRat(exported.Minimum))
+			assert.Equal(t, "18446744073709551615", lib.FormatRat(exported.Maximum))
+		})
+	}
+}
+
+func TestToRatPreservesEveryIntegerKind(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "int", value: int(math.MinInt), want: strconv.FormatInt(int64(math.MinInt), 10)},
+		{name: "int8", value: int8(math.MinInt8), want: "-128"},
+		{name: "int16", value: int16(math.MinInt16), want: "-32768"},
+		{name: "int32", value: int32(math.MinInt32), want: "-2147483648"},
+		{name: "int64", value: int64(math.MinInt64), want: "-9223372036854775808"},
+		{name: "uint", value: uint(math.MaxUint), want: strconv.FormatUint(uint64(math.MaxUint), 10)},
+		{name: "uint8", value: uint8(math.MaxUint8), want: "255"},
+		{name: "uint16", value: uint16(math.MaxUint16), want: "65535"},
+		{name: "uint32", value: uint32(math.MaxUint32), want: "4294967295"},
+		{name: "uint64", value: uint64(math.MaxUint64), want: "18446744073709551615"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := toRat(tt.value)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, lib.FormatRat(&got))
+		})
+	}
+}
+
+func TestToJSONSchema_ExplicitIntegerBoundPreservesOppositeTypeRange(t *testing.T) {
+	tests := []struct {
+		name       string
+		schema     func() core.ZodSchema
+		definition func() core.ZodSchema
+		minimum    string
+		maximum    string
+	}{
+		{
+			name:       "explicit minimum",
+			schema:     func() core.ZodSchema { return types.Uint64().Min(7) },
+			definition: func() core.ZodSchema { return types.Uint64().Min(7).Meta(core.GlobalMeta{ID: "wide"}) },
+			minimum:    "7",
+			maximum:    "18446744073709551615",
+		},
+		{
+			name:       "explicit maximum",
+			schema:     func() core.ZodSchema { return types.Uint64().Max(9) },
+			definition: func() core.ZodSchema { return types.Uint64().Max(9).Meta(core.GlobalMeta{ID: "wide"}) },
+			minimum:    "0",
+			maximum:    "9",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			direct, err := ToJSONSchema(tt.schema())
+			require.NoError(t, err)
+
+			object, err := ToJSONSchema(types.Object(core.StructSchema{"value": tt.schema()}))
+			require.NoError(t, err)
+			require.NotNil(t, object.Properties)
+			property := (*object.Properties)["value"]
+			require.NotNil(t, property)
+
+			array, err := ToJSONSchema(types.Slice[any](tt.schema()))
+			require.NoError(t, err)
+			require.NotNil(t, array.Items)
+
+			union, err := ToJSONSchema(types.UnionOf(tt.schema(), types.String()))
+			require.NoError(t, err)
+			require.NotEmpty(t, union.AnyOf)
+
+			definition, err := ToJSONSchema(types.Object(core.StructSchema{"value": tt.definition()}))
+			require.NoError(t, err)
+			require.Contains(t, definition.Defs, "wide")
+
+			for name, exported := range map[string]*lib.Schema{
+				"direct":       direct,
+				"property":     property,
+				"array item":   array.Items,
+				"union member": union.AnyOf[0],
+				"definition":   definition.Defs["wide"],
+			} {
+				t.Run(name, func(t *testing.T) {
+					assert.Equal(t, tt.minimum, lib.FormatRat(exported.Minimum))
+					assert.Equal(t, tt.maximum, lib.FormatRat(exported.Maximum))
+				})
+			}
+		})
+	}
+}
 
 func assertJSONEquals(t *testing.T, expected string, actualJSON string) {
 	t.Helper()
@@ -59,7 +248,6 @@ func TestToJSONSchema_OptionValidation(t *testing.T) {
 			Unrepresentable: UnrepresentableThrow,
 			Cycles:          CyclesRef,
 			Reused:          ReusedInline,
-			Target:          TargetDraft202012,
 			IO:              IOOutput,
 		})
 		require.NoError(t, err)
@@ -91,12 +279,6 @@ func TestToJSONSchema_OptionValidation(t *testing.T) {
 			options:  Options{Reused: "throw"},
 			wantErr:  ErrInvalidJSONSchemaOption,
 			contains: "Reused",
-		},
-		{
-			name:     "unsupported target",
-			options:  Options{Target: "draft-07"},
-			wantErr:  ErrUnsupportedJSONSchemaTarget,
-			contains: "draft-07",
 		},
 		{
 			name:     "invalid io",
@@ -313,7 +495,7 @@ func TestToJSONSchema_PrimitiveTypes(t *testing.T) {
 		{
 			name:     "Int64",
 			schema:   types.Int64(),
-			expected: `{"type":"integer","minimum":-9.223372036854776e+18,"maximum":9.223372036854776e+18}`,
+			expected: `{"type":"integer","minimum":-9223372036854775808,"maximum":9223372036854775807}`,
 		},
 		{
 			name:     "Uint",
@@ -338,7 +520,7 @@ func TestToJSONSchema_PrimitiveTypes(t *testing.T) {
 		{
 			name:     "Uint64",
 			schema:   types.Uint64(),
-			expected: `{"type":"integer","minimum":0,"maximum":1.844674407371e+19}`,
+			expected: `{"type":"integer","minimum":0,"maximum":18446744073709551615}`,
 		},
 		{
 			name:     "Float32",
@@ -719,7 +901,7 @@ func TestToJSONSchema_NumberConstraints(t *testing.T) {
 		{"Uint8Constraints", types.Uint8().Min(50).Max(200), `{"type":"integer","minimum":50,"maximum":200}`},
 		{"Uint16Constraints", types.Uint16().Min(1000).Max(60000), `{"type":"integer","minimum":1000,"maximum":60000}`},
 		{"Uint32Constraints", types.Uint32().Min(100000).Max(4000000000), `{"type":"integer","minimum":100000,"maximum":4000000000}`},
-		{"Uint64Constraints", types.Uint64().Min(1000000).Max(9223372036854775807), `{"type":"integer","minimum":1000000,"maximum":9.223372036854776e+18}`},
+		{"Uint64Constraints", types.Uint64().Min(1000000).Max(9223372036854775807), `{"type":"integer","minimum":1000000,"maximum":9223372036854775807}`},
 
 		// Float types with constraints
 		{"Float32Constraints", types.Float32().Min(-1000.5).Max(1000.5), `{"type":"number","minimum":-1000.5,"maximum":1000.5}`},
@@ -1271,6 +1453,44 @@ func TestToJSONSchema_LazySchemas(t *testing.T) {
 		_, err := ToJSONSchema(node, Options{Cycles: "throw"})
 		require.ErrorIs(t, err, ErrCircularReference)
 	})
+}
+
+func TestToJSONSchema_LazyNilTargetFailsClosedWithoutPanic(t *testing.T) {
+	lazySchema := types.LazyAny(func() any { return nil })
+	var converted *lib.Schema
+	var err error
+
+	require.NotPanics(t, func() {
+		converted, err = ToJSONSchema(lazySchema)
+	})
+	assert.Nil(t, converted)
+	require.ErrorIs(t, err, ErrUnrepresentableType)
+}
+
+func TestToJSONSchema_LazyNilTargetUsesExplicitAnyFallback(t *testing.T) {
+	lazySchema := types.LazyAny(func() any { return nil })
+
+	converted, err := ToJSONSchema(lazySchema, Options{Unrepresentable: UnrepresentableAny})
+	require.NoError(t, err)
+	encoded, err := json.Marshal(converted)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, string(encoded))
+}
+
+func TestToJSONSchema_LazyNonSchemaTargetUsesUnrepresentablePolicy(t *testing.T) {
+	lazySchema := types.LazyAny(func() any { return 42 })
+
+	assert.NotPanics(t, func() {
+		converted, err := ToJSONSchema(lazySchema)
+		assert.Nil(t, converted)
+		require.ErrorIs(t, err, ErrUnrepresentableType)
+	})
+
+	converted, err := ToJSONSchema(lazySchema, Options{Unrepresentable: UnrepresentableAny})
+	require.NoError(t, err)
+	encoded, err := json.Marshal(converted)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, string(encoded))
 }
 
 // =============================================================================
@@ -2053,7 +2273,10 @@ func TestToJSONSchemaExtractSchemasWithID(t *testing.T) {
 	assert.NoError(t, err)
 	resultStr := string(resultBytes)
 
-	assert.Contains(t, resultStr, `"$defs":{"age":{"type":"number"},"name":{"type":"string"}}`)
+	require.Contains(t, result.Defs, "age")
+	assert.Equal(t, lib.SchemaType{"number"}, result.Defs["age"].Type)
+	require.Contains(t, result.Defs, "name")
+	assert.Equal(t, lib.SchemaType{"string"}, result.Defs["name"].Type)
 	assert.Contains(t, resultStr, `"first_name":{"$ref":"#/$defs/name"}`)
 	assert.Contains(t, resultStr, `"middle_name":{"$ref":"#/$defs/name"}`)
 	assert.Contains(t, resultStr, `"age":{"$ref":"#/$defs/age"}`)
@@ -2189,7 +2412,7 @@ func TestToJSONSchemaBasicRegistry(t *testing.T) {
 	myRegistry.Add(User, core.GlobalMeta{ID: "User"})
 	myRegistry.Add(Post, core.GlobalMeta{ID: "Post"})
 
-	result, err := ToJSONSchema(myRegistry)
+	result, err := ToJSONSchemaRegistry(myRegistry)
 	assert.NoError(t, err)
 	resultBytes, err := json.Marshal(result)
 	assert.NoError(t, err)
@@ -2210,7 +2433,7 @@ func TestToJSONSchemaRegistryRejectsMissingIDBeforeConversion(t *testing.T) {
 	)
 	overrideCalls := 0
 
-	got, err := ToJSONSchema(registry, Options{
+	got, err := ToJSONSchemaRegistry(registry, Options{
 		Override: func(OverrideContext) { overrideCalls++ },
 	})
 
@@ -2221,11 +2444,35 @@ func TestToJSONSchemaRegistryRejectsMissingIDBeforeConversion(t *testing.T) {
 }
 
 func TestToJSONSchemaRegistryAcceptsEmptyRegistry(t *testing.T) {
-	got, err := ToJSONSchema(core.NewRegistry[core.GlobalMeta]())
+	got, err := ToJSONSchemaRegistry(core.NewRegistry[core.GlobalMeta]())
 
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Empty(t, got.Defs)
+}
+
+func TestToJSONSchemaRegistryRejectsNilRegistryWithoutPanic(t *testing.T) {
+	var got *lib.Schema
+	var err error
+	require.NotPanics(t, func() {
+		got, err = ToJSONSchemaRegistry(nil)
+	})
+	assert.Nil(t, got)
+	require.ErrorIs(t, err, ErrInvalidRegistrySchemaID)
+}
+
+func TestToJSONSchemaRejectsRegistryAtCompileTime(t *testing.T) {
+	cmd := exec.Command("go", "test", "-vet=off", "./testdata/tojsonschema_registry_compile_fail")
+	output, err := cmd.CombinedOutput()
+	require.Error(t, err, "fixture unexpectedly compiled:\n%s", output)
+	assert.Contains(t, string(output), "does not implement")
+}
+
+func TestToJSONSchemaRejectsTargetOptionAtCompileTime(t *testing.T) {
+	cmd := exec.Command("go", "test", "-vet=off", "./testdata/target_option_compile_fail")
+	output, err := cmd.CombinedOutput()
+	require.Error(t, err, "fixture unexpectedly compiled:\n%s", output)
+	assert.Contains(t, string(output), "unknown field Target")
 }
 
 func TestToJSONSchemaRegistryRejectsDuplicateIDBeforeConversion(t *testing.T) {
@@ -2234,7 +2481,7 @@ func TestToJSONSchemaRegistryRejectsDuplicateIDBeforeConversion(t *testing.T) {
 		Add(types.Int(), core.GlobalMeta{ID: "shared"})
 	overrideCalls := 0
 
-	got, err := ToJSONSchema(registry, Options{
+	got, err := ToJSONSchemaRegistry(registry, Options{
 		Override: func(OverrideContext) { overrideCalls++ },
 	})
 
@@ -2251,7 +2498,7 @@ func TestToJSONSchemaRegistryUsesFrozenMetadataSnapshot(t *testing.T) {
 		Add(first, core.GlobalMeta{ID: "first", Title: "First"}).
 		Add(second, core.GlobalMeta{ID: "second", Title: "Second"})
 
-	got, err := ToJSONSchema(registry, Options{
+	got, err := ToJSONSchemaRegistry(registry, Options{
 		Override: func(ctx OverrideContext) {
 			switch ctx.ZodSchema {
 			case first:
@@ -2269,10 +2516,39 @@ func TestToJSONSchemaRegistryUsesFrozenMetadataSnapshot(t *testing.T) {
 	assert.Equal(t, "First", *got.Defs["first"].Title)
 	assert.Equal(t, "Second", *got.Defs["second"].Title)
 
-	next, err := ToJSONSchema(registry)
+	next, err := ToJSONSchemaRegistry(registry)
 	require.NoError(t, err)
 	assert.Contains(t, next.Defs, "changed-first")
 	assert.Contains(t, next.Defs, "changed-second")
+}
+
+func TestToJSONSchemaRegistryFreezesNestedMetadataBeforeCallbacks(t *testing.T) {
+	first := types.String()
+	second := types.Int()
+	secondExample := map[string]any{"names": []any{"before"}}
+	registry := core.NewRegistry[core.GlobalMeta]().
+		Add(first, core.GlobalMeta{ID: "a"}).
+		Add(second, core.GlobalMeta{ID: "b", Examples: []any{secondExample}})
+
+	got, err := ToJSONSchemaRegistry(registry, Options{
+		Override: func(ctx OverrideContext) {
+			if ctx.ZodSchema == first {
+				secondExample["names"].([]any)[0] = "callback"
+			}
+		},
+	})
+	require.NoError(t, err)
+	definition := got.Defs["b"]
+	require.NotNil(t, definition)
+	require.Len(t, definition.Examples, 1)
+	outputNames := definition.Examples[0].(map[string]any)["names"].([]any)
+	assert.Equal(t, "before", outputNames[0])
+
+	outputNames[0] = "document"
+	meta, ok := registry.Get(second)
+	require.True(t, ok)
+	registryNames := meta.Examples[0].(map[string]any)["names"].([]any)
+	assert.Equal(t, "callback", registryNames[0])
 }
 
 func TestToJSONSchemaRegistrySnapshotIsCoherentDuringReplacement(t *testing.T) {
@@ -2293,7 +2569,7 @@ func TestToJSONSchemaRegistrySnapshotIsCoherentDuringReplacement(t *testing.T) {
 	<-started
 
 	for range 64 {
-		got, err := ToJSONSchema(registry)
+		got, err := ToJSONSchemaRegistry(registry)
 		require.NoError(t, err)
 		require.Len(t, got.Defs, 1)
 		if definition, ok := got.Defs["a"]; ok {
@@ -2332,7 +2608,7 @@ func TestToJSONSchemaRegistryConvertsTopLevelEntriesInIDOrder(t *testing.T) {
 
 	for range 32 {
 		var got []string
-		_, err := ToJSONSchema(registry, Options{
+		_, err := ToJSONSchemaRegistry(registry, Options{
 			Override: func(ctx OverrideContext) {
 				if id, ok := ids[ctx.ZodSchema]; ok {
 					got = append(got, id)
@@ -2354,9 +2630,9 @@ func TestToJSONSchemaRegistryOutputIsIndependentOfAddOrder(t *testing.T) {
 		Add(second, core.GlobalMeta{ID: "b"}).
 		Add(first, core.GlobalMeta{ID: "a"})
 
-	forwardResult, err := ToJSONSchema(forward)
+	forwardResult, err := ToJSONSchemaRegistry(forward)
 	require.NoError(t, err)
-	reverseResult, err := ToJSONSchema(reverse)
+	reverseResult, err := ToJSONSchemaRegistry(reverse)
 	require.NoError(t, err)
 
 	assert.Equal(t, forwardResult, reverseResult)
@@ -2372,8 +2648,8 @@ func TestToJSONSchemaRegistryReturnsStableFirstConversionError(t *testing.T) {
 		Add(second, core.GlobalMeta{ID: "b"}).
 		Add(first, core.GlobalMeta{ID: "a"})
 
-	_, forwardErr := ToJSONSchema(forward)
-	_, reverseErr := ToJSONSchema(reverse)
+	_, forwardErr := ToJSONSchemaRegistry(forward)
+	_, reverseErr := ToJSONSchemaRegistry(reverse)
 
 	require.Error(t, forwardErr)
 	require.Error(t, reverseErr)
@@ -2457,7 +2733,7 @@ func TestToJSONSchema_RegistryBatchExamplesAreDetached(t *testing.T) {
 		Examples: []any{example},
 	})
 
-	got, err := ToJSONSchema(registry)
+	got, err := ToJSONSchemaRegistry(registry)
 	require.NoError(t, err)
 	definition := got.Defs["schema"]
 	require.NotNil(t, definition)

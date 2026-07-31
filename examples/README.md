@@ -18,4 +18,4 @@ A curated set of examples to help you explore GoZod quickly without feeling over
 | `struct_tags` | Declarative struct tag validation with `gozod:"required,min=2"` |
 | `custom_tag` | Custom rule tag via `WithTagName` and yaml/toml field names via `WithFieldNameTag` |
 | `circular_references` | Automatic circular reference detection and handling |
-| `code_generation` | Zero-overhead code generation with `go generate` |
+| `code_generation` | Explicit generated `Schema()` methods with `go generate` |

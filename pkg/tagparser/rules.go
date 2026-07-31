@@ -206,9 +206,8 @@ const (
 
 // FieldPlan is the shared semantic plan for a parsed struct field.
 type FieldPlan struct {
-	Operations             []RulePlan
-	RuntimePointerOptional OptionalPlacement
-	GeneratedOptional      OptionalPlacement
+	Operations []RulePlan
+	Optional   OptionalPlacement
 }
 
 // CompileFieldPlan converts parsed field facts into semantic operations shared
@@ -265,9 +264,8 @@ func CompileFieldPlan(field *FieldInfo) (FieldPlan, error) {
 	hasDefaultLike := hasDefaultLikeOperation(operations)
 
 	return FieldPlan{
-		Operations:             operations,
-		RuntimePointerOptional: optionalPlacement(field.NeedsPointerOptional(), hasDefaultLike),
-		GeneratedOptional:      optionalPlacement(field.NeedsGeneratedOptional(), hasDefaultLike),
+		Operations: operations,
+		Optional:   optionalPlacement(!field.Required, hasDefaultLike),
 	}, nil
 }
 
@@ -364,6 +362,12 @@ func compileScalarValue(value string, family FieldFamily, fieldType reflect.Type
 		target := reflect.New(fieldType)
 		if err := json.Unmarshal([]byte(value), target.Interface()); err != nil {
 			return nil, err
+		}
+		if family == FieldFamilyArray {
+			array := target.Elem()
+			slice := reflect.MakeSlice(reflect.SliceOf(fieldType.Elem()), array.Len(), array.Len())
+			reflect.Copy(slice, array)
+			return slice.Interface(), nil
 		}
 		return target.Elem().Interface(), nil
 	default:

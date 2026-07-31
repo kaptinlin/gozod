@@ -11,16 +11,22 @@ constructs. Generated schemas should be deterministic: repeated conversion of
 the same schema should change only when the source schema or converter logic
 changes.
 
+Single-schema and batch export are distinct typed operations:
+`ToJSONSchema(core.ZodSchema)` exports one schema, while
+`ToJSONSchemaRegistry(*core.Registry[core.GlobalMeta])` exports a registry
+bundle. Invalid input categories are compile-time errors rather than runtime
+dispatch failures.
+
 Batch registry export requires every top-level entry to have a non-empty,
 unique registry `ID`. Missing and duplicate IDs fail with
 `ErrInvalidRegistrySchemaID` before schema conversion or override callbacks.
+Nil registries fail with the same sentinel instead of panicking.
 Conversion uses one frozen schema-and-metadata snapshot and visits entries in ID
 order, so concurrent registry replacement cannot mix metadata generations and
 the first conversion error is stable.
 
-Draft 2020-12 is the supported target. A requested target outside the supported
-set fails with `ErrUnsupportedJSONSchemaTarget` instead of silently emitting a
-schema with ambiguous semantics.
+Draft 2020-12 is the fixed export dialect. The API exposes no target option
+until another dialect is implemented faithfully.
 
 `FromJSONSchema` imports a defined subset into GoZod schemas and fails on
 unsupported semantics. `FromJSONSchemaLossy` is the explicit partial-import
@@ -48,6 +54,12 @@ The import subset intentionally covers the overlap GoZod owns:
 
 Unknown string formats fall back to ordinary string validation instead of
 pretending GoZod knows that format.
+
+JSON Schema `integer` imports target Go's platform-sized `int` domain.
+Rational bounds are rounded to the equivalent inclusive integer bound. A
+constraint operand or exclusive-bound adjustment outside that domain is a
+fatal `ErrInvalidJSONSchema` with the keyword's JSON Pointer; lossy import does
+not discard or approximate it.
 
 ## Fail-Closed Keywords
 
@@ -79,11 +91,9 @@ configuration. Public callers should use exported constants for:
 - unrepresentable schemas
 - cycle handling
 - reused schema handling
-- target dialect
 - input/output projection
 
-Invalid option values fail with `ErrInvalidJSONSchemaOption`. Unsupported target
-dialects fail with `ErrUnsupportedJSONSchemaTarget`.
+Invalid option values fail with `ErrInvalidJSONSchemaOption`.
 
 ## Export Language
 
@@ -98,6 +108,25 @@ the caller explicitly chooses that fallback.
 
 Round-trip tests should cover only the supported overlap. They should not imply
 that arbitrary JSON Schema documents can be imported and re-emitted unchanged.
+
+Integer constraints are emitted exactly. Native signed and unsigned integer
+values reach the JSON Schema rational representation without a `float64`
+intermediary, and each integer schema node carries its Go type range regardless
+of whether it appears at the root, in a property or item, in a union, or in
+`$defs`. An explicit lower or upper bound replaces only that side of the type
+range.
+
+Lazy schemas use the same fail-closed policy as other unrepresentable schemas.
+A lazy getter returning nil or a non-schema value returns
+`ErrUnrepresentableType` without panicking; only explicit
+`JSONSchemaUnrepresentableAny` may project it as `{}`.
+
+> **Why**: numeric meaning belongs to the schema node, not traversal depth, and
+> an invalid lazy target is an unrepresentable schema rather than an empty
+> contract.
+>
+> **Rejected**: approximate integer constraints, root-only type bounds, or an
+> implicit `{}` fallback for invalid lazy values.
 
 ## Metadata Ownership
 
@@ -125,10 +154,15 @@ metadata types.
 ## Acceptance Criteria
 
 - Option validation tests prove invalid mode values fail with
-  `ErrInvalidJSONSchemaOption` and unsupported targets fail with
-  `ErrUnsupportedJSONSchemaTarget`.
+  `ErrInvalidJSONSchemaOption`; compile-negative coverage proves `Options` has
+  no `Target` field.
 - Export tests prove first-party constraints materialized by check attachment
   are emitted without a second definition projector.
+- Numeric export tests prove all native integer kinds serialize exact explicit
+  constraints and position-independent default ranges.
+- Lazy export tests prove nil and non-schema targets fail without panic unless
+  the caller explicitly selects the any fallback, while recursive cycle modes
+  retain their defined behavior.
 - Import tests prove every fail-closed keyword errors through `FromJSONSchema`
   and is returned with location and cause through `FromJSONSchemaLossy`.
 - Metadata tests prove schema-owned and explicit-registry imports snapshot nested

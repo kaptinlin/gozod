@@ -55,6 +55,12 @@ type FileWriter struct {
 	verbose      bool
 }
 
+type renderedFile struct {
+	structName string
+	outputPath string
+	content    string
+}
+
 // NewFileWriter creates a new FileWriter instance.
 func NewFileWriter(outputDir, packageName, outputSuffix string, dryRun, verbose bool) (*FileWriter, error) {
 	tmpl, err := loadTemplates()
@@ -76,6 +82,14 @@ func NewFileWriter(outputDir, packageName, outputSuffix string, dryRun, verbose 
 
 // WriteGeneratedCode writes the generated code for a struct to a file.
 func (w *FileWriter) WriteGeneratedCode(info *GenerationInfo) error {
+	rendered, err := w.renderGeneratedCode(info)
+	if err != nil {
+		return err
+	}
+	return w.publishGeneratedCode(rendered)
+}
+
+func (w *FileWriter) renderGeneratedCode(info *GenerationInfo) (renderedFile, error) {
 	outputPath := w.outputPath(info.FilePath, info.Name)
 
 	if w.verbose {
@@ -84,23 +98,26 @@ func (w *FileWriter) WriteGeneratedCode(info *GenerationInfo) error {
 
 	content, err := w.generateCode(info)
 	if err != nil {
-		return fmt.Errorf("generate code for %s: %w", info.Name, err)
+		return renderedFile{}, fmt.Errorf("generate code for %s: %w", info.Name, err)
 	}
+	return renderedFile{structName: info.Name, outputPath: outputPath, content: content}, nil
+}
 
+func (w *FileWriter) publishGeneratedCode(rendered renderedFile) error {
 	if w.dryRun {
-		fmt.Printf("=== Generated code for %s ===\n%s\n", info.Name, content)
+		fmt.Printf("=== Generated code for %s ===\n%s\n", rendered.structName, rendered.content)
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(rendered.outputPath), 0750); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}
-	if err := writeFileAtomic(outputPath, []byte(content), 0o600); err != nil {
-		return fmt.Errorf("write file %s: %w", outputPath, err)
+	if err := writeFileAtomic(rendered.outputPath, []byte(rendered.content), 0o600); err != nil {
+		return fmt.Errorf("write file %s: %w", rendered.outputPath, err)
 	}
 
 	if w.verbose {
-		fmt.Printf("Generated %s\n", outputPath)
+		fmt.Printf("Generated %s\n", rendered.outputPath)
 	}
 	return nil
 }
@@ -225,7 +242,7 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	if constructor, consumedRule := stringFormatConstructor(field, fieldPlan); constructor != "" && !coerces {
 		var b strings.Builder
 		b.WriteString(constructor)
-		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
+		if fieldPlan.Optional == tagparser.OptionalPlacementBeforeOperations {
 			b.WriteString(".Optional()")
 		}
 		for _, operation := range fieldPlan.OperationsExcept(consumedRule) {
@@ -235,7 +252,7 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 			}
 			b.WriteString(code)
 		}
-		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
+		if fieldPlan.Optional == tagparser.OptionalPlacementAfterOperations {
 			b.WriteString(".Optional()")
 		}
 		return b.String(), nil
@@ -259,7 +276,7 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 		b.WriteString("gozod.Enum(")
 		b.WriteString(strings.Join(values, ", "))
 		b.WriteByte(')')
-		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
+		if fieldPlan.Optional == tagparser.OptionalPlacementBeforeOperations {
 			b.WriteString(".Optional()")
 		}
 		for _, operation := range fieldPlan.OperationsExcept("enum") {
@@ -269,7 +286,7 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 			}
 			b.WriteString(code)
 		}
-		if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
+		if fieldPlan.Optional == tagparser.OptionalPlacementAfterOperations {
 			b.WriteString(".Optional()")
 		}
 		return b.String(), nil
@@ -281,13 +298,13 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 	if _, coerce := compiledOperand(fieldPlan, tagparser.RuleCoerce); coerce {
 		base, err = coercionConstructor(typeName)
 	} else {
-		base, err = w.baseConstructor(typeName, structName)
+		base, err = w.schemaConstructor(field.Type, typeName, structName)
 	}
 	if err != nil {
 		return "", fmt.Errorf("render type %s for field %s: %w", typeName, field.Name, err)
 	}
 	b.WriteString(base)
-	if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementBeforeOperations {
+	if fieldPlan.Optional == tagparser.OptionalPlacementBeforeOperations {
 		b.WriteString(".Optional()")
 	}
 	for _, operation := range fieldPlan.Operations {
@@ -297,10 +314,134 @@ func (w *FileWriter) generateFieldSchemaCode(field *tagparser.FieldInfo, structN
 		}
 		b.WriteString(code)
 	}
-	if fieldPlan.GeneratedOptional == tagparser.OptionalPlacementAfterOperations {
+	if fieldPlan.Optional == tagparser.OptionalPlacementAfterOperations {
 		b.WriteString(".Optional()")
 	}
 	return b.String(), nil
+}
+
+func (w *FileWriter) schemaConstructor(goType reflect.Type, typeName, structName string) (string, error) {
+	if goType.Kind() == reflect.Pointer {
+		elementType := strings.TrimPrefix(typeName, "*")
+		if goType.Elem().Kind() == reflect.Array {
+			return w.fixedArrayConstructor(goType.Elem(), elementType, structName, true)
+		}
+		if primitive := primitiveTypeName(goType.Elem().Kind()); primitive != "" {
+			constructor := strings.TrimSuffix(basicTypeConstructor(primitive), "()")
+			return constructor + "Ptr()", nil
+		}
+	}
+	if goType.Kind() == reflect.Array {
+		return w.fixedArrayConstructor(goType, typeName, structName, false)
+	}
+	if goType.Kind() == reflect.Slice {
+		elementType, ok := strings.CutPrefix(typeName, "[]")
+		if !ok || elementType == "" {
+			return "", fmt.Errorf("malformed slice type %q", typeName)
+		}
+		element, err := w.schemaConstructor(goType.Elem(), elementType, structName)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf(
+			"gozod.Slice[%s](%s)",
+			sliceElementTypeArgument(goType.Elem(), elementType),
+			element,
+		), nil
+	}
+	if goType.Kind() == reflect.Map {
+		keyType, valueType, ok := splitMapType(typeName)
+		if !ok {
+			return "", fmt.Errorf("malformed map type %q", typeName)
+		}
+		value, err := w.schemaConstructor(goType.Elem(), valueType, structName)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf(
+			"gozod.Record[%s, %s](gozod.String(), %s)",
+			schemaTypeArgument(goType.Key(), keyType),
+			schemaTypeArgument(goType.Elem(), valueType),
+			value,
+		), nil
+	}
+	if primitive := primitiveTypeName(goType.Kind()); primitive != "" {
+		return basicTypeConstructor(primitive), nil
+	}
+	return w.baseConstructor(typeName, structName)
+}
+
+func schemaTypeArgument(goType reflect.Type, declared string) string {
+	if primitive := primitiveTypeName(goType.Kind()); primitive != "" {
+		return primitive
+	}
+	return declared
+}
+
+func sliceElementTypeArgument(goType reflect.Type, declared string) string {
+	if goType.Kind() == reflect.Array {
+		return "any"
+	}
+	return schemaTypeArgument(goType, declared)
+}
+
+func splitMapType(typeName string) (string, string, bool) {
+	if !strings.HasPrefix(typeName, "map[") {
+		return "", "", false
+	}
+	closing := strings.IndexByte(typeName[len("map["):], ']')
+	if closing < 0 {
+		return "", "", false
+	}
+	closing += len("map[")
+	if closing == len(typeName)-1 {
+		return "", "", false
+	}
+	return typeName[len("map["):closing], typeName[closing+1:], true
+}
+
+func primitiveTypeName(kind reflect.Kind) string {
+	return map[reflect.Kind]string{
+		reflect.String:     "string",
+		reflect.Bool:       "bool",
+		reflect.Int:        "int",
+		reflect.Int8:       "int8",
+		reflect.Int16:      "int16",
+		reflect.Int32:      "int32",
+		reflect.Int64:      "int64",
+		reflect.Uint:       "uint",
+		reflect.Uint8:      "uint8",
+		reflect.Uint16:     "uint16",
+		reflect.Uint32:     "uint32",
+		reflect.Uint64:     "uint64",
+		reflect.Float32:    "float32",
+		reflect.Float64:    "float64",
+		reflect.Complex64:  "complex64",
+		reflect.Complex128: "complex128",
+	}[kind]
+}
+
+func (w *FileWriter) fixedArrayConstructor(arrayType reflect.Type, typeName, structName string, pointer bool) (string, error) {
+	closing := strings.IndexByte(typeName, ']')
+	if !strings.HasPrefix(typeName, "[") || closing < 2 || closing == len(typeName)-1 {
+		return "", fmt.Errorf("malformed array type %q", typeName)
+	}
+	elementType := typeName[closing+1:]
+	element, err := w.schemaConstructor(arrayType.Elem(), elementType, structName)
+	if err != nil {
+		return "", err
+	}
+	constructor := "Slice"
+	if pointer {
+		constructor = "SlicePtr"
+	}
+	return fmt.Sprintf(
+		"gozod.%s[%s](%s).Length(%d)",
+		constructor,
+		sliceElementTypeArgument(arrayType.Elem(), elementType),
+		element,
+		arrayType.Len(),
+	), nil
 }
 
 func compiledOperand(plan tagparser.FieldPlan, op tagparser.RuleOp) (any, bool) {
@@ -423,9 +564,23 @@ func stringFormatConstructorName(op tagparser.RuleOp) string {
 	}[op]
 }
 
-func generateCompiledValue(method string, value any, _ reflect.Type) string {
+func generateCompiledValue(method string, value any, fieldType reflect.Type) string {
 	if value == nil {
 		return fmt.Sprintf(".%s(nil)", method)
+	}
+	for fieldType.Kind() == reflect.Pointer {
+		fieldType = fieldType.Elem()
+	}
+	if (fieldType.Kind() == reflect.Slice || fieldType.Kind() == reflect.Array) &&
+		fieldType.Elem().Kind() == reflect.Array {
+		source := reflect.ValueOf(value)
+		if source.Kind() == reflect.Slice || source.Kind() == reflect.Array {
+			converted := reflect.MakeSlice(reflect.SliceOf(reflect.TypeFor[any]()), source.Len(), source.Len())
+			for i := range source.Len() {
+				converted.Index(i).Set(source.Index(i))
+			}
+			value = converted.Interface()
+		}
 	}
 	return fmt.Sprintf(".%s(%#v)", method, value)
 }
@@ -448,7 +603,10 @@ func baseConstructorWithProviders(
 ) (string, error) {
 	if base, ok := strings.CutPrefix(typeName, "*"); ok {
 		if basicTypes[base] {
-			return basicTypeConstructor(base), nil
+			return strings.TrimSuffix(basicTypeConstructor(base), "()") + "Ptr()", nil
+		}
+		if base == "time.Time" {
+			return "gozod.TimePtr()", nil
 		}
 		return namedTypeConstructor(base, structName, fieldNameTag, methodName, providers), nil
 	}

@@ -713,3 +713,44 @@ func TestArray_MultipleErrorCollection(t *testing.T) {
 		}
 	})
 }
+
+func TestArray_PreservesAllElementIssues(t *testing.T) {
+	schema := Array([]any{String().Min(5).Email()})
+
+	_, err := schema.Parse([]any{"x"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	elementIssue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidElement, elementIssue.Code)
+	assert.Equal(t, []any{0}, elementIssue.Path)
+	require.Len(t, elementIssue.Issues, 2)
+	assert.Equal(t, core.TooSmall, elementIssue.Issues[0].Code)
+	assert.Equal(t, 5, elementIssue.Issues[0].Minimum)
+	assert.Equal(t, core.InvalidFormat, elementIssue.Issues[1].Code)
+	assert.Equal(t, "email", elementIssue.Issues[1].Format)
+}
+
+func TestArray_KeepsElementIssueGroupsIndependent(t *testing.T) {
+	schema := Array([]any{
+		String().Min(5).Email(),
+		String().StartsWith("z").EndsWith("q"),
+	})
+
+	_, err := schema.Parse([]any{"x", "y"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 2)
+	assert.Equal(t, []any{0}, zodErr.Issues[0].Path)
+	require.Len(t, zodErr.Issues[0].Issues, 2)
+	assert.Equal(t, 5, zodErr.Issues[0].Issues[0].Minimum)
+	assert.Equal(t, "email", zodErr.Issues[0].Issues[1].Format)
+	assert.Equal(t, []any{1}, zodErr.Issues[1].Path)
+	require.Len(t, zodErr.Issues[1].Issues, 2)
+	assert.Equal(t, "z", zodErr.Issues[1].Issues[0].Prefix)
+	assert.Equal(t, "q", zodErr.Issues[1].Issues[1].Suffix)
+}

@@ -14,8 +14,8 @@ func (ds DefaultStruct) Schema() *gozod.ZodStruct[DefaultStruct, DefaultStruct] 
 		"num":       gozod.Int().Optional().Default(42),
 		"float":     gozod.Float64().Optional().Default(3.14),
 		"bool":      gozod.Bool().Optional().Default(true),
-		"slice":     gozod.Slice(gozod.String()).Optional().Default([]string{"a", "b"}),
-		"int_slice": gozod.Slice(gozod.Int()).Optional().Default([]int{1, 2, 3}),
-		"map":       gozod.Record(gozod.String()).Optional().Default(map[string]string{"k": "v"}),
+		"slice":     gozod.Slice[string](gozod.String()).Optional().Default([]string{"a", "b"}),
+		"int_slice": gozod.Slice[int](gozod.Int()).Optional().Default([]int{1, 2, 3}),
+		"map":       gozod.Record[string, string](gozod.String(), gozod.String()).Optional().Default(map[string]string{"k": "v"}),
 	})
 }

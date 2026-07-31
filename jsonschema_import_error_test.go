@@ -41,7 +41,7 @@ func TestJSONSchemaLossyImportIsAvailableFromRoot(t *testing.T) {
 func TestJSONSchemaRegistryIDErrorIsAvailableFromRoot(t *testing.T) {
 	registry := gozod.NewRegistry[gozod.GlobalMeta]().Add(gozod.String(), gozod.GlobalMeta{})
 
-	result, err := gozod.ToJSONSchema(registry)
+	result, err := gozod.ToJSONSchemaRegistry(registry)
 
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, gozod.ErrInvalidRegistrySchemaID)

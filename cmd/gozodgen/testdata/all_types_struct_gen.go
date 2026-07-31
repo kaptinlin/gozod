@@ -20,13 +20,13 @@ func (ats AllTypesStruct) Schema() *gozod.ZodStruct[AllTypesStruct, AllTypesStru
 		"uint16":     gozod.Uint16(),
 		"uint32":     gozod.Uint32(),
 		"uint64":     gozod.Uint64(),
-		"float32":    gozod.Float32().Gt(0).Optional(),
-		"float64":    gozod.Float64().Gt(0).Optional(),
+		"float32":    gozod.Float32().Gt(0.0).Optional(),
+		"float64":    gozod.Float64().Gt(0.0).Optional(),
 		"complex64":  gozod.Complex64().Optional(),
 		"complex128": gozod.Complex128().Optional(),
 		"bool":       gozod.Bool().Optional().Default(false),
-		"ptr_string": gozod.String().Min(1).Optional(),
-		"ptr_int":    gozod.Int().Gt(0).Optional(),
-		"ptr_bool":   gozod.Bool().Optional().Default(true),
+		"ptr_string": gozod.StringPtr().Min(1).Optional(),
+		"ptr_int":    gozod.IntPtr().Gt(0).Optional(),
+		"ptr_bool":   gozod.BoolPtr().Optional().Default(true),
 	})
 }

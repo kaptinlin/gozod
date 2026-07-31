@@ -59,11 +59,6 @@ func TestFromStruct_WithFieldNameTag(t *testing.T) {
 	})
 }
 
-func TestValidateStruct_WithFieldNameTag(t *testing.T) {
-	_, err := ValidateStruct(fieldNameTagUser{UserName: "ab"}, WithFieldNameTag("yaml"))
-	assert.Equal(t, []any{"user_name"}, firstIssuePath(t, err))
-}
-
 func TestObject_WithFieldNameTag_CopyOnWrite(t *testing.T) {
 	base := Object(core.ObjectSchema{
 		"user_name": String().Min(3),

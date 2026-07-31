@@ -41,54 +41,6 @@ func main() {
 }
 ```
 
-## 🔄 Runtime Validation
-
-For scenarios where the struct type is only known at runtime (e.g., CLI frameworks, web frameworks), use `ValidateStruct`:
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/kaptinlin/gozod/types"
-)
-
-type Config struct {
-    Host string `validate:"required,min=1"`
-    Port int    `validate:"min=1000,max=9999"`
-}
-
-func main() {
-    config := &Config{Host: "localhost", Port: 8080}
-
-    // Runtime validation without generic type parameters
-    result, err := types.ValidateStruct(config, types.WithTagName("validate"))
-    if err != nil {
-        fmt.Printf("Validation error: %v\n", err)
-        return
-    }
-
-    // Type assertion needed for runtime validation
-    validated := result.(Config)
-    fmt.Printf("Valid config: %+v\n", validated)
-}
-```
-
-**When to use `ValidateStruct`:**
-
-- Generic validators that work with any struct type
-- Framework integration (CLI, web, etc.)
-- Dynamic validation scenarios
-- When compile-time type parameters are not available
-
-**Comparison:**
-
-| Feature | `FromStruct[T]()` | `ValidateStruct()` |
-|---------|-------------------|-------------------|
-| Type parameters | Compile-time generic | Runtime `any` |
-| Return type | Strongly typed `T` | `any` (needs type assertion) |
-| Use case | Type known at compile time | Type known at runtime |
-
 ## 📦 Installation
 
 ```bash
@@ -120,7 +72,7 @@ This is useful when:
 ### Core Rules
 
 - **Non-required fields generate `.Optional()`**: Fields without `required` are generated as optional in tag-derived schemas.
-- **Pointers also generate `.Optional()` by default**: Pointer fields accept `nil` unless marked `required`.
+- **Pointer type does not decide presence**: `required` is the only presence switch; pointer schemas preserve Go pointer/nil behavior.
 - **`nilable` is additive**: `nilable` enables nil semantics for the schema itself; it does not replace the generated optionality rules.
 - **Comma Separated**: `"required,min=2,max=50"`
 - **Parameters**: `"min=5"` or `"enum=red green blue"`
@@ -604,37 +556,24 @@ invalidUser := User{
 
 _, err := schema.Parse(invalidUser)
 if err != nil {
-    if zodErr, ok := err.(*issues.ZodError); ok {
+    var zodErr *gozod.ZodError
+    if gozod.IsZodError(err, &zodErr) {
         // Access structured validation issues
         for _, issue := range zodErr.Issues {
             fmt.Printf("Field: %v, Error: %s\n", issue.Path, issue.Message)
         }
 
         // Pretty formatted errors
-        fmt.Println(zodErr.PrettifyError())
+        fmt.Println(gozod.PrettifyError(zodErr))
 
         // Field-specific errors for forms
-        fieldErrors := zodErr.FlattenError()
+        fieldErrors := gozod.FlattenError(zodErr)
         for field, errors := range fieldErrors.FieldErrors {
             fmt.Printf("%s: %v\n", field, errors)
         }
     }
 }
 ```
-
-### Custom Error Messages
-
-```go
-type User struct {
-    Name  string `gozod:"required,min=2" error:"Name must be at least 2 characters"`
-    Email string `gozod:"required,email" error:"Please provide a valid email address"`
-    Age   int    `gozod:"required,min=18" error:"Must be 18 or older"`
-}
-
-// Custom error messages will be used in validation failures
-```
-
----
 
 ## 🏢 Real-World Examples
 

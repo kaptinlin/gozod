@@ -124,6 +124,22 @@ func TestObject_BasicFunctionality(t *testing.T) {
 	})
 }
 
+func TestObject_PreservesNestedIssueDetails(t *testing.T) {
+	schema := Object(core.ObjectSchema{"email": String().Email()})
+
+	_, err := schema.Parse(map[string]any{"email": "not-an-email"})
+	require.Error(t, err)
+
+	var zodErr *issues.ZodError
+	require.True(t, issues.IsZodError(err, &zodErr))
+	require.Len(t, zodErr.Issues, 1)
+	issue := zodErr.Issues[0]
+	assert.Equal(t, core.InvalidFormat, issue.Code)
+	assert.NotEmpty(t, issue.Message)
+	assert.Equal(t, []any{"email"}, issue.Path)
+	assert.Equal(t, "email", issue.Format)
+}
+
 func TestObject_ParseStructJSONTags(t *testing.T) {
 	type objectTagCase struct {
 		Name     string `json:"name,omitempty"`

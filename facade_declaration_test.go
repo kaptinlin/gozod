@@ -42,7 +42,6 @@ func TestErrorFacadeHasNoRebindableCallables(t *testing.T) {
 
 func TestJSONSchemaFacadeHasNoRebindableCallables(t *testing.T) {
 	assertNoUnexpectedExportedVars(t, "jsonschema.go", map[string]struct{}{
-		"ErrUnsupportedInputType":          {},
 		"ErrCircularReference":             {},
 		"ErrUnrepresentableType":           {},
 		"ErrSchemaNotObjectOrStruct":       {},
@@ -64,7 +63,6 @@ func TestJSONSchemaFacadeHasNoRebindableCallables(t *testing.T) {
 		"ErrMapKeyNotSchema":               {},
 		"ErrMapValueNotSchema":             {},
 		"ErrInvalidJSONSchemaOption":       {},
-		"ErrUnsupportedJSONSchemaTarget":   {},
 		"ErrUnsupportedJSONSchemaType":     {},
 		"ErrUnsupportedJSONSchemaKeyword":  {},
 		"ErrInvalidJSONSchema":             {},

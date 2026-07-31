@@ -10,7 +10,7 @@ import (
 // Package-local generated dependencies call their generated schema methods.
 func (fds FloatDefaultStruct) Schema() *gozod.ZodStruct[FloatDefaultStruct, FloatDefaultStruct] {
 	return gozod.Struct[FloatDefaultStruct](gozod.StructSchema{
-		"float_slice": gozod.Slice(gozod.Float64()).Optional().Default([]float64{1.1, 2.2}),
-		"bool_slice":  gozod.Slice(gozod.Bool()).Optional().Default([]bool{true, false}),
+		"float_slice": gozod.Slice[float64](gozod.Float64()).Optional().Default([]float64{1.1, 2.2}),
+		"bool_slice":  gozod.Slice[bool](gozod.Bool()).Optional().Default([]bool{true, false}),
 	})
 }
